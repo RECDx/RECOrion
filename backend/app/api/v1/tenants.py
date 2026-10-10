@@ -583,6 +583,7 @@ async def update_tenant(tenant_id: uuid.UUID, payload: TenantUpdate, db: AsyncSe
     if not tenant:
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
 
+    prev_active = tenant.is_active
     tenant.name = payload.name.strip()
     tenant.tax_id = payload.tax_id
     tenant.tax_office = payload.tax_office
@@ -600,9 +601,46 @@ async def update_tenant(tenant_id: uuid.UUID, payload: TenantUpdate, db: AsyncSe
         except Exception:
             pass
 
+    # Aktiflik durumu değiştiyse bağlı aktörleri güncelle (Süper admin hariç)
+    if prev_active != tenant.is_active:
+        new_actor_status = "IDLE" if tenant.is_active else "DISABLED"
+        act_res = await db.execute(select(Actor).where(Actor.tenant_id == tenant.id))
+        for act in act_res.scalars().all():
+            if act.role != "SUPER_ADMIN":
+                act.status = new_actor_status
+
     await db.commit()
     await db.refresh(tenant)
     return tenant
+
+@router.post("/{tenant_id}/toggle-status")
+async def toggle_tenant_status(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Müşteri kartını pasife alma veya tekrar aktif etme (Madde 4).
+    """
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
+
+    tenant.is_active = not tenant.is_active
+    new_actor_status = "IDLE" if tenant.is_active else "DISABLED"
+
+    # Bağlı insan/şirket aktörlerinin durumunu güncelle (Süper admin hariç)
+    act_res = await db.execute(select(Actor).where(Actor.tenant_id == tenant.id))
+    for act in act_res.scalars().all():
+        if act.role != "SUPER_ADMIN":
+            act.status = new_actor_status
+
+    await db.commit()
+    await db.refresh(tenant)
+
+    status_text = "Aktif" if tenant.is_active else "Pasif"
+    return {
+        "success": True,
+        "is_active": tenant.is_active,
+        "message": f"'{tenant.name}' şirketinin kartı başarıyla '{status_text}' durumuna alındı.",
+        "tenant_id": str(tenant.id)
+    }
 
 @router.put("/{tenant_id}/admin-user")
 async def update_tenant_admin_user(tenant_id: uuid.UUID, payload: TenantAdminUpdate, db: AsyncSession = Depends(get_db)):

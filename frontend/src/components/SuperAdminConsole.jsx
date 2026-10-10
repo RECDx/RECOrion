@@ -48,7 +48,11 @@ import {
   Save,
   GripVertical,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Image as ImageIcon,
+  PauseCircle,
+  PlayCircle,
+  Globe
 } from 'lucide-react';
 import { api } from '../api';
 
@@ -95,10 +99,21 @@ const EMAIL_PRESET_BLOCKS = [
     type: 'HEADER',
     label: 'Kurumsal Başlık & Logo',
     subtitle: 'Yapay Zeka Destekli Yeni Nesil ERP Platformu',
+    logoUrl: '',
     renderHtml: (b) => `<div style="background: linear-gradient(135deg, #1e1b4b 0%, #31104b 50%, #0f172a 100%); padding: 32px 25px; border-radius: 12px 12px 0 0; text-align: center; border-bottom: 2px solid #7134e2;">
-  <div style="font-size: 26px; font-weight: 900; color: #ffffff; letter-spacing: 0.5px;">🪐 RECOrion</div>
+  ${b.logoUrl ? `<div style="margin-bottom: 12px;"><img src="${b.logoUrl}" alt="Kurumsal Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" /></div>` : '<div style="font-size: 26px; font-weight: 900; color: #ffffff; letter-spacing: 0.5px;">🪐 RECOrion</div>'}
   <div style="font-size: 13px; color: #a78bfa; margin-top: 5px; font-weight: 600;">${b.subtitle || 'Yapay Zeka Destekli Kurumsal İşletim Sistemi'}</div>
 </div>`
+  },
+  {
+    type: 'IMAGE',
+    label: 'Özel Görsel / Logo / Banner',
+    imageUrl: '',
+    caption: '',
+    renderHtml: (b) => b.imageUrl ? `<div style="padding: 15px 25px; background: #0b0f19; text-align: center;">
+  <img src="${b.imageUrl}" alt="${b.caption || 'Görsel'}" style="max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); object-fit: contain;" />
+  ${b.caption ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${b.caption}</div>` : ''}
+</div>` : ''
   },
   {
     type: 'GREETING',
@@ -399,6 +414,8 @@ export default function SuperAdminConsole({
   const [detailNaceSearch, setDetailNaceSearch] = useState('');
   const [detailNaceResults, setDetailNaceResults] = useState([]);
   const [isGeneratingDetailManifesto, setIsGeneratingDetailManifesto] = useState(false);
+  const [tenantDetailActiveTab, setTenantDetailActiveTab] = useState('COMPANY'); // 'COMPANY' | 'ADMIN' | 'ALL'
+  const [justCreatedTenantAlert, setJustCreatedTenantAlert] = useState(null);
 
   // 3.1 Yeni Müşteri Ekle Modal (Madde 9 & 13)
   const [newTenantModalOpen, setNewTenantModalOpen] = useState(false);
@@ -502,6 +519,52 @@ export default function SuperAdminConsole({
     autonomy_level: 'L1'
   });
   const [regeneratingPrompt, setRegeneratingPrompt] = useState(false);
+
+  // ESC Tuşu ile Açık Olan Detay / Düzenleme Modalını Kaydetmeden Kapatma (Madde 3)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        if (templateModalOpen) {
+          setTemplateModalOpen(false);
+        } else if (tenantDetailModalOpen) {
+          setTenantDetailModalOpen(false);
+        } else if (newTenantModalOpen) {
+          setNewTenantModalOpen(false);
+        } else if (planModalOpen) {
+          setPlanModalOpen(false);
+        } else if (scheduleModalOpen) {
+          setScheduleModalOpen(false);
+        } else if (profileModalOpen) {
+          setProfileModalOpen(false);
+        } else if (permissionModalOpen) {
+          setPermissionModalOpen(false);
+        } else if (modelModalOpen) {
+          setModelModalOpen(false);
+        } else if (naceModalOpen) {
+          setNaceModalOpen(false);
+        } else if (titleModalOpen) {
+          setTitleModalOpen(false);
+        } else if (testEmailModalOpen) {
+          setTestEmailModalOpen(false);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    templateModalOpen,
+    tenantDetailModalOpen,
+    newTenantModalOpen,
+    planModalOpen,
+    scheduleModalOpen,
+    profileModalOpen,
+    permissionModalOpen,
+    modelModalOpen,
+    naceModalOpen,
+    titleModalOpen,
+    testEmailModalOpen
+  ]);
 
   // ================= VERİLERİ YÜKLEME =================
   const loadAllData = async () => {
@@ -623,11 +686,13 @@ export default function SuperAdminConsole({
   };
 
   // ================= 3. ŞİRKET DETAY & ADMIN KULLANICI (Madde 5 & 12) =================
-  const handleOpenTenantDetails = async (t) => {
+  const handleOpenTenantDetails = async (t, initialTab = 'COMPANY', justCreatedNotice = null, initialPassword = null) => {
     setTenantDetailModalOpen(true);
     setTenantDetailLoading(true);
     setSelectedTenantDetails(null);
-    setGeneratedAdminPassword(null);
+    setTenantDetailActiveTab(initialTab);
+    setJustCreatedTenantAlert(justCreatedNotice);
+    setGeneratedAdminPassword(initialPassword || null);
     try {
       const details = await api.getTenantDetails(t.id);
       setSelectedTenantDetails(details);
@@ -648,12 +713,15 @@ export default function SuperAdminConsole({
       const firstAdmin = details.admins && details.admins.length > 0 ? details.admins[0] : null;
       setTenantAdminForm({
         actor_id: firstAdmin ? firstAdmin.id : null,
-        display_name: firstAdmin ? firstAdmin.display_name : 'Şirket Yöneticisi',
+        display_name: firstAdmin ? firstAdmin.display_name : (newTenantForm.admin_name || 'Şirket Yöneticisi'),
         email: firstAdmin ? firstAdmin.email : (details.tenant.contact_email || ''),
-        phone: firstAdmin ? (firstAdmin.phone || '') : '',
+        phone: firstAdmin ? (firstAdmin.phone || '') : (details.tenant.phone || ''),
         address: firstAdmin ? (firstAdmin.address || '') : '',
-        new_password: ''
+        new_password: initialPassword || ''
       });
+      if (initialPassword) {
+        setGeneratedAdminPassword(initialPassword);
+      }
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Şirket detayları alınamadı: ' + err.message });
       setTenantDetailModalOpen(false);
@@ -713,6 +781,43 @@ export default function SuperAdminConsole({
     }
   };
 
+  // Müşterinin kartını pasife alma / aktife alma (Madde 4)
+  const handleToggleTenantStatus = async (t) => {
+    const isCurrentlyActive = t.is_active;
+    const confirmMsg = isCurrentlyActive
+      ? `'${t.name}' şirketinin kartını PASİFE almak istediğinize emin misiniz?\n\nPasife alındığında şirket yöneticisi ve kullanıcıları sisteme giriş yapamayacaktır.`
+      : `'${t.name}' şirketinin kartını tekrar AKTİFE almak istediğinize emin misiniz?\n\nAktife alındığında şirket kullanıcılarının sisteme erişimi açılacaktır.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setProcessingId('toggle-status-' + t.id);
+      const res = await api.toggleTenantStatus(t.id);
+      const newStatus = res.is_active;
+      setActionFeedback({
+        type: 'success',
+        text: `✓ ${res.message || `'${t.name}' şirket durumu başarıyla güncellendi.`}`
+      });
+      alert(`✓ İşlem Başarılı!\n\n${res.message || `'${t.name}' şirketi ${newStatus ? 'Aktif' : 'Pasif'} duruma getirildi.`}`);
+
+      // Eğer detay modalı bu şirket için açıksa formu da anında senkronize et
+      if (selectedTenantDetails?.tenant?.id === t.id) {
+        setTenantEditForm(prev => ({ ...prev, is_active: newStatus }));
+        setSelectedTenantDetails(prev => prev ? {
+          ...prev,
+          tenant: { ...prev.tenant, is_active: newStatus }
+        } : prev);
+      }
+
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Şirket durumu değiştirilemedi: ' + err.message });
+      alert(`⚠️ Hata Alındı!\n\nŞirket durumu değiştirilemedi: ${err.message || 'Bilinmeyen hata'}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   // Manuel Paket Süre Dolum Hatırlatıcı Gönder (Madde 14)
   const handleSendManualReminder = async (t) => {
     if (!window.confirm(`'${t.name}' şirketine (${t.contact_email}) paket kullanım süresi hatırlatıcı e-postası göndermek istiyor musunuz?`)) return;
@@ -720,9 +825,11 @@ export default function SuperAdminConsole({
       setProcessingId('reminder-' + t.id);
       const res = await api.sendManualReminder(t.id);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
+      alert(`✓ E-Posta Başarıyla Gönderildi!\n\n${res.message || `'${t.name}' şirketine hatırlatıcı e-postası başarıyla iletildi.`}`);
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Hatırlatıcı e-postası gönderilemedi: ' + err.message });
+      alert(`⚠️ E-Posta Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
     } finally {
       setProcessingId(null);
     }
@@ -749,9 +856,11 @@ export default function SuperAdminConsole({
       setProcessingId('sched-' + sched.id);
       const res = await api.triggerSchedule(sched.id);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
+      alert(`✓ Zamanlayıcı E-Postaları Başarıyla Gönderildi!\n\n${res.message || 'Zamanlayıcı kuralı başarıyla işletildi.'}`);
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Zamanlayıcı çalıştırılamadı: ' + err.message });
+      alert(`⚠️ Zamanlayıcı E-Postası Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
     } finally {
       setProcessingId(null);
     }
@@ -814,21 +923,31 @@ export default function SuperAdminConsole({
         activate_package: options.activate,
         send_welcome_email: options.sendEmail
       });
-      if (options.activate) {
-        setActionFeedback({
-          type: 'success',
-          text: `✓ '${newTenantForm.name}' kurumu başarıyla eklendi! 1 Yıllık paket süresi tanımlandı ve Hoş Geldiniz e-postası iletildi.`
-        });
+      const companyName = newTenantForm.name;
+      const tenantId = res.tenant_id;
+      const initialPassword = res.admin_password;
+
+      // Yeni müşteri modalını kapat ve listeleri tazele
+      setNewTenantModalOpen(false);
+      await loadAllData();
+
+      // Madde 1: Yeni Şirket Bilgileri kayıt edildikten sonra yönetici tanımlaması bölümü otomatik açılır!
+      if (tenantId) {
+        await handleOpenTenantDetails(
+          { id: tenantId, name: companyName },
+          'ADMIN', // Yönetici Tanımlama sekmesini doğrudan aç
+          `✓ '${companyName}' kurumu başarıyla kaydedildi! Şimdi bu şirketin Yönetici (Admin) bilgilerini tanımlayabilir, güçlü şifresini belirleyebilir veya kopyalayabilirsiniz.`,
+          initialPassword
+        );
       } else {
         setActionFeedback({
           type: 'success',
-          text: `✓ '${newTenantForm.name}' kurumu paketi başlatılmadan (onay bekleyen olarak) başarıyla kaydedildi.`
+          text: `✓ '${companyName}' kurumu başarıyla eklendi!`
         });
       }
-      setNewTenantModalOpen(false);
-      await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Müşteri ekleme hatası: ' + err.message });
+      alert(`⚠️ Müşteri Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -841,9 +960,11 @@ export default function SuperAdminConsole({
       setProcessingId('welcome-' + t.id);
       const res = await api.sendManualWelcome(t.id);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
+      alert(`✓ E-Posta Başarıyla Gönderildi!\n\n${res.message || `'${t.name}' şirketine kurumsal Hoş Geldiniz e-postası başarıyla iletildi.`}`);
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Hoş geldiniz e-postası gönderilemedi: ' + err.message });
+      alert(`⚠️ E-Posta Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1019,8 +1140,10 @@ export default function SuperAdminConsole({
       setProcessingId('test-mail-' + tmpl.id);
       const res = await api.testSendEmailTemplate(tmpl.id, { to_email: toEmail });
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
+      alert(`✓ Test E-Postası Başarıyla Gönderildi!\n\nAlıcı: ${toEmail}\n${res.message || 'E-posta SMTP üzerinden başarıyla iletildi.'}`);
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Test e-postası gönderilemedi: ' + err.message });
+      alert(`⚠️ Test E-Postası Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1094,11 +1217,13 @@ export default function SuperAdminConsole({
       setProcessingId('save-tenant-admin');
       const res = await api.updateTenantAdmin(selectedTenantDetails.tenant.id, tenantAdminForm);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
+      alert(`✓ Yönetici Bilgileri Kaydedildi!\n\n${res.message || 'Yönetici bilgileri ve erişim şifresi başarıyla güncellendi.'}`);
       setTenantAdminForm(prev => ({ ...prev, new_password: '' }));
       const refreshed = await api.getTenantDetails(selectedTenantDetails.tenant.id);
       setSelectedTenantDetails(refreshed);
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Yönetici güncelleme hatası: ' + err.message });
+      alert(`⚠️ Yönetici Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1803,17 +1928,37 @@ export default function SuperAdminConsole({
         </nav>
 
         {/* ALT AKSİYONLAR */}
-        <div className="super-admin-sidebar-footer">
-          {/* Resmi Web Sitesine Git (Yeni Pencerede Açılır - Madde 6) */}
-          <button
-            onClick={() => window.open('/', '_blank', 'noopener,noreferrer')}
+        <div className="super-admin-sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* RECDx Resmi Web Sitesi Butonu (Yeni Sekmede Açılır - Madde 6) */}
+          <a
+            href="https://www.recdx.com"
+            target="_blank"
+            rel="noopener noreferrer"
             className="super-admin-btn-secondary"
-            style={{ width: '100%', justifyContent: 'center' }}
-            title="Resmi Web Sitesini Yeni Pencerede Aç"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 7,
+              padding: '9px 12px',
+              borderRadius: 12,
+              fontSize: '0.785rem',
+              fontWeight: 700,
+              color: '#38bdf8',
+              background: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              textDecoration: 'none',
+              boxSizing: 'border-box',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            title="RECDx Resmi Web Sitesine Git (https://www.recdx.com - Yeni Sekmede Açılır)"
           >
-            <ExternalLink style={{ width: 14, height: 14 }} />
-            {!sidebarCollapsed && <span>Resmi Web Sitesine Git</span>}
-          </button>
+            <Globe style={{ width: 15, height: 15, color: '#38bdf8', flexShrink: 0 }} />
+            {!sidebarCollapsed && <span>www.recdx.com</span>}
+            {!sidebarCollapsed && <ExternalLink style={{ width: 12, height: 12, opacity: 0.8 }} />}
+          </a>
 
           <button
             onClick={onLogout}
@@ -2684,10 +2829,10 @@ export default function SuperAdminConsole({
                         background: tenantStatusFilter === 'APPROVED' ? 'rgba(16,185,129,0.3)' : 'transparent',
                         color: tenantStatusFilter === 'APPROVED' ? '#34d399' : '#94a3b8'
                       }}
-                      title="Onaylanmış Şirketleri Listele"
+                      title="Aktif Durumdaki Şirketleri Listele"
                     >
                       <CheckCircle2 style={{ width: 13, height: 13, color: '#34d399' }} />
-                      <span>Onaylananlar ({tenants.filter(t => t.is_active).length})</span>
+                      <span>Aktif ({tenants.filter(t => t.is_active).length})</span>
                     </button>
                     <button
                       onClick={() => setTenantStatusFilter('PENDING')}
@@ -2696,13 +2841,13 @@ export default function SuperAdminConsole({
                         padding: '5px 10px',
                         fontSize: '0.75rem',
                         border: 'none',
-                        background: tenantStatusFilter === 'PENDING' ? 'rgba(245,158,11,0.3)' : 'transparent',
-                        color: tenantStatusFilter === 'PENDING' ? '#fbbf24' : '#94a3b8'
+                        background: tenantStatusFilter === 'PENDING' ? 'rgba(239,68,68,0.25)' : 'transparent',
+                        color: tenantStatusFilter === 'PENDING' ? '#f87171' : '#94a3b8'
                       }}
-                      title="Onay Bekleyen Şirketleri Listele"
+                      title="Pasife Alınmış veya Onay Bekleyen Şirketleri Listele"
                     >
-                      <Clock style={{ width: 13, height: 13, color: '#fbbf24' }} />
-                      <span>Onay Bekleyenler ({tenants.filter(t => !t.is_active).length})</span>
+                      <PauseCircle style={{ width: 13, height: 13, color: '#f87171' }} />
+                      <span>Pasif / Bekleyen ({tenants.filter(t => !t.is_active).length})</span>
                     </button>
                   </div>
 
@@ -2783,16 +2928,16 @@ export default function SuperAdminConsole({
                                 display: 'flex', alignItems: 'center', gap: 4
                               }}>
                                 <CheckCircle2 style={{ width: 12, height: 12 }} />
-                                <span>ONAYLANDI</span>
+                                <span>AKTİF</span>
                               </span>
                             ) : (
                               <span style={{
                                 padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800,
-                                background: 'rgba(245,158,11,0.2)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)',
+                                background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)',
                                 display: 'flex', alignItems: 'center', gap: 4
                               }}>
-                                <Clock style={{ width: 12, height: 12 }} />
-                                <span>ONAY BEKLİYOR</span>
+                                <PauseCircle style={{ width: 12, height: 12 }} />
+                                <span>PASİF</span>
                               </span>
                             )}
                           </div>
@@ -2823,7 +2968,7 @@ export default function SuperAdminConsole({
                               <Calendar style={{ width: 13, height: 13, color: '#60a5fa' }} /> Kira Bitiş:
                             </span>
                             <span style={{ color: !t.is_active ? '#fbbf24' : (t.is_warning_3_months ? '#f87171' : '#cbd5e1'), fontWeight: 700 }}>
-                              {!t.is_active ? 'Onay Bekliyor' : (t.package_expiry_date ? new Date(t.package_expiry_date).toLocaleDateString('tr-TR') : '1 Yıl')}
+                              {!t.is_active ? 'Onay Bekliyor / Pasif' : (t.package_expiry_date ? new Date(t.package_expiry_date).toLocaleDateString('tr-TR') : '1 Yıl')}
                             </span>
                           </div>
                         </div>
@@ -2840,15 +2985,15 @@ export default function SuperAdminConsole({
                           </div>
                         )}
 
-                        {/* Başvuru Onay Bekliyor Banner */}
+                        {/* Başvuru Onay Bekliyor / Pasif Banner */}
                         {!t.is_active && (
                           <div style={{
                             marginTop: 10, padding: '7px 10px', borderRadius: 8,
-                            background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
-                            display: 'flex', alignItems: 'center', gap: 6, color: '#fbbf24', fontSize: '0.72rem', fontWeight: 700
+                            background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+                            display: 'flex', alignItems: 'center', gap: 6, color: '#fca5a5', fontSize: '0.72rem', fontWeight: 700
                           }}>
-                            <Clock style={{ width: 14, height: 14, color: '#fbbf24', flexShrink: 0 }} />
-                            <span>⏳ Başvuru Onay Bekliyor (Henüz Aktive Edilmedi)</span>
+                            <PauseCircle style={{ width: 14, height: 14, color: '#f87171', flexShrink: 0 }} />
+                            <span>⏸️ Şirket Kartı Pasif Durumda (Girişler Kapalı)</span>
                           </div>
                         )}
 
@@ -2869,7 +3014,7 @@ export default function SuperAdminConsole({
                         </div>
                       </div>
 
-                      {/* Kart Altı Aksiyon Butonları (Madde 10 & 14) */}
+                      {/* Kart Altı Aksiyon Butonları (Madde 10 & 14 & Madde 4) */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                         {!t.is_active && (
                           <button
@@ -2887,6 +3032,34 @@ export default function SuperAdminConsole({
                             <span>Hemen Onayla</span>
                           </button>
                         )}
+
+                        {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 4) */}
+                        <button
+                          onClick={() => handleToggleTenantStatus(t)}
+                          disabled={processingId === 'toggle-status-' + t.id}
+                          className="super-admin-btn-secondary"
+                          style={{
+                            padding: '6px 10px', fontSize: '0.75rem',
+                            color: t.is_active ? '#f87171' : '#34d399',
+                            borderColor: t.is_active ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.35)',
+                            background: t.is_active ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'
+                          }}
+                          title={t.is_active ? "Müşteri kartını pasife al (girişleri durdur)" : "Müşteri kartını aktife al (girişleri aç)"}
+                        >
+                          {processingId === 'toggle-status-' + t.id ? (
+                            <RefreshCw style={{ width: 13, height: 13 }} className="animate-spin" />
+                          ) : t.is_active ? (
+                            <>
+                              <PauseCircle style={{ width: 13, height: 13 }} />
+                              <span>Pasife Al</span>
+                            </>
+                          ) : (
+                            <>
+                              <PlayCircle style={{ width: 13, height: 13 }} />
+                              <span>Aktife Al</span>
+                            </>
+                          )}
+                        </button>
 
                         <button
                           onClick={() => handleOpenTenantDetails(t)}
@@ -2976,15 +3149,15 @@ export default function SuperAdminConsole({
                       ) : (
                         filteredTenants.map((t) => (
                           <tr key={t.id} style={t.is_warning_3_months ? { background: 'rgba(239,68,68,0.06)' } : {}}>
-                            {/* 1. Onay Durumu İkonu */}
+                            {/* 1. Onay & Aktiflik Durumu İkonu */}
                             <td>
                               {t.is_active ? (
                                 <span style={{ background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <CheckCircle2 style={{ width: 12, height: 12 }} /> Onaylandı
+                                  <CheckCircle2 style={{ width: 12, height: 12 }} /> Aktif
                                 </span>
                               ) : (
-                                <span style={{ background: 'rgba(245,158,11,0.2)', color: '#fbbf24', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Clock style={{ width: 12, height: 12 }} /> Onay Bekliyor
+                                <span style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <PauseCircle style={{ width: 12, height: 12 }} /> Pasif
                                 </span>
                               )}
                             </td>
@@ -3031,14 +3204,14 @@ export default function SuperAdminConsole({
 
                             {/* 9. Kira Bitiş Tarihi */}
                             <td style={{ fontSize: '0.75rem', fontWeight: 700, color: !t.is_active ? '#fbbf24' : (t.is_warning_3_months ? '#f87171' : '#fff') }}>
-                              {!t.is_active ? 'Onay Bekliyor' : (t.package_expiry_date ? new Date(t.package_expiry_date).toLocaleDateString('tr-TR') : '1 Yıl')}
+                              {!t.is_active ? 'Onay Bekliyor / Pasif' : (t.package_expiry_date ? new Date(t.package_expiry_date).toLocaleDateString('tr-TR') : '1 Yıl')}
                             </td>
 
                             {/* 10. 3 Ay Uyarısı */}
                             <td>
                               {!t.is_active ? (
-                                <span style={{ color: '#fbbf24', fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Clock style={{ width: 12, height: 12 }} /> Onay Bekliyor
+                                <span style={{ color: '#fca5a5', fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <PauseCircle style={{ width: 12, height: 12 }} /> Pasif Durumda
                                 </span>
                               ) : t.is_warning_3_months ? (
                                 <span style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -3073,6 +3246,35 @@ export default function SuperAdminConsole({
                                     <span>Onayla</span>
                                   </button>
                                 )}
+
+                                {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 4) */}
+                                <button
+                                  onClick={() => handleToggleTenantStatus(t)}
+                                  disabled={processingId === 'toggle-status-' + t.id}
+                                  className="super-admin-btn-secondary"
+                                  style={{
+                                    padding: '5px 8px',
+                                    fontSize: '0.72rem',
+                                    color: t.is_active ? '#f87171' : '#34d399',
+                                    borderColor: t.is_active ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.35)',
+                                    background: t.is_active ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'
+                                  }}
+                                  title={t.is_active ? "Müşteri kartını pasife al" : "Müşteri kartını aktife al"}
+                                >
+                                  {processingId === 'toggle-status-' + t.id ? (
+                                    <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" />
+                                  ) : t.is_active ? (
+                                    <>
+                                      <PauseCircle style={{ width: 12, height: 12 }} />
+                                      <span>Pasif</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PlayCircle style={{ width: 12, height: 12 }} />
+                                      <span>Aktif</span>
+                                    </>
+                                  )}
+                                </button>
 
                                 <button
                                   onClick={() => handleOpenTenantDetails(t)}
@@ -4449,29 +4651,177 @@ export default function SuperAdminConsole({
               </button>
             </div>
 
+            {/* Sekme Butonları: 1. Kurumsal Bilgiler | 2. Yönetici Tanımlaması */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setTenantDetailActiveTab('COMPANY')}
+                className="super-admin-btn-secondary"
+                style={{
+                  padding: '7px 14px',
+                  fontSize: '0.785rem',
+                  fontWeight: 700,
+                  background: tenantDetailActiveTab === 'COMPANY' ? '#7134e2' : 'rgba(255,255,255,0.05)',
+                  color: tenantDetailActiveTab === 'COMPANY' ? '#fff' : '#94a3b8',
+                  borderColor: tenantDetailActiveTab === 'COMPANY' ? '#7134e2' : 'rgba(255,255,255,0.1)'
+                }}
+              >
+                <Building2 style={{ width: 14, height: 14 }} />
+                <span>1. Kurumsal Bilgiler & Paket</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTenantDetailActiveTab('ADMIN')}
+                className="super-admin-btn-secondary"
+                style={{
+                  padding: '7px 14px',
+                  fontSize: '0.785rem',
+                  fontWeight: 700,
+                  background: tenantDetailActiveTab === 'ADMIN' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(255,255,255,0.05)',
+                  color: tenantDetailActiveTab === 'ADMIN' ? '#fff' : '#94a3b8',
+                  borderColor: tenantDetailActiveTab === 'ADMIN' ? '#10b981' : 'rgba(255,255,255,0.1)',
+                  boxShadow: tenantDetailActiveTab === 'ADMIN' ? '0 0 12px rgba(16,185,129,0.3)' : 'none'
+                }}
+              >
+                <User style={{ width: 14, height: 14 }} />
+                <span>2. Şirket Yöneticisi Tanımlaması</span>
+                {justCreatedTenantAlert && (
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: '#34d399', display: 'inline-block' }} />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTenantDetailActiveTab('ALL')}
+                className="super-admin-btn-secondary"
+                style={{
+                  padding: '7px 12px',
+                  fontSize: '0.725rem',
+                  marginLeft: 'auto',
+                  background: tenantDetailActiveTab === 'ALL' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  color: tenantDetailActiveTab === 'ALL' ? '#fff' : '#64748b',
+                  border: 'none'
+                }}
+                title="Tüm Bölümleri Alt Alta Göster"
+              >
+                <span>Tümünü Göster</span>
+              </button>
+            </div>
+
+            {justCreatedTenantAlert && (
+              <div style={{
+                marginTop: 12,
+                padding: '10px 14px',
+                borderRadius: 10,
+                background: 'rgba(16,185,129,0.15)',
+                border: '1px solid rgba(16,185,129,0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                color: '#6ee7b7',
+                fontSize: '0.785rem',
+                fontWeight: 700
+              }}>
+                <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399', flexShrink: 0 }} />
+                <span>{justCreatedTenantAlert}</span>
+              </div>
+            )}
+
             {tenantDetailLoading ? (
               <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Yükleniyor...</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16 }}>
                 
                 {/* 1. Şirket Bilgileri */}
+                {(tenantDetailActiveTab === 'COMPANY' || tenantDetailActiveTab === 'ALL') && (
                 <form onSubmit={handleSaveTenantDetails} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase' }}>
-                      1. Kurumsal Bilgiler & Onay
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase' }}>
+                        1. Kurumsal Bilgiler & Durum:
+                      </span>
+                      {tenantEditForm.is_active ? (
+                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <CheckCircle2 style={{ width: 11, height: 11 }} /> AKTİF
+                        </span>
+                      ) : (
+                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <PauseCircle style={{ width: 11, height: 11 }} /> PASİF
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {/* Pasife Al / Aktife Al Butonu (Madde 4) */}
+                      {selectedTenantDetails?.tenant && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTenantStatus(selectedTenantDetails.tenant)}
+                          disabled={processingId === 'toggle-status-' + selectedTenantDetails.tenant.id}
+                          className="super-admin-btn-secondary"
+                          style={{
+                            fontSize: '0.725rem',
+                            padding: '5px 12px',
+                            color: tenantEditForm.is_active ? '#f87171' : '#34d399',
+                            borderColor: tenantEditForm.is_active ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)',
+                            background: tenantEditForm.is_active ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)'
+                          }}
+                          title={tenantEditForm.is_active ? "Müşteri kartını pasife al" : "Müşteri kartını aktife al"}
+                        >
+                          {processingId === 'toggle-status-' + selectedTenantDetails.tenant.id ? (
+                            <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" />
+                          ) : tenantEditForm.is_active ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <PauseCircle style={{ width: 12, height: 12 }} />
+                              <span>Kartı Pasife Al</span>
+                            </span>
+                          ) : (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <PlayCircle style={{ width: 12, height: 12 }} />
+                              <span>Kartı Aktife Al</span>
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {!tenantEditForm.is_active && (
+                        <button
+                          type="button"
+                          onClick={handleApproveTenantInModal}
+                          disabled={processingId === 'approve-tenant'}
+                          className="super-admin-btn-corporate"
+                          style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', fontSize: '0.725rem', padding: '5px 10px' }}
+                        >
+                          <CheckCircle2 style={{ width: 13, height: 13 }} />
+                          <span>Şirketi Onayla & 1 Yıl Başlat</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Müşteri Kartı Aktiflik Durumu Checkbox Kontrolü (Madde 4) */}
+                  <div style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    background: tenantEditForm.is_active ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)',
+                    border: `1px solid ${tenantEditForm.is_active ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: tenantEditForm.is_active ? '#6ee7b7' : '#fca5a5' }}>
+                      <input
+                        type="checkbox"
+                        checked={tenantEditForm.is_active}
+                        onChange={(e) => setTenantEditForm({ ...tenantEditForm, is_active: e.target.checked })}
+                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#10b981' }}
+                      />
+                      <span>Müşteri Kartı Aktif Durumda (İşaret kaldırılırsa müşteri ve tüm kullanıcıları pasife alınır)</span>
+                    </label>
+                    <span style={{ fontSize: '0.7rem', color: tenantEditForm.is_active ? '#34d399' : '#f87171', fontWeight: 800 }}>
+                      {tenantEditForm.is_active ? '● Aktif' : '○ Pasif'}
                     </span>
-                    {!tenantEditForm.is_active && (
-                      <button
-                        type="button"
-                        onClick={handleApproveTenantInModal}
-                        disabled={processingId === 'approve-tenant'}
-                        className="super-admin-btn-corporate"
-                        style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', fontSize: '0.725rem', padding: '5px 10px' }}
-                      >
-                        <CheckCircle2 style={{ width: 13, height: 13 }} />
-                        <span>Şirketi Onayla & Aktif Et</span>
-                      </button>
-                    )}
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10 }}>
@@ -4722,7 +5072,7 @@ export default function SuperAdminConsole({
                     />
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       onClick={() => setTenantDetailModalOpen(false)}
@@ -4752,31 +5102,70 @@ export default function SuperAdminConsole({
                       )}
                       <span>Şirket Bilgilerini Kaydet</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setTenantDetailActiveTab('ADMIN')}
+                      className="super-admin-btn-corporate"
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        boxShadow: '0 0 12px rgba(16, 185, 129, 0.3)',
+                        fontWeight: 800,
+                        padding: '8px 16px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}
+                      title="Yönetici (Admin) tanımlama bölümüne geç"
+                    >
+                      <User style={{ width: 14, height: 14 }} />
+                      <span>Yönetici Tanımlamasına Geç →</span>
+                    </button>
                   </div>
                 </form>
+                )}
 
                 {/* 2. Şirket Admin Kullanıcısı & Güçlü Şifre */}
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {(tenantDetailActiveTab === 'ADMIN' || tenantDetailActiveTab === 'ALL') && (
+                <div style={{
+                  borderTop: tenantDetailActiveTab === 'ALL' ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                  paddingTop: tenantDetailActiveTab === 'ALL' ? 16 : 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: '0.785rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
-                        2. Şirket Admin Kullanıcı Bilgileri
+                      <div style={{ fontSize: '0.825rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <User style={{ width: 15, height: 15 }} />
+                        <span>2. Şirket Admin Kullanıcı Tanımlaması</span>
                       </div>
                       <div style={{ fontSize: '0.725rem', color: '#94a3b8' }}>
-                        Şirket Admin rolündeki kullanıcının bilgileri ve şifresi.
+                        Şirketin sisteme ilk giriş yapacak yöneticisinin (Admin) kullanıcı bilgileri ve şifresi.
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleGenerateTenantPassword}
-                      disabled={processingId === 'gen-pass'}
-                      className="super-admin-btn-corporate"
-                      style={{ background: 'linear-gradient(135deg, #1261cd 0%, #146ceb 100%)', fontSize: '0.725rem' }}
-                    >
-                      <Lock style={{ width: 13, height: 13 }} />
-                      <span>Güçlü Şifre Oluştur</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {tenantDetailActiveTab === 'ADMIN' && (
+                        <button
+                          type="button"
+                          onClick={() => setTenantDetailActiveTab('COMPANY')}
+                          className="super-admin-btn-secondary"
+                          style={{ fontSize: '0.725rem', padding: '6px 12px' }}
+                        >
+                          ← Şirket Bilgilerine Dön
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleGenerateTenantPassword}
+                        disabled={processingId === 'gen-pass'}
+                        className="super-admin-btn-corporate"
+                        style={{ background: 'linear-gradient(135deg, #1261cd 0%, #146ceb 100%)', fontSize: '0.725rem' }}
+                      >
+                        <Lock style={{ width: 13, height: 13 }} />
+                        <span>Güçlü Şifre Oluştur</span>
+                      </button>
+                    </div>
                   </div>
 
                   {generatedAdminPassword && (
@@ -4845,13 +5234,39 @@ export default function SuperAdminConsole({
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                      <button type="submit" disabled={processingId === 'save-tenant-admin'} className="super-admin-btn-corporate">
-                        Yönetici Bilgilerini Kaydet
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => setTenantDetailModalOpen(false)}
+                        className="super-admin-btn-secondary"
+                      >
+                        Kapat
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={processingId === 'save-tenant-admin'}
+                        className="super-admin-btn-corporate"
+                        style={{
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          boxShadow: '0 0 12px rgba(16,185,129,0.3)',
+                          fontWeight: 800,
+                          padding: '8px 18px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        {processingId === 'save-tenant-admin' ? (
+                          <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" />
+                        ) : (
+                          <Save style={{ width: 14, height: 14 }} />
+                        )}
+                        <span>Yönetici Bilgilerini Kaydet</span>
                       </button>
                     </div>
                   </form>
                 </div>
+                )}
 
               </div>
             )}
@@ -5718,7 +6133,7 @@ export default function SuperAdminConsole({
                   Vazgeç
                 </button>
 
-                {/* 1. SADECE KAYDET (Paketi onaylamadan kaydeder) */}
+                {/* 1. SADECE KAYDET & YÖNETİCİ TANIMLA */}
                 <button
                   type="button"
                   onClick={(e) => handleSaveNewTenant(e, { activate: false, sendEmail: false })}
@@ -5730,23 +6145,23 @@ export default function SuperAdminConsole({
                     color: '#e2e8f0',
                     fontWeight: 700
                   }}
-                  title="Paketi onaylamadan ve başlatmadan taslak / onay bekleyen olarak kaydeder"
+                  title="Şirket bilgilerini kaydeder ve ardından doğrudan Yönetici Tanımlama ekranını açar"
                 >
                   {processingId === 'create-new-tenant-draft' ? <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" /> : <Save style={{ width: 14, height: 14 }} />}
-                  <span>Sadece Kaydet (Onaylamadan)</span>
+                  <span>Şirketi Kaydet & Yönetici Tanımla</span>
                 </button>
 
-                {/* 2. MÜŞTERİYİ KAYDET, PAKETİ BAŞLAT & HOŞ GELDİN MAİLİ GÖNDER */}
+                {/* 2. MÜŞTERİYİ KAYDET, PAKETİ BAŞLAT & YÖNETİCİ TANIMLAMAYA GEÇ */}
                 <button
                   type="button"
                   onClick={(e) => handleSaveNewTenant(e, { activate: true, sendEmail: true })}
                   disabled={!!processingId}
                   className="super-admin-btn-corporate"
                   style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', fontWeight: 800 }}
-                  title="Müşteriyi kaydeder, 1 yıllık paketi aktif eder ve Hoş Geldiniz maili gönderir"
+                  title="Müşteriyi kaydeder, 1 yıllık paketi aktif eder ve doğrudan Yönetici Tanımlama ekranına geçer"
                 >
                   {processingId === 'create-new-tenant-activate' ? <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" /> : <CheckCircle2 style={{ width: 14, height: 14 }} />}
-                  <span>Müşteriyi Kaydet, Paketi Başlat & Hoş Geldin Maili Gönder</span>
+                  <span>Şirketi Kaydet, Paketi Başlat & Yönetici Tanımlamaya Geç →</span>
                 </button>
               </div>
             </form>
@@ -6034,14 +6449,132 @@ export default function SuperAdminConsole({
 
                           {/* Blok İçerik Inputları */}
                           {block.type === 'HEADER' && (
-                            <input
-                              type="text"
-                              value={block.subtitle || ''}
-                              onChange={(e) => handleUpdateBlockField(block.id, 'subtitle', e.target.value)}
-                              placeholder="Alt başlık / slogan..."
-                              className="super-admin-input"
-                              style={{ fontSize: '0.75rem', padding: '5px 8px' }}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <input
+                                type="text"
+                                value={block.subtitle || ''}
+                                onChange={(e) => handleUpdateBlockField(block.id, 'subtitle', e.target.value)}
+                                placeholder="Alt başlık / slogan..."
+                                className="super-admin-input"
+                                style={{ fontSize: '0.75rem', padding: '5px 8px' }}
+                              />
+
+                              {/* Logo Seçim Dialogu (Madde 1) */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <input
+                                  type="file"
+                                  id={`logo-upload-${block.id}`}
+                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                                  style={{ display: 'none' }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.size > 3 * 1024 * 1024) {
+                                        alert("Logo dosya boyutu 3MB'tan küçük olmalıdır.");
+                                        return;
+                                      }
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => {
+                                        handleUpdateBlockField(block.id, 'logoUrl', ev.target.result);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`logo-upload-${block.id}`}
+                                  className="super-admin-btn-secondary"
+                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  title="Dosya Seçici Penceresi: PNG, JPG, SVG logo dosyası yükleyin"
+                                >
+                                  <ImageIcon style={{ width: 13, height: 13 }} />
+                                  <span>{block.logoUrl ? '🖼️ Logoyu Değiştir (PNG, JPG)' : '📁 Logo Dosyası Seç (PNG, JPG)'}</span>
+                                </label>
+
+                                {block.logoUrl ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                                    <div style={{ height: 26, maxWidth: 90, background: '#ffffff', borderRadius: 4, padding: '2px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <img
+                                        src={block.logoUrl}
+                                        alt="Seçilen Logo"
+                                        style={{ maxHeight: 22, maxWidth: 80, objectFit: 'contain' }}
+                                      />
+                                    </div>
+                                    <span style={{ fontSize: '0.68rem', color: '#34d399', fontWeight: 700 }}>✓ Logo Yüklendi</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateBlockField(block.id, 'logoUrl', '')}
+                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                      title="Logoyu kaldırıp varsayılan RECOrion başlığına dön"
+                                    >
+                                      Kaldır ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Varsayılan RECOrion logosu devrede</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {block.type === 'IMAGE' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <input
+                                  type="file"
+                                  id={`img-upload-${block.id}`}
+                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                                  style={{ display: 'none' }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.size > 4 * 1024 * 1024) {
+                                        alert("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
+                                        return;
+                                      }
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => {
+                                        handleUpdateBlockField(block.id, 'imageUrl', ev.target.result);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`img-upload-${block.id}`}
+                                  className="super-admin-btn-secondary"
+                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  title="PNG, JPG görsel seçin"
+                                >
+                                  <ImageIcon style={{ width: 13, height: 13 }} />
+                                  <span>{block.imageUrl ? '🖼️ Görseli Değiştir' : '📁 Görsel Dosyası Seç (PNG, JPG)'}</span>
+                                </label>
+
+                                {block.imageUrl && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                                    <img
+                                      src={block.imageUrl}
+                                      alt="Önizleme"
+                                      style={{ height: 26, maxWidth: 60, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
+                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                    >
+                                      Kaldır ✕
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <input
+                                type="text"
+                                value={block.caption || ''}
+                                onChange={(e) => handleUpdateBlockField(block.id, 'caption', e.target.value)}
+                                placeholder="Görsel alt yazısı / açıklama..."
+                                className="super-admin-input"
+                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
+                              />
+                            </div>
                           )}
                           {block.type === 'GREETING' && (
                             <input

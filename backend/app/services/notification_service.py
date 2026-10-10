@@ -15,6 +15,7 @@ class NotificationService:
     """
     RECOrion Satın Alma & Kiralama Talepleri İçin Profesyonel E-Posta Bildirim Servisi.
     """
+    ADMIN_NOTIFICATION_EMAIL = os.getenv("ADMIN_NOTIFICATION_EMAIL", "info@recdx.com")
 
     @classmethod
     def get_smtp_config(cls) -> Dict[str, Any]:

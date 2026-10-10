@@ -1748,4 +1748,377 @@ option:hover {
   position: relative;
 }
 
+/* ======================================================== */
+/* 3D MODERN PAKET SATIN ALMA / KİRALAMA WIZARD MODALI      */
+/* ======================================================== */
+
+.purchase-modal-backdrop-3d {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 18, 0.88);
+  backdrop-filter: blur(14px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.purchase-modal-card-3d {
+  background: linear-gradient(180deg, #11172a 0%, #0a0e1c 100%);
+  border: 1px solid rgba(113, 52, 226, 0.45);
+  border-radius: 24px;
+  width: 100%;
+  max-width: 860px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 
+    0 30px 80px rgba(0, 0, 0, 0.85),
+    0 0 50px rgba(113, 52, 226, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  position: relative;
+}
+
+.purchase-modal-header-3d {
+  padding: 20px 26px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.purchase-modal-header-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  letter-spacing: -0.01em;
+}
+
+.purchase-plan-badge-3d {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(113, 52, 226, 0.3) 0%, rgba(56, 189, 248, 0.25) 100%);
+  border: 1px solid rgba(113, 52, 226, 0.5);
+  color: #e2e8f0;
+  font-size: 0.775rem;
+  font-weight: 700;
+  box-shadow: 0 0 14px rgba(113, 52, 226, 0.35);
+}
+
+.purchase-price-tag-3d {
+  font-family: 'Outfit', sans-serif, system-ui;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #38bdf8;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+.purchase-btn-close-3d {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.purchase-btn-close-3d:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  transform: rotate(90deg);
+}
+
+/* 3D Stepper İlerleme Çubuğu */
+.purchase-stepper-3d {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 26px;
+  background: rgba(10, 14, 28, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 8px;
+}
+
+.stepper-step-pill-3d {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.stepper-step-pill-3d.active {
+  background: linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.2) 100%);
+  border-color: rgba(113, 52, 226, 0.6);
+  box-shadow: 0 0 20px rgba(113, 52, 226, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.stepper-step-pill-3d.completed {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.stepper-circle-3d {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.stepper-step-pill-3d.active .stepper-circle-3d {
+  background: linear-gradient(135deg, #7134e2 0%, #146ceb 100%);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(113, 52, 226, 0.6);
+}
+
+.stepper-step-pill-3d.completed .stepper-circle-3d {
+  background: #10b981;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.stepper-title-3d {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stepper-step-num {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.05em;
+}
+
+.stepper-step-pill-3d.active .stepper-step-num {
+  color: #38bdf8;
+}
+
+.stepper-step-name {
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stepper-step-pill-3d.active .stepper-step-name {
+  color: #fff;
+}
+
+/* 3D Form Gövdesi */
+.purchase-form-scroll-3d {
+  padding: 22px 26px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.purchase-section-card-3d {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.purchase-section-title-3d {
+  font-size: 0.825rem;
+  font-weight: 800;
+  color: #a78bfa;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.03em;
+}
+
+/* 3D Inputs */
+.purchase-input-field-3d {
+  width: 100%;
+  background: linear-gradient(180deg, #070b16 0%, #0b1122 100%);
+  border: 1px solid rgba(113, 52, 226, 0.32);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 0.85rem;
+  color: #fff;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.purchase-input-field-3d:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(56, 189, 248, 0.25), 0 4px 16px rgba(113, 52, 226, 0.3);
+}
+
+.purchase-label-3d {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin-bottom: 5px;
+}
+
+/* 3D Butonlar */
+.purchase-btn-next-3d {
+  background: linear-gradient(135deg, #7134e2 0%, #314ccd 50%, #146ceb 100%);
+  color: white;
+  font-weight: 800;
+  font-size: 0.875rem;
+  padding: 11px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 0 #1b2668, 0 8px 22px rgba(113, 52, 226, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.purchase-btn-next-3d:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #1b2668, 0 12px 26px rgba(113, 52, 226, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.purchase-btn-next-3d:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #1b2668, 0 4px 10px rgba(113, 52, 226, 0.3);
+}
+
+.purchase-btn-back-3d {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-weight: 700;
+  font-size: 0.825rem;
+  padding: 10px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.18s ease;
+}
+
+.purchase-btn-back-3d:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* 3D Footer */
+.purchase-footer-3d {
+  padding: 16px 26px;
+  background: rgba(8, 12, 24, 0.85);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 3D Popüler NACE Önayarları */
+.nace-preset-btn-3d {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.nace-preset-btn-3d:hover {
+  background: rgba(113, 52, 226, 0.2);
+  border-color: rgba(113, 52, 226, 0.5);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.nace-chip-3d {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(113, 52, 226, 0.15) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 999px;
+  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.nace-chip-remove-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.nace-chip-remove-btn:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+
 

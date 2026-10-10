@@ -1,6 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import AdminLeadsModal from './AdminLeadsModal';
+import { 
+  Building2, 
+  Hash, 
+  Landmark, 
+  Mail, 
+  Phone, 
+  Globe, 
+  MapPin, 
+  User, 
+  Lock, 
+  Sparkles, 
+  CheckCircle2, 
+  ChevronRight, 
+  ChevronLeft, 
+  ArrowRight, 
+  X, 
+  Copy, 
+  Check, 
+  RefreshCw, 
+  ShieldCheck, 
+  Zap, 
+  Layers, 
+  AlertCircle, 
+  Package, 
+  Eye, 
+  EyeOff,
+  Search,
+  KeyRound
+} from 'lucide-react';
 
 export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogout }) {
   const [plans, setPlans] = useState([]);
@@ -12,7 +41,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [step, setStep] = useState(1); // 1: Şirket Bilgileri, 2: NACE Kodları, 3: Yetkili/Şifre, 4: Başarı & Manifesto
   
-  // Form Bilgileri
+  // Form Bilgileri (Süper Admin Tanımı ile Birebir Eşleşen)
   const [companyName, setCompanyName] = useState('');
   const [taxId, setTaxId] = useState('');
   const [taxOffice, setTaxOffice] = useState('');
@@ -22,6 +51,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(null);
   
   // NACE Arama ve Seçim State'leri
   const [naceQuery, setNaceQuery] = useState('');
@@ -40,6 +71,44 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const POPULAR_NACE_PRESETS = [
+    { title: '💻 Bilişim & Yazılım', code: '620101', name: 'Bilgisayar Programlama Faaliyetleri' },
+    { title: '🛡️ Savunma & Havacılık', code: '303001', name: 'Hava ve Uzay Araçları İmalatı' },
+    { title: '📊 Yönetim Danışmanlığı', code: '702202', name: 'İşletme ve İdari Danışmanlık' },
+    { title: '🏦 Finans & Sigorta', code: '641901', name: 'Parasal Aracı Kurumlar' },
+    { title: '🏭 Sanayi & İmalat', code: '289901', name: 'Özel Amaçlı Makine İmalatı' },
+    { title: '🛒 E-Ticaret & Perakende', code: '479101', name: 'İnternet Üzerinden Perakende Ticaret' }
+  ];
+
+  const handleGenerateStrongPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+    let newPass = '';
+    for (let i = 0; i < 14; i++) {
+      newPass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setPassword(newPass);
+    copyToClipboard(newPass, 'wizardpass');
+  };
+
+  const copyToClipboard = (text, key) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  // ESC Tuşu ile Modal Kapatma
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        if (isPurchaseModalOpen) setIsPurchaseModalOpen(false);
+        if (isLoginModalOpen) setIsLoginModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPurchaseModalOpen, isLoginModalOpen]);
 
   // 1. Paketleri Backend'den Yükle
   useEffect(() => {
@@ -305,107 +374,290 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         )}
       </section>
 
-      {/* SATIN ALMA / KİRALAMA WIZARD MODALI */}
+      {/* ======================================================== */}
+      {/* 3D MODERN PAKET SATIN ALMA / KİRALAMA WIZARD MODALI      */}
+      {/* ======================================================== */}
       {isPurchaseModalOpen && selectedPlan && (
-        <div className="modal-backdrop">
-          <div className="purchase-modal-card">
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">
-                  {selectedPlan.name} Kiralama Başvurusu
-                </h3>
-                <span className="modal-subtitle">
-                  {Number(selectedPlan.monthly_price).toLocaleString('tr-TR')} ₺/Ay — Adım {step} / 3
-                </span>
+        <div className="purchase-modal-backdrop-3d">
+          <div className="purchase-modal-card-3d">
+            {/* 3D Modal Başlığı */}
+            <div className="purchase-modal-header-3d">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                <div style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #7134e2 0%, #146ceb 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 16px rgba(113, 52, 226, 0.5)',
+                  border: '1px solid rgba(255,255,255,0.2)'
+                }}>
+                  <Package style={{ width: 22, height: 22, color: '#fff' }} />
+                </div>
+                <div>
+                  <h3 className="purchase-modal-header-title">
+                    <span>{selectedPlan.name} Kiralama Başvurusu</span>
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+                    <span className="purchase-plan-badge-3d">
+                      <Sparkles style={{ width: 12, height: 12, color: '#38bdf8' }} />
+                      <span>Kurumsal Bulut Paket</span>
+                    </span>
+                    <span className="purchase-price-tag-3d">
+                      {Number(selectedPlan.monthly_price).toLocaleString('tr-TR')} ₺ / Ay
+                    </span>
+                  </div>
+                </div>
               </div>
-              <button className="btn-close" onClick={() => setIsPurchaseModalOpen(false)}>✕</button>
+
+              <button 
+                type="button" 
+                className="purchase-btn-close-3d" 
+                onClick={() => setIsPurchaseModalOpen(false)}
+                title="Kapat (ESC)"
+              >
+                <X style={{ width: 18, height: 18 }} />
+              </button>
             </div>
 
+            {/* 3D Adım Çubuğu (Stepper) */}
+            <div className="purchase-stepper-3d">
+              <div 
+                className={`stepper-step-pill-3d ${step === 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}
+                onClick={() => setStep(1)}
+              >
+                <div className="stepper-circle-3d">
+                  {step > 1 ? <Check style={{ width: 14, height: 14 }} /> : 1}
+                </div>
+                <div className="stepper-title-3d">
+                  <span className="stepper-step-num">Adım 1</span>
+                  <span className="stepper-step-name">1. Kurumsal Bilgiler</span>
+                </div>
+              </div>
+
+              <div 
+                className={`stepper-step-pill-3d ${step === 2 ? 'active' : ''} ${step > 2 ? 'completed' : ''}`}
+                onClick={() => {
+                  if (companyName.trim()) setStep(2);
+                }}
+              >
+                <div className="stepper-circle-3d">
+                  {step > 2 ? <Check style={{ width: 14, height: 14 }} /> : 2}
+                </div>
+                <div className="stepper-title-3d">
+                  <span className="stepper-step-num">Adım 2</span>
+                  <span className="stepper-step-name">2. NACE Faaliyetleri</span>
+                </div>
+              </div>
+
+              <div 
+                className={`stepper-step-pill-3d ${step === 3 ? 'active' : ''} ${step > 3 ? 'completed' : ''}`}
+                onClick={() => {
+                  if (companyName.trim() && selectedNaces.length > 0) setStep(3);
+                }}
+              >
+                <div className="stepper-circle-3d">
+                  {step > 3 ? <Check style={{ width: 14, height: 14 }} /> : 3}
+                </div>
+                <div className="stepper-title-3d">
+                  <span className="stepper-step-num">Adım 3</span>
+                  <span className="stepper-step-name">3. Yönetici & Güvenlik</span>
+                </div>
+              </div>
+
+              <div className={`stepper-step-pill-3d ${step === 4 ? 'active' : ''}`}>
+                <div className="stepper-circle-3d">
+                  {step === 4 ? '🎉' : 4}
+                </div>
+                <div className="stepper-title-3d">
+                  <span className="stepper-step-num">Adım 4</span>
+                  <span className="stepper-step-name">4. Onay & AI Manifesto</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Hata Bildirimi */}
             {errorMessage && (
-              <div className="alert-error-box">
-                ⚠️ {errorMessage}
+              <div style={{
+                margin: '14px 26px 0 26px',
+                padding: '12px 16px',
+                borderRadius: 12,
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5',
+                fontSize: '0.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <AlertCircle style={{ width: 16, height: 16, color: '#f87171', flexShrink: 0 }} />
+                <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* ADIM 1: ŞİRKET BİLGİLERİ */}
+            {/* ADIM 1: ŞİRKET VE İLETİŞİM BİLGİLERİ */}
             {step === 1 && (
-              <form onSubmit={(e) => { e.preventDefault(); setStep(2); }} className="wizard-form-body">
-                <h4 className="form-step-title">1. Şirket ve İletişim Bilgileri</h4>
-                <div className="form-group">
-                  <label>Şirket Ünvanı *</label>
-                  <input 
-                    id="input-company-name"
-                    type="text" 
-                    required 
-                    placeholder="Örn: Atlas Teknoloji ve Bilişim A.Ş." 
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                  />
-                </div>
+              <form 
+                onSubmit={(e) => { 
+                  e.preventDefault(); 
+                  if (!companyName.trim()) {
+                    setErrorMessage('Lütfen şirket ünvanını giriniz.');
+                    return;
+                  }
+                  if (!phone.trim()) {
+                    setErrorMessage('Lütfen iletişim telefon numarasını giriniz.');
+                    return;
+                  }
+                  setErrorMessage('');
+                  setStep(2); 
+                }} 
+                style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}
+              >
+                <div className="purchase-form-scroll-3d">
+                  <div className="purchase-section-card-3d">
+                    <div className="purchase-section-title-3d">
+                      <Building2 style={{ width: 15, height: 15, color: '#38bdf8' }} />
+                      <span>Kurumsal Kimlik ve Vergi Bilgileri</span>
+                    </div>
 
-                <div className="form-row-2">
-                  <div className="form-group">
-                    <label>Telefon Numarası *</label>
-                    <input 
-                      id="input-phone"
-                      type="tel" 
-                      required 
-                      placeholder="+90 532 ..." 
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label className="purchase-label-3d">
+                          <Building2 style={{ width: 13, height: 13, color: '#38bdf8' }} />
+                          <span>Şirket Ünvanı *</span>
+                        </label>
+                        <input 
+                          id="input-company-name"
+                          type="text" 
+                          required 
+                          placeholder="Örn: Atlas Teknoloji ve Bilişim A.Ş." 
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="purchase-label-3d">
+                          <Hash style={{ width: 13, height: 13, color: '#a78bfa' }} />
+                          <span>Vergi Kimlik No (VKN / TCKN) *</span>
+                        </label>
+                        <input 
+                          id="input-tax-id"
+                          type="text" 
+                          required
+                          placeholder="10 veya 11 Haneli Vergi No" 
+                          value={taxId}
+                          onChange={(e) => setTaxId(e.target.value)}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="purchase-label-3d">
+                          <Landmark style={{ width: 13, height: 13, color: '#34d399' }} />
+                          <span>Vergi Dairesi</span>
+                        </label>
+                        <input 
+                          id="input-tax-office"
+                          type="text" 
+                          placeholder="Örn: Maslak V.D. / Kadıköy V.D." 
+                          value={taxOffice}
+                          onChange={(e) => setTaxOffice(e.target.value)}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Vergi Dairesi</label>
-                    <input 
-                      id="input-tax-office"
-                      type="text" 
-                      placeholder="Örn: Kadıköy V.D." 
-                      value={taxOffice}
-                      onChange={(e) => setTaxOffice(e.target.value)}
-                    />
+
+                  <div className="purchase-section-card-3d">
+                    <div className="purchase-section-title-3d">
+                      <Phone style={{ width: 15, height: 15, color: '#fbbf24' }} />
+                      <span>İletişim ve Resmi Adres</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label className="purchase-label-3d">
+                          <Mail style={{ width: 13, height: 13, color: '#f43f5e' }} />
+                          <span>Kurumsal İletişim E-Posta *</span>
+                        </label>
+                        <input 
+                          id="input-corporate-email"
+                          type="email" 
+                          required 
+                          placeholder="info@sirketiniz.com" 
+                          value={contactEmail}
+                          onChange={(e) => {
+                            setContactEmail(e.target.value);
+                          }}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="purchase-label-3d">
+                          <Phone style={{ width: 13, height: 13, color: '#fbbf24' }} />
+                          <span>Telefon Numarası *</span>
+                        </label>
+                        <input 
+                          id="input-phone"
+                          type="tel" 
+                          required 
+                          placeholder="+90 532 000 00 00" 
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="purchase-label-3d">
+                          <Globe style={{ width: 13, height: 13, color: '#60a5fa' }} />
+                          <span>Web Sitesi</span>
+                        </label>
+                        <input 
+                          id="input-website"
+                          type="url" 
+                          placeholder="https://sirketiniz.com" 
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="purchase-label-3d">
+                        <MapPin style={{ width: 13, height: 13, color: '#c084fc' }} />
+                        <span>Şirket Resmi Adresi</span>
+                      </label>
+                      <textarea 
+                        id="input-address"
+                        rows={2} 
+                        placeholder="Şirket genel merkez adresi..." 
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="purchase-input-field-3d"
+                        style={{ resize: 'vertical' }}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label>Vergi Numarası (VKN / TCKN)</label>
-                  <input 
-                    id="input-tax-id"
-                    type="text" 
-                    placeholder="10 veya 11 Haneli Vergi No" 
-                    value={taxId}
-                    onChange={(e) => setTaxId(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Web Sitesi</label>
-                  <input 
-                    id="input-website"
-                    type="url" 
-                    placeholder="https://..." 
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Şirket Adresi</label>
-                  <textarea 
-                    id="input-address"
-                    rows={2} 
-                    placeholder="Şirket merkezi adresi..." 
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                  />
-                </div>
-
-                <div className="wizard-footer">
-                  <button type="button" className="btn-secondary" onClick={() => setIsPurchaseModalOpen(false)}>
-                    İptal
+                <div className="purchase-footer-3d">
+                  <button 
+                    type="button" 
+                    className="purchase-btn-back-3d" 
+                    onClick={() => setIsPurchaseModalOpen(false)}
+                  >
+                    Vazgeç / İptal
                   </button>
-                  <button id="btn-step1-next" type="submit" className="btn-primary">
-                    Devam Et: NACE Faaliyet Seçimi →
+                  <button id="btn-step1-next" type="submit" className="purchase-btn-next-3d">
+                    <span>Devam Et: NACE Faaliyet Seçimi</span>
+                    <ArrowRight style={{ width: 16, height: 16 }} />
                   </button>
                 </div>
               </form>
@@ -413,71 +665,170 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
             {/* ADIM 2: NACE FAALİYET ALANLARI */}
             {step === 2 && (
-              <div className="wizard-form-body">
-                <h4 className="form-step-title">2. NACE Faaliyet Alanları Seçimi</h4>
-                <p className="step-hint">
-                  Şirketinizin faaliyet alanını seçin. RECOrion, bu kodlara göre şirketinize özel 
-                  <b> Yapay Zeka Operasyon Manifestosu</b> oluşturacaktır.
-                </p>
-
-                <div className="form-group">
-                  <label>NACE Kodu veya Faaliyet Adı ile Ara (2.164 Kod)</label>
-                  <input 
-                    id="input-nace-search"
-                    type="text" 
-                    placeholder="Örn: yazılım, bilgisayar, danışmanlık, 621000..." 
-                    value={naceQuery}
-                    onChange={(e) => setNaceQuery(e.target.value)}
-                  />
-                </div>
-
-                {isSearchingNace && <div className="searching-text">Aranıyor...</div>}
-
-                {naceResults.length > 0 && (
-                  <div className="nace-search-dropdown" id="nace-search-results">
-                    {naceResults.map((n) => (
-                      <div key={n.code} className="nace-search-item" onClick={() => handleAddNace(n)}>
-                        <span className="nace-item-code">{n.code}</span>
-                        <span className="nace-item-title">{n.title}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                <div className="purchase-form-scroll-3d">
+                  <div className="purchase-section-card-3d">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <div className="purchase-section-title-3d">
+                        <Sparkles style={{ width: 15, height: 15, color: '#c084fc' }} />
+                        <span>2.164 Kod Kataloğunda Canlı NACE Araması</span>
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="selected-naces-section">
-                  <label>Seçilen NACE Faaliyet Kodları ({selectedNaces.length}):</label>
-                  {selectedNaces.length === 0 ? (
-                    <div className="empty-nace-hint">Henüz NACE kodu seçilmedi. Yukarıdaki arama kutusunu kullanın.</div>
-                  ) : (
-                    <div className="nace-tags-container">
-                      {selectedNaces.map((n) => (
-                        <div key={n.code} className="nace-tag-chip">
-                          <span className="tag-code">{n.code}</span>
-                          <span className="tag-title">{n.title.substring(0, 40)}...</span>
-                          <button className="tag-remove" onClick={() => handleRemoveNace(n.code)}>✕</button>
-                        </div>
-                      ))}
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                        Seçilen Kod: <strong style={{ color: '#38bdf8' }}>{selectedNaces.length}</strong>
+                      </span>
                     </div>
-                  )}
+
+                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+                      Şirketinizin ana ve yan faaliyet alanlarını seçiniz. RECOrion, bu kodlara göre kurumunuza özel 
+                      <strong style={{ color: '#6ee7b7' }}> Yapay Zeka Operasyon Manifestosu</strong> ve uzman ajan becerileri yapılandıracaktır.
+                    </p>
+
+                    {/* Arama Input */}
+                    <div style={{ position: 'relative' }}>
+                      <input 
+                        id="input-nace-search"
+                        type="text" 
+                        placeholder="Sektör veya NACE kodu arayın (Örn: yazılım, danışmanlık, 6201, sanayi, finans...)" 
+                        value={naceQuery}
+                        onChange={(e) => setNaceQuery(e.target.value)}
+                        className="purchase-input-field-3d"
+                        style={{ paddingLeft: 38 }}
+                      />
+                      <Search style={{ width: 16, height: 16, color: '#94a3b8', position: 'absolute', left: 12, top: 12 }} />
+                      {isSearchingNace && (
+                        <RefreshCw style={{ width: 14, height: 14, color: '#38bdf8', position: 'absolute', right: 12, top: 13 }} className="animate-spin" />
+                      )}
+                    </div>
+
+                    {/* Canlı Arama Sonuçları */}
+                    {naceResults.length > 0 && (
+                      <div className="nace-search-dropdown-3d" id="nace-search-results" style={{
+                        maxHeight: 180,
+                        overflowY: 'auto',
+                        borderRadius: 12,
+                        background: '#090e1c',
+                        border: '1px solid rgba(113, 52, 226, 0.4)',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
+                        padding: 6,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4
+                      }}>
+                        {naceResults.map((n) => {
+                          const isAdded = selectedNaces.some(sn => sn.code === n.code);
+                          return (
+                            <div 
+                              key={n.code} 
+                              onClick={() => handleAddNace(n)}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: 8,
+                                cursor: isAdded ? 'default' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: '0.785rem',
+                                background: isAdded ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)',
+                                color: isAdded ? '#64748b' : '#cbd5e1',
+                                transition: 'background 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => { if (!isAdded) e.currentTarget.style.background = 'rgba(113, 52, 226, 0.2)'; }}
+                              onMouseLeave={(e) => { if (!isAdded) e.currentTarget.style.background = 'rgba(255,255,255,0.01)'; }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{n.code}</span>
+                                <span>{n.title}</span>
+                              </div>
+                              <span>{isAdded ? '✓ Eklendi' : '+ Ekle'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Hızlı Sektör Önerileri */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                        Hızlı Sektör Seçimi (Tek Tıkla Ekle):
+                      </span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {POPULAR_NACE_PRESETS.map((preset) => {
+                          const isAdded = selectedNaces.some(sn => sn.code === preset.code);
+                          return (
+                            <button
+                              key={preset.code}
+                              type="button"
+                              onClick={() => {
+                                if (!isAdded) {
+                                  handleAddNace({ code: preset.code, title: preset.name });
+                                }
+                              }}
+                              className="nace-preset-btn-3d"
+                              style={{
+                                background: isAdded ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)',
+                                borderColor: isAdded ? '#38bdf8' : 'rgba(255,255,255,0.08)',
+                                color: isAdded ? '#38bdf8' : '#cbd5e1'
+                              }}
+                            >
+                              <span>{preset.title}</span>
+                              {isAdded && <span>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Seçilen NACE Kodları Çipleri */}
+                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#94a3b8' }}>
+                        Seçilen Faaliyet Alanları ({selectedNaces.length}):
+                      </span>
+                      {selectedNaces.length === 0 ? (
+                        <div style={{ padding: '14px', borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', textAlign: 'center', fontSize: '0.775rem', color: '#64748b' }}>
+                          Henüz faaliyet alanı eklenmedi. Yukarıdaki arama kutusundan arayabilir veya hızlı sektör butonlarını tıklayabilirsiniz.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {selectedNaces.map((n) => (
+                            <div key={n.code} className="nace-chip-3d">
+                              <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{n.code}</span>
+                              <span style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title}</span>
+                              <button 
+                                type="button" 
+                                className="nace-chip-remove-btn" 
+                                onClick={() => handleRemoveNace(n.code)}
+                                title="Kaldır"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="wizard-footer">
-                  <button type="button" className="btn-secondary" onClick={() => setStep(1)}>
-                    ← Geri: Şirket Bilgileri
+                <div className="purchase-footer-3d">
+                  <button type="button" className="purchase-btn-back-3d" onClick={() => setStep(1)}>
+                    <ChevronLeft style={{ width: 16, height: 16 }} />
+                    <span>← Geri: Şirket Bilgileri</span>
                   </button>
                   <button 
                     id="btn-step2-next"
                     type="button" 
-                    className="btn-primary" 
+                    className="purchase-btn-next-3d" 
                     onClick={() => {
                       if (selectedNaces.length === 0) {
                         alert("Lütfen en az bir NACE faaliyet alanı seçiniz.");
                         return;
                       }
+                      setErrorMessage('');
                       setStep(3);
                     }}
                   >
-                    Devam Et: Yetkili Hesap & Şifre →
+                    <span>Devam Et: Yetkili Hesap & Şifre</span>
+                    <ArrowRight style={{ width: 16, height: 16 }} />
                   </button>
                 </div>
               </div>
@@ -485,62 +836,216 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
             {/* ADIM 3: YETKİLİ HESAP & ŞİFRE */}
             {step === 3 && (
-              <form onSubmit={handleSubmitPurchase} className="wizard-form-body">
-                <h4 className="form-step-title">3. Yetkili Kullanıcı ve Şifre Oluşturma</h4>
-                <p className="step-hint">
-                  Belirleyeceğiniz şifre ile satın alma sonrasında şirketinize tahsis edilecek panele giriş yapabileceksiniz.
-                </p>
+              <form onSubmit={handleSubmitPurchase} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                <div className="purchase-form-scroll-3d">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
+                    {/* Sol: Yetkili Kullanıcı ve Şifre */}
+                    <div className="purchase-section-card-3d">
+                      <div className="purchase-section-title-3d">
+                        <User style={{ width: 15, height: 15, color: '#38bdf8' }} />
+                        <span>Yetkili Yönetici ve Hesap Bilgileri</span>
+                      </div>
 
-                <div className="form-group">
-                  <label>Yetkili Adı Soyadı *</label>
-                  <input 
-                    id="input-contact-name"
-                    type="text" 
-                    required 
-                    placeholder="Örn: Cüneyt Özdemir" 
-                    value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
-                  />
+                      <div>
+                        <label className="purchase-label-3d">
+                          <User style={{ width: 13, height: 13, color: '#cbd5e1' }} />
+                          <span>Yetkili Adı Soyadı *</span>
+                        </label>
+                        <input 
+                          id="input-contact-name"
+                          type="text" 
+                          required 
+                          placeholder="Örn: Cüneyt Erdil" 
+                          value={contactName}
+                          onChange={(e) => setContactName(e.target.value)}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="purchase-label-3d">
+                          <Mail style={{ width: 13, height: 13, color: '#cbd5e1' }} />
+                          <span>Giriş E-Posta Adresi (Yönetim Paneli Girişi) *</span>
+                        </label>
+                        <input 
+                          id="input-contact-email"
+                          type="email" 
+                          required 
+                          placeholder="yonetici@sirketiniz.com" 
+                          value={contactEmail}
+                          onChange={(e) => setContactEmail(e.target.value)}
+                          className="purchase-input-field-3d"
+                        />
+                      </div>
+
+                      {/* Şifre ve Güçlü Şifre Oluşturucu */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                          <label className="purchase-label-3d" style={{ margin: 0 }}>
+                            <Lock style={{ width: 13, height: 13, color: '#cbd5e1' }} />
+                            <span>Giriş Şifresi *</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleGenerateStrongPassword}
+                            className="super-admin-btn-corporate"
+                            style={{
+                              padding: '3px 9px',
+                              fontSize: '0.7rem',
+                              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                              gap: 4
+                            }}
+                            title="Rastgele 14 karakterli güçlü şifre ata"
+                          >
+                            <Sparkles style={{ width: 11, height: 11 }} />
+                            <span>✨ Güçlü Şifre Oluştur</span>
+                          </button>
+                        </div>
+
+                        <div style={{ position: 'relative' }}>
+                          <input 
+                            id="input-password"
+                            type={showPassword ? 'text' : 'password'} 
+                            required 
+                            placeholder="Güçlü bir şifre belirleyin..." 
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="purchase-input-field-3d"
+                            style={{ paddingRight: 74, fontFamily: showPassword ? 'inherit' : 'monospace' }}
+                          />
+                          <div style={{ position: 'absolute', right: 8, top: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {password && (
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(password, 'wizardpass')}
+                                style={{
+                                  background: 'rgba(255,255,255,0.08)',
+                                  border: 'none',
+                                  borderRadius: 6,
+                                  padding: '4px 6px',
+                                  color: '#cbd5e1',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  fontSize: '0.68rem'
+                                }}
+                                title="Şifreyi panoya kopyala"
+                              >
+                                {copiedKey === 'wizardpass' ? <Check style={{ width: 12, height: 12, color: '#34d399' }} /> : <Copy style={{ width: 12, height: 12 }} />}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#94a3b8',
+                                cursor: 'pointer',
+                                padding: 4,
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              {showPassword ? <EyeOff style={{ width: 15, height: 15 }} /> : <Eye style={{ width: 15, height: 15 }} />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sağ: 3D Seçilen Paket & Başvuru Özeti */}
+                    <div className="purchase-section-card-3d" style={{
+                      background: 'linear-gradient(180deg, rgba(113,52,226,0.12) 0%, rgba(14,165,233,0.08) 100%)',
+                      borderColor: 'rgba(113,52,226,0.35)',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#c084fc', letterSpacing: '0.05em' }}>
+                            SEÇİLEN KURUMSAL PAKET
+                          </span>
+                          <span className="purchase-plan-badge-3d">
+                            👑 {selectedPlan.name}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, padding: '10px 14px', borderRadius: 12, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#38bdf8', fontFamily: 'Outfit, sans-serif' }}>
+                            {Number(selectedPlan.monthly_price).toLocaleString('tr-TR')} ₺
+                          </span>
+                          <span style={{ fontSize: '0.775rem', color: '#94a3b8' }}>/ Ay (Yıllık Kurumsal Sözleşme)</span>
+                        </div>
+
+                        {/* Paket Değiştirme Opsiyonu */}
+                        {plans.length > 1 && (
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
+                              Farklı Bir Paket Seçmek İster misiniz?
+                            </label>
+                            <select
+                              value={selectedPlan.id}
+                              onChange={(e) => {
+                                const newP = plans.find(p => p.id === e.target.value);
+                                if (newP) setSelectedPlan(newP);
+                              }}
+                              className="super-admin-select"
+                              style={{ fontSize: '0.775rem', padding: '6px 10px' }}
+                            >
+                              {plans.map(p => (
+                                <option key={p.id} value={p.id}>{p.name} — {Number(p.monthly_price).toLocaleString('tr-TR')} ₺/Ay</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.75rem', color: '#cbd5e1' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CheckCircle2 style={{ width: 14, height: 14, color: '#34d399' }} />
+                            <span><b>{selectedPlan.max_agents} AI Ajan</b> ve <b>{selectedPlan.max_humans} İnsan</b> Kullanıcı</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CheckCircle2 style={{ width: 14, height: 14, color: '#34d399' }} />
+                            <span><b>{selectedPlan.storage_gb} GB</b> İzole MinIO Bulut Depolama</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CheckCircle2 style={{ width: 14, height: 14, color: '#34d399' }} />
+                            <span><b>{selectedNaces.length} NACE Kodu</b> Odaklı AI Manifestosu</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(2,132,199,0.1)', border: '1px solid rgba(2,132,199,0.25)', fontSize: '0.72rem', color: '#7dd3fc', lineHeight: 1.4, marginTop: 10 }}>
+                        📌 Başvuru tamamlandığında Odoo 19 sipariş kaydınız açılacak ve <b>{contactEmail || 'kurumsal adresinize'}</b> onay ve aktivasyon mektubu iletilecektir.
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="form-group">
-                  <label>Yetkili E-Posta Adresi (Giriş İçin Kullanılacak) *</label>
-                  <input 
-                    id="input-contact-email"
-                    type="email" 
-                    required 
-                    placeholder="ornek@sirketiniz.com" 
-                    value={contactEmail}
-                    onChange={(e) => setContactEmail(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Giriş Şifresi *</label>
-                  <input 
-                    id="input-password"
-                    type="password" 
-                    required 
-                    placeholder="Güçlü bir şifre belirleyin" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-
-                <div className="summary-alert-box">
-                  <p><b>Seçilen Paket:</b> {selectedPlan.name} ({Number(selectedPlan.monthly_price).toLocaleString('tr-TR')} ₺/Ay)</p>
-                  <p><b>Faaliyet Alanları:</b> {selectedNaces.map(n => n.code).join(', ')}</p>
-                  <p className="notification-note">
-                    📌 Başvurunuz tamamlandığında <b>info@recdx.com</b> adresine bildirim gidecek ve <b>{contactEmail || 'e-posta adresinize'}</b> onay mektubu iletilecektir.
-                  </p>
-                </div>
-
-                <div className="wizard-footer">
-                  <button type="button" className="btn-secondary" onClick={() => setStep(2)} disabled={submitting}>
-                    ← Geri: NACE Seçimi
+                <div className="purchase-footer-3d">
+                  <button type="button" className="purchase-btn-back-3d" onClick={() => setStep(2)} disabled={submitting}>
+                    <ChevronLeft style={{ width: 16, height: 16 }} />
+                    <span>← Geri: NACE Seçimi</span>
                   </button>
-                  <button id="btn-submit-purchase" type="submit" className="btn-primary btn-submit-purchase" disabled={submitting}>
-                    {submitting ? '⏳ AI Manifestoyu Yazıyor & İletiliyor...' : '✅ Satın Alma Talebini Tamamla'}
+                  <button 
+                    id="btn-submit-purchase" 
+                    type="submit" 
+                    className="purchase-btn-next-3d" 
+                    disabled={submitting}
+                    style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 0 #064e3b, 0 8px 24px rgba(16,185,129,0.45)' }}
+                  >
+                    {submitting ? (
+                      <>
+                        <RefreshCw style={{ width: 16, height: 16 }} className="animate-spin" />
+                        <span>AI Manifestoyu Yazıyor & Odoo Siparişi Oluşturuluyor...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 style={{ width: 16, height: 16 }} />
+                        <span>Kiralama Başvurusunu Tamamla →</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -548,53 +1053,86 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
             {/* ADIM 4: BAŞARI VE MANİFESTO GÖSTERİMİ */}
             {step === 4 && purchaseResult && (
-              <div className="wizard-form-body success-step-body">
-                <div className="success-icon-banner">🎉</div>
-                <h4 className="success-title">Kiralama Talebiniz Başarıyla Alındı!</h4>
-                <p className="success-subtitle">
-                  Talebiniz işleme alınmış ve ilgili birimlere iletilmiştir.
-                </p>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                <div className="purchase-form-scroll-3d" style={{ alignItems: 'center' }}>
+                  <div className="purchase-section-card-3d" style={{ textAlign: 'center', padding: '26px 20px', alignItems: 'center', gap: 14, width: '100%' }}>
+                    <div style={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: 18,
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.8rem',
+                      boxShadow: '0 0 25px rgba(16,185,129,0.5)',
+                      border: '1px solid rgba(255,255,255,0.3)'
+                    }}>
+                      🎉
+                    </div>
 
-                <div className="notifications-status-card">
-                  <div className="notify-row">
-                    <span className="notify-badge ok">✓ İletildi</span>
-                    <span><b>info@recdx.com</b> adresine RECDx yönetim bildirimi gönderildi.</span>
-                  </div>
-                  <div className="notify-row">
-                    <span className="notify-badge ok">✓ İletildi</span>
-                    <span><b>{purchaseResult.contact_email}</b> adresinize kurumsal karşılama e-postası gönderildi.</span>
+                    <div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                        Kiralama Talebiniz Başarıyla Alındı!
+                      </h3>
+                      <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                        '{companyName}' kurumu için sipariş kaydı oluşturuldu ve şirket ortamınız hazırlandı.
+                      </p>
+                    </div>
+
+                    {/* Bildirim Durumları */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 650 }}>
+                      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: '#6ee7b7' }}>
+                        <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399', flexShrink: 0 }} />
+                        <span><b>info@recdx.com</b> adresine Süper Admin bildirimi gönderildi.</span>
+                      </div>
+                      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: '#6ee7b7' }}>
+                        <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399', flexShrink: 0 }} />
+                        <span><b>{purchaseResult.contact_email}</b> adresinize kurumsal karşılama iletildi.</span>
+                      </div>
+                    </div>
+
+                    {/* AI Manifestosu Önizleme */}
+                    <div style={{ width: '100%', maxWidth: 760, borderRadius: 14, background: '#080c18', border: '1px solid rgba(113,52,226,0.3)', overflow: 'hidden', textAlign: 'left' }}>
+                      <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.785rem', fontWeight: 700, color: '#c084fc' }}>
+                          <Sparkles style={{ width: 14, height: 14 }} />
+                          <span>RECOrion AI Tarafından Üretilen Kurumsal Manifesto</span>
+                        </div>
+                        <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', color: '#38bdf8' }}>
+                          {purchaseResult.assigned_skills?.length || 0} Yetenek Atandı
+                        </span>
+                      </div>
+                      <pre style={{ margin: 0, padding: '12px 14px', fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.6, maxHeight: 160, overflowY: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                        {purchaseResult.generated_manifesto}
+                      </pre>
+                    </div>
+
+                    {/* Atanan Sektörel Yetenekler */}
+                    {purchaseResult.assigned_skills?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 760 }}>
+                        {purchaseResult.assigned_skills.map(s => (
+                          <span key={s} style={{ padding: '3px 10px', borderRadius: 999, background: 'rgba(113,52,226,0.2)', border: '1px solid rgba(113,52,226,0.4)', color: '#d8b4fe', fontSize: '0.72rem', fontWeight: 600 }}>
+                            ✦ {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="manifesto-preview-box">
-                  <div className="manifesto-box-header">
-                    <span>📜 AI Tarafından Üretilen Kurumsal Yapay Zeka Manifestosu</span>
-                    <span className="badge-sector">{purchaseResult.assigned_skills?.length} Yetenek Tanımlandı</span>
-                  </div>
-                  <pre className="manifesto-code-text">
-                    {purchaseResult.generated_manifesto}
-                  </pre>
-                </div>
-
-                <div className="assigned-skills-row">
-                  <span className="skills-label">Şirketinize Atanan Sektörel Beceriler:</span>
-                  <div className="skills-wrap">
-                    {purchaseResult.assigned_skills?.map(s => (
-                      <span key={s} className="skill-chip">{s}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="wizard-footer success-footer">
+                <div className="purchase-footer-3d" style={{ justifyContent: 'center' }}>
                   <button 
                     id="btn-go-to-workspace" 
-                    className="btn-primary" 
+                    className="purchase-btn-next-3d" 
+                    style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 0 #064e3b, 0 8px 24px rgba(16,185,129,0.5)' }}
                     onClick={() => {
                       setIsPurchaseModalOpen(false);
                       setIsLoginModalOpen(true);
                     }}
                   >
-                    🔑 Giriş Ekranına Git →
+                    <KeyRound style={{ width: 16, height: 16 }} />
+                    <span>🔑 Yönetim Paneline / Giriş Ekranına Git →</span>
                   </button>
                 </div>
               </div>

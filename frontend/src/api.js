@@ -110,6 +110,7 @@ export const api = {
   // Şirketler & Detay Yönetimi
   getTenantDetails: (tenantId) => request(`/tenants/${tenantId}/details`),
   updateTenant: (tenantId, data) => request(`/tenants/${tenantId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  toggleTenantStatus: (tenantId) => request(`/tenants/${tenantId}/toggle-status`, { method: 'POST' }),
   updateTenantAdmin: (tenantId, data) => request(`/tenants/${tenantId}/admin-user`, { method: 'PUT', body: JSON.stringify(data) }),
   generateTenantAdminPassword: (tenantId) => request(`/tenants/${tenantId}/generate-password`, { method: 'POST' }),
   approveRegisteredTenant: (tenantId) => request(`/tenants/${tenantId}/approve`, { method: 'POST' }),

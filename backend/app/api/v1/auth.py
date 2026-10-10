@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import hashlib
 import uuid
+from datetime import datetime
 from app.db.session import get_db
 from app.db.models import Actor, Tenant
 
@@ -55,13 +56,33 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     stmt = select(Actor).where(func.lower(Actor.email) == clean_email)
     result = await db.execute(stmt)
-    actor = result.scalar_one_or_none()
+    matching_actors = result.scalars().all()
 
-    if not actor:
+    if not matching_actors:
         raise HTTPException(status_code=401, detail="Geçersiz kullanıcı adı veya şifre.")
 
-    if not actor.password_hash or not verify_password(payload.password, actor.password_hash):
+    # Şifresi doğrulanan aktörleri topla
+    valid_actors = []
+    for a in matching_actors:
+        if a.password_hash and verify_password(payload.password, a.password_hash):
+            valid_actors.append(a)
+
+    if not valid_actors:
         raise HTTPException(status_code=401, detail="Geçersiz kullanıcı adı veya şifre.")
+
+    # Öncelik sıralaması:
+    # 1. SUPER_ADMIN hesabı en yüksek önceliğe sahiptir
+    # 2. Aktif durumdaki hesaplar (status != 'DISABLED')
+    # 3. En güncel oluşturulan hesap
+    valid_actors.sort(
+        key=lambda a: (
+            1 if a.role == "SUPER_ADMIN" else 0,
+            1 if getattr(a, "status", None) != "DISABLED" else 0,
+            getattr(a, "created_at", None) or datetime.min
+        ),
+        reverse=True
+    )
+    actor = valid_actors[0]
 
     # Şirket bilgilerini çek
     tenant_res = await db.execute(select(Tenant).where(Tenant.id == actor.tenant_id))
