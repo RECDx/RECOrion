@@ -1,0 +1,246 @@
+# ==============================================================================
+# RECOrion (Operational Reasoning & Intelligence Orchestration Network)
+# Çekirdek Altyapı Docker Orkestrasyonu (docker-compose.infra.yml)
+# Sürüm: 3.0 (Local Dev & Dark DB İzolasyonu)
+# ==============================================================================
+
+networks:
+  recorion_net:
+    name: ${DOCKER_NETWORK_NAME:-recorion_net}
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: recorion_postgres_data
+  qdrant_data:
+    name: recorion_qdrant_data
+  redis_data:
+    name: recorion_redis_data
+  minio_data:
+    name: recorion_minio_data
+  gitea_data:
+    name: recorion_gitea_data
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. PostgreSQL 16 + pgvector (Dark DB - Çekirdek İlişkisel Veritabanı)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: recorion_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-recorion_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recorion_secret_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-recorion_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recorion_admin} -d ${POSTGRES_DB:-recorion_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 2. Qdrant (2 Kademeli Vektörel Hafıza: NS_GLOBAL & NS_AGENT)
+  # ----------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: recorion_qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 3. Redis 7 (Streams, Canlı Düşünce Akışı, Telemetri, WebSockets)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: recorion_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 4. MinIO (S3 Uyumlu Nesne ve Artifact Deposu)
+  # ----------------------------------------------------------------------------
+  minio:
+    image: elestio/minio:latest
+    container_name: recorion_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_secret_pass_2026}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 5. Gitea (Yerel Kapalı Devre Git Sunucusu - Yazılım Projeleri)
+  # ----------------------------------------------------------------------------
+  gitea:
+    image: gitea/gitea:1.22
+    container_name: recorion_gitea
+    restart: unless-stopped
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__database__PATH=/data/gitea/gitea.db
+      - GITEA__server__DOMAIN=localhost
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__ROOT_URL=http://localhost:3000/
+      - GITEA__server__SSH_PORT=2222
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__service__DISABLE_REGISTRATION=true
+      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-gitea_admin}
+      - GITEA_ADMIN_PASSWORD=${GITEA_ADMIN_PASSWORD:-gitea_secret_pass_2026}
+    ports:
+      - "${GITEA_HTTP_PORT:-3000}:3000"
+      - "${GITEA_SSH_PORT:-2222}:22"
+    volumes:
+      - gitea_data:/data
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 6. Temporal Server (Dayanıklı İş Akışı Motoru ve SAGA Orkestrasyonu)
+  # ----------------------------------------------------------------------------
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: recorion_temporal
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-recorion_admin}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-recorion_secret_pass_2026}
+      - POSTGRES_SEEDS=postgres
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 6.1 Temporal Web UI (İş Akışlarını ve Saga Adımlarını Görsel İzleme)
+  # ----------------------------------------------------------------------------
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: recorion_temporal_ui
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:8233
+    ports:
+      - "${TEMPORAL_UI_PORT:-8233}:8080"
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 7. FastAPI Backend Çekirdeği (Orkestrasyon, LLM Gateway, 2 Kademeli Hafıza)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recorion_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=local_dev
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-recorion_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-recorion_secret_pass_2026}
+      - POSTGRES_DB=${POSTGRES_DB:-recorion_db}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - EVREN_API_BASE_URL=${EVREN_API_BASE_URL:-https://evren-llmapi.ssyz.org.tr/v1}
+      - EVREN_API_KEY=${EVREN_API_KEY:-evren_llm_YFiyd7zrA1Bs0r5egqud8HMhCwMaqbRQnV47UCeZ4jg}
+      - SMTP_HOST=${SMTP_HOST:-mail.recdx.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-info@recdx.com}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-J18BG&d@}
+      - FROM_EMAIL=${FROM_EMAIL:-info@recdx.com}
+      - ODOO_URL=${ODOO_URL:-https://recdx.odoo.com}
+      - ODOO_DB=${ODOO_DB:-recdx}
+      - ODOO_USER=${ODOO_USER:-cuneyterdil@recdx.com}
+      - ODOO_PASSWORD=${ODOO_PASSWORD:-bde1c9b5c20d5f0bd5ed0541505df880824bcc2c}
+    volumes:
+      - ./backend:/app
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
+  # 8. React + Vite Frontend (Work Area Tri-Pane Modern Arayüz)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: recorion_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - recorion_net
