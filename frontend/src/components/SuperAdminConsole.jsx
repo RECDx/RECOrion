@@ -3155,13 +3155,36 @@ export default function SuperAdminConsole({
                       </div>
 
                       {/* Kart Altı Aksiyon Butonları (Madde 10 & 14 & Madde 4) */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      {/* Kart Altı Aksiyon Butonları (Madde 1 & 10 & 14) */}
+                      <div 
+                        className="super-admin-card-actions"
+                        style={{ 
+                          display: 'flex', 
+                          flexWrap: 'wrap', 
+                          alignItems: 'center', 
+                          gap: 6, 
+                          marginTop: 16, 
+                          paddingTop: 12, 
+                          borderTop: '1px solid rgba(255,255,255,0.08)',
+                          width: '100%',
+                          overflowX: 'auto',
+                          scrollbarWidth: 'thin'
+                        }}
+                      >
                         {!t.is_active && (
                           <button
                             onClick={() => handleQuickApproveTenant(t)}
                             disabled={processingId === 'approve-' + t.id}
                             className="super-admin-btn-corporate"
-                            style={{ flex: 1, justifyContent: 'center', fontSize: '0.75rem', padding: '6px 10px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                            style={{ 
+                              flex: '1 1 calc(50% - 6px)', 
+                              minWidth: '100px',
+                              justifyContent: 'center', 
+                              fontSize: '0.72rem', 
+                              padding: '6px 8px', 
+                              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                              whiteSpace: 'nowrap'
+                            }}
                             title="Şirketi ve 1 Yıllık Paketi Hemen Onayla"
                           >
                             {processingId === 'approve-' + t.id ? (
@@ -3173,13 +3196,18 @@ export default function SuperAdminConsole({
                           </button>
                         )}
 
-                        {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 4) */}
+                        {/* Müşteri Kartını Pasife Al / Aktife Al Butonu */}
                         <button
                           onClick={() => handleToggleTenantStatus(t)}
                           disabled={processingId === 'toggle-status-' + t.id}
                           className="super-admin-btn-secondary"
                           style={{
-                            padding: '6px 10px', fontSize: '0.75rem',
+                            flex: '1 1 calc(50% - 6px)',
+                            minWidth: '85px',
+                            justifyContent: 'center',
+                            padding: '6px 8px', 
+                            fontSize: '0.72rem',
+                            whiteSpace: 'nowrap',
                             color: t.is_active ? '#f87171' : '#34d399',
                             borderColor: t.is_active ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.35)',
                             background: t.is_active ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'
@@ -3204,18 +3232,34 @@ export default function SuperAdminConsole({
                         <button
                           onClick={() => handleOpenTenantDetails(t)}
                           className="super-admin-btn-corporate"
-                          style={{ flex: t.is_active ? 1 : 'none', justifyContent: 'center', fontSize: '0.75rem', padding: '6px 10px' }}
+                          style={{ 
+                            flex: '1 1 calc(50% - 6px)', 
+                            minWidth: '105px',
+                            justifyContent: 'center', 
+                            fontSize: '0.72rem', 
+                            padding: '6px 8px',
+                            whiteSpace: 'nowrap'
+                          }}
                         >
                           <Edit style={{ width: 13, height: 13 }} />
                           <span>Detay & Yönetim</span>
                         </button>
 
-                        {/* Manuel Hoş Geldin Mail Gönder (Madde 1) */}
+                        {/* Manuel Hoş Geldin Mail Gönder */}
                         <button
                           onClick={() => handleSendManualWelcome(t)}
                           disabled={processingId === 'welcome-' + t.id}
                           className="super-admin-btn-secondary"
-                          style={{ padding: '6px 10px', fontSize: '0.75rem', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                          style={{ 
+                            flex: '1 1 calc(50% - 6px)', 
+                            minWidth: '100px',
+                            justifyContent: 'center',
+                            padding: '6px 8px', 
+                            fontSize: '0.72rem', 
+                            whiteSpace: 'nowrap',
+                            color: '#38bdf8', 
+                            borderColor: 'rgba(56,189,248,0.3)' 
+                          }}
                           title="Hoş Geldiniz E-postası Gönder"
                         >
                           {processingId === 'welcome-' + t.id ? (
@@ -3226,13 +3270,22 @@ export default function SuperAdminConsole({
                           <span>Hoş Geldin Maili</span>
                         </button>
 
-                        {/* Manuel Hatırlatıcı Mail Gönder (Madde 14) */}
+                        {/* Manuel Hatırlatıcı Mail Gönder */}
                         {t.is_active && (
                           <button
                             onClick={() => handleSendManualReminder(t)}
                             disabled={processingId === 'reminder-' + t.id}
                             className="super-admin-btn-secondary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)' }}
+                            style={{ 
+                              flex: '1 1 calc(50% - 6px)', 
+                              minWidth: '95px',
+                              justifyContent: 'center',
+                              padding: '6px 8px', 
+                              fontSize: '0.72rem', 
+                              whiteSpace: 'nowrap',
+                              color: '#f59e0b', 
+                              borderColor: 'rgba(245,158,11,0.3)' 
+                            }}
                             title="Paket Süre Dolum Hatırlatma E-postası Gönder"
                           >
                             {processingId === 'reminder-' + t.id ? (
@@ -3249,7 +3302,7 @@ export default function SuperAdminConsole({
                             onClick={() => onSwitchToWorkspace(t)}
                             className="super-admin-btn-secondary"
                             title="Şirket Çalışma Alanına Geç"
-                            style={{ padding: '6px 8px' }}
+                            style={{ flex: '0 0 auto', padding: '6px 8px', justifyContent: 'center' }}
                           >
                             <ChevronRight style={{ width: 15, height: 15 }} />
                           </button>
@@ -3260,23 +3313,30 @@ export default function SuperAdminConsole({
                 </div>
               )}
 
-              {/* LİSTE FORMAT GÖRÜNÜMÜ (Madde 11) */}
+              {/* LİSTE FORMAT GÖRÜNÜMÜ (Madde 11 & Madde 2) */}
               {tenantViewMode === 'LIST' && (
-                <div className="super-admin-table-container">
-                  <table className="super-admin-table">
+                <div 
+                  className="super-admin-table-container"
+                  style={{
+                    overflowX: 'auto',
+                    maxWidth: '100%',
+                    scrollbarWidth: 'thin'
+                  }}
+                >
+                  <table className="super-admin-table" style={{ minWidth: 1550 }}>
                     <thead>
                       <tr>
-                        <th>Durum</th>
-                        <th>Firma Adı & Kimlik</th>
-                        <th>Vergi No / Dairesi</th>
-                        <th>Telefon</th>
-                        <th>Web Adres</th>
-                        <th>Yönetici Adı</th>
-                        <th>Email</th>
-                        <th>Aldığı Paket</th>
-                        <th>Kira Bitiş Tarihi</th>
-                        <th>3 Ay Uyarısı</th>
-                        <th style={{ textAlign: 'right' }}>İşlemler</th>
+                        <th style={{ whiteSpace: 'nowrap' }}>Durum</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 180 }}>Firma Adı & Kimlik</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 140 }}>Vergi No / Dairesi</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Telefon</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 160 }}>Web Adres</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Yönetici Adı</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 160 }}>Email</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Aldığı Paket</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Kira Bitiş Tarihi</th>
+                        <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>3 Ay Uyarısı</th>
+                        <th style={{ textAlign: 'right', whiteSpace: 'nowrap', minWidth: 240 }}>İşlemler</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3290,7 +3350,7 @@ export default function SuperAdminConsole({
                         filteredTenants.map((t) => (
                           <tr key={t.id} style={t.is_warning_3_months ? { background: 'rgba(239,68,68,0.06)' } : {}}>
                             {/* 1. Onay & Aktiflik Durumu İkonu */}
-                            <td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
                               {t.is_active ? (
                                 <span style={{ background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <CheckCircle2 style={{ width: 12, height: 12 }} /> Aktif
@@ -3303,7 +3363,7 @@ export default function SuperAdminConsole({
                             </td>
 
                             {/* 2. Firma Adı & Slug */}
-                            <td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
                               <div style={{ fontWeight: 800, color: '#fff' }}>{t.name}</div>
                               <div style={{ fontSize: '0.68rem', color: '#38bdf8', fontFamily: 'monospace' }}>
                                 URL: {t.slug}
@@ -3311,16 +3371,16 @@ export default function SuperAdminConsole({
                             </td>
 
                             {/* 3. Vergi No / Dairesi (Madde 12) */}
-                            <td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
                               <div style={{ fontFamily: 'monospace', color: '#cbd5e1' }}>{t.tax_id || '-'}</div>
                               <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{t.tax_office ? `${t.tax_office} V.D.` : 'V.D. Yok'}</div>
                             </td>
 
                             {/* 4. Telefon */}
-                            <td style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>{t.phone || '-'}</td>
+                            <td style={{ fontSize: '0.75rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{t.phone || '-'}</td>
 
                             {/* 5. Web Adres */}
-                            <td style={{ fontSize: '0.75rem' }}>
+                            <td style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
                               {t.website ? (
                                 <a href={t.website.startsWith('http') ? t.website : `https://${t.website}`} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
                                   <span>{t.website.replace('https://', '').replace('http://', '')}</span>
@@ -3330,25 +3390,25 @@ export default function SuperAdminConsole({
                             </td>
 
                             {/* 6. Yönetici Adı */}
-                            <td style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0' }}>{t.admin_name || '-'}</td>
+                            <td style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap' }}>{t.admin_name || '-'}</td>
 
                             {/* 7. Email */}
-                            <td style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>{t.contact_email || '-'}</td>
+                            <td style={{ fontSize: '0.75rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{t.contact_email || '-'}</td>
 
                             {/* 8. Aldığı Paket */}
-                            <td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
                               <span style={{ background: 'rgba(113,52,226,0.2)', color: '#c084fc', padding: '2px 7px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700 }}>
                                 {t.plan_name || 'Standart'}
                               </span>
                             </td>
 
                             {/* 9. Kira Bitiş Tarihi */}
-                            <td style={{ fontSize: '0.75rem', fontWeight: 700, color: !t.is_active ? '#fbbf24' : (t.is_warning_3_months ? '#f87171' : '#fff') }}>
+                            <td style={{ fontSize: '0.75rem', fontWeight: 700, color: !t.is_active ? '#fbbf24' : (t.is_warning_3_months ? '#f87171' : '#fff'), whiteSpace: 'nowrap' }}>
                               {!t.is_active ? 'Onay Bekliyor / Pasif' : (t.package_expiry_date ? new Date(t.package_expiry_date).toLocaleDateString('tr-TR') : '1 Yıl')}
                             </td>
 
                             {/* 10. 3 Ay Uyarısı */}
-                            <td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
                               {!t.is_active ? (
                                 <span style={{ color: '#fca5a5', fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <PauseCircle style={{ width: 12, height: 12 }} /> Pasif Durumda
@@ -3364,7 +3424,7 @@ export default function SuperAdminConsole({
                             </td>
 
                             {/* 11. İşlemler */}
-                            <td style={{ textAlign: 'right' }}>
+                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                 {!t.is_active && (
                                   <button
