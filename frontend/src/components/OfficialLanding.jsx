@@ -98,11 +98,36 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setTimeout(() => setCopiedKey(null), 2500);
   };
 
+  const resetPurchaseForm = () => {
+    setCompanyName('');
+    setTaxId('');
+    setTaxOffice('');
+    setPhone('');
+    setWebsite('');
+    setAddress('');
+    setContactName('');
+    setContactEmail('');
+    setPassword('');
+    setShowPassword(false);
+    setCopiedKey(null);
+    setNaceQuery('');
+    setNaceResults([]);
+    setSelectedNaces([]);
+    setPurchaseResult(null);
+    setErrorMessage('');
+    setStep(1);
+  };
+
+  const handleClosePurchaseModal = () => {
+    setIsPurchaseModalOpen(false);
+    resetPurchaseForm();
+  };
+
   // ESC Tuşu ile Modal Kapatma
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' || e.keyCode === 27) {
-        if (isPurchaseModalOpen) setIsPurchaseModalOpen(false);
+        if (isPurchaseModalOpen) handleClosePurchaseModal();
         if (isLoginModalOpen) setIsLoginModalOpen(false);
       }
     };
@@ -147,10 +172,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   }, [naceQuery]);
 
   const handleOpenPurchase = (plan) => {
+    resetPurchaseForm();
     setSelectedPlan(plan);
-    setStep(1);
-    setPurchaseResult(null);
-    setErrorMessage('');
     setIsPurchaseModalOpen(true);
   };
 
@@ -415,7 +438,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
               <button 
                 type="button" 
                 className="purchase-btn-close-3d" 
-                onClick={() => setIsPurchaseModalOpen(false)}
+                onClick={handleClosePurchaseModal}
                 title="Kapat (ESC)"
               >
                 <X style={{ width: 18, height: 18 }} />
@@ -651,7 +674,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   <button 
                     type="button" 
                     className="purchase-btn-back-3d" 
-                    onClick={() => setIsPurchaseModalOpen(false)}
+                    onClick={handleClosePurchaseModal}
                   >
                     Vazgeç / İptal
                   </button>
@@ -1017,7 +1040,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       </div>
 
                       <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(2,132,199,0.1)', border: '1px solid rgba(2,132,199,0.25)', fontSize: '0.72rem', color: '#7dd3fc', lineHeight: 1.4, marginTop: 10 }}>
-                        📌 Başvuru tamamlandığında Odoo 19 sipariş kaydınız açılacak ve <b>{contactEmail || 'kurumsal adresinize'}</b> onay ve aktivasyon mektubu iletilecektir.
+                        📌 Başvuru tamamlandığında kurumsal hesabınız oluşturulacak ve <b>{contactEmail || 'kurumsal adresinize'}</b> aktivasyon mektubu iletilecektir.
                       </div>
                     </div>
                   </div>
@@ -1038,12 +1061,12 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     {submitting ? (
                       <>
                         <RefreshCw style={{ width: 16, height: 16 }} className="animate-spin" />
-                        <span>AI Manifestoyu Yazıyor & Odoo Siparişi Oluşturuluyor...</span>
+                        <span>Kayıt Tamamlanıyor...</span>
                       </>
                     ) : (
                       <>
                         <CheckCircle2 style={{ width: 16, height: 16 }} />
-                        <span>Kiralama Başvurusunu Tamamla →</span>
+                        <span>KAYIT TAMAMLA</span>
                       </>
                     )}
                   </button>
@@ -1127,7 +1150,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     className="purchase-btn-next-3d" 
                     style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 0 #064e3b, 0 8px 24px rgba(16,185,129,0.5)' }}
                     onClick={() => {
-                      setIsPurchaseModalOpen(false);
+                      handleClosePurchaseModal();
                       setIsLoginModalOpen(true);
                     }}
                   >

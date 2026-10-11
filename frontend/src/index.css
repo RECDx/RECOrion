@@ -1746,6 +1746,48 @@ option:hover {
   padding: 24px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75), 0 0 30px rgba(113, 52, 226, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: #7134e2 rgba(255, 255, 255, 0.05);
+}
+
+.super-admin-modal-box::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.super-admin-modal-box::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 8px;
+}
+
+.super-admin-modal-box::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7134e2 0%, #38bdf8 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.super-admin-modal-box::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #8b5cf6 0%, #0ea5e9 100%);
+}
+
+.super-admin-modal-box *::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.super-admin-modal-box *::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 6px;
+}
+
+.super-admin-modal-box *::-webkit-scrollbar-thumb {
+  background: rgba(113, 52, 226, 0.5);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.super-admin-modal-box *::-webkit-scrollbar-thumb:hover {
+  background: rgba(147, 51, 234, 0.8);
 }
 
 /* ======================================================== */

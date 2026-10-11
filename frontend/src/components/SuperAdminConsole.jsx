@@ -100,10 +100,20 @@ const EMAIL_PRESET_BLOCKS = [
     label: 'Kurumsal Başlık & Logo',
     subtitle: 'Yapay Zeka Destekli Yeni Nesil ERP Platformu',
     logoUrl: '',
-    renderHtml: (b) => `<div style="background: linear-gradient(135deg, #1e1b4b 0%, #31104b 50%, #0f172a 100%); padding: 32px 25px; border-radius: 12px 12px 0 0; text-align: center; border-bottom: 2px solid #7134e2;">
-  ${b.logoUrl ? `<div style="margin-bottom: 12px;"><img src="${b.logoUrl}" alt="Kurumsal Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" /></div>` : '<div style="font-size: 26px; font-weight: 900; color: #ffffff; letter-spacing: 0.5px;">🪐 RECOrion</div>'}
+    bgColor: '#1e1b4b',
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    fontSize: '26px',
+    textColor: '#ffffff',
+    renderHtml: (b) => {
+      const bg = b.bgColor ? b.bgColor : 'linear-gradient(135deg, #1e1b4b 0%, #31104b 50%, #0f172a 100%)';
+      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+      const fSize = b.fontSize || '26px';
+      const color = b.textColor || '#ffffff';
+      return `<div style="background: ${bg}; padding: 32px 25px; border-radius: 12px 12px 0 0; text-align: center; border-bottom: 2px solid #7134e2; font-family: ${font};">
+  ${b.logoUrl ? `<div style="margin-bottom: 12px;"><img src="${b.logoUrl}" alt="Kurumsal Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" /></div>` : `<div style="font-size: ${fSize}; font-weight: 900; color: ${color}; letter-spacing: 0.5px;">🪐 RECOrion</div>`}
   <div style="font-size: 13px; color: #a78bfa; margin-top: 5px; font-weight: 600;">${b.subtitle || 'Yapay Zeka Destekli Kurumsal İşletim Sistemi'}</div>
-</div>`
+</div>`;
+    }
   },
   {
     type: 'IMAGE',
@@ -119,17 +129,40 @@ const EMAIL_PRESET_BLOCKS = [
     type: 'GREETING',
     label: 'Karşılama Metni',
     text: 'Sayın <b>{{company_name}}</b> Yetkilisi, Sayın <b>{{contact_name}}</b>,',
-    renderHtml: (b) => `<div style="padding: 22px 25px 12px 25px; background: #0b0f19; color: #f1f5f9; font-size: 15px; line-height: 1.6;">
+    bgColor: '#0b0f19',
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    fontSize: '15px',
+    textColor: '#f1f5f9',
+    renderHtml: (b) => {
+      const bg = b.bgColor || '#0b0f19';
+      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+      const fSize = b.fontSize || '15px';
+      const color = b.textColor || '#f1f5f9';
+      return `<div style="padding: 22px 25px 12px 25px; background: ${bg}; color: ${color}; font-size: ${fSize}; font-family: ${font}; line-height: 1.6;">
   <p style="margin: 0;">${b.text || 'Sayın <b>{{company_name}}</b> Yetkilisi,'}</p>
-</div>`
+</div>`;
+    }
   },
   {
     type: 'CONTENT',
-    label: 'Açıklama / Duyuru Paragrafı',
+    label: 'Açıklama / Duyuru Paragrafı (Body)',
     text: 'RECOrion kurumsal aboneliğiniz başarıyla aktif edilmiştir. Kurumunuza özel olarak hazırlanan yapay zeka ajanları ve şirket çalışma ortamınız hazır durumdadır.',
-    renderHtml: (b) => `<div style="padding: 10px 25px 15px 25px; background: #0b0f19; color: #cbd5e1; font-size: 14px; line-height: 1.7;">
+    bgColor: '#0b0f19',
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    fontSize: '14px',
+    textColor: '#cbd5e1',
+    imageUrl: '',
+    renderHtml: (b) => {
+      const bg = b.bgColor || '#0b0f19';
+      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+      const fSize = b.fontSize || '14px';
+      const color = b.textColor || '#cbd5e1';
+      const imgHtml = b.imageUrl ? `<div style="text-align: center; margin-top: 12px;"><img src="${b.imageUrl}" alt="Body Görseli" style="max-width: 100%; max-height: 220px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); object-fit: contain;" /></div>` : '';
+      return `<div style="padding: 10px 25px 15px 25px; background: ${bg}; color: ${color}; font-size: ${fSize}; font-family: ${font}; line-height: 1.7;">
   <p style="margin: 0;">${b.text || ''}</p>
-</div>`
+  ${imgHtml}
+</div>`;
+    }
   },
   {
     type: 'PACKAGE_INFO',
@@ -200,11 +233,24 @@ const EMAIL_PRESET_BLOCKS = [
     type: 'FOOTER',
     label: 'Kurumsal Alt Bilgi & İmza',
     footerText: 'Bu e-posta RECDx Bilişim Teknolojileri ve Yapay Zeka A.Ş. tarafından otomatik olarak iletilmiştir. Destek için info@recdx.com adresiyle iletişime geçebilirsiniz.',
-    renderHtml: (b) => `<div style="padding: 25px; background: #060911; border-radius: 0 0 12px 12px; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; color: #64748b; font-size: 11px; line-height: 1.6;">
+    bgColor: '#060911',
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    fontSize: '11px',
+    textColor: '#64748b',
+    imageUrl: '',
+    renderHtml: (b) => {
+      const bg = b.bgColor || '#060911';
+      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+      const fSize = b.fontSize || '11px';
+      const color = b.textColor || '#64748b';
+      const imgHtml = b.imageUrl ? `<div style="text-align: center; margin-bottom: 12px;"><img src="${b.imageUrl}" alt="Footer Görseli" style="max-height: 48px; max-width: 200px; object-fit: contain;" /></div>` : '';
+      return `<div style="padding: 25px; background: ${bg}; border-radius: 0 0 12px 12px; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; color: ${color}; font-size: ${fSize}; font-family: ${font}; line-height: 1.6;">
+  ${imgHtml}
   <div style="font-weight: 700; color: #94a3b8; margin-bottom: 4px;">RECDx Bilişim Teknolojileri ve Yapay Zeka A.Ş.</div>
   <div>${b.footerText}</div>
   <div style="margin-top: 8px; color: #475569;">© 2026 RECOrion. Tüm Hakları Saklıdır.</div>
-</div>`
+</div>`;
+    }
   }
 ];
 
@@ -1061,6 +1107,100 @@ export default function SuperAdminConsole({
       html_content: compileBlocksToHtml(updated)
     }));
   };
+
+  const renderBlockStyleControls = (block) => (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))',
+      gap: 6,
+      background: 'rgba(0,0,0,0.3)',
+      padding: '8px 10px',
+      borderRadius: 6,
+      border: '1px solid rgba(255,255,255,0.06)',
+      marginTop: 6
+    }}>
+      {/* Arka Plan Rengi */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>🎨 Arka Plan Rengi</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input
+            type="color"
+            value={block.bgColor || (block.type === 'HEADER' ? '#1e1b4b' : block.type === 'FOOTER' ? '#060911' : '#0b0f19')}
+            onChange={(e) => handleUpdateBlockField(block.id, 'bgColor', e.target.value)}
+            style={{ width: 22, height: 22, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}
+            title="Arka Plan Rengi Seç"
+          />
+          <input
+            type="text"
+            value={block.bgColor || ''}
+            onChange={(e) => handleUpdateBlockField(block.id, 'bgColor', e.target.value)}
+            placeholder={block.type === 'HEADER' ? '#1e1b4b' : block.type === 'FOOTER' ? '#060911' : '#0b0f19'}
+            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+          />
+        </div>
+      </div>
+
+      {/* Yazı Rengi */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>✏️ Yazı Rengi</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input
+            type="color"
+            value={block.textColor || (block.type === 'HEADER' ? '#ffffff' : block.type === 'FOOTER' ? '#64748b' : '#cbd5e1')}
+            onChange={(e) => handleUpdateBlockField(block.id, 'textColor', e.target.value)}
+            style={{ width: 22, height: 22, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}
+            title="Yazı Rengi Seç"
+          />
+          <input
+            type="text"
+            value={block.textColor || ''}
+            onChange={(e) => handleUpdateBlockField(block.id, 'textColor', e.target.value)}
+            placeholder={block.type === 'HEADER' ? '#ffffff' : block.type === 'FOOTER' ? '#64748b' : '#cbd5e1'}
+            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+          />
+        </div>
+      </div>
+
+      {/* Yazı Fontu */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>🔤 Yazı Fontu</span>
+        <select
+          value={block.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"}
+          onChange={(e) => handleUpdateBlockField(block.id, 'fontFamily', e.target.value)}
+          style={{ fontSize: '0.65rem', padding: '3px 4px', background: '#0b0f19', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+        >
+          <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI / Standart</option>
+          <option value="'Outfit', sans-serif">Outfit (Modern)</option>
+          <option value="'Inter', sans-serif">Inter (Minimal)</option>
+          <option value="Arial, Helvetica, sans-serif">Arial / Sans</option>
+          <option value="Georgia, serif">Georgia (Kurumsal Serif)</option>
+          <option value="'Courier New', monospace">Courier (Kod/Mono)</option>
+        </select>
+      </div>
+
+      {/* Font Büyüklüğü */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>📏 Font Büyüklüğü</span>
+        <select
+          value={block.fontSize || (block.type === 'HEADER' ? '26px' : block.type === 'FOOTER' ? '11px' : '14px')}
+          onChange={(e) => handleUpdateBlockField(block.id, 'fontSize', e.target.value)}
+          style={{ fontSize: '0.65rem', padding: '3px 4px', background: '#0b0f19', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+        >
+          <option value="11px">11px (Çok Küçük)</option>
+          <option value="12px">12px (Küçük)</option>
+          <option value="13px">13px (Kompakt)</option>
+          <option value="14px">14px (Standart)</option>
+          <option value="15px">15px (Orta)</option>
+          <option value="16px">16px (Büyük)</option>
+          <option value="18px">18px (Vurgulu)</option>
+          <option value="20px">20px (Alt Başlık)</option>
+          <option value="24px">24px (Başlık)</option>
+          <option value="26px">26px (Büyük Başlık)</option>
+          <option value="28px">28px (Manşet)</option>
+        </select>
+      </div>
+    </div>
+  );
 
   const handleTestSendFromModal = async () => {
     const toEmail = prompt(`'${templateForm.name || "E-Posta"}' şablonunu test etmek için alıcı e-posta adresi giriniz:`, currentUser?.email || 'cuneyterdil@recdx.com');
@@ -6174,7 +6314,7 @@ export default function SuperAdminConsole({
       {/* ======================================================== */}
       {templateModalOpen && (
         <div className="super-admin-modal-overlay">
-          <div className="super-admin-modal-box" style={{ maxWidth: 1340, width: '96%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="super-admin-modal-box" style={{ maxWidth: 1360, width: '96%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -6223,7 +6363,7 @@ export default function SuperAdminConsole({
               </div>
             </div>
 
-            <form onSubmit={handleSaveTemplate} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <form onSubmit={handleSaveTemplate} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12, flex: 1, minHeight: 0 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.6fr 2.2fr', gap: 10 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Şablon Kodu *</label>
@@ -6287,7 +6427,7 @@ export default function SuperAdminConsole({
 
               {/* GÖRSEL BUILDER MODU (Madde 5) */}
               {templateEditorTab === 'BUILDER' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '270px 1.4fr 1.1fr', gap: 12, flex: 1, minHeight: 440, maxHeight: '55vh', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '270px 1.4fr 1.1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>
                   {/* Kolon 1: Bileşen Blokları Paleti */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
                     <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.5, marginBottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -6514,6 +6654,7 @@ export default function SuperAdminConsole({
                                   <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Varsayılan RECOrion logosu devrede</span>
                                 )}
                               </div>
+                              {renderBlockStyleControls(block)}
                             </div>
                           )}
                           {block.type === 'IMAGE' && (
@@ -6577,24 +6718,76 @@ export default function SuperAdminConsole({
                             </div>
                           )}
                           {block.type === 'GREETING' && (
-                            <input
-                              type="text"
-                              value={block.text || ''}
-                              onChange={(e) => handleUpdateBlockField(block.id, 'text', e.target.value)}
-                              placeholder="Karşılama metni..."
-                              className="super-admin-input"
-                              style={{ fontSize: '0.75rem', padding: '5px 8px' }}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <input
+                                type="text"
+                                value={block.text || ''}
+                                onChange={(e) => handleUpdateBlockField(block.id, 'text', e.target.value)}
+                                placeholder="Karşılama metni..."
+                                className="super-admin-input"
+                                style={{ fontSize: '0.75rem', padding: '5px 8px' }}
+                              />
+                              {renderBlockStyleControls(block)}
+                            </div>
                           )}
                           {block.type === 'CONTENT' && (
-                            <textarea
-                              rows="2"
-                              value={block.text || ''}
-                              onChange={(e) => handleUpdateBlockField(block.id, 'text', e.target.value)}
-                              placeholder="Duyuru veya açıklama paragrafı..."
-                              className="super-admin-input"
-                              style={{ fontSize: '0.75rem', padding: '5px 8px' }}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <textarea
+                                rows="2"
+                                value={block.text || ''}
+                                onChange={(e) => handleUpdateBlockField(block.id, 'text', e.target.value)}
+                                placeholder="Duyuru veya açıklama paragrafı..."
+                                className="super-admin-input"
+                                style={{ fontSize: '0.75rem', padding: '5px 8px' }}
+                              />
+                              {/* Body Görsel Seçici (Madde 3) */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <input
+                                  type="file"
+                                  id={`body-img-upload-${block.id}`}
+                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                                  style={{ display: 'none' }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.size > 4 * 1024 * 1024) {
+                                        alert("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
+                                        return;
+                                      }
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => {
+                                        handleUpdateBlockField(block.id, 'imageUrl', ev.target.result);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`body-img-upload-${block.id}`}
+                                  className="super-admin-btn-secondary"
+                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  title="Body paragrafına PNG, JPG görsel ekleyin"
+                                >
+                                  <ImageIcon style={{ width: 12, height: 12 }} />
+                                  <span>{block.imageUrl ? '🖼️ Body Görselini Değiştir' : '📁 Body Görseli Ekle (PNG, JPG)'}</span>
+                                </label>
+                                {block.imageUrl && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                                    <img src={block.imageUrl} alt="Önizleme" style={{ height: 22, maxWidth: 50, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }} />
+                                    <span style={{ fontSize: '0.65rem', color: '#34d399', fontWeight: 700 }}>✓ Görsel Eklendi</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
+                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                      title="Görseli Kaldır"
+                                    >
+                                      Kaldır ✕
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              {renderBlockStyleControls(block)}
+                            </div>
                           )}
                           {block.type === 'PACKAGE_INFO' && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
@@ -6665,14 +6858,63 @@ export default function SuperAdminConsole({
                             </div>
                           )}
                           {block.type === 'FOOTER' && (
-                            <textarea
-                              rows="2"
-                              value={block.footerText || ''}
-                              onChange={(e) => handleUpdateBlockField(block.id, 'footerText', e.target.value)}
-                              placeholder="Alt bilgi ve yasal metin..."
-                              className="super-admin-input"
-                              style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <textarea
+                                rows="2"
+                                value={block.footerText || ''}
+                                onChange={(e) => handleUpdateBlockField(block.id, 'footerText', e.target.value)}
+                                placeholder="Alt bilgi ve yasal metin..."
+                                className="super-admin-input"
+                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
+                              />
+                              {/* Footer Görsel / İmza Seçici (Madde 3) */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <input
+                                  type="file"
+                                  id={`footer-img-upload-${block.id}`}
+                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                                  style={{ display: 'none' }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.size > 3 * 1024 * 1024) {
+                                        alert("Görsel dosya boyutu 3MB'tan küçük olmalıdır.");
+                                        return;
+                                      }
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => {
+                                        handleUpdateBlockField(block.id, 'imageUrl', ev.target.result);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`footer-img-upload-${block.id}`}
+                                  className="super-admin-btn-secondary"
+                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  title="Footer alanına PNG, JPG imza veya logo ekleyin"
+                                >
+                                  <ImageIcon style={{ width: 12, height: 12 }} />
+                                  <span>{block.imageUrl ? '🖼️ Footer İmzayı / Logoyu Değiştir' : '📁 Footer Görseli / İmzası Ekle (PNG, JPG)'}</span>
+                                </label>
+                                {block.imageUrl && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                                    <img src={block.imageUrl} alt="Footer Görseli" style={{ height: 22, maxWidth: 50, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }} />
+                                    <span style={{ fontSize: '0.65rem', color: '#34d399', fontWeight: 700 }}>✓ Görsel Eklendi</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
+                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                      title="Görseli Kaldır"
+                                    >
+                                      Kaldır ✕
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              {renderBlockStyleControls(block)}
+                            </div>
                           )}
                         </div>
                       ))
@@ -6699,7 +6941,7 @@ export default function SuperAdminConsole({
                 </div>
               ) : (
                 /* HTML KOD EDİTÖRÜ MODU */
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, flex: 1, minHeight: 440, maxHeight: '55vh', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Code style={{ width: 13, height: 13, color: '#a78bfa' }} />
@@ -6733,7 +6975,19 @@ export default function SuperAdminConsole({
               )}
 
               {/* Alt Aksiyon Butonları & Madde 4 Modal İçi Test Gönder */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: 14,
+                paddingBottom: 4,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                position: 'sticky',
+                bottom: 0,
+                background: '#0d1222',
+                zIndex: 20,
+                marginTop: 'auto'
+              }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
