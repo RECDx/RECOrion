@@ -54,11 +54,11 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   const [showPassword, setShowPassword] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
   
-  // NACE Arama ve Seçim State'leri
-  const [naceQuery, setNaceQuery] = useState('');
-  const [naceResults, setNaceResults] = useState([]);
-  const [selectedNaces, setSelectedNaces] = useState([]);
-  const [isSearchingNace, setIsSearchingNace] = useState(false);
+  // Sektör ve Meslek Grubu Seçim State'leri (Madde 2 - T.C. Ticaret Bakanlığı)
+  const [sectors, setSectors] = useState([]);
+  const [professions, setProfessions] = useState([]);
+  const [selectedSectors, setSelectedSectors] = useState([]);
+  const [selectedProfessions, setSelectedProfessions] = useState([]);
 
   // İşlem Sonucu
   const [submitting, setSubmitting] = useState(false);
@@ -67,20 +67,11 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
   // Giriş Yap Modalı
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
+  const [loginEmail, setLoginEmail] = useState(() => localStorage.getItem('recorion_remembered_email') || '');
   const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('recorion_remember_me') === 'true');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-
-  const POPULAR_NACE_PRESETS = [
-    { title: '💻 Bilişim & Yazılım', code: '620101', name: 'Bilgisayar Programlama Faaliyetleri' },
-    { title: '🛡️ Savunma & Havacılık', code: '303001', name: 'Hava ve Uzay Araçları İmalatı' },
-    { title: '📊 Yönetim Danışmanlığı', code: '702202', name: 'İşletme ve İdari Danışmanlık' },
-    { title: '🏦 Finans & Sigorta', code: '641901', name: 'Parasal Aracı Kurumlar' },
-    { title: '🏭 Sanayi & İmalat', code: '289901', name: 'Özel Amaçlı Makine İmalatı' },
-    { title: '🛒 E-Ticaret & Perakende', code: '479101', name: 'İnternet Üzerinden Perakende Ticaret' }
-  ];
-
   const handleGenerateStrongPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
     let newPass = '';
@@ -110,9 +101,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setPassword('');
     setShowPassword(false);
     setCopiedKey(null);
-    setNaceQuery('');
-    setNaceResults([]);
-    setSelectedNaces([]);
+    setSelectedSectors([]);
+    setSelectedProfessions([]);
     setPurchaseResult(null);
     setErrorMessage('');
     setStep(1);
@@ -135,41 +125,48 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPurchaseModalOpen, isLoginModalOpen]);
 
-  // 1. Paketleri Backend'den Yükle
+  // 1. Paketleri, Sektörleri ve Meslekleri Backend'den Yükle (Madde 2 - Ticaret Bakanlığı)
   useEffect(() => {
-    async function loadPlans() {
+    async function loadInitialData() {
       try {
         setLoadingPlans(true);
-        const data = await api.getPlans();
-        setPlans(data);
+        const [plansData, sectorsData, professionsData] = await Promise.all([
+          api.getPlans(true).catch(() => []),
+          api.getSectors(true).catch(() => []),
+          api.getProfessions({ is_active: true, limit: 500 }).catch(() => [])
+        ]);
+        const activePlans = (plansData || []).filter(p => p.is_active !== false);
+        setPlans(activePlans);
+        setSectors(sectorsData || []);
+        setProfessions(professionsData || []);
       } catch (err) {
-        console.error("Paketleri yükleme hatası:", err);
+        console.error("Paketleri, sektörleri ve meslekleri yükleme hatası:", err);
       } finally {
         setLoadingPlans(false);
       }
     }
-    loadPlans();
+    loadInitialData();
   }, []);
 
-  // 2. NACE Arama Efekti
-  useEffect(() => {
-    if (!naceQuery.trim()) {
-      setNaceResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        setIsSearchingNace(true);
-        const res = await api.searchNace(naceQuery.trim(), 15);
-        setNaceResults(res);
-      } catch (err) {
-        console.error("NACE arama hatası:", err);
-      } finally {
-        setIsSearchingNace(false);
+  const handleToggleSector = (sectorCode) => {
+    setSelectedSectors((prev) => {
+      const isSelected = prev.includes(sectorCode);
+      const updatedSectors = isSelected ? prev.filter(s => s !== sectorCode) : [...prev, sectorCode];
+      if (isSelected) {
+        setSelectedProfessions(profPrev => profPrev.filter(pCode => {
+          const profObj = professions.find(pr => pr.code === pCode);
+          return profObj ? profObj.sector_code !== sectorCode : true;
+        }));
       }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [naceQuery]);
+      return updatedSectors;
+    });
+  };
+
+  const handleToggleProfession = (profCode) => {
+    setSelectedProfessions((prev) => {
+      return prev.includes(profCode) ? prev.filter(p => p !== profCode) : [...prev, profCode];
+    });
+  };
 
   const handleOpenPurchase = (plan) => {
     resetPurchaseForm();
@@ -177,21 +174,24 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setIsPurchaseModalOpen(true);
   };
 
-  const handleAddNace = (nace) => {
-    if (!selectedNaces.some(n => n.code === nace.code)) {
-      setSelectedNaces([...selectedNaces, nace]);
-    }
-    setNaceQuery('');
-    setNaceResults([]);
-  };
-
-  const handleRemoveNace = (code) => {
-    setSelectedNaces(selectedNaces.filter(n => n.code !== code));
-  };
-
   const handleSubmitPurchase = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+
+    // Madde 3: Kurumsal / Official e-posta zorunluluğu (Gmail, Hotmail vb. engelleme)
+    const publicMailDomains = [
+      'gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.com.tr', 'outlook.com', 
+      'outlook.com.tr', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.com.tr', 'ymail.com', 
+      'yandex.com', 'yandex.com.tr', 'ya.ru', 'icloud.com', 'mail.ru', 'proton.me', 
+      'protonmail.com', 'zoho.com', 'gmx.com', 'aol.com'
+    ];
+    const emailParts = (contactEmail || '').trim().toLowerCase().split('@');
+    const domain = (emailParts[1] || '').trim();
+    if (!domain || publicMailDomains.includes(domain) || publicMailDomains.some(d => domain.endsWith('.' + d))) {
+      setErrorMessage(`⚠️ Kurumsal / Official E-Posta Zorunluluğu: RECOrion kurumsal abonelik başvurularında şirket uzantılı resmi (official) e-posta adresi zorunludur. Genel ve ücretsiz sağlayıcılar (${domain || 'geçersiz e-posta'}) kabul edilmemektedir. Lütfen 'info@sirketiniz.com' veya 'yonetici@sirketiniz.com' gibi kurumsal bir alan adı giriniz.`);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -205,8 +205,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         address: address || null,
         contact_name: contactName,
         contact_email: contactEmail,
-        password: password,
-        nace_codes: selectedNaces.map(n => n.code),
+        sectors: selectedSectors,
+        professions: selectedProfessions,
+        nace_codes: []
       };
 
       const result = await api.submitPurchaseRequest(payload);
@@ -225,13 +226,19 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setIsLoggingIn(true);
     try {
       let email = loginEmail.trim();
-      if (email.toLowerCase() === 'cuneyterdil@recdx.' || email.toLowerCase() === 'cuneyterdil@recdx') {
-        email = 'cuneyterdil@recdx.com';
-      }
       const user = await api.login({
         email: email,
         password: loginPassword,
       });
+
+      if (rememberMe) {
+        localStorage.setItem('recorion_remember_me', 'true');
+        localStorage.setItem('recorion_remembered_email', email);
+      } else {
+        localStorage.removeItem('recorion_remember_me');
+        localStorage.removeItem('recorion_remembered_email');
+      }
+
       localStorage.setItem('recorion_user', JSON.stringify(user));
       setIsLoginModalOpen(false);
       onEnterWorkspace(user);
@@ -240,12 +247,6 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     } finally {
       setIsLoggingIn(false);
     }
-  };
-
-  const fillSuperAdmin = () => {
-    setLoginEmail('cuneyterdil@recdx.com');
-    setLoginPassword('RECDx_SuperAdmin_2026!');
-    setLoginError('');
   };
 
   return (
@@ -267,7 +268,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                 onClick={() => onEnterWorkspace(currentUser)}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                {currentUser.role === 'SUPER_ADMIN' ? '👑 Süper Admin Konsolu →' : '💻 Çalışma Alanına Git →'}
+                {currentUser.role === 'SUPER_ADMIN' ? '👑 Süper Admin Konsolu →' : (currentUser.role === 'COMPANY_ADMIN' ? '🏢 Şirket Yönetim Paneli →' : '💻 Çalışma Alanına Git →')}
               </button>
               <button 
                 className="btn-secondary" 
@@ -311,7 +312,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
           </div>
           <div className="stat-card">
             <span className="stat-value">2.164</span>
-            <span className="stat-label">NACE Faaliyet Alanı</span>
+            <span className="stat-label">Sektör & Meslek Grubu</span>
           </div>
           <div className="stat-card">
             <span className="stat-value">%100</span>
@@ -334,7 +335,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         ) : (
           <div className="plans-grid">
             {plans.map((p) => {
-              const isPopular = p.code === 'PRO';
+              const isPopular = p.features?.is_popular || p.code === 'PRO';
               return (
                 <div key={p.id} className={`plan-card ${isPopular ? 'popular' : ''}`}>
                   {isPopular && <div className="popular-badge">⭐ En Çok Tercih Edilen</div>}
@@ -370,7 +371,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     </div>
                     <div className="spec-item">
                       <span className="spec-icon">📜</span>
-                      <span>Otomatik AI NACE Manifestosu</span>
+                      <span>Otomatik Kurumsal AI Manifestosu</span>
                     </div>
                   </div>
 
@@ -471,14 +472,14 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                 </div>
                 <div className="stepper-title-3d">
                   <span className="stepper-step-num">Adım 2</span>
-                  <span className="stepper-step-name">2. NACE Faaliyetleri</span>
+                  <span className="stepper-step-name">2. Sektör & Meslek Grupları</span>
                 </div>
               </div>
 
               <div 
                 className={`stepper-step-pill-3d ${step === 3 ? 'active' : ''} ${step > 3 ? 'completed' : ''}`}
                 onClick={() => {
-                  if (companyName.trim() && selectedNaces.length > 0) setStep(3);
+                  if (companyName.trim() && selectedSectors.length > 0) setStep(3);
                 }}
               >
                 <div className="stepper-circle-3d">
@@ -618,6 +619,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           }}
                           className="purchase-input-field-3d"
                         />
+                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>
+                          * Kurumsal official şirket alan adı zorunludur (Gmail, Hotmail vb. kabul edilmez).
+                        </div>
                       </div>
 
                       <div>
@@ -679,153 +683,138 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     Vazgeç / İptal
                   </button>
                   <button id="btn-step1-next" type="submit" className="purchase-btn-next-3d">
-                    <span>Devam Et: NACE Faaliyet Seçimi</span>
+                    <span>Devam Et: Sektör & Meslek Grupları</span>
                     <ArrowRight style={{ width: 16, height: 16 }} />
                   </button>
                 </div>
               </form>
             )}
 
-            {/* ADIM 2: NACE FAALİYET ALANLARI */}
+            {/* ADIM 2: SEKTÖR & MESLEK GRUPLARI */}
             {step === 2 && (
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                 <div className="purchase-form-scroll-3d">
                   <div className="purchase-section-card-3d">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                       <div className="purchase-section-title-3d">
-                        <Sparkles style={{ width: 15, height: 15, color: '#c084fc' }} />
-                        <span>2.164 Kod Kataloğunda Canlı NACE Araması</span>
+                        <Briefcase style={{ width: 16, height: 16, color: '#818cf8' }} />
+                        <span>1. Faaliyet Sektörleri (T.C. Ticaret Bakanlığı)</span>
                       </div>
                       <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                        Seçilen Kod: <strong style={{ color: '#38bdf8' }}>{selectedNaces.length}</strong>
+                        Seçilen Sektör: <strong style={{ color: '#38bdf8' }}>{selectedSectors.length}</strong>
                       </span>
                     </div>
 
                     <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
-                      Şirketinizin ana ve yan faaliyet alanlarını seçiniz. RECOrion, bu kodlara göre kurumunuza özel 
-                      <strong style={{ color: '#6ee7b7' }}> Yapay Zeka Operasyon Manifestosu</strong> ve uzman ajan becerileri yapılandıracaktır.
+                      Şirketinizin faaliyet gösterdiği ana sektörü/sektörleri seçiniz. Seçtiğiniz sektörlere ait resmi meslek grupları aşağıda otomatik filtrelenecektir.
                     </p>
 
-                    {/* Arama Input */}
-                    <div style={{ position: 'relative' }}>
-                      <input 
-                        id="input-nace-search"
-                        type="text" 
-                        placeholder="Sektör veya NACE kodu arayın (Örn: yazılım, danışmanlık, 6201, sanayi, finans...)" 
-                        value={naceQuery}
-                        onChange={(e) => setNaceQuery(e.target.value)}
-                        className="purchase-input-field-3d"
-                        style={{ paddingLeft: 38 }}
-                      />
-                      <Search style={{ width: 16, height: 16, color: '#94a3b8', position: 'absolute', left: 12, top: 12 }} />
-                      {isSearchingNace && (
-                        <RefreshCw style={{ width: 14, height: 14, color: '#38bdf8', position: 'absolute', right: 12, top: 13 }} className="animate-spin" />
-                      )}
-                    </div>
-
-                    {/* Canlı Arama Sonuçları */}
-                    {naceResults.length > 0 && (
-                      <div className="nace-search-dropdown-3d" id="nace-search-results" style={{
-                        maxHeight: 180,
-                        overflowY: 'auto',
-                        borderRadius: 12,
-                        background: '#090e1c',
-                        border: '1px solid rgba(113, 52, 226, 0.4)',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
-                        padding: 6,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 4
-                      }}>
-                        {naceResults.map((n) => {
-                          const isAdded = selectedNaces.some(sn => sn.code === n.code);
-                          return (
-                            <div 
-                              key={n.code} 
-                              onClick={() => handleAddNace(n)}
-                              style={{
-                                padding: '8px 12px',
-                                borderRadius: 8,
-                                cursor: isAdded ? 'default' : 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                fontSize: '0.785rem',
-                                background: isAdded ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)',
-                                color: isAdded ? '#64748b' : '#cbd5e1',
-                                transition: 'background 0.15s ease'
-                              }}
-                              onMouseEnter={(e) => { if (!isAdded) e.currentTarget.style.background = 'rgba(113, 52, 226, 0.2)'; }}
-                              onMouseLeave={(e) => { if (!isAdded) e.currentTarget.style.background = 'rgba(255,255,255,0.01)'; }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{n.code}</span>
-                                <span>{n.title}</span>
+                    {/* Sektör Seçim Butonları Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 4 }}>
+                      {sectors.map((sec) => {
+                        const isSelected = selectedSectors.includes(sec.code);
+                        return (
+                          <button
+                            key={sec.code}
+                            type="button"
+                            onClick={() => handleToggleSector(sec.code)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 12px',
+                              borderRadius: 10,
+                              background: isSelected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                              border: isSelected ? '1px solid rgba(129, 140, 248, 0.8)' : '1px solid rgba(255, 255, 255, 0.08)',
+                              color: isSelected ? '#ffffff' : '#cbd5e1',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              textAlign: 'left'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                              <span style={{ fontSize: '1.2rem' }}>{sec.icon || '🏢'}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  [{sec.code}] {sec.name}
+                                </span>
                               </div>
-                              <span>{isAdded ? '✓ Eklendi' : '+ Ekle'}</span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Hızlı Sektör Önerileri */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-                        Hızlı Sektör Seçimi (Tek Tıkla Ekle):
-                      </span>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {POPULAR_NACE_PRESETS.map((preset) => {
-                          const isAdded = selectedNaces.some(sn => sn.code === preset.code);
-                          return (
-                            <button
-                              key={preset.code}
-                              type="button"
-                              onClick={() => {
-                                if (!isAdded) {
-                                  handleAddNace({ code: preset.code, title: preset.name });
-                                }
-                              }}
-                              className="nace-preset-btn-3d"
-                              style={{
-                                background: isAdded ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255,255,255,0.03)',
-                                borderColor: isAdded ? '#38bdf8' : 'rgba(255,255,255,0.08)',
-                                color: isAdded ? '#38bdf8' : '#cbd5e1'
-                              }}
-                            >
-                              <span>{preset.title}</span>
-                              {isAdded && <span>✓</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
+                            <span style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: '50%',
+                              background: isSelected ? '#10b981' : 'rgba(255,255,255,0.1)',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.7rem',
+                              fontWeight: 800,
+                              flexShrink: 0
+                            }}>
+                              {isSelected ? '✓' : '+'}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    {/* Seçilen NACE Kodları Çipleri */}
-                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <span style={{ fontSize: '0.725rem', fontWeight: 700, color: '#94a3b8' }}>
-                        Seçilen Faaliyet Alanları ({selectedNaces.length}):
-                      </span>
-                      {selectedNaces.length === 0 ? (
-                        <div style={{ padding: '14px', borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', textAlign: 'center', fontSize: '0.775rem', color: '#64748b' }}>
-                          Henüz faaliyet alanı eklenmedi. Yukarıdaki arama kutusundan arayabilir veya hızlı sektör butonlarını tıklayabilirsiniz.
+                    {/* 2. MESLEK GRUPLARI (Filtreli) */}
+                    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div className="purchase-section-title-3d">
+                          <GraduationCap style={{ width: 16, height: 16, color: '#38bdf8' }} />
+                          <span>2. Meslek Grupları (Seçili Sektörlere Göre Filtrelenmiş)</span>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                          Seçilen Meslek: <strong style={{ color: '#38bdf8' }}>{selectedProfessions.length}</strong>
+                        </span>
+                      </div>
+
+                      {selectedSectors.length === 0 ? (
+                        <div style={{ padding: '16px', borderRadius: 10, background: 'rgba(234, 179, 8, 0.06)', border: '1px dashed rgba(234, 179, 8, 0.3)', color: '#fde047', textAlign: 'center', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                          <AlertCircle style={{ width: 16, height: 16 }} />
+                          <span>Lütfen önce yukarıdan en az bir <strong>Faaliyet Sektörü</strong> seçiniz. İlgili resmi meslek grupları burada listelenecektir.</span>
                         </div>
                       ) : (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {selectedNaces.map((n) => (
-                            <div key={n.code} className="nace-chip-3d">
-                              <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{n.code}</span>
-                              <span style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title}</span>
-                              <button 
-                                type="button" 
-                                className="nace-chip-remove-btn" 
-                                onClick={() => handleRemoveNace(n.code)}
-                                title="Kaldır"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ))}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
+                            Seçili sektör(ler)e bağlı <strong>{professions.filter(pr => selectedSectors.includes(pr.sector_code)).length} meslek grubu</strong> bulundu. Şirketiniz bünyesindeki meslek alanlarını işaretleyiniz:
+                          </p>
+
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 180, overflowY: 'auto', padding: 8, borderRadius: 8, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            {professions
+                              .filter(pr => selectedSectors.includes(pr.sector_code))
+                              .map((pr) => {
+                                const isAdded = selectedProfessions.includes(pr.code);
+                                return (
+                                  <button
+                                    key={pr.code}
+                                    type="button"
+                                    onClick={() => handleToggleProfession(pr.code)}
+                                    style={{
+                                      padding: '4px 9px',
+                                      borderRadius: 6,
+                                      fontSize: '0.72rem',
+                                      fontWeight: isAdded ? 700 : 500,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      background: isAdded ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                                      border: isAdded ? '1px solid rgba(56, 189, 248, 0.6)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                      color: isAdded ? '#38bdf8' : '#cbd5e1',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 800 }}>[{pr.code}]</span>
+                                    <span>{pr.name}</span>
+                                    <span>{isAdded ? '✓' : '+'}</span>
+                                  </button>
+                                );
+                              })}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -842,8 +831,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     type="button" 
                     className="purchase-btn-next-3d" 
                     onClick={() => {
-                      if (selectedNaces.length === 0) {
-                        alert("Lütfen en az bir NACE faaliyet alanı seçiniz.");
+                      if (selectedSectors.length === 0) {
+                        alert("Lütfen en az bir faaliyet sektörü seçiniz.");
                         return;
                       }
                       setErrorMessage('');
@@ -899,6 +888,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           onChange={(e) => setContactEmail(e.target.value)}
                           className="purchase-input-field-3d"
                         />
+                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>
+                          * Kurumsal official şirket alan adı zorunludur (Gmail, Hotmail vb. kabul edilmez).
+                        </div>
                       </div>
 
                       {/* Şifre ve Güçlü Şifre Oluşturucu */}
@@ -1034,7 +1026,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <CheckCircle2 style={{ width: 14, height: 14, color: '#34d399' }} />
-                            <span><b>{selectedNaces.length} NACE Kodu</b> Odaklı AI Manifestosu</span>
+                            <span><b>{selectedSectors.length} Sektör & {selectedProfessions.length} Meslek</b> Odaklı AI Manifestosu</span>
                           </div>
                         </div>
                       </div>
@@ -1049,7 +1041,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                 <div className="purchase-footer-3d">
                   <button type="button" className="purchase-btn-back-3d" onClick={() => setStep(2)} disabled={submitting}>
                     <ChevronLeft style={{ width: 16, height: 16 }} />
-                    <span>← Geri: NACE Seçimi</span>
+                    <span>← Geri: Sektör & Meslek Seçimi</span>
                   </button>
                   <button 
                     id="btn-submit-purchase" 
@@ -1181,7 +1173,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
               <button className="btn-close" onClick={() => setIsLoginModalOpen(false)}>✕</button>
             </div>
 
-            <form onSubmit={handleRealLogin} noValidate style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <form onSubmit={handleRealLogin} method="post" autoComplete="on" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               {loginError && (
                 <div style={{ padding: '10px 14px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>⚠️</span>
@@ -1191,13 +1183,16 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
               {/* Kurumsal E-Posta */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label htmlFor="login-username" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>✉️ Kurumsal E-Posta Adresi</span>
                 </label>
                 <input 
                   type="email" 
+                  id="login-username"
+                  name="username"
+                  autoComplete="username"
                   required 
-                  placeholder="ornek: cuneyterdil@recdx.com"
+                  placeholder="ornek: cuneyterdil@recx.com"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
                   className="login-input-3d"
@@ -1206,11 +1201,14 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
               {/* Şifre */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label htmlFor="login-password" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>🔑 Güvenli Şifre</span>
                 </label>
                 <input 
                   type="password" 
+                  id="login-password"
+                  name="password"
+                  autoComplete="current-password"
                   required 
                   placeholder="••••••••••••"
                   value={loginPassword}
@@ -1219,34 +1217,23 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                 />
               </div>
 
-              {/* Hızlı Demo / Süper Admin Doldur Butonu */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4 }}>
-                <button 
-                  type="button" 
-                  onClick={fillSuperAdmin}
-                  style={{
-                    background: 'rgba(113, 52, 226, 0.12)',
-                    border: '1px solid rgba(113, 52, 226, 0.35)',
-                    color: '#c084fc',
-                    cursor: 'pointer',
-                    fontSize: '0.775rem',
-                    fontWeight: 600,
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(113, 52, 226, 0.25)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(113, 52, 226, 0.12)'}
-                >
-                  <span>👑 Süper Admin Bilgilerini Doldur</span>
-                </button>
+              {/* Beni Hatırla (Remember Me) */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.82rem', color: '#cbd5e1', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    name="remember"
+                    id="login-remember-me"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: '#7134e2', cursor: 'pointer' }}
+                  />
+                  <span>Beni Hatırla</span>
+                </label>
               </div>
 
               {/* Giriş Butonu */}
-              <div style={{ marginTop: 8 }}>
+              <div style={{ marginTop: 4 }}>
                 <button type="submit" className="login-btn-submit-3d" disabled={isLoggingIn}>
                   {isLoggingIn ? (
                     <>

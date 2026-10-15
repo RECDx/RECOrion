@@ -13,6 +13,10 @@ import uuid
 import json
 
 from sqlalchemy.orm import selectinload
+import logging
+from app.services.agent_learning_service import agent_learning_service
+
+logger = logging.getLogger("chat_api")
 
 router = APIRouter(prefix="/chat", tags=["Work Area Chat (Kalıcı Sohbet & Düşünce Akışı)"])
 
@@ -208,8 +212,75 @@ async def send_chat_message(payload: SendMessageRequest, db: AsyncSession = Depe
     await db.commit()
     await db.refresh(assistant_msg)
 
+    # 6. Yazışmadan Öğrenme (Learn from Chat / Dialogue):
+    # Mesajlaşma sonrası arka planda kritik iş kurallarını ve kararları hafızaya indeksle
+    learned_items = []
+    try:
+        dialogue_to_learn = [
+            {"role": "user", "content": payload.content},
+            {"role": "assistant", "content": assistant_content}
+        ]
+        target_agent_uuid = uuid.UUID(agent_id) if agent_id else None
+        learned_items = await agent_learning_service.learn_from_chat_dialogue(
+            tenant_id=tenant_id,
+            agent_id=target_agent_uuid,
+            messages=dialogue_to_learn,
+            task_id=task_id,
+            db=db,
+            model_code=model_code
+        )
+    except Exception as learn_err:
+        logger.warning(f"Sohbetten öğrenme adımı hatası: {learn_err}")
+
     return {
         "user_message": user_msg,
         "assistant_message": assistant_msg,
         "citations": citations
     }
+
+
+@router.post("/learn/{task_id}")
+async def learn_from_task_chat_history(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Belirli bir göreve ait tüm sohbet geçmişini analiz eder ve
+    şirket / personel hafızasına kalıcı know-how, kural ve tercih maddeleri çıkarır.
+    """
+    stmt = (
+        select(Task)
+        .options(selectinload(Task.project), selectinload(Task.assignee))
+        .where(Task.id == task_id)
+    )
+    task_res = await db.execute(stmt)
+    task = task_res.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Görev bulunamadı.")
+
+    msgs_stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.task_id == task_id)
+        .order_by(ChatMessage.created_at.asc())
+    )
+    messages = (await db.execute(msgs_stmt)).scalars().all()
+    if not messages:
+        return {"learned_items": [], "count": 0, "message": "Görevde henüz yazışma bulunmuyor."}
+
+    msg_payloads = [{"role": m.role, "content": m.content} for m in messages]
+    agent_id = task.assignee.id if task.assignee else None
+
+    learned = await agent_learning_service.learn_from_chat_dialogue(
+        tenant_id=task.project.tenant_id,
+        agent_id=agent_id,
+        messages=msg_payloads,
+        task_id=task.id,
+        db=db
+    )
+
+    return {
+        "learned_items": learned,
+        "count": len(learned),
+        "message": f"Yazışma geçmişinden {len(learned)} bilgi maddesi hafızaya başarıyla kaydedildi."
+    }
+

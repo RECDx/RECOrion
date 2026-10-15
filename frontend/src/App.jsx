@@ -6,6 +6,7 @@ import RightPane from './components/RightPane';
 import CreateTaskModal from './components/CreateTaskModal';
 import OfficialLanding from './components/OfficialLanding';
 import SuperAdminConsole from './components/SuperAdminConsole';
+import CompanyAdminConsole from './components/CompanyAdminConsole';
 import { api } from './api';
 
 export default function App() {
@@ -33,14 +34,23 @@ export default function App() {
     if (hash.startsWith('#/super-admin') && savedUser?.role === 'SUPER_ADMIN') {
       return 'SUPER_ADMIN_CONSOLE';
     }
+    if (hash === '#/company-admin' && savedUser) {
+      return 'COMPANY_ADMIN_CONSOLE';
+    }
     if (hash === '#/workspace' && savedUser) {
       return 'WORKSPACE';
     }
     if (savedUser?.role === 'SUPER_ADMIN') {
       return 'SUPER_ADMIN_CONSOLE';
     }
+    if (savedUser?.role === 'COMPANY_ADMIN') {
+      return 'COMPANY_ADMIN_CONSOLE';
+    }
     if (hash === '#/landing') {
       return 'LANDING';
+    }
+    if (savedView === 'COMPANY_ADMIN_CONSOLE' && savedUser) {
+      return 'COMPANY_ADMIN_CONSOLE';
     }
     if (savedView === 'SUPER_ADMIN_CONSOLE' && savedUser?.role === 'SUPER_ADMIN') {
       return 'SUPER_ADMIN_CONSOLE';
@@ -74,6 +84,10 @@ export default function App() {
         if (!window.location.hash.startsWith('#/super-admin')) {
           window.history.replaceState(null, '', '#/super-admin/dashboard');
         }
+      } else if (currentView === 'COMPANY_ADMIN_CONSOLE') {
+        if (window.location.hash !== '#/company-admin') {
+          window.history.replaceState(null, '', '#/company-admin');
+        }
       } else if (currentView === 'WORKSPACE') {
         if (window.location.hash !== '#/workspace') {
           window.history.replaceState(null, '', '#/workspace');
@@ -105,6 +119,12 @@ export default function App() {
         } else {
           setCurrentView('LANDING');
         }
+      } else if (hash === '#/company-admin') {
+        if (u) {
+          setCurrentView('COMPANY_ADMIN_CONSOLE');
+        } else {
+          setCurrentView('LANDING');
+        }
       } else if (hash === '#/workspace') {
         if (u) {
           setCurrentView('WORKSPACE');
@@ -116,6 +136,9 @@ export default function App() {
         if (u?.role === 'SUPER_ADMIN') {
           setCurrentView('SUPER_ADMIN_CONSOLE');
           window.history.replaceState(null, '', '#/super-admin/dashboard');
+        } else if (u?.role === 'COMPANY_ADMIN') {
+          setCurrentView('COMPANY_ADMIN_CONSOLE');
+          window.history.replaceState(null, '', '#/company-admin');
         } else {
           setCurrentView('LANDING');
         }
@@ -143,19 +166,44 @@ export default function App() {
 
         const tData = await api.getTenants();
         if (tData.length > 0) {
-          const defaultTenant = tData[0];
-          setTenant(defaultTenant);
+          // Kullanıcının şirket eşleştirmesi (currentUser.tenant_id mutlak önceliklidir)
+          let activeTenant = null;
+          const savedUser = currentUser || (() => {
+            try {
+              const u = localStorage.getItem('recorion_user');
+              return u ? JSON.parse(u) : null;
+            } catch { return null; }
+          })();
 
-          const actData = await api.getActors(defaultTenant.id);
+          if (savedUser?.tenant_id) {
+            activeTenant = tData.find(t => t.id === savedUser.tenant_id);
+            if (!activeTenant) {
+              try {
+                const details = await api.getTenantDetails(savedUser.tenant_id);
+                activeTenant = details?.tenant || details;
+              } catch (e) {
+                console.warn("Kullanıcı şirketi detayları çekilemedi:", e);
+              }
+            }
+          }
+
+          // Fallback: Eğer kullanıcı yoksa veya genel yönetici ise listenin ilk şirketi
+          if (!activeTenant) {
+            activeTenant = tData[0];
+          }
+
+          setTenant(activeTenant);
+
+          const actData = await api.getActors(activeTenant.id);
           setActors(actData);
 
-          const prjData = await api.getProjects(defaultTenant.id);
+          const prjData = await api.getProjects(activeTenant.id);
           setProjects(prjData);
           if (prjData.length > 0) {
             setActiveProject(prjData[0]);
           }
 
-          const memData = await api.getMemoryItems(defaultTenant.id);
+          const memData = await api.getMemoryItems(activeTenant.id);
           setMemoryItems(memData);
         }
       } catch (err) {
@@ -276,17 +324,54 @@ export default function App() {
     localStorage.removeItem('recorion_user');
     localStorage.removeItem('recorion_current_view');
     setCurrentUser(null);
+    setTenant(null);
+    setActors([]);
+    setProjects([]);
+    setActiveProject(null);
+    setTasks([]);
+    setSelectedTask(null);
+    setMemoryItems([]);
     setCurrentView('LANDING');
     window.location.hash = '#/landing';
   };
 
-  const handleEnterPlatform = (loggedInUser) => {
+  const handleEnterPlatform = async (loggedInUser) => {
     const user = loggedInUser || currentUser;
     if (!user) return;
     setCurrentUser(user);
+
+    // Giriş yapan kullanıcının şirketini derhal yükle ve senkronize et
+    if (user.tenant_id) {
+      try {
+        const details = await api.getTenantDetails(user.tenant_id);
+        const userTenant = details?.tenant || details;
+        if (userTenant) {
+          setTenant(userTenant);
+          const actData = await api.getActors(userTenant.id);
+          setActors(actData);
+          const prjData = await api.getProjects(userTenant.id);
+          setProjects(prjData);
+          if (prjData.length > 0) {
+            setActiveProject(prjData[0]);
+          } else {
+            setActiveProject(null);
+            setTasks([]);
+            setSelectedTask(null);
+          }
+          const memData = await api.getMemoryItems(userTenant.id);
+          setMemoryItems(memData);
+        }
+      } catch (e) {
+        console.warn("Giriş yapan kullanıcının şirketi senkronize edilemedi:", e);
+      }
+    }
+
     if (user.role === 'SUPER_ADMIN') {
       setCurrentView('SUPER_ADMIN_CONSOLE');
       window.location.hash = '#/super-admin/dashboard';
+    } else if (user.role === 'COMPANY_ADMIN') {
+      setCurrentView('COMPANY_ADMIN_CONSOLE');
+      window.location.hash = '#/company-admin';
     } else {
       setCurrentView('WORKSPACE');
       window.location.hash = '#/workspace';
@@ -337,6 +422,30 @@ export default function App() {
         onLogout={handleLogout}
         onGoToOfficialSite={() => setCurrentView('LANDING')}
         onSwitchToWorkspace={handleSwitchTenant}
+        onSwitchToCompanyAdmin={(selectedT) => {
+          if (selectedT) setTenant(selectedT);
+          setCurrentView('COMPANY_ADMIN_CONSOLE');
+          window.location.hash = '#/company-admin';
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'COMPANY_ADMIN_CONSOLE') {
+    return (
+      <CompanyAdminConsole
+        currentUser={currentUser}
+        currentTenant={tenant}
+        onSwitchToWorkspace={(selectedT) => {
+          if (selectedT) handleSwitchTenant(selectedT);
+          else setCurrentView('WORKSPACE');
+        }}
+        onGoToOfficialSite={() => setCurrentView('LANDING')}
+        onGoToSuperAdmin={() => {
+          setCurrentView('SUPER_ADMIN_CONSOLE');
+          window.location.hash = '#/super-admin/dashboard';
+        }}
+        onLogout={handleLogout}
       />
     );
   }
@@ -354,6 +463,10 @@ export default function App() {
         onGoToAdminConsole={() => {
           setCurrentView('SUPER_ADMIN_CONSOLE');
           window.location.hash = '#/super-admin/dashboard';
+        }}
+        onGoToCompanyAdmin={() => {
+          setCurrentView('COMPANY_ADMIN_CONSOLE');
+          window.location.hash = '#/company-admin';
         }}
         onLogout={handleLogout}
         currentUser={currentUser}

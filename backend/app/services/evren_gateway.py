@@ -25,7 +25,8 @@ class EvrenLLMGateway:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        stream: bool = False
+        stream: bool = False,
+        timeout: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         EVREN Chat API çağrısı.
@@ -47,7 +48,8 @@ class EvrenLLMGateway:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            req_timeout = timeout if timeout is not None else self.timeout
+            async with httpx.AsyncClient(timeout=req_timeout) as client:
                 resp = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()

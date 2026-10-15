@@ -8,14 +8,44 @@ from sqlalchemy.orm import relationship
 from app.db.session import Base
 
 
-class NaceCatalog(Base):
-    __tablename__ = "nace_catalog"
+class Sector(Base):
+    """
+    Türkiye Ticaret Bakanlığı Sektör Tanımlama Modülü (Madde 1).
+    - Sektör Kodu (code: örn: A, B, C...)
+    - Sektör Adı (name: örn: AĞAÇ İŞLERİ)
+    """
+    __tablename__ = "sectors"
 
-    code = Column(String(16), primary_key=True)
-    title = Column(String(255), nullable=False)
-    sector_group = Column(String(64), nullable=False)
-    description = Column(Text)
+    code = Column(String(32), primary_key=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    icon = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    professions = relationship("Profession", back_populates="sector", cascade="all, delete-orphan")
+
+
+class Profession(Base):
+    """
+    Türkiye Ticaret Bakanlığı Meslek Tanımı Modülü (Madde 1).
+    - Meslek Kodu (code: örn: A.01, A.02...)
+    - Sektör Kodu (sector_code: örn: A)
+    - Meslek Tanım Adı (name: örn: Kerestecilik)
+    """
+    __tablename__ = "professions"
+
+    code = Column(String(32), primary_key=True)
+    sector_code = Column(String(32), ForeignKey("sectors.code", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    sector = relationship("Sector", back_populates="professions")
 
 
 class LLMProvider(Base):
@@ -76,7 +106,8 @@ class JobTitle(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)
-    code = Column(String(64), unique=True, nullable=False)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    code = Column(String(64), nullable=False)
     title = Column(String(128), nullable=False)
     category = Column(String(64), nullable=False)
     description = Column(Text)
@@ -84,10 +115,13 @@ class JobTitle(Base):
     required_skills = Column(JSONB, default=list)
     recommended_model_code = Column(String(128), default="glm-5.3")
     autonomy_level = Column(String(8), default="L1")
+    ai_review_status = Column(String(32), default="COMPANY_LOCAL")
+    ai_review_feedback = Column(Text)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     tenant = relationship("Tenant", foreign_keys=[tenant_id])
+    department = relationship("Department", foreign_keys=[department_id])
 
 
 class SystemPermission(Base):
@@ -115,6 +149,22 @@ class TenantRole(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class Department(Base):
+    """
+    Müşteri şirketinin kendi içindeki departmanları (Company Admin tarafından tanımlanır).
+    """
+    __tablename__ = "departments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(128), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant", foreign_keys=[tenant_id])
+
+
 class TenantLead(Base):
     __tablename__ = "tenant_leads"
 
@@ -127,6 +177,8 @@ class TenantLead(Base):
     phone = Column(String(32))
     website = Column(String(255))
     contact_email = Column(String(255), nullable=False)
+    sectors = Column(JSONB, default=list)
+    professions = Column(JSONB, default=list)
     nace_codes = Column(JSONB, default=list)
     generated_manifesto = Column(Text)
     assigned_skills = Column(JSONB, default=list)
@@ -153,6 +205,8 @@ class Tenant(Base):
     website = Column(String(255))
     contact_email = Column(String(255))
     plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL"), nullable=True)
+    sectors = Column(JSONB, default=list)
+    professions = Column(JSONB, default=list)
     nace_codes = Column(JSONB, default=list)
     sector_manifesto = Column(Text)
     package_start_date = Column(DateTime(timezone=True), default=datetime.utcnow)
@@ -181,13 +235,18 @@ class Actor(Base):
     role = Column(String(64), nullable=False)  # SUPER_ADMIN, ARCHITECT, CODER, QA, ANALYST, etc.
     role_id = Column(UUID(as_uuid=True), ForeignKey("tenant_roles.id", ondelete="SET NULL"), nullable=True)
     job_title_id = Column(UUID(as_uuid=True), ForeignKey("job_titles.id", ondelete="SET NULL"), nullable=True)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     password_hash = Column(String(255))
     capability_profile = Column(String(64))  # reasoning, code-strong, vision
     preferred_model_id = Column(UUID(as_uuid=True), ForeignKey("llm_models.id", ondelete="SET NULL"))
     system_prompt = Column(Text)
+    description = Column(Text)
     autonomy_level = Column(String(8), default="L1")  # L1, L2, L3
     consecutive_rejects = Column(Integer, default=0)
     status = Column(String(32), default="IDLE")  # IDLE, WORKING, WAITING, QUARANTINED, DISABLED
+    hired_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    dismissed_at = Column(DateTime(timezone=True), nullable=True)
+    extra_permissions = Column(JSONB, default=list)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -195,6 +254,7 @@ class Actor(Base):
     preferred_model = relationship("LLMModel")
     job_title = relationship("JobTitle")
     tenant_role = relationship("TenantRole")
+    department = relationship("Department")
 
 
 class Project(Base):
@@ -279,6 +339,33 @@ class MemoryItem(Base):
 
     tenant = relationship("Tenant", back_populates="memory_items")
     agent = relationship("Actor")
+
+
+class AgentDocument(Base):
+    """
+    AI Ajanları Uzmanlık / Kaynak Dokümanları (PDF, Word, Excel, vb.)
+    Ajanın kolektif ve bireysel hafızasını (RAG) besler.
+    """
+    __tablename__ = "agent_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    original_name = Column(String(255), nullable=False)
+    file_type = Column(String(32), nullable=False)  # pdf, docx, xlsx, txt
+    file_size = Column(Integer, nullable=False)
+    storage_path = Column(String(512), nullable=True)
+    extracted_text = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
+    status = Column(String(32), default="INDEXED")  # INDEXED, ERROR, PROCESSING
+    memory_item_id = Column(UUID(as_uuid=True), ForeignKey("memory_items.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    agent = relationship("Actor")
+    memory_item = relationship("MemoryItem")
 
 
 class ChatMessage(Base):

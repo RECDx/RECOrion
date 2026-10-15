@@ -7,10 +7,10 @@ const BASE_URL = '/api/v1';
 
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  const headers = { ...options.headers };
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  }
 
   try {
     const res = await fetch(url, { ...options, headers });
@@ -34,7 +34,7 @@ export const api = {
 
   // Şirketler, Paketler & NACE
   getTenants: () => request('/tenants/'),
-  getPlans: () => request('/tenants/plans'),
+  getPlans: (activeOnly = false) => request(`/tenants/plans${activeOnly ? '?active_only=true' : ''}`),
   getJobTitles: (category = null) => request(`/actors/job-titles${category ? `?category=${category}` : ''}`),
   getNaceCatalog: () => request('/tenants/nace-catalog'),
   searchNace: (query = '', limit = 30) => request(`/tenants/nace-catalog?query=${encodeURIComponent(query)}&limit=${limit}`),
@@ -69,6 +69,7 @@ export const api = {
     return request(`/chat/project/${projectId}?${params.toString()}`);
   },
   sendMessage: (payload) => request('/chat/send', { method: 'POST', body: JSON.stringify(payload) }),
+  learnFromTaskChat: (taskId) => request(`/chat/learn/${taskId}`, { method: 'POST' }),
 
   // 2 Kademeli Kolektif Hafıza
   getMemoryItems: (tenantId, scope = null) => {
@@ -92,6 +93,12 @@ export const api = {
   getSystemSettings: () => request('/system/settings'),
   setDefaultManifestoModel: (modelCode) => request('/system/settings/default-manifesto-model', { method: 'POST', body: JSON.stringify({ model_code: modelCode }) }),
 
+  // Sistem Yetki Rolleri (RBAC - Madde 1)
+  getSystemRoles: () => request('/system/roles'),
+  createSystemRole: (data) => request('/system/roles', { method: 'POST', body: JSON.stringify(data) }),
+  updateSystemRole: (roleId, data) => request(`/system/roles/${roleId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSystemRole: (roleId) => request(`/system/roles/${roleId}`, { method: 'DELETE' }),
+
   // EVREN Modelleri CRUD
   createModel: (data) => request('/models', { method: 'POST', body: JSON.stringify(data) }),
   updateModel: (modelId, data) => request(`/models/${modelId}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -102,10 +109,37 @@ export const api = {
   updatePlan: (planId, data) => request(`/tenants/plans/${planId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePlan: (planId) => request(`/tenants/plans/${planId}`, { method: 'DELETE' }),
 
-  // NACE Kodları Kataloğu CRUD
-  createNace: (data) => request('/tenants/nace-catalog', { method: 'POST', body: JSON.stringify(data) }),
-  updateNace: (code, data) => request(`/tenants/nace-catalog/${code}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteNace: (code) => request(`/tenants/nace-catalog/${code}`, { method: 'DELETE' }),
+  // Türkiye Ticaret Bakanlığı Sektör Tanımları (Madde 1)
+  getSectors: (params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.search) qs.append('search', params.search);
+    if (params.active_only !== undefined) qs.append('active_only', params.active_only);
+    const query = qs.toString();
+    return request(`/sectors/${query ? `?${query}` : ''}`);
+  },
+  getSector: (code) => request(`/sectors/${encodeURIComponent(code)}`),
+  createSector: (data) => request('/sectors/', { method: 'POST', body: JSON.stringify(data) }),
+  updateSector: (code, data) => request(`/sectors/${encodeURIComponent(code)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSector: (code) => request(`/sectors/${encodeURIComponent(code)}`, { method: 'DELETE' }),
+
+  // Türkiye Ticaret Bakanlığı Meslek Tanımları (Madde 1)
+  getProfessions: (params = {}) => {
+    const p = (params && typeof params === 'object') ? params : {};
+    const qs = new URLSearchParams();
+    if (p.sector_code) qs.append('sector_code', p.sector_code);
+    if (p.search) qs.append('q', p.search);
+    if (p.q) qs.append('q', p.q);
+    if (p.is_active !== undefined) qs.append('is_active', p.is_active);
+    if (p.active_only !== undefined) qs.append('is_active', p.active_only);
+    qs.append('limit', p.limit || 500);
+    if (p.offset) qs.append('offset', p.offset);
+    const query = qs.toString();
+    return request(`/professions/${query ? `?${query}` : ''}`);
+  },
+  getProfession: (code) => request(`/professions/${encodeURIComponent(code)}`),
+  createProfession: (data) => request('/professions/', { method: 'POST', body: JSON.stringify(data) }),
+  updateProfession: (code, data) => request(`/professions/${encodeURIComponent(code)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProfession: (code) => request(`/professions/${encodeURIComponent(code)}`, { method: 'DELETE' }),
 
   // Şirketler & Detay Yönetimi
   getTenantDetails: (tenantId) => request(`/tenants/${tenantId}/details`),
@@ -141,10 +175,75 @@ export const api = {
   deleteSchedule: (id) => request(`/system/schedules/${id}`, { method: 'DELETE' }),
   triggerSchedule: (id) => request(`/system/schedules/${id}/trigger`, { method: 'POST' }),
 
-  // Şirket Gelişmiş İşlemleri (Madde 9, 13, 14)
+  // Şirket Gelişmiş İşlemleri (Madde 9, 13, 14, Silme)
   adminCreateTenant: (data) => request('/tenants/admin-create', { method: 'POST', body: JSON.stringify(data) }),
+  deleteTenant: (tenantId) => request(`/tenants/${tenantId}`, { method: 'DELETE' }),
   sendManualReminder: (tenantId) => request(`/tenants/${tenantId}/send-reminder`, { method: 'POST' }),
   sendManualWelcome: (tenantId) => request(`/tenants/${tenantId}/send-welcome`, { method: 'POST' }),
   generateManifesto: (data) => request('/tenants/generate-manifesto', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Müşteri Şirket Yönetimi (Company Admin) - Departmanlar (Madde 1)
+  getDepartments: (tenantId) => request(`/company/${tenantId}/departments`),
+  createDepartment: (tenantId, data) => request(`/company/${tenantId}/departments`, { method: 'POST', body: JSON.stringify(data) }),
+  updateDepartment: (tenantId, departmentId, data) => request(`/company/${tenantId}/departments/${departmentId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDepartment: (tenantId, departmentId) => request(`/company/${tenantId}/departments/${departmentId}`, { method: 'DELETE' }),
+
+  // Müşteri Şirket Yönetimi (Company Admin) - Ünvanlar & AI Kontrolü (Madde 2)
+  getCompanyJobTitles: (tenantId) => request(`/company/${tenantId}/job-titles`),
+  getSystemJobTitleTemplates: (tenantId, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.category) query.append('category', params.category);
+    if (params.search) query.append('search', params.search);
+    const qs = query.toString();
+    return request(`/company/${tenantId}/job-titles/system-templates${qs ? `?${qs}` : ''}`);
+  },
+  createCompanyJobTitle: (tenantId, data) => request(`/company/${tenantId}/job-titles`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCompanyJobTitle: (tenantId, titleId, data) => request(`/company/${tenantId}/job-titles/${titleId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCompanyJobTitle: (tenantId, titleId) => request(`/company/${tenantId}/job-titles/${titleId}`, { method: 'DELETE' }),
+  generateRolePrompt: (tenantId, data) => request(`/company/${tenantId}/generate-role-prompt`, { method: 'POST', body: JSON.stringify(data) }),
+
+  // Müşteri Şirket Yönetimi (Company Admin) - AI Ajan İşe Alım & Yaşam Döngüsü (Madde 3)
+  getAvailableLLMModels: (tenantId) => request(`/company/${tenantId}/llm-models`),
+  getCompanyAIAgents: (tenantId, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    const qs = query.toString();
+    return request(`/company/${tenantId}/ai-agents${qs ? `?${qs}` : ''}`);
+  },
+  hireAIAgent: (tenantId, data) => request(`/company/${tenantId}/ai-agents`, { method: 'POST', body: JSON.stringify(data) }),
+  updateAIAgent: (tenantId, agentId, data) => request(`/company/${tenantId}/ai-agents/${agentId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  terminateAIAgent: (tenantId, agentId, data = {}) => request(`/company/${tenantId}/ai-agents/${agentId}/terminate`, { method: 'POST', body: JSON.stringify(data) }),
+  rehireAIAgent: (tenantId, agentId) => request(`/company/${tenantId}/ai-agents/${agentId}/rehire`, { method: 'POST' }),
+  deleteAIAgent: (tenantId, agentId) => request(`/company/${tenantId}/ai-agents/${agentId}`, { method: 'DELETE' }),
+  getAgentQuota: (tenantId) => request(`/company/${tenantId}/agent-quota`),
+
+  // AI Ajan Uzmanlık Dokümanları, Web, Video & Deep Search Kaynak Yönetimi
+  getAgentDocuments: (tenantId, agentId) => request(`/company/${tenantId}/ai-agents/${agentId}/documents`),
+  uploadAgentDocument: (tenantId, agentId, formData) => request(`/company/${tenantId}/ai-agents/${agentId}/documents`, { method: 'POST', body: formData }),
+  addAgentWebLink: (tenantId, agentId, data) => request(`/company/${tenantId}/ai-agents/${agentId}/web-links`, { method: 'POST', body: JSON.stringify(data) }),
+  addAgentVideoLink: (tenantId, agentId, data) => request(`/company/${tenantId}/ai-agents/${agentId}/video-links`, { method: 'POST', body: JSON.stringify(data) }),
+  triggerAgentDeepSearch: (tenantId, agentId, data) => request(`/company/${tenantId}/ai-agents/${agentId}/deep-search`, { method: 'POST', body: JSON.stringify(data) }),
+  deepSearchSectorTitle: (tenantId, data) => request(`/company/${tenantId}/ai-agents/deep-search-sector-title`, { method: 'POST', body: JSON.stringify(data) }),
+  deepSearchExistingAgentSectorTitle: (tenantId, agentId, modelCode = 'glm-5.3') => request(`/company/${tenantId}/ai-agents/${agentId}/deep-search-sector-title?model_code=${encodeURIComponent(modelCode)}`, { method: 'POST' }),
+  deleteAgentDocument: (tenantId, agentId, documentId) => request(`/company/${tenantId}/ai-agents/${agentId}/documents/${documentId}`, { method: 'DELETE' }),
+  getAgentDocumentDownloadUrl: (tenantId, agentId, documentId) => `${BASE_URL}/company/${tenantId}/ai-agents/${agentId}/documents/${documentId}/download`,
+
+  // Müşteri Şirket Yönetimi - Kurumsal Manifesto (Madde 6)
+  updateCompanyManifesto: (tenantId, data) => request(`/company/${tenantId}/manifesto`, { method: 'PUT', body: JSON.stringify(data) }),
+  generateCompanyManifesto: (tenantId, data) => request(`/company/${tenantId}/generate-manifesto`, { method: 'POST', body: JSON.stringify(data) }),
+
+  // Müşteri Şirket Yönetimi (Company Admin) - Normal İnsan Kullanıcı Yönetimi (Madde 1)
+  getCompanyUsers: (tenantId, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.search) query.append('search', params.search);
+    const qs = query.toString();
+    return request(`/company/${tenantId}/users${qs ? `?${qs}` : ''}`);
+  },
+  getCompanyUserQuota: (tenantId) => request(`/company/${tenantId}/user-quota`),
+  createCompanyUser: (tenantId, data) => request(`/company/${tenantId}/users`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCompanyUser: (tenantId, userId, data) => request(`/company/${tenantId}/users/${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCompanyUser: (tenantId, userId) => request(`/company/${tenantId}/users/${userId}`, { method: 'DELETE' }),
 };
+
 

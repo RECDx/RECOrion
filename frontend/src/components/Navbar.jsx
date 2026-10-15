@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import AdminLeadsModal from './AdminLeadsModal';
 
-export default function Navbar({ health, tenant, selectedModel, models, onSelectModel, onGoToOfficialSite, currentUser, onGoToAdminConsole, onLogout }) {
+export default function Navbar({ health, tenant, selectedModel, models, onSelectModel, onGoToOfficialSite, currentUser, onGoToAdminConsole, onGoToCompanyAdmin, onLogout }) {
   const isHealthy = health?.status === 'healthy';
   const [isLeadsModalOpen, setIsLeadsModalOpen] = useState(false);
 
@@ -163,6 +163,30 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
             title="RECDx Platform Süper Admin Yönetim Konsoluna Git"
           >
             👑 Süper Admin Konsolu
+          </button>
+        )}
+
+        {/* Company Admin Console Button */}
+        {(currentUser?.role === 'COMPANY_ADMIN' || currentUser?.role === 'SUPER_ADMIN') && onGoToCompanyAdmin && (
+          <button
+            onClick={onGoToCompanyAdmin}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, rgba(113, 52, 226, 0.2) 0%, rgba(20, 108, 235, 0.2) 100%)',
+              border: '1px solid rgba(113, 52, 226, 0.5)',
+              color: '#c084fc',
+              fontSize: '0.775rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            title="Şirket Departmanları ve Organizasyon Yönetim Konsoluna Git"
+          >
+            🏢 Şirket Yönetimi
           </button>
         )}
 

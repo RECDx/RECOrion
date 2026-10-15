@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard,
   Building2, 
@@ -24,6 +24,7 @@ import {
   Settings,
   Tag,
   Briefcase,
+  GraduationCap,
   Lock,
   Copy,
   Check,
@@ -60,28 +61,30 @@ const TAB_SLUG_MAP = {
   DASHBOARD: 'dashboard',
   LEADS: 'leads',
   TENANTS: 'tenants',
+  SECTORS: 'sectors',
+  PROFESSIONS: 'professions',
   PERMISSIONS: 'permissions',
+  ROLES: 'roles',
   PLANS: 'plans',
   EMAIL_TEMPLATES: 'email-templates',
   SCHEDULES: 'schedules',
   AI_MODEL_SETTINGS: 'ai-models',
-  MODELS: 'models',
-  NACE: 'nace',
-  TITLES: 'job-titles'
+  MODELS: 'models'
 };
 
 const SLUG_TAB_MAP = {
   'dashboard': 'DASHBOARD',
   'leads': 'LEADS',
   'tenants': 'TENANTS',
+  'sectors': 'SECTORS',
+  'professions': 'PROFESSIONS',
   'permissions': 'PERMISSIONS',
+  'roles': 'ROLES',
   'plans': 'PLANS',
   'email-templates': 'EMAIL_TEMPLATES',
   'schedules': 'SCHEDULES',
   'ai-models': 'AI_MODEL_SETTINGS',
-  'models': 'MODELS',
-  'nace': 'NACE',
-  'job-titles': 'TITLES'
+  'models': 'MODELS'
 };
 
 function getTabFromHash() {
@@ -279,11 +282,13 @@ export default function SuperAdminConsole({
   currentUser, 
   onLogout, 
   onSwitchToWorkspace, 
+  onSwitchToCompanyAdmin,
   onGoToOfficialSite, 
   onUpdateCurrentUser 
 }) {
   // Sol Menü Daraltma / Genişletme State'i (Madde 4)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isSavingTenantRef = useRef(false);
 
   // Aktif Menü Sekmesi (URL Hash Senkronize)
   const [activeTab, setActiveTab] = useState(getTabFromHash); 
@@ -327,6 +332,7 @@ export default function SuperAdminConsole({
   const [tenantViewMode, setTenantViewMode] = useState('KANBAN');
   const [leadViewMode, setLeadViewMode] = useState('LIST');
   const [permissionViewMode, setPermissionViewMode] = useState('LIST');
+  const [roleViewMode, setRoleViewMode] = useState('KANBAN');
   const [planViewMode, setPlanViewMode] = useState('KANBAN');
   const [modelViewMode, setModelViewMode] = useState('LIST');
   const [naceViewMode, setNaceViewMode] = useState('LIST');
@@ -390,16 +396,17 @@ export default function SuperAdminConsole({
   const [permissions, setPermissions] = useState([]);
   const [models, setModels] = useState([]);
   const [plans, setPlans] = useState([]);
-  const [naceList, setNaceList] = useState([]);
-  const [jobTitles, setJobTitles] = useState([]);
+  const [professions, setProfessions] = useState([]);
   const [systemSettings, setSystemSettings] = useState({ default_manifesto_model: 'deepseek-v4.1-flash' });
   const [emailTemplates, setEmailTemplates] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [sectors, setSectors] = useState([]);
 
   // Arama & Filtre State'leri
   const [searchQuery, setSearchQuery] = useState('');
-  const [naceSearch, setNaceSearch] = useState('');
-  const [jobTitleCategoryFilter, setJobTitleCategoryFilter] = useState('ALL');
+  const [professionsFilterSector, setProfessionsFilterSector] = useState('');
+  const [professionSearch, setProfessionSearch] = useState('');
+  const [professionViewMode, setProfessionViewMode] = useState('TABLE');
   const [permissionModuleFilter, setPermissionModuleFilter] = useState('ALL');
 
   // UI & Geri Bildirim
@@ -430,6 +437,19 @@ export default function SuperAdminConsole({
     default_for_roles: ['SUPER_ADMIN', 'COMPANY_ADMIN']
   });
 
+  // 2.1 Yetki Rolleri Detay / Ekleme Modal (Madde 1)
+  const [roles, setRoles] = useState([]);
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState(null);
+  const [roleForm, setRoleForm] = useState({
+    name: '',
+    description: '',
+    permissions: [],
+    is_system: true
+  });
+  const [rolePermissionSearch, setRolePermissionSearch] = useState('');
+  const [rolePermissionModuleFilter, setRolePermissionModuleFilter] = useState('ALL');
+
   // 3. Şirket Detay & Yönetici Modal (Madde 5 & 12)
   const [tenantDetailModalOpen, setTenantDetailModalOpen] = useState(false);
   const [tenantDetailLoading, setTenantDetailLoading] = useState(false);
@@ -445,6 +465,7 @@ export default function SuperAdminConsole({
     is_active: true,
     sector_manifesto: '',
     plan_id: '',
+    sectors: [],
     nace_codes: [],
     package_expiry_date: ''
   });
@@ -476,6 +497,7 @@ export default function SuperAdminConsole({
     admin_name: '',
     admin_password: '',
     plan_id: '',
+    sectors: [],
     nace_codes: []
   });
   const [newTenantNaceSearch, setNewTenantNaceSearch] = useState('');
@@ -541,30 +563,29 @@ export default function SuperAdminConsole({
     status: 'ACTIVE'
   });
 
-  // 6. NACE Detay / Ekleme Modal (Madde 12)
-  const [naceModalOpen, setNaceModalOpen] = useState(false);
-  const [editingNace, setEditingNace] = useState(null);
-  const [naceForm, setNaceForm] = useState({
+  // 6. Meslek Grubu Tanımı Modal (Madde 1)
+  const [professionModalOpen, setProfessionModalOpen] = useState(false);
+  const [editingProfession, setEditingProfession] = useState(null);
+  const [professionForm, setProfessionForm] = useState({
     code: '',
-    title: '',
-    sector_group: 'Bilişim & Yazılım',
-    description: ''
+    sector_code: '',
+    name: '',
+    description: '',
+    is_active: true
   });
 
-  // 7. Sektörel Ünvan Detay / Ekleme Modal (Madde 13)
-  const [titleModalOpen, setTitleModalOpen] = useState(false);
-  const [editingTitle, setEditingTitle] = useState(null);
-  const [titleForm, setTitleForm] = useState({
+  // 7. Sektör Tanımlama Modal (Madde 1)
+  const [sectorModalOpen, setSectorModalOpen] = useState(false);
+  const [editingSector, setEditingSector] = useState(null);
+  const [sectorViewMode, setSectorViewMode] = useState('TABLE');
+  const [sectorForm, setSectorForm] = useState({
     code: '',
-    title: '',
-    category: 'YAZILIM',
+    name: '',
     description: '',
-    base_role_prompt: '',
-    required_skills: ['Yazılım Mimarisi', 'Temiz Kod'],
-    recommended_model_code: 'glm-5.3',
-    autonomy_level: 'L1'
+    icon: '',
+    image_url: '',
+    is_active: true
   });
-  const [regeneratingPrompt, setRegeneratingPrompt] = useState(false);
 
   // ESC Tuşu ile Açık Olan Detay / Düzenleme Modalını Kaydetmeden Kapatma (Madde 3)
   useEffect(() => {
@@ -584,12 +605,14 @@ export default function SuperAdminConsole({
           setProfileModalOpen(false);
         } else if (permissionModalOpen) {
           setPermissionModalOpen(false);
+        } else if (roleModalOpen) {
+          setRoleModalOpen(false);
         } else if (modelModalOpen) {
           setModelModalOpen(false);
-        } else if (naceModalOpen) {
-          setNaceModalOpen(false);
-        } else if (titleModalOpen) {
-          setTitleModalOpen(false);
+        } else if (professionModalOpen) {
+          setProfessionModalOpen(false);
+        } else if (sectorModalOpen) {
+          setSectorModalOpen(false);
         } else if (testEmailModalOpen) {
           setTestEmailModalOpen(false);
         }
@@ -606,9 +629,10 @@ export default function SuperAdminConsole({
     scheduleModalOpen,
     profileModalOpen,
     permissionModalOpen,
+    roleModalOpen,
     modelModalOpen,
-    naceModalOpen,
-    titleModalOpen,
+    professionModalOpen,
+    sectorModalOpen,
     testEmailModalOpen
   ]);
 
@@ -617,29 +641,31 @@ export default function SuperAdminConsole({
     setLoading(true);
     setActionFeedback(null);
     try {
-      const [lData, tData, pData, mData, plData, nData, jData, sData, etData, scData] = await Promise.all([
+      const [lData, tData, pData, rData, mData, plData, sData, etData, scData, secData, profData] = await Promise.all([
         api.getLeads().catch(() => []),
         api.getTenants().catch(() => []),
         api.getPermissions().catch(() => []),
+        api.getSystemRoles().catch(() => []),
         api.getModels().catch(() => []),
         api.getPlans().catch(() => []),
-        api.getNaceCatalog().catch(() => []),
-        api.getJobTitles().catch(() => []),
         api.getSystemSettings().catch(() => ({ default_manifesto_model: 'deepseek-v3' })),
         api.getEmailTemplates().catch(() => []),
-        api.getSchedules().catch(() => [])
+        api.getSchedules().catch(() => []),
+        api.getSectors().catch(() => []),
+        api.getProfessions().catch(() => [])
       ]);
 
       setLeads(lData || []);
       setTenants(tData || []);
       setPermissions(pData || []);
+      setRoles(rData || []);
       setModels(mData || []);
       setPlans(plData || []);
-      setNaceList(nData || []);
-      setJobTitles(jData || []);
       setSystemSettings(sData || { default_manifesto_model: 'deepseek-v3' });
       setEmailTemplates(etData || []);
       setSchedules(scData || []);
+      setSectors(secData || []);
+      setProfessions(profData || []);
 
       // Güncel profil verisi
       if (currentUser?.actor_id) {
@@ -667,19 +693,6 @@ export default function SuperAdminConsole({
   useEffect(() => {
     loadAllData();
   }, []);
-
-  // NACE Arama
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const res = await api.searchNace(naceSearch, 50);
-        setNaceList(res || []);
-      } catch (err) {
-        console.error("NACE arama hatası:", err);
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [naceSearch]);
 
   const copyToClipboard = (text, key) => {
     navigator.clipboard.writeText(text);
@@ -753,7 +766,8 @@ export default function SuperAdminConsole({
         is_active: details.tenant.is_active,
         sector_manifesto: details.tenant.sector_manifesto || '',
         plan_id: details.tenant.plan_id || '',
-        nace_codes: details.tenant.nace_codes || [],
+        sectors: details.tenant.sectors || [],
+        professions: details.tenant.professions || [],
         package_expiry_date: details.tenant.package_expiry_date || ''
       });
       const firstAdmin = details.admins && details.admins.length > 0 ? details.admins[0] : null;
@@ -792,7 +806,8 @@ export default function SuperAdminConsole({
         is_active: tenantEditForm.is_active,
         sector_manifesto: tenantEditForm.sector_manifesto,
         plan_id: tenantEditForm.plan_id || null,
-        nace_codes: tenantEditForm.nace_codes || [],
+        sectors: tenantEditForm.sectors || [],
+        professions: tenantEditForm.professions || [],
         package_expiry_date: tenantEditForm.package_expiry_date || null
       });
       setActionFeedback({ type: 'success', text: `✓ '${tenantEditForm.name}' şirket bilgileri başarıyla kaydedildi!` });
@@ -815,7 +830,8 @@ export default function SuperAdminConsole({
       setIsGeneratingDetailManifesto(true);
       const res = await api.generateManifesto({
         company_name: tenantEditForm.name,
-        nace_codes: tenantEditForm.nace_codes || [],
+        sectors: tenantEditForm.sectors || [],
+        professions: tenantEditForm.professions || [],
         website: tenantEditForm.website || null
       });
       setTenantEditForm(prev => ({ ...prev, sector_manifesto: res.manifesto }));
@@ -864,6 +880,51 @@ export default function SuperAdminConsole({
     }
   };
 
+  // Ana Şirket Kontrolü (RECDx Teknoloji & Dijital Dönüşüm Danışmanlığı LTD. Şirketi Silinemez)
+  const isMainCompany = (tenant) => {
+    if (!tenant) return false;
+    const slug = (tenant.slug || '').toLowerCase();
+    const name = (tenant.name || '').toLowerCase();
+    return slug === 'recdx' || slug === 'recdx_hq' || name.includes('recdx teknoloji') || name.includes('dijital dönüşüm');
+  };
+
+  // Şirket Silme İşlemi (Madde 1: Departman, AI Ajan veya Proje yoksa silinebilir, Ana Şirket Silinemez)
+  const handleDeleteTenant = async (t) => {
+    if (!t?.id) return;
+    if (isMainCompany(t)) {
+      alert("⚠️ RECDx Teknoloji & Dijital Dönüşüm Danışmanlığı LTD. Şirketi sistemin ana şirketidir ve SİLİNEMEZ!");
+      return;
+    }
+    const confirmText = `'${t.name}' şirketini sistemden kalıcı olarak SİLMEK istediğinize emin misiniz?\n\n⚠️ Dikkat: Bu işlem geri alınamaz!\n(Şirket içerisinde tanımlı departman, AI ajanı veya proje bulunması halinde silme işlemi engellenecektir.)`;
+    if (!window.confirm(confirmText)) return;
+
+    try {
+      setProcessingId('delete-tenant-' + t.id);
+      const res = await api.deleteTenant(t.id);
+      setActionFeedback({
+        type: 'success',
+        text: `✓ ${res.message || `'${t.name}' şirketi başarıyla silindi.`}`
+      });
+      alert(`✓ İşlem Başarılı!\n\n${res.message || `'${t.name}' şirketi sistemden silindi.`}`);
+
+      // Eğer detay modalı açık ise kapat
+      if (selectedTenantDetails?.tenant?.id === t.id) {
+        setTenantDetailModalOpen(false);
+        setSelectedTenantDetails(null);
+      }
+
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({
+        type: 'error',
+        text: 'Şirket silinemedi: ' + err.message
+      });
+      alert(`⚠️ Şirket Silinemedi!\n\nSebep: ${err.message || 'Bilinmeyen hata'}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   // Manuel Paket Süre Dolum Hatırlatıcı Gönder (Madde 14)
   const handleSendManualReminder = async (t) => {
     if (!window.confirm(`'${t.name}' şirketine (${t.contact_email}) paket kullanım süresi hatırlatıcı e-postası göndermek istiyor musunuz?`)) return;
@@ -902,14 +963,86 @@ export default function SuperAdminConsole({
       setProcessingId('sched-' + sched.id);
       const res = await api.triggerSchedule(sched.id);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-      alert(`✓ Zamanlayıcı E-Postaları Başarıyla Gönderildi!\n\n${res.message || 'Zamanlayıcı kuralı başarıyla işletildi.'}`);
+      alert(`✓ Zamanlayıcı E-Postaları Başarıyla Gönderildi!\n\n${res.message || 'Kural işletildi.'}`);
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Zamanlayıcı çalıştırılamadı: ' + err.message });
-      alert(`⚠️ Zamanlayıcı E-Postası Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
+      alert(`⚠️ Zamanlayıcı E-Postası Gönderilemedi!\n\nHata: ${err.message}`);
     } finally {
       setProcessingId(null);
     }
+  };
+
+  // Sektör & Meslek Grubu Yardımcıları (Yeni Müşteri & Müşteri Düzenleme)
+  const handleToggleSectorNewTenant = (sectorCode) => {
+    const current = newTenantForm.sectors || [];
+    const isSelected = current.includes(sectorCode);
+    const updatedSectors = isSelected ? current.filter(s => s !== sectorCode) : [...current, sectorCode];
+    // Sektör kaldırıldıysa ona ait seçili meslekleri de temizle
+    const updatedProfessions = isSelected
+      ? (newTenantForm.professions || []).filter(p => {
+          const profObj = professions.find(pr => (typeof p === 'object' ? pr.code === p.code : pr.code === p));
+          return profObj ? profObj.sector_code !== sectorCode : true;
+        })
+      : (newTenantForm.professions || []);
+
+    setNewTenantForm(prev => ({
+      ...prev,
+      sectors: updatedSectors,
+      professions: updatedProfessions
+    }));
+  };
+
+  const handleToggleProfessionNewTenant = (profCode) => {
+    const current = newTenantForm.professions || [];
+    const isSelected = current.includes(profCode);
+    setNewTenantForm(prev => ({
+      ...prev,
+      professions: isSelected ? current.filter(p => p !== profCode) : [...current, profCode]
+    }));
+  };
+
+  const handleClearAllSectorsNewTenant = () => {
+    setNewTenantForm(prev => ({
+      ...prev,
+      sectors: [],
+      professions: []
+    }));
+  };
+
+  const handleToggleSectorTenantEdit = (sectorCode) => {
+    const current = tenantEditForm.sectors || [];
+    const isSelected = current.includes(sectorCode);
+    const updatedSectors = isSelected ? current.filter(s => s !== sectorCode) : [...current, sectorCode];
+    const updatedProfessions = isSelected
+      ? (tenantEditForm.professions || []).filter(p => {
+          const profObj = professions.find(pr => (typeof p === 'object' ? pr.code === p.code : pr.code === p));
+          return profObj ? profObj.sector_code !== sectorCode : true;
+        })
+      : (tenantEditForm.professions || []);
+
+    setTenantEditForm(prev => ({
+      ...prev,
+      sectors: updatedSectors,
+      professions: updatedProfessions
+    }));
+  };
+
+  const handleToggleProfessionTenantEdit = (profCode) => {
+    const current = tenantEditForm.professions || [];
+    const isSelected = current.includes(profCode);
+    setTenantEditForm(prev => ({
+      ...prev,
+      professions: isSelected ? current.filter(p => p !== profCode) : [...current, profCode]
+    }));
+  };
+
+  const handleClearAllSectorsTenantEdit = () => {
+    setTenantEditForm(prev => ({
+      ...prev,
+      sectors: [],
+      professions: []
+    }));
   };
 
   // Süper Admin Doğrudan Müşteri Ekleme (Madde 9)
@@ -925,10 +1058,9 @@ export default function SuperAdminConsole({
       admin_name: '',
       admin_password: '',
       plan_id: plans.length > 0 ? plans[0].id : '',
-      nace_codes: []
+      sectors: [],
+      professions: []
     });
-    setNewTenantNaceSearch('');
-    setNewTenantNaceResults([]);
     setNewTenantManifesto('');
     setNewTenantModalOpen(true);
   };
@@ -942,7 +1074,8 @@ export default function SuperAdminConsole({
       setIsGeneratingNewTenantManifesto(true);
       const res = await api.generateManifesto({
         company_name: newTenantForm.name,
-        nace_codes: newTenantForm.nace_codes || [],
+        sectors: newTenantForm.sectors || [],
+        professions: newTenantForm.professions || [],
         website: newTenantForm.website || null
       });
       setNewTenantManifesto(res.manifesto);
@@ -954,48 +1087,76 @@ export default function SuperAdminConsole({
     }
   };
 
-  const handleSaveNewTenant = async (e, options = { activate: true, sendEmail: true }) => {
+  const handleSaveNewTenant = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (isSavingTenantRef.current) return;
     if (!newTenantForm.name.trim() || !newTenantForm.contact_email.trim()) {
       alert("Lütfen şirket adı ve e-posta adresini doldurunuz.");
       return;
     }
+
+    // Madde 2: Resmi/Official kurumsal e-posta zorunluluğu (Gmail, Hotmail vb. engelleme)
+    const publicMailDomains = [
+      'gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.com.tr', 'outlook.com', 
+      'outlook.com.tr', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.com.tr', 'ymail.com', 
+      'yandex.com', 'yandex.com.tr', 'ya.ru', 'icloud.com', 'mail.ru', 'proton.me', 
+      'protonmail.com', 'zoho.com', 'gmx.com', 'aol.com'
+    ];
+    const emailParts = newTenantForm.contact_email.trim().toLowerCase().split('@');
+    const domain = (emailParts[1] || '').trim();
+    if (!domain || publicMailDomains.includes(domain) || publicMailDomains.some(d => domain.endsWith('.' + d))) {
+      alert(`⚠️ Kurumsal / Official E-Posta Zorunluluğu!\n\nMüşteri kaydı için şirkete ait resmi (official) bir şirket e-posta adresi gereklidir.\nGenel/ücretsiz (${domain || 'geçersiz'}) e-posta sağlayıcıları kabul edilmemektedir.\nLütfen 'adsoyad@sirketiniz.com' veya 'info@sirketiniz.com' gibi bir kurumsal adres giriniz.`);
+      return;
+    }
+
+    isSavingTenantRef.current = true;
     try {
-      const modeId = options.activate ? 'create-new-tenant-activate' : 'create-new-tenant-draft';
-      setProcessingId(modeId);
+      setProcessingId('create-new-tenant');
       const res = await api.adminCreateTenant({
         ...newTenantForm,
         sector_manifesto: newTenantManifesto,
-        activate_package: options.activate,
-        send_welcome_email: options.sendEmail
+        activate_package: false,
+        send_welcome_email: false
       });
       const companyName = newTenantForm.name;
-      const tenantId = res.tenant_id;
-      const initialPassword = res.admin_password;
+      const adminName = res.admin_name || newTenantForm.admin_name || 'Yetkili';
+      const adminEmail = res.admin_email || newTenantForm.contact_email;
 
-      // Yeni müşteri modalını kapat ve listeleri tazele
+      // 1. Yeni müşteri modalını kapat
       setNewTenantModalOpen(false);
+
+      // 2. Formu sıfırla
+      setNewTenantForm({
+        name: '',
+        tax_id: '',
+        tax_office: '',
+        contact_email: '',
+        phone: '',
+        website: '',
+        plan_id: '',
+        admin_name: '',
+        admin_password: '',
+        sectors: [],
+        nace_codes: [],
+        address: ''
+      });
+      setNewTenantManifesto('');
+
+      // 3. Verileri tazele
       await loadAllData();
 
-      // Madde 1: Yeni Şirket Bilgileri kayıt edildikten sonra yönetici tanımlaması bölümü otomatik açılır!
-      if (tenantId) {
-        await handleOpenTenantDetails(
-          { id: tenantId, name: companyName },
-          'ADMIN', // Yönetici Tanımlama sekmesini doğrudan aç
-          `✓ '${companyName}' kurumu başarıyla kaydedildi! Şimdi bu şirketin Yönetici (Admin) bilgilerini tanımlayabilir, güçlü şifresini belirleyebilir veya kopyalayabilirsiniz.`,
-          initialPassword
-        );
-      } else {
-        setActionFeedback({
-          type: 'success',
-          text: `✓ '${companyName}' kurumu başarıyla eklendi!`
-        });
-      }
+      // 4. Kullanıcı İsteği: "bir daha kullanıcı ekleme ekranı açma"
+      // İkinci modalı (handleOpenTenantDetails) KESİNLİKLE açmıyoruz!
+      setActionFeedback({
+        type: 'success',
+        text: `✓ '${companyName}' kurumu ve yetkili yöneticisi (${adminName} - ${adminEmail}) başarıyla sisteme kaydedildi.`
+      });
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Müşteri ekleme hatası: ' + err.message });
       alert(`⚠️ Müşteri Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
+      isSavingTenantRef.current = false;
     }
   };
 
@@ -1357,10 +1518,16 @@ export default function SuperAdminConsole({
       setProcessingId('save-tenant-admin');
       const res = await api.updateTenantAdmin(selectedTenantDetails.tenant.id, tenantAdminForm);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-      alert(`✓ Yönetici Bilgileri Kaydedildi!\n\n${res.message || 'Yönetici bilgileri ve erişim şifresi başarıyla güncellendi.'}`);
+      alert(`✓ Yönetici ve Müşteri Kartı Güncellendi!\n\n${res.message || 'Yönetici bilgileri ve müşteri kartı başarıyla güncellendi.'}`);
       setTenantAdminForm(prev => ({ ...prev, new_password: '' }));
-      const refreshed = await api.getTenantDetails(selectedTenantDetails.tenant.id);
-      setSelectedTenantDetails(refreshed);
+      setTenantEditForm(prev => ({
+        ...prev,
+        contact_email: tenantAdminForm.email,
+        phone: tenantAdminForm.phone || prev.phone
+      }));
+      // Madde 1: Yönetici kaydedilince modal ekranı otomatik kapatılır
+      setTenantDetailModalOpen(false);
+      await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Yönetici güncelleme hatası: ' + err.message });
       alert(`⚠️ Yönetici Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
@@ -1454,6 +1621,107 @@ export default function SuperAdminConsole({
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'İzin silinemedi: ' + err.message });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // ================= 4.1 YETKİ ROLLERİ CRUD (Madde 1) =================
+  const handleOpenRoleModal = (role = null) => {
+    if (role) {
+      setEditingRole(role);
+      setRoleForm({
+        name: role.name,
+        description: role.description || '',
+        permissions: [...(role.permissions || [])],
+        is_system: role.is_system !== undefined ? role.is_system : true
+      });
+    } else {
+      setEditingRole(null);
+      setRoleForm({
+        name: '',
+        description: '',
+        permissions: [],
+        is_system: true
+      });
+    }
+    setRolePermissionSearch('');
+    setRolePermissionModuleFilter('ALL');
+    setRoleModalOpen(true);
+  };
+
+  const handleTogglePermissionInRole = (permCode) => {
+    setRoleForm(prev => {
+      const current = prev.permissions || [];
+      if (current.includes(permCode)) {
+        return { ...prev, permissions: current.filter(c => c !== permCode) };
+      } else {
+        return { ...prev, permissions: [...current, permCode] };
+      }
+    });
+  };
+
+  const handleSelectAllPermissionsInCatalog = (listToSelect) => {
+    const codesToAdd = listToSelect.map(p => p.code);
+    setRoleForm(prev => {
+      const merged = Array.from(new Set([...(prev.permissions || []), ...codesToAdd]));
+      return { ...prev, permissions: merged };
+    });
+  };
+
+  const handleDeselectAllPermissionsInCatalog = (listToDeselect) => {
+    const codesToRemove = new Set(listToDeselect.map(p => p.code));
+    setRoleForm(prev => ({
+      ...prev,
+      permissions: (prev.permissions || []).filter(c => !codesToRemove.has(c))
+    }));
+  };
+
+  const handleSaveRole = async (e) => {
+    e.preventDefault();
+    if (!roleForm.name.trim()) {
+      alert("Lütfen rol adını giriniz.");
+      return;
+    }
+    try {
+      setProcessingId('save-role');
+      if (editingRole) {
+        await api.updateSystemRole(editingRole.id, {
+          name: roleForm.name,
+          description: roleForm.description,
+          permissions: roleForm.permissions,
+          is_system: roleForm.is_system
+        });
+        setActionFeedback({ type: 'success', text: `✓ '${roleForm.name}' yetki rolü güncellendi.` });
+      } else {
+        await api.createSystemRole({
+          name: roleForm.name,
+          description: roleForm.description,
+          permissions: roleForm.permissions,
+          is_system: roleForm.is_system
+        });
+        setActionFeedback({ type: 'success', text: `✓ '${roleForm.name}' yetki rolü oluşturuldu.` });
+      }
+      setRoleModalOpen(false);
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Rol kaydedilemedi: ' + err.message });
+      alert(`⚠️ Rol Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteRole = async (role) => {
+    if (!window.confirm(`'${role.name}' yetki rolünü silmek istediğinize emin misiniz?`)) return;
+    try {
+      setProcessingId('del-role-' + role.id);
+      await api.deleteSystemRole(role.id);
+      setActionFeedback({ type: 'success', text: `✓ '${role.name}' yetki rolü silindi.` });
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Rol silinemedi: ' + err.message });
+      alert(`⚠️ Rol Silinemedi!\n\nSebep: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1610,160 +1878,176 @@ export default function SuperAdminConsole({
     }
   };
 
-  // ================= 8. NACE KODLARI CRUD (Madde 12) =================
-  const handleOpenNaceModal = (item = null) => {
-    if (item) {
-      setEditingNace(item);
-      setNaceForm({
-        code: item.code,
-        title: item.title,
-        sector_group: item.sector_group,
-        description: item.description || ''
+  // ================= 8. MESLEK GRUBU TANIMLARI CRUD (Madde 1) =================
+  const handleOpenProfessionModal = (prof = null) => {
+    if (prof) {
+      setEditingProfession(prof);
+      setProfessionForm({
+        code: prof.code || '',
+        sector_code: prof.sector_code || '',
+        name: prof.name || '',
+        description: prof.description || '',
+        is_active: prof.is_active !== undefined ? prof.is_active : true
       });
     } else {
-      setEditingNace(null);
-      setNaceForm({
+      setEditingProfession(null);
+      setProfessionForm({
         code: '',
-        title: '',
-        sector_group: 'Bilişim & Yazılım',
-        description: ''
-      });
-    }
-    setNaceModalOpen(true);
-  };
-
-  const handleSaveNace = async (e) => {
-    e.preventDefault();
-    if (!naceForm.code.trim() || !naceForm.title.trim()) return;
-    try {
-      setProcessingId('save-nace');
-      if (editingNace) {
-        await api.updateNace(editingNace.code, {
-          title: naceForm.title,
-          sector_group: naceForm.sector_group,
-          description: naceForm.description
-        });
-        setActionFeedback({ type: 'success', text: `✓ '${naceForm.code}' NACE kodu güncellendi.` });
-      } else {
-        await api.createNace(naceForm);
-        setActionFeedback({ type: 'success', text: `✓ '${naceForm.code}' yeni NACE kodu eklendi.` });
-      }
-      setNaceModalOpen(false);
-      const res = await api.searchNace(naceSearch, 50);
-      setNaceList(res || []);
-    } catch (err) {
-      setActionFeedback({ type: 'error', text: 'NACE kaydedilemedi: ' + err.message });
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleDeleteNace = async (item) => {
-    if (!window.confirm(`'${item.code}' NACE kodunu silmek istediğinize emin misiniz?`)) return;
-    try {
-      setProcessingId(item.code);
-      await api.deleteNace(item.code);
-      setActionFeedback({ type: 'success', text: `✓ '${item.code}' silindi.` });
-      const res = await api.searchNace(naceSearch, 50);
-      setNaceList(res || []);
-    } catch (err) {
-      setActionFeedback({ type: 'error', text: 'NACE silinemedi: ' + err.message });
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  // ================= 9. SEKTOREL ÜNVANLAR & PROMPT (Madde 13) =================
-  const handleOpenTitleModal = (jt = null) => {
-    if (jt) {
-      setEditingTitle(jt);
-      setTitleForm({
-        code: jt.code,
-        title: jt.title,
-        category: jt.category,
-        description: jt.description || '',
-        base_role_prompt: jt.base_role_prompt,
-        required_skills: jt.required_skills || [],
-        recommended_model_code: jt.recommended_model_code || 'glm-5.3',
-        autonomy_level: jt.autonomy_level || 'L1'
-      });
-    } else {
-      setEditingTitle(null);
-      setTitleForm({
-        code: '',
-        title: '',
-        category: 'YAZILIM',
+        sector_code: professionsFilterSector || (sectors[0]?.code || ''),
+        name: '',
         description: '',
-        base_role_prompt: '',
-        required_skills: ['Yazılım Geliştirme', 'Algoritma'],
-        recommended_model_code: 'glm-5.3',
-        autonomy_level: 'L1'
+        is_active: true
       });
     }
-    setTitleModalOpen(true);
+    setProfessionModalOpen(true);
   };
 
-  const handleSaveTitle = async (e) => {
+  const handleSaveProfession = async (e) => {
     e.preventDefault();
-    if (!titleForm.code.trim() || !titleForm.title.trim()) return;
-    try {
-      setProcessingId('save-title');
-      if (editingTitle) {
-        await api.updateJobTitle(editingTitle.id, {
-          title: titleForm.title,
-          category: titleForm.category,
-          description: titleForm.description,
-          base_role_prompt: titleForm.base_role_prompt,
-          required_skills: titleForm.required_skills,
-          recommended_model_code: titleForm.recommended_model_code,
-          autonomy_level: titleForm.autonomy_level
-        });
-        setActionFeedback({ type: 'success', text: `✓ '${titleForm.title}' güncellendi.` });
-      } else {
-        await api.createAdminJobTitle(titleForm);
-        setActionFeedback({ type: 'success', text: `✓ '${titleForm.title}' ünvanı eklendi.` });
-      }
-      setTitleModalOpen(false);
-      await loadAllData();
-    } catch (err) {
-      setActionFeedback({ type: 'error', text: 'Ünvan kaydedilemedi: ' + err.message });
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleDeleteTitle = async (jt) => {
-    if (!window.confirm(`'${jt.title}' ünvanını silmek istediğinize emin misiniz?`)) return;
-    try {
-      setProcessingId(jt.id);
-      await api.deleteJobTitle(jt.id);
-      setActionFeedback({ type: 'success', text: `✓ '${jt.title}' silindi.` });
-      await loadAllData();
-    } catch (err) {
-      setActionFeedback({ type: 'error', text: 'Ünvan silinemedi: ' + err.message });
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleRegeneratePromptWithAI = async () => {
-    if (!editingTitle?.id) {
-      alert("Lütfen önce mevcut bir ünvanı düzenleyin.");
+    if (!professionForm.code.trim() || !professionForm.name.trim() || !professionForm.sector_code.trim()) {
+      alert("Lütfen Meslek Kodu, Sektör Kodu ve Meslek Tanım Adı alanlarını doldurunuz.");
       return;
     }
     try {
-      setRegeneratingPrompt(true);
-      const res = await api.regenerateJobTitlePrompt(editingTitle.id);
-      setTitleForm(prev => ({ ...prev, base_role_prompt: res.new_prompt }));
-      setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
+      setProcessingId('save-profession');
+      if (editingProfession) {
+        await api.updateProfession(editingProfession.code, {
+          sector_code: professionForm.sector_code,
+          name: professionForm.name,
+          description: professionForm.description,
+          is_active: professionForm.is_active
+        });
+        setActionFeedback({ type: 'success', text: `✓ '${professionForm.code}' meslek tanımı güncellendi.` });
+      } else {
+        await api.createProfession({
+          code: professionForm.code.trim(),
+          sector_code: professionForm.sector_code.trim(),
+          name: professionForm.name.trim(),
+          description: professionForm.description,
+          is_active: professionForm.is_active
+        });
+        setActionFeedback({ type: 'success', text: `✓ '${professionForm.code}' yeni meslek tanımı eklendi.` });
+      }
+      setProfessionModalOpen(false);
+      await loadAllData();
     } catch (err) {
-      setActionFeedback({ type: 'error', text: 'Prompt üretimi başarısız: ' + err.message });
+      setActionFeedback({ type: 'error', text: 'Meslek kaydedilemedi: ' + err.message });
     } finally {
-      setRegeneratingPrompt(false);
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteProfession = async (prof) => {
+    if (!window.confirm(`'${prof.code} - ${prof.name}' meslek tanımını silmek istediğinize emin misiniz?`)) return;
+    try {
+      setProcessingId(prof.code);
+      await api.deleteProfession(prof.code);
+      setActionFeedback({ type: 'success', text: `✓ '${prof.code}' meslek tanımı silindi.` });
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Meslek silinemedi: ' + err.message });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // ================= 9. SEKTÖR TANIMLAMA CRUD (Madde 1) =================
+  const handleOpenSectorModal = (sec = null) => {
+    if (sec) {
+      setEditingSector(sec);
+      setSectorForm({
+        code: sec.code || '',
+        name: sec.name || '',
+        description: sec.description || '',
+        icon: sec.icon || '',
+        image_url: sec.image_url || '',
+        is_active: sec.is_active !== undefined ? sec.is_active : true
+      });
+    } else {
+      setEditingSector(null);
+      setSectorForm({
+        code: '',
+        name: '',
+        description: '',
+        icon: '',
+        image_url: '',
+        is_active: true
+      });
+    }
+    setSectorModalOpen(true);
+  };
+
+  const handleSaveSector = async (e) => {
+    e.preventDefault();
+    if (!sectorForm.code.trim() || !sectorForm.name.trim()) {
+      alert("Lütfen Sektör Kodu ve Sektör Adı alanlarını doldurunuz.");
+      return;
+    }
+    try {
+      setProcessingId('save-sector');
+      if (editingSector) {
+        await api.updateSector(editingSector.code, {
+          name: sectorForm.name,
+          description: sectorForm.description,
+          icon: sectorForm.icon || null,
+          image_url: sectorForm.image_url || null,
+          is_active: sectorForm.is_active
+        });
+        setActionFeedback({ type: 'success', text: `✓ '${sectorForm.code}' sektörü güncellendi.` });
+      } else {
+        await api.createSector({
+          code: sectorForm.code.trim().toUpperCase(),
+          name: sectorForm.name.trim(),
+          description: sectorForm.description,
+          icon: sectorForm.icon || null,
+          image_url: sectorForm.image_url || null,
+          is_active: sectorForm.is_active
+        });
+        setActionFeedback({ type: 'success', text: `✓ '${sectorForm.code}' yeni sektör oluşturuldu.` });
+      }
+      setSectorModalOpen(false);
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Sektör kaydedilemedi: ' + err.message });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteSector = async (sec) => {
+    if (!window.confirm(`'${sec.code} - ${sec.name}' sektörünü ve bağlı meslek tanımlarını silmek istediğinize emin misiniz?`)) return;
+    try {
+      setProcessingId(sec.code);
+      await api.deleteSector(sec.code);
+      setActionFeedback({ type: 'success', text: `✓ '${sec.code}' sektörü silindi.` });
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Sektör silinemedi: ' + err.message });
+    } finally {
+      setProcessingId(null);
     }
   };
 
   // Filtrelenmiş Listeler
+  const filteredSectors = sectors.filter(s => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const codeMatch = s.code && s.code.toLowerCase().includes(q);
+    const nameMatch = s.name && s.name.toLowerCase().includes(q);
+    const descMatch = s.description && s.description.toLowerCase().includes(q);
+    return codeMatch || nameMatch || descMatch;
+  });
+
+  const filteredProfessions = professions.filter(p => {
+    if (professionsFilterSector && p.sector_code !== professionsFilterSector) return false;
+    if (!professionSearch && !searchQuery) return true;
+    const q = (professionSearch || searchQuery).toLowerCase();
+    const codeMatch = p.code && p.code.toLowerCase().includes(q);
+    const nameMatch = p.name && p.name.toLowerCase().includes(q);
+    const secMatch = p.sector_code && p.sector_code.toLowerCase().includes(q);
+    const descMatch = p.description && p.description.toLowerCase().includes(q);
+    return codeMatch || nameMatch || secMatch || descMatch;
+  });
   const filteredLeads = leads
     .filter(l => {
       if (leadApprovalFilter === 'PENDING') return l.status === 'PENDING';
@@ -1801,12 +2085,13 @@ export default function SuperAdminConsole({
     return matchMod && matchSearch;
   });
 
-  const filteredJobTitles = jobTitles.filter(jt => {
-    const matchCat = jobTitleCategoryFilter === 'ALL' || jt.category === jobTitleCategoryFilter;
-    const matchSearch = !searchQuery || 
-      jt.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      jt.code.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
+  const filteredRoles = roles.filter(r => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const nameMatch = r.name && r.name.toLowerCase().includes(q);
+    const descMatch = r.description && r.description.toLowerCase().includes(q);
+    const permMatch = Array.isArray(r.permissions) && r.permissions.some(p => p.toLowerCase().includes(q));
+    return nameMatch || descMatch || permMatch;
   });
 
   const filteredModels = models.filter(m => 
@@ -1955,6 +2240,21 @@ export default function SuperAdminConsole({
             )}
           </button>
 
+          {/* YETKİ ROLLERİ (Madde 1) */}
+          <button
+            onClick={() => { switchTab('ROLES'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'ROLES' ? 'active' : ''}`}
+            title="Yetki Rolleri (RBAC)"
+          >
+            <div className="super-admin-nav-item-left">
+              <ShieldCheck style={{ width: 17, height: 17, color: '#10b981' }} />
+              {!sidebarCollapsed && <span>Yetki Rolleri</span>}
+            </div>
+            {!sidebarCollapsed && (
+              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{roles.length}</span>
+            )}
+          </button>
+
           {/* KİRALAMA PAKETLERİ */}
           <button
             onClick={() => { switchTab('PLANS'); setSearchQuery(''); }}
@@ -2036,33 +2336,33 @@ export default function SuperAdminConsole({
             )}
           </button>
 
-          {/* NACE KODLARI */}
+          {/* SEKTÖR TANIMLARI (TİCARET BAKANLIĞI) */}
           <button
-            onClick={() => { switchTab('NACE'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'NACE' ? 'active' : ''}`}
-            title="NACE Kodları Kataloğu"
+            onClick={() => { switchTab('SECTORS'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'SECTORS' ? 'active' : ''}`}
+            title="Sektör Tanımları (Ticaret Bakanlığı)"
           >
             <div className="super-admin-nav-item-left">
-              <Tag style={{ width: 17, height: 17, color: '#38bdf8' }} />
-              {!sidebarCollapsed && <span>NACE Kodları</span>}
+              <Layers style={{ width: 17, height: 17, color: '#10b981' }} />
+              {!sidebarCollapsed && <span>Sektör Tanımları</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>2,160+</span>
+              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{sectors.length}</span>
             )}
           </button>
 
-          {/* SEKTÖREL ROLLER */}
+          {/* MESLEK TANIMLARI (TİCARET BAKANLIĞI) */}
           <button
-            onClick={() => { switchTab('TITLES'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'TITLES' ? 'active' : ''}`}
-            title="Sektörel Roller & Promptlar"
+            onClick={() => { switchTab('PROFESSIONS'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'PROFESSIONS' ? 'active' : ''}`}
+            title="Meslek Grubu Tanımları (Ticaret Bakanlığı)"
           >
             <div className="super-admin-nav-item-left">
-              <Briefcase style={{ width: 17, height: 17, color: '#ec4899' }} />
-              {!sidebarCollapsed && <span>Sektörel Roller</span>}
+              <Briefcase style={{ width: 17, height: 17, color: '#38bdf8' }} />
+              {!sidebarCollapsed && <span>Meslek Tanımları</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{jobTitles.length}</span>
+              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{professions.length}</span>
             )}
           </button>
         </nav>
@@ -2146,8 +2446,8 @@ export default function SuperAdminConsole({
               {activeTab === 'PLANS' && 'Kiralama Paketleri Yönetimi'}
               {activeTab === 'MODELS' && 'EVREN Model Kataloğu'}
               {activeTab === 'AI_MODEL_SETTINGS' && 'Çekirdek Manifesto & Ajan AI Modeli Seçimi'}
-              {activeTab === 'NACE' && 'NACE Faaliyet Kodları Kataloğu (Rev.2)'}
-              {activeTab === 'TITLES' && 'Sektörel Personel Ünvanları & Rol Promptları'}
+              {activeTab === 'SECTORS' && 'Sektör Tanımları (Ticaret Bakanlığı)'}
+              {activeTab === 'PROFESSIONS' && 'Meslek Grubu Tanımları (Ticaret Bakanlığı)'}
             </span>
           </div>
 
@@ -2359,17 +2659,17 @@ export default function SuperAdminConsole({
                   </div>
                 </div>
 
-                {/* KART 3: Onaylanmış Müşteri Başvuruları */}
+                {/* KART 3: Onaylanmış & Aktif Müşteri Portföyü */}
                 <div 
-                  onClick={() => { switchTab('LEADS'); setLeadApprovalFilter('APPROVED'); setSearchQuery(''); }}
-                  className="super-admin-kpi-card-3d"
+                  onClick={() => { switchTab('TENANTS'); setSearchQuery(''); }}
+                  className="super-admin-kpi-card-3d glow-green"
                   style={{ borderColor: 'rgba(16, 185, 129, 0.3)' }}
-                  title="Onaylanmış müşteri başvurularını incelemek için tıklayın"
+                  title="Onaylanmış ve aktif müşterileri incelemek için tıklayın"
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
                       <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Onaylanmış Başvurular
+                        Onaylanmış Portföy
                       </div>
                       <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: 2 }}>
                         Odoo & Sistemde Aktif
@@ -2392,11 +2692,17 @@ export default function SuperAdminConsole({
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontSize: '2.2rem', fontWeight: 900, color: '#fff', lineHeight: 1 }}>
-                      {leads.filter(l => l.status === 'APPROVED').length}
+                      {tenants.filter(t => t.is_active).length}
                     </span>
                     <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700 }}>
-                      Müşteri Satışı Resmileşti
+                      Aktif / Onaylı Müşteri
                     </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
+                    <span style={{ color: '#34d399', fontWeight: 700 }}>{leads.filter(l => l.status === 'APPROVED').length} Web Başvurusu</span>
+                    <span>•</span>
+                    <span>{Math.max(0, tenants.filter(t => t.is_active).length - leads.filter(l => l.status === 'APPROVED').length)} Doğrudan Kurumsal</span>
                   </div>
 
                   <div style={{ 
@@ -2409,7 +2715,7 @@ export default function SuperAdminConsole({
                     fontSize: '0.725rem',
                     color: '#34d399'
                   }}>
-                    <span style={{ fontWeight: 600 }}>Onaylananları Filtrele</span>
+                    <span style={{ fontWeight: 600 }}>Aktif Portföyü Gör</span>
                     <ArrowRight style={{ width: 14, height: 14 }} />
                   </div>
                 </div>
@@ -2655,7 +2961,7 @@ export default function SuperAdminConsole({
                         </div>
                       </div>
                       <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#cbd5e1', fontFamily: 'monospace' }}>
-                        {permissions.length} İzin / {jobTitles.length} Rol
+                        {permissions.length} İzin / {roles.length} Rol
                       </span>
                     </div>
 
@@ -3094,6 +3400,35 @@ export default function SuperAdminConsole({
                           <span><strong>🔑 Sistem Kimliği / URL:</strong> <code style={{ color: '#38bdf8' }}>{t.slug}</code></span>
                         </div>
 
+                        {/* Faaliyet Sektörleri Rozetleri (Madde 1) */}
+                        {t.sectors && t.sectors.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                            {t.sectors.map((secName, sIdx) => {
+                              const sObj = sectors.find(s => s.name === secName || s.code === secName);
+                              return (
+                                <span
+                                  key={sIdx}
+                                  style={{
+                                    padding: '2px 7px',
+                                    borderRadius: 6,
+                                    fontSize: '0.675rem',
+                                    fontWeight: 700,
+                                    background: 'rgba(99,102,241,0.2)',
+                                    border: '1px solid rgba(129,140,248,0.4)',
+                                    color: '#c7d2fe',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4
+                                  }}
+                                >
+                                  <span>{sObj?.icon || '📁'}</span>
+                                  <span>{secName}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         {/* Paket & Bitiş Tarihi Bilgileri (Madde 10) */}
                         <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 5 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem' }}>
@@ -3171,32 +3506,7 @@ export default function SuperAdminConsole({
                           scrollbarWidth: 'thin'
                         }}
                       >
-                        {!t.is_active && (
-                          <button
-                            onClick={() => handleQuickApproveTenant(t)}
-                            disabled={processingId === 'approve-' + t.id}
-                            className="super-admin-btn-corporate"
-                            style={{ 
-                              flex: '1 1 calc(50% - 6px)', 
-                              minWidth: '100px',
-                              justifyContent: 'center', 
-                              fontSize: '0.72rem', 
-                              padding: '6px 8px', 
-                              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                              whiteSpace: 'nowrap'
-                            }}
-                            title="Şirketi ve 1 Yıllık Paketi Hemen Onayla"
-                          >
-                            {processingId === 'approve-' + t.id ? (
-                              <RefreshCw style={{ width: 13, height: 13 }} className="animate-spin" />
-                            ) : (
-                              <CheckCircle2 style={{ width: 13, height: 13 }} />
-                            )}
-                            <span>Hemen Onayla</span>
-                          </button>
-                        )}
-
-                        {/* Müşteri Kartını Pasife Al / Aktife Al Butonu */}
+                        {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 3: Yalnızca Kayıtlı Şirketler Listesinden Yapılır) */}
                         <button
                           onClick={() => handleToggleTenantStatus(t)}
                           disabled={processingId === 'toggle-status-' + t.id}
@@ -3228,6 +3538,50 @@ export default function SuperAdminConsole({
                             </>
                           )}
                         </button>
+
+                        {/* Şirketi Sil Butonu (Madde 1: Ana Şirket Silinemez) */}
+                        {!isMainCompany(t) ? (
+                          <button
+                            onClick={() => handleDeleteTenant(t)}
+                            disabled={processingId === 'delete-tenant-' + t.id}
+                            className="super-admin-btn-secondary"
+                            style={{
+                              padding: '6px 8px',
+                              fontSize: '0.72rem',
+                              color: '#f87171',
+                              borderColor: 'rgba(239,68,68,0.35)',
+                              background: 'rgba(239,68,68,0.08)',
+                              justifyContent: 'center'
+                            }}
+                            title="Şirketi Kalıcı Olarak Sil (Departman, AI ajanı veya proje yoksa silinebilir)"
+                          >
+                            {processingId === 'delete-tenant-' + t.id ? (
+                              <RefreshCw style={{ width: 13, height: 13 }} className="animate-spin" />
+                            ) : (
+                              <Trash2 style={{ width: 13, height: 13 }} />
+                            )}
+                            <span>Sil</span>
+                          </button>
+                        ) : (
+                          <span
+                            style={{
+                              padding: '6px 8px',
+                              fontSize: '0.70rem',
+                              fontWeight: 600,
+                              color: '#38bdf8',
+                              background: 'rgba(56, 189, 248, 0.08)',
+                              border: '1px solid rgba(56, 189, 248, 0.25)',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px'
+                            }}
+                            title="Ana sistem şirketi silinemez"
+                          >
+                            🛡️ Ana Şirket
+                          </span>
+                        )}
 
                         <button
                           onClick={() => handleOpenTenantDetails(t)}
@@ -3297,6 +3651,17 @@ export default function SuperAdminConsole({
                           </button>
                         )}
 
+                        {onSwitchToCompanyAdmin && (
+                          <button
+                            onClick={() => onSwitchToCompanyAdmin(t)}
+                            className="super-admin-btn-secondary"
+                            title="Şirket Yönetim Paneline Geç (Departmanlar, Ünvanlar, AI Ajanlar)"
+                            style={{ flex: '0 0 auto', padding: '6px 8px', justifyContent: 'center', color: '#c084fc', borderColor: 'rgba(113,52,226,0.4)', background: 'rgba(113,52,226,0.1)' }}
+                          >
+                            <Building2 style={{ width: 14, height: 14 }} />
+                          </button>
+                        )}
+
                         {onSwitchToWorkspace && (
                           <button
                             onClick={() => onSwitchToWorkspace(t)}
@@ -3362,12 +3727,39 @@ export default function SuperAdminConsole({
                               )}
                             </td>
 
-                            {/* 2. Firma Adı & Slug */}
+                            {/* 2. Firma Adı, Slug & Sektörler (Madde 1) */}
                             <td style={{ whiteSpace: 'nowrap' }}>
                               <div style={{ fontWeight: 800, color: '#fff' }}>{t.name}</div>
                               <div style={{ fontSize: '0.68rem', color: '#38bdf8', fontFamily: 'monospace' }}>
                                 URL: {t.slug}
                               </div>
+                              {t.sectors && t.sectors.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+                                  {t.sectors.map((secName, sIdx) => {
+                                    const sObj = sectors.find(s => s.name === secName || s.code === secName);
+                                    return (
+                                      <span
+                                        key={sIdx}
+                                        style={{
+                                          padding: '1px 6px',
+                                          borderRadius: 4,
+                                          fontSize: '0.65rem',
+                                          fontWeight: 700,
+                                          background: 'rgba(99,102,241,0.2)',
+                                          border: '1px solid rgba(129,140,248,0.3)',
+                                          color: '#c7d2fe',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: 3
+                                        }}
+                                      >
+                                        <span>{sObj?.icon || '📁'}</span>
+                                        <span>{secName}</span>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </td>
 
                             {/* 3. Vergi No / Dairesi (Madde 12) */}
@@ -3426,28 +3818,7 @@ export default function SuperAdminConsole({
                             {/* 11. İşlemler */}
                             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                {!t.is_active && (
-                                  <button
-                                    onClick={() => handleQuickApproveTenant(t)}
-                                    disabled={processingId === 'approve-' + t.id}
-                                    style={{
-                                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                      color: '#fff', border: 'none', borderRadius: 6,
-                                      padding: '5px 8px', fontSize: '0.72rem', fontWeight: 700,
-                                      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
-                                    }}
-                                    title="Şirketi ve 1 Yıllık Paketi Hemen Onayla"
-                                  >
-                                    {processingId === 'approve-' + t.id ? (
-                                      <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" />
-                                    ) : (
-                                      <CheckCircle2 style={{ width: 12, height: 12 }} />
-                                    )}
-                                    <span>Onayla</span>
-                                  </button>
-                                )}
-
-                                {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 4) */}
+                                {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 3: Yalnızca Kayıtlı Şirketler Listesinden Yapılır) */}
                                 <button
                                   onClick={() => handleToggleTenantStatus(t)}
                                   disabled={processingId === 'toggle-status-' + t.id}
@@ -3475,6 +3846,48 @@ export default function SuperAdminConsole({
                                     </>
                                   )}
                                 </button>
+
+                                {/* Şirketi Sil Butonu (Madde 1: Ana Şirket Silinemez) */}
+                                {!isMainCompany(t) ? (
+                                  <button
+                                    onClick={() => handleDeleteTenant(t)}
+                                    disabled={processingId === 'delete-tenant-' + t.id}
+                                    className="super-admin-btn-secondary"
+                                    style={{
+                                      padding: '5px 8px',
+                                      fontSize: '0.72rem',
+                                      color: '#f87171',
+                                      borderColor: 'rgba(239,68,68,0.35)',
+                                      background: 'rgba(239,68,68,0.08)'
+                                    }}
+                                    title="Şirketi Kalıcı Olarak Sil (Departman, AI ajan veya proje yoksa silinebilir)"
+                                  >
+                                    {processingId === 'delete-tenant-' + t.id ? (
+                                      <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" />
+                                    ) : (
+                                      <Trash2 style={{ width: 12, height: 12 }} />
+                                    )}
+                                    <span>Sil</span>
+                                  </button>
+                                ) : (
+                                  <span
+                                    style={{
+                                      padding: '5px 8px',
+                                      fontSize: '0.70rem',
+                                      fontWeight: 600,
+                                      color: '#38bdf8',
+                                      background: 'rgba(56, 189, 248, 0.08)',
+                                      border: '1px solid rgba(56, 189, 248, 0.25)',
+                                      borderRadius: '6px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                    title="Ana sistem şirketi silinemez"
+                                  >
+                                    🛡️ Ana Şirket
+                                  </span>
+                                )}
 
                                 <button
                                   onClick={() => handleOpenTenantDetails(t)}
@@ -3514,6 +3927,17 @@ export default function SuperAdminConsole({
                                     ) : (
                                       <Send style={{ width: 12, height: 12 }} />
                                     )}
+                                  </button>
+                                )}
+
+                                {onSwitchToCompanyAdmin && (
+                                  <button
+                                    onClick={() => onSwitchToCompanyAdmin(t)}
+                                    className="super-admin-btn-secondary"
+                                    style={{ padding: '5px 8px', color: '#c084fc', borderColor: 'rgba(113,52,226,0.4)', background: 'rgba(113,52,226,0.1)' }}
+                                    title="Şirket Yönetim Paneline Geç (Departmanlar, Ünvanlar, AI Ajanlar)"
+                                  >
+                                    <Building2 style={{ width: 13, height: 13 }} />
                                   </button>
                                 )}
 
@@ -3688,6 +4112,351 @@ export default function SuperAdminConsole({
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3.5: YETKİ ROLLERİ YÖNETİMİ (Madde 1) */}
+          {activeTab === 'ROLES' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Sayfa Başlığı ve İşlemler */}
+              <div className="super-admin-page-header">
+                <div>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ShieldCheck style={{ width: 20, height: 20, color: '#10b981' }} />
+                    <span>Yetki Rolleri Yönetimi (RBAC Roles)</span>
+                  </h2>
+                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                    Kullanıcı ve aktörlerin sistem üzerindeki Yetki Rollerini tanımlayın, İzin Kataloğundan yetkileri çoklu olarak eşleştirin.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    onClick={() => handleOpenRoleModal(null)}
+                    className="super-admin-btn-corporate"
+                    style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 0 14px rgba(16,185,129,0.35)' }}
+                  >
+                    <Plus style={{ width: 14, height: 14 }} />
+                    <span>Yeni Rol Tanımla</span>
+                  </button>
+
+                  {renderViewModeToggle(roleViewMode, setRoleViewMode)}
+
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Rol adı veya izin ara..."
+                    className="super-admin-input"
+                    style={{ width: 220 }}
+                  />
+                </div>
+              </div>
+
+              {/* KPI Özet Kartları */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+                    <ShieldCheck style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Tanımlı Yetki Rolü</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>{roles.length}</div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(129,140,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8' }}>
+                    <Layers style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Sistem / Global Roller</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#818cf8', fontFamily: 'monospace' }}>
+                      {roles.filter(r => r.is_system).length}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+                    <KeyRound style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>İzin Kataloğu Havuzu</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fbbf24', fontFamily: 'monospace' }}>
+                      {permissions.length} İzin
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8' }}>
+                    <User style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Atanmış Aktör / Personel</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#38bdf8', fontFamily: 'monospace' }}>
+                      {roles.reduce((acc, r) => acc + (r.actor_count || 0), 0)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rol Kartları (KANBAN Görünümü) */}
+              {roleViewMode === 'KANBAN' ? (
+                <div className="super-admin-card-grid">
+                  {filteredRoles.map((role) => {
+                    const rolePerms = role.permissions || [];
+                    return (
+                      <div
+                        key={role.id}
+                        className="super-admin-card"
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          border: role.is_system ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                          background: 'linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(0,0,0,0.25) 100%)'
+                        }}
+                      >
+                        <div>
+                          {/* Başlık & Rozetler */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <span
+                              style={{
+                                fontSize: '0.675rem',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                                background: role.is_system ? 'rgba(16,185,129,0.2)' : 'rgba(129,140,248,0.2)',
+                                color: role.is_system ? '#34d399' : '#a78bfa',
+                                border: role.is_system ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(129,140,248,0.3)'
+                              }}
+                            >
+                              {role.is_system ? '🛡️ SİSTEM ROLÜ' : '🏢 ÖZEL ROL'}
+                            </span>
+
+                            <span
+                              style={{
+                                fontSize: '0.68rem',
+                                color: role.actor_count > 0 ? '#38bdf8' : '#64748b',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                            >
+                              <User style={{ width: 12, height: 12 }} />
+                              <span>{role.actor_count > 0 ? `${role.actor_count} Aktör` : 'Atanmamış'}</span>
+                            </span>
+                          </div>
+
+                          {/* Rol Adı & Açıklaması */}
+                          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginBottom: 6, lineHeight: 1.3 }}>
+                            {role.name}
+                          </h3>
+                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.45, minHeight: 38, marginBottom: 14 }}>
+                            {role.description || 'Bu yetki rolü için henüz bir açıklama girilmemiş.'}
+                          </p>
+
+                          {/* İzin Kataloğu Yetkileri */}
+                          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10, marginTop: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                İzin Kataloğu Yetkileri
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 800,
+                                  color: rolePerms.length > 0 ? '#10b981' : '#f87171',
+                                  background: rolePerms.length > 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                                  padding: '1px 6px',
+                                  borderRadius: 4
+                                }}
+                              >
+                                {rolePerms.length} İzin Seçili
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minHeight: 48, maxHeight: 90, overflowY: 'auto' }}>
+                              {rolePerms.length === 0 ? (
+                                <span style={{ fontSize: '0.7rem', color: '#64748b', fontStyle: 'italic' }}>
+                                  Henüz izin kataloğundan yetki seçilmedi.
+                                </span>
+                              ) : (
+                                <>
+                                  {rolePerms.slice(0, 6).map((code) => {
+                                    const pObj = permissions.find(p => p.code === code);
+                                    return (
+                                      <span
+                                        key={code}
+                                        style={{
+                                          fontSize: '0.65rem',
+                                          fontFamily: 'monospace',
+                                          padding: '2px 6px',
+                                          borderRadius: 4,
+                                          background: 'rgba(255,255,255,0.06)',
+                                          color: '#e2e8f0',
+                                          border: '1px solid rgba(255,255,255,0.08)'
+                                        }}
+                                        title={pObj?.name || code}
+                                      >
+                                        {code}
+                                      </span>
+                                    );
+                                  })}
+                                  {rolePerms.length > 6 && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        background: 'rgba(16,185,129,0.15)',
+                                        color: '#34d399',
+                                        border: '1px solid rgba(16,185,129,0.3)'
+                                      }}
+                                    >
+                                      +{rolePerms.length - 6} diğer izin
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Kart Aksiyonları */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            marginTop: 16,
+                            paddingTop: 12,
+                            borderTop: '1px solid rgba(255,255,255,0.08)'
+                          }}
+                        >
+                          <button
+                            onClick={() => handleOpenRoleModal(role)}
+                            className="super-admin-btn-secondary"
+                            style={{ flex: 1, justifyContent: 'center' }}
+                          >
+                            <Edit style={{ width: 13, height: 13 }} />
+                            <span>Düzenle & İzinler</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRole(role)}
+                            className="super-admin-btn-secondary"
+                            style={{ color: '#f87171' }}
+                            title="Rolü Sil"
+                          >
+                            <Trash2 style={{ width: 13, height: 13 }} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* TABLO GÖRÜNÜMÜ */
+                <div className="super-admin-table-container">
+                  <table className="super-admin-table">
+                    <thead>
+                      <tr>
+                        <th>Rol Adı & Kapsam</th>
+                        <th>Rol Açıklaması</th>
+                        <th>Seçili İzin Kataloğu Yetkileri</th>
+                        <th>Bağlı Aktörler</th>
+                        <th>Oluşturulma Tarihi</th>
+                        <th style={{ textAlign: 'right' }}>İşlemler</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRoles.map((role) => {
+                        const rolePerms = role.permissions || [];
+                        return (
+                          <tr key={role.id}>
+                            <td>
+                              <div style={{ fontWeight: 800, color: '#fff', fontSize: '0.85rem' }}>{role.name}</div>
+                              <span
+                                style={{
+                                  fontSize: '0.62rem',
+                                  fontWeight: 800,
+                                  padding: '1px 6px',
+                                  borderRadius: 4,
+                                  background: role.is_system ? 'rgba(16,185,129,0.2)' : 'rgba(129,140,248,0.2)',
+                                  color: role.is_system ? '#34d399' : '#a78bfa'
+                                }}
+                              >
+                                {role.is_system ? 'SİSTEM ROLÜ' : 'ÖZEL ROL'}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ fontSize: '0.75rem', color: '#cbd5e1', maxWidth: 260, lineHeight: 1.4 }}>
+                                {role.description || '-'}
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', maxWidth: 380 }}>
+                                <span
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    background: 'rgba(16,185,129,0.15)',
+                                    color: '#34d399'
+                                  }}
+                                >
+                                  {rolePerms.length} İzin
+                                </span>
+                                {rolePerms.slice(0, 4).map(code => (
+                                  <span key={code} style={{ fontSize: '0.65rem', fontFamily: 'monospace', background: 'rgba(255,255,255,0.06)', padding: '2px 5px', borderRadius: 4, color: '#94a3b8' }}>
+                                    {code}
+                                  </span>
+                                ))}
+                                {rolePerms.length > 4 && (
+                                  <span style={{ fontSize: '0.65rem', color: '#64748b' }}>+{rolePerms.length - 4} diğer</span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: role.actor_count > 0 ? '#38bdf8' : '#64748b' }}>
+                                {role.actor_count || 0} Aktör
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                                {role.created_at ? new Date(role.created_at).toLocaleDateString('tr-TR') : '-'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                onClick={() => handleOpenRoleModal(role)}
+                                className="super-admin-btn-secondary"
+                                style={{ padding: '5px 8px', marginRight: 6 }}
+                                title="Düzenle & İzinler"
+                              >
+                                <Edit style={{ width: 13, height: 13 }} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRole(role)}
+                                className="super-admin-btn-secondary"
+                                style={{ padding: '5px 8px', color: '#f87171' }}
+                                title="Sil"
+                              >
+                                <Trash2 style={{ width: 13, height: 13 }} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -4094,112 +4863,191 @@ export default function SuperAdminConsole({
             </div>
           )}
 
-          {/* TAB 7: NACE KODLARI KATALOĞU (Madde 12) */}
-          {activeTab === 'NACE' && (
+          {/* ======================================================== */}
+          {/* TAB: SEKTÖR TANIMLAMA MODÜLÜ (TİCARET BAKANLIĞI)        */}
+          {/* ======================================================== */}
+          {activeTab === 'SECTORS' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Tag style={{ width: 20, height: 20, color: '#38bdf8' }} />
-                    <span>NACE Faaliyet Kodları Kataloğu (Rev.2)</span>
+                    <Layers style={{ width: 20, height: 20, color: '#10b981' }} />
+                    <span>Sektör Tanımları (Ticaret Bakanlığı)</span>
                   </h2>
                   <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
-                    Sistemde kayıtlı 2,160+ NACE kodunun listesi, filtrelemesi, ekleme ve düzenleme ekranı.
+                    T.C. Ticaret Bakanlığı resmi sektör kataloğu ve bağlı meslek grupları yönetim modülü.
                   </p>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => handleOpenNaceModal(null)} className="super-admin-btn-corporate">
+                  <button onClick={() => handleOpenSectorModal(null)} className="super-admin-btn-corporate">
                     <Plus style={{ width: 14, height: 14 }} />
-                    <span>Yeni NACE Ekle</span>
+                    <span>Yeni Sektör Ekle</span>
                   </button>
-                  {renderViewModeToggle(naceViewMode, setNaceViewMode)}
+                  {renderViewModeToggle(sectorViewMode, setSectorViewMode)}
                   <input
                     type="text"
-                    value={naceSearch}
-                    onChange={(e) => setNaceSearch(e.target.value)}
-                    placeholder="Kod veya faaliyet ara (örn: 62.01, yazılım)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Sektör kodu veya adı ara..."
                     className="super-admin-input"
-                    style={{ width: 280 }}
+                    style={{ width: 250 }}
                   />
                 </div>
               </div>
 
-              {naceViewMode === 'KANBAN' ? (
+              {sectorViewMode === 'KANBAN' ? (
                 <div className="super-admin-card-grid">
-                  {naceList.map((item) => (
-                    <div key={item.code} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem' }}>
-                            {item.code}
-                          </span>
-                          <span style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4 }}>
-                            {item.sector_group || 'Genel'}
-                          </span>
+                  {filteredSectors.map((sec) => {
+                    const profCount = professions.filter(p => p.sector_code === sec.code).length;
+                    return (
+                      <div key={sec.code} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              {sec.image_url ? (
+                                <img
+                                  src={sec.image_url}
+                                  alt={sec.name}
+                                  style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.12)' }}
+                                />
+                              ) : (
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem' }}>
+                                  {sec.icon || '🏢'}
+                                </div>
+                              )}
+                              <span style={{ fontSize: '0.85rem', fontFamily: 'monospace', fontWeight: 800, padding: '4px 10px', borderRadius: 6, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                                Sektör Kodu: {sec.code}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: sec.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: sec.is_active ? '#4ade80' : '#f87171' }}>
+                              {sec.is_active ? '● Aktif' : '○ Pasif'}
+                            </span>
+                          </div>
+
+                          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginBottom: 6 }}>{sec.name}</h3>
+                          <p style={{ fontSize: '0.785rem', color: '#94a3b8', lineHeight: 1.4, marginBottom: 12 }}>
+                            {sec.description || 'T.C. Ticaret Bakanlığı ana sektör tanımı.'}
+                          </p>
+
+                          <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Bağlı Meslek Sayısı:</span>
+                            <button
+                              onClick={() => {
+                                setProfessionsFilterSector(sec.code);
+                                setProfessionSearch('');
+                                setSearchQuery('');
+                                switchTab('PROFESSIONS');
+                              }}
+                              style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                              {profCount} Meslek Tanımı →
+                            </button>
+                          </div>
                         </div>
-                        <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', margin: '6px 0 4px 0' }}>{item.title}</h4>
-                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '4px 0 8px 0', lineHeight: 1.4 }}>{item.description || '-'}</p>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                          <button
+                            onClick={() => handleOpenSectorModal(sec)}
+                            className="super-admin-btn-corporate"
+                            style={{ flex: 1, justifyContent: 'center', fontSize: '0.785rem', padding: '6px 10px' }}
+                          >
+                            <Edit style={{ width: 13, height: 13 }} />
+                            <span>Düzenle</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSector(sec)}
+                            className="super-admin-btn-secondary"
+                            style={{ padding: '6px 8px', color: '#f87171' }}
+                            title="Sektörü Sil"
+                          >
+                            <Trash2 style={{ width: 13, height: 13 }} />
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                        <button
-                          onClick={() => handleOpenNaceModal(item)}
-                          className="super-admin-btn-secondary"
-                          style={{ padding: '5px 8px' }}
-                          title="Düzenle"
-                        >
-                          <Edit style={{ width: 12, height: 12 }} />
-                          <span style={{ fontSize: '0.72rem', marginLeft: 4 }}>Düzenle</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteNace(item)}
-                          className="super-admin-btn-secondary"
-                          style={{ padding: '5px 8px', color: '#f87171' }}
-                          title="Sil"
-                        >
-                          <Trash2 style={{ width: 12, height: 12 }} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="super-admin-table-container">
                   <table className="super-admin-table">
                     <thead>
                       <tr>
-                        <th style={{ width: 110 }}>NACE Kodu</th>
-                        <th style={{ width: 180 }}>Sektör Grubu</th>
-                        <th>Faaliyet Alanı / Ünvan</th>
+                        <th style={{ width: 110 }}>Sektör Kodu</th>
+                        <th>Sektör Adı & İkon</th>
                         <th>Açıklama</th>
-                        <th style={{ textAlign: 'right', width: 90 }}>İşlemler</th>
+                        <th style={{ width: 150 }}>Bağlı Meslek Sayısı</th>
+                        <th style={{ width: 90 }}>Durum</th>
+                        <th style={{ textAlign: 'right', width: 110 }}>İşlemler</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {naceList.map((item) => (
-                        <tr key={item.code}>
-                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{item.code}</td>
-                          <td style={{ fontWeight: 600, color: '#fff' }}>{item.sector_group}</td>
-                          <td style={{ fontWeight: 700, color: '#cbd5e1' }}>{item.title}</td>
-                          <td style={{ fontSize: '0.725rem', color: '#94a3b8' }}>{item.description || '-'}</td>
-                          <td style={{ textAlign: 'right' }}>
-                            <button
-                              onClick={() => handleOpenNaceModal(item)}
-                              className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', marginRight: 4 }}
-                            >
-                              <Edit style={{ width: 12, height: 12 }} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteNace(item)}
-                              className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', color: '#f87171' }}
-                            >
-                              <Trash2 style={{ width: 12, height: 12 }} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredSectors.map((sec) => {
+                        const profCount = professions.filter(p => p.sector_code === sec.code).length;
+                        return (
+                          <tr key={sec.code}>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#34d399', fontSize: '0.9rem' }}>{sec.code}</td>
+                            <td style={{ fontWeight: 800, color: '#fff' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                {sec.image_url ? (
+                                  <img src={sec.image_url} alt={sec.name} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }} />
+                                ) : (
+                                  <span style={{ fontSize: '1.25rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.05)' }}>
+                                    {sec.icon || '🏢'}
+                                  </span>
+                                )}
+                                <span>{sec.name}</span>
+                              </div>
+                            </td>
+                            <td style={{ fontSize: '0.785rem', color: '#94a3b8' }}>{sec.description || '-'}</td>
+                            <td>
+                              <button
+                                onClick={() => {
+                                  setProfessionsFilterSector(sec.code);
+                                  setProfessionSearch('');
+                                  setSearchQuery('');
+                                  switchTab('PROFESSIONS');
+                                }}
+                                style={{
+                                  background: 'rgba(56, 189, 248, 0.1)',
+                                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                                  color: '#38bdf8',
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {profCount} Meslek Tanımı →
+                              </button>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: sec.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: sec.is_active ? '#4ade80' : '#f87171' }}>
+                                {sec.is_active ? 'Aktif' : 'Pasif'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                onClick={() => handleOpenSectorModal(sec)}
+                                className="super-admin-btn-secondary"
+                                style={{ padding: '5px 8px', marginRight: 4 }}
+                                title="Düzenle"
+                              >
+                                <Edit style={{ width: 12, height: 12 }} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSector(sec)}
+                                className="super-admin-btn-secondary"
+                                style={{ padding: '5px 8px', color: '#f87171' }}
+                                title="Sil"
+                              >
+                                <Trash2 style={{ width: 12, height: 12 }} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -4207,145 +5055,158 @@ export default function SuperAdminConsole({
             </div>
           )}
 
-          {/* TAB 8: SEKTOREL ÜNVANLAR & PROMPT (Madde 13) */}
-          {activeTab === 'TITLES' && (
+          {/* ======================================================== */}
+          {/* TAB: MESLEK GRUBU TANIMLAMA MODÜLÜ (TİCARET BAKANLIĞI)    */}
+          {/* ======================================================== */}
+          {activeTab === 'PROFESSIONS' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Briefcase style={{ width: 20, height: 20, color: '#ec4899' }} />
-                    <span>Sektörel Personel Ünvanları ve Rol Promptları</span>
+                    <Briefcase style={{ width: 20, height: 20, color: '#38bdf8' }} />
+                    <span>Meslek Grubu Tanımları (Ticaret Bakanlığı)</span>
                   </h2>
                   <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
-                    AI personellerinin ünvan tanımları, yetenek profilleri ve AI tarafından yeniden üretilebilen rol promptları.
+                    T.C. Ticaret Bakanlığı sektörlerine bağlı 184 resmi meslek grubu tanımı ve yönetimi.
                   </p>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => handleOpenTitleModal(null)} className="super-admin-btn-corporate">
+                  <button onClick={() => handleOpenProfessionModal(null)} className="super-admin-btn-corporate">
                     <Plus style={{ width: 14, height: 14 }} />
-                    <span>Yeni Ünvan Tanımla</span>
+                    <span>Yeni Meslek Ekle</span>
                   </button>
-                  {renderViewModeToggle(titleViewMode, setTitleViewMode)}
+                  {renderViewModeToggle(professionViewMode, setProfessionViewMode)}
                   <input
                     type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Ünvan ara..."
+                    value={professionSearch}
+                    onChange={(e) => setProfessionSearch(e.target.value)}
+                    placeholder="Meslek kodu veya adı ara..."
                     className="super-admin-input"
-                    style={{ width: 200 }}
+                    style={{ width: 220 }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {['ALL', 'YAZILIM', 'ANALIZ', 'FINANS', 'YONETIM', 'HUKUK', 'PAZARLAMA', 'OPERASYON'].map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setJobTitleCategoryFilter(cat)}
-                    className="super-admin-btn-secondary"
-                    style={jobTitleCategoryFilter === cat ? { background: '#ec4899', color: '#fff', borderColor: '#ec4899' } : {}}
-                  >
-                    {cat === 'ALL' ? 'TÜM KATEGORİLER' : cat}
-                  </button>
-                ))}
+              {/* Sektöre Göre Filtreleme Barı */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginRight: 4 }}>
+                  Sektör Filtresi:
+                </span>
+                <button
+                  onClick={() => setProfessionsFilterSector('')}
+                  className="super-admin-btn-secondary"
+                  style={!professionsFilterSector ? { background: '#38bdf8', color: '#0f172a', borderColor: '#38bdf8', fontWeight: 800 } : { fontSize: '0.725rem' }}
+                >
+                  TÜM SEKTÖRLER ({professions.length})
+                </button>
+                {sectors.map((sec) => {
+                  const count = professions.filter(p => p.sector_code === sec.code).length;
+                  const isSelected = professionsFilterSector === sec.code;
+                  return (
+                    <button
+                      key={sec.code}
+                      onClick={() => setProfessionsFilterSector(sec.code)}
+                      className="super-admin-btn-secondary"
+                      style={isSelected ? { background: '#10b981', color: '#fff', borderColor: '#10b981', fontWeight: 800 } : { fontSize: '0.725rem' }}
+                    >
+                      {sec.code} - {sec.name} ({count})
+                    </button>
+                  );
+                })}
               </div>
 
-              {titleViewMode === 'KANBAN' ? (
+              {professionViewMode === 'KANBAN' ? (
                 <div className="super-admin-card-grid">
-                  {filteredJobTitles.map((jt) => (
-                    <div key={jt.id} className="super-admin-card">
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'rgba(236,72,153,0.2)', color: '#f472b6' }}>
-                            {jt.category}
-                          </span>
-                          <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: '#64748b' }}>{jt.code}</span>
+                  {filteredProfessions.map((prof) => {
+                    const parentSector = sectors.find(s => s.code === prof.sector_code);
+                    return (
+                      <div key={prof.code} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '2px 8px', borderRadius: 6, fontSize: '0.8rem' }}>
+                              {prof.code}
+                            </span>
+                            <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: '#34d399', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                              Sektör: {prof.sector_code} {parentSector ? `(${parentSector.name})` : ''}
+                            </span>
+                          </div>
+                          <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff', margin: '6px 0 4px 0' }}>{prof.name}</h4>
+                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '4px 0 8px 0', lineHeight: 1.4 }}>{prof.description || '-'}</p>
                         </div>
-
-                        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', marginTop: 8 }}>{jt.title}</h3>
-                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>{jt.description || '-'}</p>
-
-                        <div style={{ marginTop: 12, padding: '10px', borderRadius: 8, background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: '#a78bfa', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Sparkles style={{ width: 12, height: 12 }} />
-                            <span>Sistem Rol Promptu:</span>
-                          </div>
-                          <div style={{ fontSize: '0.725rem', color: '#cbd5e1', fontFamily: 'monospace', maxHeight: 60, overflow: 'hidden' }}>
-                            {jt.base_role_prompt}
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                          <button
+                            onClick={() => handleOpenProfessionModal(prof)}
+                            className="super-admin-btn-secondary"
+                            style={{ padding: '5px 8px' }}
+                            title="Düzenle"
+                          >
+                            <Edit style={{ width: 12, height: 12 }} />
+                            <span style={{ fontSize: '0.72rem', marginLeft: 4 }}>Düzenle</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProfession(prof)}
+                            className="super-admin-btn-secondary"
+                            style={{ padding: '5px 8px', color: '#f87171' }}
+                            title="Sil"
+                          >
+                            <Trash2 style={{ width: 12, height: 12 }} />
+                          </button>
                         </div>
                       </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                        <button
-                          onClick={() => handleOpenTitleModal(jt)}
-                          className="super-admin-btn-corporate"
-                          style={{ flex: 1, justifyContent: 'center' }}
-                        >
-                          <Edit style={{ width: 13, height: 13 }} />
-                          <span>Detay & Prompt</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTitle(jt)}
-                          className="super-admin-btn-secondary"
-                          style={{ color: '#f87171' }}
-                          title="Sil"
-                        >
-                          <Trash2 style={{ width: 13, height: 13 }} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="super-admin-table-container">
                   <table className="super-admin-table">
                     <thead>
                       <tr>
-                        <th style={{ width: 90 }}>Kod</th>
-                        <th style={{ width: 120 }}>Kategori</th>
-                        <th style={{ width: 200 }}>Ünvan</th>
-                        <th>Açıklama & Sistem Rol Prompt Özeti</th>
+                        <th style={{ width: 120 }}>Meslek Kodu</th>
+                        <th style={{ width: 130 }}>Sektör Kodu</th>
+                        <th style={{ width: 220 }}>Sektör Adı</th>
+                        <th>Meslek Tanım Adı</th>
+                        <th>Açıklama</th>
+                        <th style={{ width: 80 }}>Durum</th>
                         <th style={{ textAlign: 'right', width: 90 }}>İşlemler</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredJobTitles.map((jt) => (
-                        <tr key={jt.id}>
-                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#ec4899' }}>{jt.code}</td>
-                          <td>
-                            <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'rgba(236,72,153,0.2)', color: '#f472b6' }}>
-                              {jt.category}
-                            </span>
-                          </td>
-                          <td style={{ fontWeight: 700, color: '#fff' }}>{jt.title}</td>
-                          <td>
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{jt.description || '-'}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#a78bfa', fontFamily: 'monospace', marginTop: 2, maxHeight: 38, overflow: 'hidden' }}>
-                              {jt.base_role_prompt}
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <button
-                              onClick={() => handleOpenTitleModal(jt)}
-                              className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', marginRight: 4 }}
-                              title="Düzenle"
-                            >
-                              <Edit style={{ width: 12, height: 12 }} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTitle(jt)}
-                              className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', color: '#f87171' }}
-                              title="Sil"
-                            >
-                              <Trash2 style={{ width: 12, height: 12 }} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredProfessions.map((prof) => {
+                        const parentSector = sectors.find(s => s.code === prof.sector_code);
+                        return (
+                          <tr key={prof.code}>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{prof.code}</td>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#34d399' }}>{prof.sector_code}</td>
+                            <td style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.785rem' }}>{parentSector?.name || '-'}</td>
+                            <td style={{ fontWeight: 700, color: '#fff' }}>{prof.name}</td>
+                            <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{prof.description || '-'}</td>
+                            <td>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: prof.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: prof.is_active ? '#4ade80' : '#f87171' }}>
+                                {prof.is_active ? 'Aktif' : 'Pasif'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                onClick={() => handleOpenProfessionModal(prof)}
+                                className="super-admin-btn-secondary"
+                                style={{ padding: '5px 7px', marginRight: 4 }}
+                                title="Düzenle"
+                              >
+                                <Edit style={{ width: 12, height: 12 }} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteProfession(prof)}
+                                className="super-admin-btn-secondary"
+                                style={{ padding: '5px 7px', color: '#f87171' }}
+                                title="Sil"
+                              >
+                                <Trash2 style={{ width: 12, height: 12 }} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -4952,55 +5813,56 @@ export default function SuperAdminConsole({
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {/* Pasife Al / Aktife Al Butonu (Madde 4) */}
-                      {selectedTenantDetails?.tenant && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                        Sistem Kimliği: <code style={{ color: '#38bdf8' }}>{selectedTenantDetails?.tenant?.slug}</code>
+                      </span>
+                      {selectedTenantDetails?.tenant && !isMainCompany(selectedTenantDetails.tenant) && (
                         <button
                           type="button"
-                          onClick={() => handleToggleTenantStatus(selectedTenantDetails.tenant)}
-                          disabled={processingId === 'toggle-status-' + selectedTenantDetails.tenant.id}
+                          onClick={() => handleDeleteTenant(selectedTenantDetails.tenant)}
+                          disabled={processingId === 'delete-tenant-' + selectedTenantDetails.tenant.id}
                           className="super-admin-btn-secondary"
                           style={{
-                            fontSize: '0.725rem',
-                            padding: '5px 12px',
-                            color: tenantEditForm.is_active ? '#f87171' : '#34d399',
-                            borderColor: tenantEditForm.is_active ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)',
-                            background: tenantEditForm.is_active ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)'
+                            padding: '4px 10px',
+                            fontSize: '0.72rem',
+                            color: '#f87171',
+                            borderColor: 'rgba(239,68,68,0.35)',
+                            background: 'rgba(239,68,68,0.08)'
                           }}
-                          title={tenantEditForm.is_active ? "Müşteri kartını pasife al" : "Müşteri kartını aktife al"}
+                          title="Şirketi Kalıcı Olarak Sil (Departman, AI ajanı veya proje yoksa silinebilir)"
                         >
-                          {processingId === 'toggle-status-' + selectedTenantDetails.tenant.id ? (
+                          {processingId === 'delete-tenant-' + selectedTenantDetails.tenant.id ? (
                             <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" />
-                          ) : tenantEditForm.is_active ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <PauseCircle style={{ width: 12, height: 12 }} />
-                              <span>Kartı Pasife Al</span>
-                            </span>
                           ) : (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <PlayCircle style={{ width: 12, height: 12 }} />
-                              <span>Kartı Aktife Al</span>
-                            </span>
+                            <Trash2 style={{ width: 12, height: 12 }} />
                           )}
+                          <span>Şirketi Sil</span>
                         </button>
                       )}
-
-                      {!tenantEditForm.is_active && (
-                        <button
-                          type="button"
-                          onClick={handleApproveTenantInModal}
-                          disabled={processingId === 'approve-tenant'}
-                          className="super-admin-btn-corporate"
-                          style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', fontSize: '0.725rem', padding: '5px 10px' }}
+                      {selectedTenantDetails?.tenant && isMainCompany(selectedTenantDetails.tenant) && (
+                        <span
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            color: '#38bdf8',
+                            background: 'rgba(56, 189, 248, 0.08)',
+                            border: '1px solid rgba(56, 189, 248, 0.25)',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Ana sistem şirketi silinemez"
                         >
-                          <CheckCircle2 style={{ width: 13, height: 13 }} />
-                          <span>Şirketi Onayla & 1 Yıl Başlat</span>
-                        </button>
+                          🛡️ Ana Şirket (Silinemez)
+                        </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Müşteri Kartı Aktiflik Durumu Checkbox Kontrolü (Madde 4) */}
+                  {/* Madde 3: Aktif / Pasif Yapma İşlemi Sadece Kayıtlı Müşteri Listesinden yapılmalı */}
                   <div style={{
                     padding: '8px 12px',
                     borderRadius: 8,
@@ -5010,17 +5872,12 @@ export default function SuperAdminConsole({
                     alignItems: 'center',
                     justifyContent: 'space-between'
                   }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: tenantEditForm.is_active ? '#6ee7b7' : '#fca5a5' }}>
-                      <input
-                        type="checkbox"
-                        checked={tenantEditForm.is_active}
-                        onChange={(e) => setTenantEditForm({ ...tenantEditForm, is_active: e.target.checked })}
-                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#10b981' }}
-                      />
-                      <span>Müşteri Kartı Aktif Durumda (İşaret kaldırılırsa müşteri ve tüm kullanıcıları pasife alınır)</span>
-                    </label>
-                    <span style={{ fontSize: '0.7rem', color: tenantEditForm.is_active ? '#34d399' : '#f87171', fontWeight: 800 }}>
-                      {tenantEditForm.is_active ? '● Aktif' : '○ Pasif'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.74rem', fontWeight: 700, color: tenantEditForm.is_active ? '#6ee7b7' : '#fca5a5' }}>
+                      {tenantEditForm.is_active ? <CheckCircle2 style={{ width: 14, height: 14 }} /> : <PauseCircle style={{ width: 14, height: 14 }} />}
+                      <span>Şirket Kartı Durumu: <strong>{tenantEditForm.is_active ? 'AKTİF' : 'PASİF'}</strong> (Aktif / Pasif yapma işlemi yalnızca Kayıtlı Müşteri Listesinden yapılabilir)</span>
+                    </div>
+                    <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                      {tenantEditForm.is_active ? '✓ Sistem Girişleri Açık' : '⏸️ Girişler Kapalı'}
                     </span>
                   </div>
 
@@ -5148,85 +6005,228 @@ export default function SuperAdminConsole({
                     </div>
                   </div>
 
-                  {/* NACE Kodları Çoklu Seçim (Madde 13) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#38bdf8' }}>
-                        Şirket Faaliyet NACE Kodları (Birden Fazla Seçilebilir)
-                      </label>
-                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
-                        {tenantEditForm.nace_codes?.length || 0} kod seçili
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 32, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      {(tenantEditForm.nace_codes || []).map((code) => (
-                        <span key={code} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', color: '#38bdf8', fontSize: '0.7rem', fontFamily: 'monospace' }}>
-                          <span>{code}</span>
-                          <button
-                            type="button"
-                            onClick={() => setTenantEditForm({
-                              ...tenantEditForm,
-                              nace_codes: tenantEditForm.nace_codes.filter(c => c !== code)
-                            })}
-                            style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0 }}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                      {(!tenantEditForm.nace_codes || tenantEditForm.nace_codes.length === 0) && (
-                        <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Henüz NACE kodu seçilmedi. Aşağıdan arayarak ekleyebilirsiniz.</span>
-                      )}
-                    </div>
-
-                    {/* NACE Arama */}
-                    <input
-                      type="text"
-                      placeholder="NACE kodu veya sektör ara (Örn: 62.01, Yazılım, Danışmanlık)..."
-                      value={detailNaceSearch}
-                      onChange={async (e) => {
-                        const val = e.target.value;
-                        setDetailNaceSearch(val);
-                        if (val.trim().length > 1) {
-                          try {
-                            const res = await api.searchNace(val, 8);
-                            setDetailNaceResults(res || []);
-                          } catch (_) {}
-                        } else {
-                          setDetailNaceResults([]);
-                        }
-                      }}
-                      className="super-admin-input"
-                      style={{ fontSize: '0.75rem' }}
-                    />
-
-                    {detailNaceResults.length > 0 && (
-                      <div style={{ maxHeight: 120, overflowY: 'auto', borderRadius: 6, background: '#12182c', border: '1px solid rgba(255,255,255,0.1)', padding: 4 }}>
-                        {detailNaceResults.map((n) => {
-                          const isAlreadySelected = (tenantEditForm.nace_codes || []).includes(n.code);
-                          return (
-                            <div
-                              key={n.id}
-                              onClick={() => {
-                                if (!isAlreadySelected) {
-                                  setTenantEditForm({
-                                    ...tenantEditForm,
-                                    nace_codes: [...(tenantEditForm.nace_codes || []), n.code]
-                                  });
-                                }
-                                setDetailNaceSearch('');
-                                setDetailNaceResults([]);
+                  {/* Sektörler ve Meslek Grupları Seçimi (Madde 2 - T.C. Ticaret Bakanlığı) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 12, borderRadius: 10, background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                    {/* 1. SEKTÖR SEÇİMİ */}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#818cf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Briefcase style={{ width: 14, height: 14 }} />
+                          <span>Faaliyet Sektörleri (T.C. Ticaret Bakanlığı)</span>
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                            {tenantEditForm.sectors?.length || 0} sektör seçili
+                          </span>
+                          {tenantEditForm.sectors?.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleClearAllSectorsTenantEdit}
+                              style={{
+                                background: 'rgba(239,68,68,0.15)',
+                                border: '1px solid rgba(239,68,68,0.3)',
+                                color: '#f87171',
+                                padding: '2px 8px',
+                                borderRadius: 6,
+                                fontSize: '0.675rem',
+                                fontWeight: 700,
+                                cursor: 'pointer'
                               }}
-                              style={{ padding: '6px 8px', borderRadius: 4, cursor: isAlreadySelected ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', background: isAlreadySelected ? 'rgba(255,255,255,0.02)' : 'transparent', color: isAlreadySelected ? '#64748b' : '#cbd5e1' }}
                             >
-                              <span><strong style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{n.code}</strong> - {n.title}</span>
-                              <span>{isAlreadySelected ? '✓ Eklendi' : '+ Ekle'}</span>
-                            </div>
+                              Temizle ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Seçili Sektör Rozetleri */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                        {(tenantEditForm.sectors || []).map((secCode) => {
+                          const secObj = sectors.find(s => s.code === secCode || s.name === secCode);
+                          return (
+                            <span
+                              key={secCode}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '3px 10px',
+                                borderRadius: 999,
+                                background: 'linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(168,85,247,0.25) 100%)',
+                                border: '1px solid rgba(129,140,248,0.4)',
+                                color: '#c7d2fe',
+                                fontSize: '0.72rem',
+                                fontWeight: 700
+                              }}
+                            >
+                              <span>{secObj?.icon || '📁'}</span>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 800 }}>[{secObj?.code || secCode}]</span>
+                              <span>{secObj?.name || secCode}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleSectorTenantEdit(secCode)}
+                                style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}
+                                title="Sektörü kaldır"
+                              >
+                                ×
+                              </button>
+                            </span>
                           );
                         })}
+                        {(!tenantEditForm.sectors || tenantEditForm.sectors.length === 0) && (
+                          <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                            Henüz sektör seçilmedi. Aşağıdaki butonlardan veya açılır kutudan sektör(ler) seçiniz.
+                          </span>
+                        )}
                       </div>
-                    )}
+
+                      {/* Sektör Seçim Listesi (Açılır Kutu + Butonlar) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            const selCode = e.target.value;
+                            if (!selCode) return;
+                            handleToggleSectorTenantEdit(selCode);
+                          }}
+                          className="super-admin-select"
+                          style={{ fontSize: '0.75rem', borderColor: 'rgba(129,140,248,0.3)' }}
+                        >
+                          <option value="">+ Açılır Listeden Sektör Seçiniz...</option>
+                          {sectors.map((s) => {
+                            const isSelected = (tenantEditForm.sectors || []).includes(s.code);
+                            return (
+                              <option key={s.code} value={s.code} disabled={isSelected}>
+                                {s.icon || '📁'} [{s.code}] {s.name} {isSelected ? '(Seçildi)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 85, overflowY: 'auto' }}>
+                          {sectors.map((s) => {
+                            const isSelected = (tenantEditForm.sectors || []).includes(s.code);
+                            return (
+                              <button
+                                key={s.code}
+                                type="button"
+                                onClick={() => handleToggleSectorTenantEdit(s.code)}
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  fontSize: '0.675rem',
+                                  fontWeight: isSelected ? 800 : 500,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  background: isSelected ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.03)',
+                                  border: isSelected ? '1px solid rgba(129,140,248,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                                  color: isSelected ? '#ffffff' : '#94a3b8',
+                                  transition: 'all 0.15s'
+                                }}
+                              >
+                                <span>{s.icon || '📁'}</span>
+                                <span>[{s.code}] {s.name}</span>
+                                <span>{isSelected ? '✓' : '+'}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. MESLEK GRUPLARI SEÇİMİ (Seçili sektörlere göre filtreli) */}
+                    <div style={{ paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <GraduationCap style={{ width: 14, height: 14 }} />
+                          <span>Meslek Grupları (Seçili Sektörlere Göre Filtrelenir)</span>
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                            {tenantEditForm.professions?.length || 0} meslek seçili
+                          </span>
+                          {tenantEditForm.professions?.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setTenantEditForm({ ...tenantEditForm, professions: [] })}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#f87171',
+                                fontSize: '0.675rem',
+                                cursor: 'pointer',
+                                fontWeight: 600
+                              }}
+                            >
+                              Temizle ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {(!tenantEditForm.sectors || tenantEditForm.sectors.length === 0) ? (
+                        <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(234, 179, 8, 0.08)', border: '1px solid rgba(234, 179, 8, 0.25)', color: '#fde047', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <AlertCircle style={{ width: 15, height: 15, flexShrink: 0 }} />
+                          <span>Lütfen önce yukarıdan en az bir <strong>Faaliyet Sektörü</strong> seçiniz. Seçtiğiniz sektör(ler)e ait resmi meslek grupları otomatik olarak burada listelenecektir.</span>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Seçili Meslekler Etiketleri (Chips) */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                            {(tenantEditForm.professions || []).map((pItem) => {
+                              const pCode = typeof pItem === 'object' ? pItem.code : pItem;
+                              const profObj = professions.find(pr => pr.code === pCode);
+                              const pName = profObj ? profObj.name : (typeof pItem === 'object' ? pItem.name : pCode);
+                              const pSector = profObj ? profObj.sector_code : '';
+                              return (
+                                <span key={pCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', border: '1px solid rgba(56,189,248,0.4)', color: '#38bdf8', fontSize: '0.7rem' }}>
+                                  <span style={{ fontFamily: 'monospace', fontWeight: 800 }}>[{pCode}]</span>
+                                  <span>{pName}</span>
+                                  {pSector && <span style={{ opacity: 0.6, fontSize: '0.65rem' }}>({pSector})</span>}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleProfessionTenantEdit(pCode)}
+                                    style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0, fontWeight: 800 }}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              );
+                            })}
+                            {(!tenantEditForm.professions || tenantEditForm.professions.length === 0) && (
+                              <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                                Seçili sektör(ler)e ait meslek grubu seçilmedi. Aşağıdan seçebilirsiniz (opsiyonel).
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Meslek Grubu Açılır Listesi (Sadece Seçili Sektörler) */}
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val) handleToggleProfessionTenantEdit(val);
+                            }}
+                            className="super-admin-select"
+                            style={{ fontSize: '0.75rem', borderColor: 'rgba(56,189,248,0.3)' }}
+                          >
+                            <option value="">+ Seçili Sektörlere Bağlı Meslek Grubu Ekle ({professions.filter(pr => (tenantEditForm.sectors || []).includes(pr.sector_code)).length} meslek mevcut)...</option>
+                            {professions
+                              .filter(pr => (tenantEditForm.sectors || []).includes(pr.sector_code))
+                              .map(pr => {
+                                const isAlreadySelected = (tenantEditForm.professions || []).some(p => (typeof p === 'object' ? p.code : p) === pr.code);
+                                return (
+                                  <option key={pr.code} value={pr.code} disabled={isAlreadySelected}>
+                                    [{pr.code}] {pr.name} (Sektör: {pr.sector_code}) {isAlreadySelected ? '✓' : ''}
+                                  </option>
+                                );
+                              })}
+                          </select>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* AI İle Şirket Manifestosu Oluşturma (Madde 13) */}
@@ -5555,6 +6555,362 @@ export default function SuperAdminConsole({
       )}
 
       {/* ======================================================== */}
+      {/* 3.1 YETKİ ROLÜ EKLEME / DÜZENLEME MODALI (Madde 1)       */}
+      {/* ======================================================== */}
+      {roleModalOpen && (
+        <div className="super-admin-modal-overlay">
+          <div className="super-admin-modal-box" style={{ maxWidth: 880, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+            {/* Modal Başlığı */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ShieldCheck style={{ width: 20, height: 20, color: '#10b981' }} />
+                  <span>{editingRole ? `Yetki Rolünü Düzenle: ${editingRole.name}` : 'Yeni Yetki Rolü Tanımla (RBAC)'}</span>
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
+                  Kullanıcı ve aktör yetki sınırlarını belirleyin, İzin Kataloğundan çoklu yetkileri seçin.
+                </p>
+              </div>
+              <button onClick={() => setRoleModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <X style={{ width: 20, height: 20 }} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRole} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14, overflowY: 'auto', paddingRight: 4 }}>
+              {/* 1. Rol Adı & Sistem Rolü Toggle */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                    Rol Adı *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={roleForm.name}
+                    onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                    placeholder="Örn: Operasyon ve Müşteri Destek Yöneticisi"
+                    className="super-admin-input"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                    Rol Türü / Kapsamı
+                  </label>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      height: 38,
+                      padding: '0 12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      color: roleForm.is_system ? '#34d399' : '#94a3b8',
+                      fontWeight: 700
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={roleForm.is_system}
+                      onChange={(e) => setRoleForm({ ...roleForm, is_system: e.target.checked })}
+                    />
+                    <span>Sistem / Global Rol Olarak Tanımla</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* 2. Rol Açıklaması */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  Rol Açıklaması
+                </label>
+                <textarea
+                  rows="2"
+                  value={roleForm.description}
+                  onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                  placeholder="Bu yetki rolünün sistem ve kurum genelindeki sorumlulukları, yetki çerçevesi..."
+                  className="super-admin-input"
+                />
+              </div>
+
+              {/* 3. İZİN KATALOĞUNDAN ÇOKLU SEÇİM ALANI */}
+              <div
+                style={{
+                  background: 'rgba(0,0,0,0.25)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 8,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10
+                }}
+              >
+                {/* İzin Başlığı, Sayaç ve Hızlı Eylemler */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <KeyRound style={{ width: 16, height: 16, color: '#fbbf24' }} />
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff' }}>
+                      İzin Kataloğu Yetkileri (Çoklu Seçim)
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: roleForm.permissions.length > 0 ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)',
+                        color: roleForm.permissions.length > 0 ? '#34d399' : '#94a3b8',
+                        border: roleForm.permissions.length > 0 ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(255,255,255,0.08)'
+                      }}
+                    >
+                      {roleForm.permissions.length} / {permissions.length} İzin Seçildi
+                    </span>
+                  </div>
+
+                  {/* Hızlı Seçim Butonları */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const matching = permissions.filter(p => {
+                          const matchMod = rolePermissionModuleFilter === 'ALL' || p.module === rolePermissionModuleFilter;
+                          const matchQ = !rolePermissionSearch ||
+                            p.code.toLowerCase().includes(rolePermissionSearch.toLowerCase()) ||
+                            p.name.toLowerCase().includes(rolePermissionSearch.toLowerCase());
+                          return matchMod && matchQ;
+                        });
+                        handleSelectAllPermissionsInCatalog(matching);
+                      }}
+                      className="super-admin-btn-secondary"
+                      style={{ fontSize: '0.68rem', padding: '3px 8px' }}
+                    >
+                      ✓ Listelenenleri Seç
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllPermissionsInCatalog(permissions)}
+                      className="super-admin-btn-secondary"
+                      style={{ fontSize: '0.68rem', padding: '3px 8px' }}
+                    >
+                      Tümünü Seç ({permissions.length})
+                    </button>
+                    {roleForm.permissions.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setRoleForm({ ...roleForm, permissions: [] })}
+                        className="super-admin-btn-secondary"
+                        style={{ fontSize: '0.68rem', padding: '3px 8px', color: '#f87171' }}
+                      >
+                        Temizle
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filtreleme ve Arama Çubuğu */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={rolePermissionSearch}
+                    onChange={(e) => setRolePermissionSearch(e.target.value)}
+                    placeholder="İzin ara (örn: role:create, agent, chat)..."
+                    className="super-admin-input"
+                    style={{ flex: 1, minWidth: 200, fontSize: '0.75rem', height: 32 }}
+                  />
+
+                  {/* Modül Butonları */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {['ALL', 'PLATFORM', 'RBAC', 'AGENTS', 'PROJECTS', 'CHAT', 'MEMORY', 'BILLING'].map((mod) => (
+                      <button
+                        key={mod}
+                        type="button"
+                        onClick={() => setRolePermissionModuleFilter(mod)}
+                        style={{
+                          fontSize: '0.65rem',
+                          fontWeight: 700,
+                          padding: '3px 7px',
+                          borderRadius: 4,
+                          border: rolePermissionModuleFilter === mod ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.08)',
+                          background: rolePermissionModuleFilter === mod ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.03)',
+                          color: rolePermissionModuleFilter === mod ? '#34d399' : '#94a3b8',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {mod === 'ALL' ? 'TÜMÜ' : mod}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Seçili İzinlerin Önizleme Şeridi */}
+                {roleForm.permissions.length > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 4,
+                      padding: '6px 8px',
+                      background: 'rgba(16,185,129,0.04)',
+                      border: '1px solid rgba(16,185,129,0.15)',
+                      borderRadius: 6,
+                      maxHeight: 70,
+                      overflowY: 'auto'
+                    }}
+                  >
+                    {roleForm.permissions.map((code) => {
+                      const pObj = permissions.find(p => p.code === code);
+                      return (
+                        <span
+                          key={code}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: 'rgba(16,185,129,0.18)',
+                            color: '#34d399',
+                            fontSize: '0.68rem',
+                            fontFamily: 'monospace'
+                          }}
+                          title={pObj?.name || code}
+                        >
+                          <span>{code}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePermissionInRole(code)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#34d399',
+                              cursor: 'pointer',
+                              padding: 0,
+                              fontWeight: 900,
+                              lineHeight: 1
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* İzin Kataloğu Seçim Listesi (Kompakt Grid) */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                    gap: 6,
+                    maxHeight: 280,
+                    overflowY: 'auto',
+                    padding: 4,
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: 6,
+                    border: '1px solid rgba(255,255,255,0.04)'
+                  }}
+                >
+                  {permissions
+                    .filter(p => {
+                      const matchMod = rolePermissionModuleFilter === 'ALL' || p.module === rolePermissionModuleFilter;
+                      const matchQ = !rolePermissionSearch ||
+                        p.code.toLowerCase().includes(rolePermissionSearch.toLowerCase()) ||
+                        p.name.toLowerCase().includes(rolePermissionSearch.toLowerCase()) ||
+                        (p.description && p.description.toLowerCase().includes(rolePermissionSearch.toLowerCase()));
+                      return matchMod && matchQ;
+                    })
+                    .map((p) => {
+                      const isSelected = roleForm.permissions.includes(p.code);
+                      return (
+                        <div
+                          key={p.id || p.code}
+                          onClick={() => handleTogglePermissionInRole(p.code)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 8,
+                            padding: '8px 10px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            background: isSelected ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.02)',
+                            border: isSelected ? '1px solid rgba(16,185,129,0.45)' : '1px solid rgba(255,255,255,0.05)',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}} // parent onClick handles toggle
+                            style={{ marginTop: 2, cursor: 'pointer' }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginBottom: 2 }}>
+                              <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.08)', color: '#a78bfa' }}>
+                                {p.module}
+                              </span>
+                              <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 700, color: isSelected ? '#34d399' : '#cbd5e1' }}>
+                                {p.code}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {p.name}
+                            </div>
+                            {p.description && (
+                              <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: 2, lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                {p.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Modal Butonları */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <button
+                  type="button"
+                  onClick={() => setRoleModalOpen(false)}
+                  className="super-admin-btn-secondary"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingId === 'save-role'}
+                  className="super-admin-btn-corporate"
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    boxShadow: '0 0 14px rgba(16,185,129,0.35)',
+                    padding: '8px 20px',
+                    fontWeight: 800
+                  }}
+                >
+                  {processingId === 'save-role' ? (
+                    <>
+                      <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" />
+                      <span>Kaydediliyor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save style={{ width: 14, height: 14 }} />
+                      <span>{editingRole ? 'Değişiklikleri Kaydet' : 'Yetki Rolünü Oluştur'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
       {/* 4. PLAN MODALI (Madde 7)                                  */}
       {/* ======================================================== */}
       {planModalOpen && (
@@ -5862,212 +7218,106 @@ export default function SuperAdminConsole({
       )}
 
       {/* ======================================================== */}
-      {/* 6. NACE KODU MODALI (Madde 12)                            */}
+      {/* MESLEK GRUBU TANIMLAMA MODALI (TİCARET BAKANLIĞI)        */}
       {/* ======================================================== */}
-      {naceModalOpen && (
+      {professionModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
-                {editingNace ? 'NACE Kodunu Düzenle' : 'Yeni NACE Kodu Tanımla'}
-              </h3>
-              <button onClick={() => setNaceModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                <X style={{ width: 20, height: 20 }} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveNace} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>NACE Kodu</label>
-                  <input
-                    type="text"
-                    required
-                    disabled={!!editingNace}
-                    value={naceForm.code}
-                    onChange={(e) => setNaceForm({ ...naceForm, code: e.target.value })}
-                    placeholder="62.01.01"
-                    className="super-admin-input"
-                    style={{ fontFamily: 'monospace' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Sektör Grubu</label>
-                  <input
-                    type="text"
-                    required
-                    value={naceForm.sector_group}
-                    onChange={(e) => setNaceForm({ ...naceForm, sector_group: e.target.value })}
-                    placeholder="Bilişim Teknolojileri"
-                    className="super-admin-input"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Faaliyet Alanı / Başlık</label>
-                <input
-                  type="text"
-                  required
-                  value={naceForm.title}
-                  onChange={(e) => setNaceForm({ ...naceForm, title: e.target.value })}
-                  placeholder="Bilgisayar programlama faaliyetleri"
-                  className="super-admin-input"
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Açıklama</label>
-                <textarea
-                  rows="3"
-                  value={naceForm.description}
-                  onChange={(e) => setNaceForm({ ...naceForm, description: e.target.value })}
-                  className="super-admin-input"
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <button type="button" onClick={() => setNaceModalOpen(false)} className="super-admin-btn-secondary">
-                  Vazgeç
-                </button>
-                <button type="submit" className="super-admin-btn-corporate">
-                  NACE Kodunu Kaydet
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 7. SEKTOREL ÜNVAN & PROMPT MODALI (Madde 13)              */}
-      {/* ======================================================== */}
-      {titleModalOpen && (
-        <div className="super-admin-modal-overlay">
-          <div className="super-admin-modal-box" style={{ maxWidth: 680 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <div>
                 <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
-                  {editingTitle ? `'${titleForm.title}' Ünvan ve Prompt Düzenleme` : 'Yeni Sektörel Ünvan Tanımla'}
+                  {editingProfession ? `'${professionForm.code}' Meslek Tanımını Düzenle` : 'Yeni Meslek Grubu Tanımla'}
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>AI ajan personelleri için sistem rol ve görev tanımı.</p>
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>T.C. Ticaret Bakanlığı resmi meslek grubu tanımı.</p>
               </div>
-              <button onClick={() => setTitleModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setProfessionModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveTitle} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+            <form onSubmit={handleSaveProfession} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Ünvan Kodu</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                    Meslek Kodu *
+                  </label>
                   <input
                     type="text"
                     required
-                    disabled={!!editingTitle}
-                    value={titleForm.code}
-                    onChange={(e) => setTitleForm({ ...titleForm, code: e.target.value })}
-                    placeholder="CHIEF_ARCHITECT"
+                    disabled={!!editingProfession}
+                    value={professionForm.code}
+                    onChange={(e) => setProfessionForm({ ...professionForm, code: e.target.value })}
+                    placeholder="Örn: A.01, B.05..."
                     className="super-admin-input"
-                    style={{ fontFamily: 'monospace' }}
+                    style={{ fontFamily: 'monospace', fontWeight: 700 }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Ünvan Adı</label>
-                  <input
-                    type="text"
-                    required
-                    value={titleForm.title}
-                    onChange={(e) => setTitleForm({ ...titleForm, title: e.target.value })}
-                    placeholder="Baş Sistem Mimarı"
-                    className="super-admin-input"
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Sektör / Kategori</label>
-                  <input
-                    type="text"
-                    required
-                    value={titleForm.category}
-                    onChange={(e) => setTitleForm({ ...titleForm, category: e.target.value })}
-                    placeholder="YAZILIM"
-                    className="super-admin-input"
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Önerilen Model</label>
-                  <input
-                    type="text"
-                    value={titleForm.recommended_model_code}
-                    onChange={(e) => setTitleForm({ ...titleForm, recommended_model_code: e.target.value })}
-                    className="super-admin-input"
-                    style={{ fontFamily: 'monospace' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Otonomi Seviyesi</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                    Bağlı Olduğu Sektör *
+                  </label>
                   <select
-                    value={titleForm.autonomy_level}
-                    onChange={(e) => setTitleForm({ ...titleForm, autonomy_level: e.target.value })}
-                    className="super-admin-select"
+                    required
+                    value={professionForm.sector_code}
+                    onChange={(e) => setProfessionForm({ ...professionForm, sector_code: e.target.value })}
+                    className="super-admin-input"
+                    style={{ background: '#1e293b', color: '#fff', cursor: 'pointer' }}
                   >
-                    <option value="L1">L1 (Yardımcı)</option>
-                    <option value="L2">L2 (Yarı Otonom)</option>
-                    <option value="L3">L3 (Tam Otonom)</option>
+                    <option value="">-- Sektör Seçiniz --</option>
+                    {sectors.map((sec) => (
+                      <option key={sec.code} value={sec.code}>
+                        {sec.code} - {sec.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Ünvan Açıklaması</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  Meslek Tanım Adı *
+                </label>
                 <input
                   type="text"
-                  value={titleForm.description}
-                  onChange={(e) => setTitleForm({ ...titleForm, description: e.target.value })}
-                  placeholder="Sistem mimarisini kurgular ve kalite kapılarını denetler."
-                  className="super-admin-input"
-                />
-              </div>
-
-              {/* AI İLE ROL PROMPTU YENİDEN OLUŞTURMA (Madde 13) */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1' }}>
-                    Temel Sistem Rol Promptu (Base Role Prompt)
-                  </label>
-                  {editingTitle && (
-                    <button
-                      type="button"
-                      onClick={handleRegeneratePromptWithAI}
-                      disabled={regeneratingPrompt}
-                      className="super-admin-btn-corporate"
-                      style={{ background: 'linear-gradient(135deg, #7134e2 0%, #ec4899 100%)', fontSize: '0.725rem', padding: '4px 10px' }}
-                    >
-                      <Sparkles style={{ width: 12, height: 12 }} className={regeneratingPrompt ? 'animate-spin' : ''} />
-                      <span>{regeneratingPrompt ? 'AI Üretiyor...' : '✨ AI ile Rol Promptunu Yeniden Üret'}</span>
-                    </button>
-                  )}
-                </div>
-                <textarea
-                  rows="7"
                   required
-                  value={titleForm.base_role_prompt}
-                  onChange={(e) => setTitleForm({ ...titleForm, base_role_prompt: e.target.value })}
-                  placeholder="Sen RECOrion otonom mimarisinde görev alan Baş Mimarsın..."
+                  value={professionForm.name}
+                  onChange={(e) => setProfessionForm({ ...professionForm, name: e.target.value })}
+                  placeholder="Örn: Kerestecilik, Marangozluk, Yazılım Geliştirme..."
                   className="super-admin-input"
-                  style={{ fontFamily: 'monospace', fontSize: '0.75rem', lineHeight: 1.5 }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <button type="button" onClick={() => setTitleModalOpen(false)} className="super-admin-btn-secondary">
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  Açıklama (Opsiyonel)
+                </label>
+                <textarea
+                  rows="3"
+                  value={professionForm.description}
+                  onChange={(e) => setProfessionForm({ ...professionForm, description: e.target.value })}
+                  placeholder="Meslek grubunun kapsamı ve faaliyet detayları..."
+                  className="super-admin-input"
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={professionForm.is_active}
+                    onChange={(e) => setProfessionForm({ ...professionForm, is_active: e.target.checked })}
+                  />
+                  <span style={{ fontWeight: 700 }}>Meslek Tanımı Aktif</span>
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <button type="button" onClick={() => setProfessionModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>
-                <button type="submit" className="super-admin-btn-corporate">
-                  Ünvanı Kaydet
+                <button type="submit" disabled={processingId === 'save-profession'} className="super-admin-btn-corporate">
+                  {processingId === 'save-profession' ? <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" /> : <Save style={{ width: 14, height: 14 }} />}
+                  <span>{editingProfession ? 'Değişiklikleri Kaydet' : 'Meslek Tanımını Kaydet'}</span>
                 </button>
               </div>
             </form>
@@ -6136,15 +7386,18 @@ export default function SuperAdminConsole({
               {/* İletişim Bilgileri */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>İletişim E-posta *</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Kurumsal / Official E-posta *</label>
                   <input
                     type="email"
                     required
                     value={newTenantForm.contact_email}
                     onChange={(e) => setNewTenantForm({ ...newTenantForm, contact_email: e.target.value })}
-                    placeholder="info@sirket.com"
+                    placeholder="yetkili@sirketiniz.com"
                     className="super-admin-input"
                   />
+                  <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: 3 }}>
+                    * Resmi şirket e-posta adresi zorunludur (Gmail, Hotmail vb. kabul edilmez).
+                  </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Telefon</label>
@@ -6204,84 +7457,228 @@ export default function SuperAdminConsole({
                 </div>
               </div>
 
-              {/* NACE Kodları Çoklu Seçim (Madde 13) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#38bdf8' }}>
-                    Şirket Faaliyet NACE Kodları (Çoklu Seçim) (Madde 13)
-                  </label>
-                  <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
-                    {newTenantForm.nace_codes?.length || 0} kod seçildi
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 32, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  {(newTenantForm.nace_codes || []).map((code) => (
-                    <span key={code} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', color: '#38bdf8', fontSize: '0.7rem', fontFamily: 'monospace' }}>
-                      <span>{code}</span>
-                      <button
-                        type="button"
-                        onClick={() => setNewTenantForm({
-                          ...newTenantForm,
-                          nace_codes: newTenantForm.nace_codes.filter(c => c !== code)
-                        })}
-                        style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0 }}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                  {(!newTenantForm.nace_codes || newTenantForm.nace_codes.length === 0) && (
-                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aşağıdaki arama alanından NACE kodlarını seçebilirsiniz.</span>
-                  )}
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="NACE kodu veya sektör ara (Örn: 62.01, Bilişim, Danışmanlık)..."
-                  value={newTenantNaceSearch}
-                  onChange={async (e) => {
-                    const val = e.target.value;
-                    setNewTenantNaceSearch(val);
-                    if (val.trim().length > 1) {
-                      try {
-                        const res = await api.searchNace(val, 8);
-                        setNewTenantNaceResults(res || []);
-                      } catch (_) {}
-                    } else {
-                      setNewTenantNaceResults([]);
-                    }
-                  }}
-                  className="super-admin-input"
-                  style={{ fontSize: '0.75rem' }}
-                />
-
-                {newTenantNaceResults.length > 0 && (
-                  <div style={{ maxHeight: 110, overflowY: 'auto', borderRadius: 6, background: '#12182c', border: '1px solid rgba(255,255,255,0.1)', padding: 4 }}>
-                    {newTenantNaceResults.map((n) => {
-                      const isAlreadySelected = (newTenantForm.nace_codes || []).includes(n.code);
-                      return (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            if (!isAlreadySelected) {
-                              setNewTenantForm({
-                                ...newTenantForm,
-                                nace_codes: [...(newTenantForm.nace_codes || []), n.code]
-                              });
-                            }
-                            setNewTenantNaceSearch('');
-                            setNewTenantNaceResults([]);
+              {/* Sektörler ve Meslek Grupları Seçimi (Madde 2 - T.C. Ticaret Bakanlığı) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 12, borderRadius: 10, background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                {/* 1. SEKTÖR SEÇİMİ */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#818cf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Briefcase style={{ width: 14, height: 14 }} />
+                      <span>Faaliyet Sektörleri (T.C. Ticaret Bakanlığı) *</span>
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                        {newTenantForm.sectors?.length || 0} sektör seçili
+                      </span>
+                      {newTenantForm.sectors?.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearAllSectorsNewTenant}
+                          style={{
+                            background: 'rgba(239,68,68,0.15)',
+                            border: '1px solid rgba(239,68,68,0.3)',
+                            color: '#f87171',
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            fontSize: '0.675rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
                           }}
-                          style={{ padding: '6px 8px', borderRadius: 4, cursor: isAlreadySelected ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', background: isAlreadySelected ? 'rgba(255,255,255,0.02)' : 'transparent', color: isAlreadySelected ? '#64748b' : '#cbd5e1' }}
                         >
-                          <span><strong style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{n.code}</strong> - {n.title}</span>
-                          <span>{isAlreadySelected ? '✓ Eklendi' : '+ Ekle'}</span>
-                        </div>
+                          Temizle ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Seçili Sektörler Etiketleri (Chips) */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                    {(newTenantForm.sectors || []).map((secCode) => {
+                      const secObj = sectors.find(s => s.code === secCode || s.name === secCode);
+                      return (
+                        <span
+                          key={secCode}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '3px 10px',
+                            borderRadius: 999,
+                            background: 'linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(168,85,247,0.25) 100%)',
+                            border: '1px solid rgba(129,140,248,0.4)',
+                            color: '#c7d2fe',
+                            fontSize: '0.72rem',
+                            fontWeight: 700
+                          }}
+                        >
+                          <span>{secObj?.icon || '📁'}</span>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 800 }}>[{secObj?.code || secCode}]</span>
+                          <span>{secObj?.name || secCode}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSectorNewTenant(secCode)}
+                            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}
+                            title="Sektörü kaldır"
+                          >
+                            ×
+                          </button>
+                        </span>
                       );
                     })}
+                    {(!newTenantForm.sectors || newTenantForm.sectors.length === 0) && (
+                      <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                        Henüz sektör seçilmedi. Aşağıdaki butonlardan veya açılır kutudan sektör(ler) seçiniz.
+                      </span>
+                    )}
                   </div>
-                )}
+
+                  {/* Açılır Kutu + Hızlı Sektör Butonları */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const selCode = e.target.value;
+                        if (!selCode) return;
+                        handleToggleSectorNewTenant(selCode);
+                      }}
+                      className="super-admin-select"
+                      style={{ fontSize: '0.75rem', borderColor: 'rgba(129,140,248,0.3)' }}
+                    >
+                      <option value="">+ Açılır Listeden Sektör Seçiniz...</option>
+                      {sectors.map((s) => {
+                        const isSelected = (newTenantForm.sectors || []).includes(s.code);
+                        return (
+                          <option key={s.code} value={s.code} disabled={isSelected}>
+                            {s.icon || '📁'} [{s.code}] {s.name} {isSelected ? '(Seçildi)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 85, overflowY: 'auto' }}>
+                      {sectors.map((s) => {
+                        const isSelected = (newTenantForm.sectors || []).includes(s.code);
+                        return (
+                          <button
+                            key={s.code}
+                            type="button"
+                            onClick={() => handleToggleSectorNewTenant(s.code)}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 6,
+                              fontSize: '0.675rem',
+                              fontWeight: isSelected ? 800 : 500,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              background: isSelected ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.03)',
+                              border: isSelected ? '1px solid rgba(129,140,248,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                              color: isSelected ? '#ffffff' : '#94a3b8',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            <span>{s.icon || '📁'}</span>
+                            <span>[{s.code}] {s.name}</span>
+                            <span>{isSelected ? '✓' : '+'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. MESLEK GRUPLARI SEÇİMİ (Seçili sektörlere göre filtreli) */}
+                <div style={{ paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <GraduationCap style={{ width: 14, height: 14 }} />
+                      <span>Meslek Grupları (Seçili Sektörlere Göre Filtrelenir)</span>
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                        {newTenantForm.professions?.length || 0} meslek seçili
+                      </span>
+                      {newTenantForm.professions?.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setNewTenantForm({ ...newTenantForm, professions: [] })}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#f87171',
+                            fontSize: '0.675rem',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                          }}
+                        >
+                          Temizle ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {(!newTenantForm.sectors || newTenantForm.sectors.length === 0) ? (
+                    <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(234, 179, 8, 0.08)', border: '1px solid rgba(234, 179, 8, 0.25)', color: '#fde047', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <AlertCircle style={{ width: 15, height: 15, flexShrink: 0 }} />
+                      <span>Lütfen önce yukarıdan en az bir <strong>Faaliyet Sektörü</strong> seçiniz. Seçtiğiniz sektör(ler)e ait resmi meslek grupları otomatik olarak burada listelenecektir.</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Seçili Meslekler Etiketleri (Chips) */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                        {(newTenantForm.professions || []).map((pItem) => {
+                          const pCode = typeof pItem === 'object' ? pItem.code : pItem;
+                          const profObj = professions.find(pr => pr.code === pCode);
+                          const pName = profObj ? profObj.name : (typeof pItem === 'object' ? pItem.name : pCode);
+                          const pSector = profObj ? profObj.sector_code : '';
+                          return (
+                            <span key={pCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', border: '1px solid rgba(56,189,248,0.4)', color: '#38bdf8', fontSize: '0.7rem' }}>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 800 }}>[{pCode}]</span>
+                              <span>{pName}</span>
+                              {pSector && <span style={{ opacity: 0.6, fontSize: '0.65rem' }}>({pSector})</span>}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProfessionNewTenant(pCode)}
+                                style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0, fontWeight: 800 }}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                        {(!newTenantForm.professions || newTenantForm.professions.length === 0) && (
+                          <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                            Seçili sektör(ler)e ait meslek grubu seçilmedi. Aşağıdan seçebilirsiniz (opsiyonel).
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Meslek Grubu Açılır Listesi (Sadece Seçili Sektörler) */}
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val) handleToggleProfessionNewTenant(val);
+                        }}
+                        className="super-admin-select"
+                        style={{ fontSize: '0.75rem', borderColor: 'rgba(56,189,248,0.3)' }}
+                      >
+                        <option value="">+ Seçili Sektörlere Bağlı Meslek Grubu Ekle ({professions.filter(pr => (newTenantForm.sectors || []).includes(pr.sector_code)).length} meslek mevcut)...</option>
+                        {professions
+                          .filter(pr => (newTenantForm.sectors || []).includes(pr.sector_code))
+                          .map(pr => {
+                            const isAlreadySelected = (newTenantForm.professions || []).some(p => (typeof p === 'object' ? p.code : p) === pr.code);
+                            return (
+                              <option key={pr.code} value={pr.code} disabled={isAlreadySelected}>
+                                [{pr.code}] {pr.name} (Sektör: {pr.sector_code}) {isAlreadySelected ? '✓' : ''}
+                              </option>
+                            );
+                          })}
+                      </select>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* AI İle Kurumsal Manifesto Üretimi (Madde 13) */}
@@ -6311,7 +7708,7 @@ export default function SuperAdminConsole({
                   rows="3"
                   value={newTenantManifesto}
                   onChange={(e) => setNewTenantManifesto(e.target.value)}
-                  placeholder="Seçilen NACE kodlarına göre RECOrion LLM tarafından otomatik üretilen şirket vizyonu ve yapay zeka entegrasyon manifestosu (Kullanıcı dilediğince düzenleyebilir)..."
+                  placeholder="Seçilen sektör ve meslek gruplarına göre RECOrion LLM tarafından otomatik üretilen şirket vizyonu ve yapay zeka entegrasyon manifestosu (Kullanıcı dilediğince düzenleyebilir)..."
                   className="super-admin-input"
                   style={{ fontSize: '0.75rem', lineHeight: 1.5 }}
                 />
@@ -6333,35 +7730,17 @@ export default function SuperAdminConsole({
                   Vazgeç
                 </button>
 
-                {/* 1. SADECE KAYDET & YÖNETİCİ TANIMLA */}
+                {/* MÜŞTERİYİ VE YÖNETİCİYİ KAYDET (Tek Adımda Kayıt) */}
                 <button
                   type="button"
-                  onClick={(e) => handleSaveNewTenant(e, { activate: false, sendEmail: false })}
-                  disabled={!!processingId}
-                  className="super-admin-btn-secondary"
-                  style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    borderColor: 'rgba(255,255,255,0.2)',
-                    color: '#e2e8f0',
-                    fontWeight: 700
-                  }}
-                  title="Şirket bilgilerini kaydeder ve ardından doğrudan Yönetici Tanımlama ekranını açar"
-                >
-                  {processingId === 'create-new-tenant-draft' ? <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" /> : <Save style={{ width: 14, height: 14 }} />}
-                  <span>Şirketi Kaydet & Yönetici Tanımla</span>
-                </button>
-
-                {/* 2. MÜŞTERİYİ KAYDET, PAKETİ BAŞLAT & YÖNETİCİ TANIMLAMAYA GEÇ */}
-                <button
-                  type="button"
-                  onClick={(e) => handleSaveNewTenant(e, { activate: true, sendEmail: true })}
+                  onClick={handleSaveNewTenant}
                   disabled={!!processingId}
                   className="super-admin-btn-corporate"
                   style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', fontWeight: 800 }}
-                  title="Müşteriyi kaydeder, 1 yıllık paketi aktif eder ve doğrudan Yönetici Tanımlama ekranına geçer"
+                  title="Şirket ve yetkili yönetici kullanıcısı tek adımda doğrudan sisteme kaydedilir"
                 >
-                  {processingId === 'create-new-tenant-activate' ? <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" /> : <CheckCircle2 style={{ width: 14, height: 14 }} />}
-                  <span>Şirketi Kaydet, Paketi Başlat & Yönetici Tanımlamaya Geç →</span>
+                  {processingId === 'create-new-tenant' ? <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" /> : <CheckCircle2 style={{ width: 14, height: 14 }} />}
+                  <span>Müşteriyi ve Yöneticiyi Kaydet</span>
                 </button>
               </div>
             </form>
@@ -7200,6 +8579,214 @@ export default function SuperAdminConsole({
                     <span>Zamanlayıcıyı Kaydet</span>
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* SEKTÖR TANIMLAMA MODALI (TİCARET BAKANLIĞI)              */}
+      {/* ======================================================== */}
+      {sectorModalOpen && (
+        <div className="super-admin-modal-overlay">
+          <div className="super-admin-modal-box">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Layers style={{ width: 18, height: 18, color: '#10b981' }} />
+                  <span>{editingSector ? `'${sectorForm.code} - ${sectorForm.name}' Sektörünü Düzenle` : 'Yeni Sektör Tanımla'}</span>
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  T.C. Ticaret Bakanlığı resmi sektör kataloğu ana sektör tanımı.
+                </p>
+              </div>
+              <button onClick={() => setSectorModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <X style={{ width: 20, height: 20 }} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSector} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                    Sektör Kodu *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    disabled={!!editingSector}
+                    value={sectorForm.code}
+                    onChange={(e) => setSectorForm({ ...sectorForm, code: e.target.value.toUpperCase() })}
+                    placeholder="Örn: A, B, C..."
+                    className="super-admin-input"
+                    style={{ fontFamily: 'monospace', fontWeight: 800, textTransform: 'uppercase' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                    Sektör Adı *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={sectorForm.name}
+                    onChange={(e) => setSectorForm({ ...sectorForm, name: e.target.value })}
+                    placeholder="Örn: BİLİŞİM, İLETİŞİM VE MEDYA"
+                    className="super-admin-input"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  Sektör Açıklaması (Opsiyonel)
+                </label>
+                <textarea
+                  rows={3}
+                  value={sectorForm.description}
+                  onChange={(e) => setSectorForm({ ...sectorForm, description: e.target.value })}
+                  placeholder="Sektörün kapsadığı iş kolları ve genel tanım..."
+                  className="super-admin-textarea"
+                />
+              </div>
+
+              {/* Sektör İkonu & Resmi Seçimi (Madde 1) */}
+              <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label style={{ fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ImageIcon style={{ width: 14, height: 14, color: '#38bdf8' }} />
+                    <span>Sektör İkonu / Görseli (Eski Usül İkon / Resim)</span>
+                  </label>
+                  {(sectorForm.icon || sectorForm.image_url) && (
+                    <button
+                      type="button"
+                      onClick={() => setSectorForm({ ...sectorForm, icon: '', image_url: '' })}
+                      style={{ background: 'transparent', border: 'none', color: '#f87171', fontSize: '0.68rem', cursor: 'pointer', fontWeight: 700 }}
+                    >
+                      İkon ve Görseli Temizle ✕
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Canlı Önizleme */}
+                  <div style={{ width: 50, height: 50, borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '2px solid rgba(16, 185, 129, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                    {sectorForm.image_url ? (
+                      <img src={sectorForm.image_url} alt="Sektör Görseli" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontSize: '1.75rem' }}>{sectorForm.icon || '🏢'}</span>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="text"
+                        value={sectorForm.icon}
+                        onChange={(e) => setSectorForm({ ...sectorForm, icon: e.target.value })}
+                        placeholder="İkon / Emoji (Örn: 🌲, 💻, 🌾)"
+                        className="super-admin-input"
+                        style={{ flex: 1, fontSize: '0.85rem' }}
+                      />
+                      
+                      <input
+                        type="file"
+                        id="sector-image-file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.size > 2 * 1024 * 1024) {
+                              alert("Resim dosyası 2MB'den küçük olmalıdır.");
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              setSectorForm({ ...sectorForm, image_url: ev.target.result });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor="sector-image-file"
+                        className="super-admin-btn-secondary"
+                        style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.12)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)', whiteSpace: 'nowrap' }}
+                        title="PNG, JPG veya SVG resim dosyası seçin"
+                      >
+                        <ImageIcon style={{ width: 13, height: 13 }} />
+                        <span>{sectorForm.image_url ? 'Resmi Değiştir' : 'Resim Yükle'}</span>
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginRight: 4 }}>Hızlı Seçim:</span>
+                      {['🌲', '🎭', '💻', '🌾', '👗', '🎁', '✂️', '🚗', '🛒', '🚚', '🏗️', '🏦', '🏥', '⚖️', '🎓', '⚡', '🏢', '🛡️', '⚙️', '🚀', '💎', '📈', '🌐', '📦'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => setSectorForm({ ...sectorForm, icon: emoji })}
+                          style={{
+                            background: sectorForm.icon === emoji ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.05)',
+                            border: sectorForm.icon === emoji ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 4,
+                            padding: '2px 4px',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="text"
+                    value={sectorForm.image_url && !sectorForm.image_url.startsWith('data:') ? sectorForm.image_url : ''}
+                    onChange={(e) => setSectorForm({ ...sectorForm, image_url: e.target.value })}
+                    placeholder="Veya Harici Resim Linki (https://...)"
+                    className="super-admin-input"
+                    style={{ fontSize: '0.725rem' }}
+                  />
+                  {sectorForm.image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setSectorForm({ ...sectorForm, image_url: '' })}
+                      className="super-admin-btn-secondary"
+                      style={{ fontSize: '0.68rem', padding: '4px 8px', color: '#f87171', whiteSpace: 'nowrap' }}
+                    >
+                      Resmi Kaldır
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={sectorForm.is_active}
+                    onChange={(e) => setSectorForm({ ...sectorForm, is_active: e.target.checked })}
+                  />
+                  <span style={{ fontWeight: 700 }}>Sektör Aktif</span>
+                </label>
+              </div>
+
+              {/* FOOTER BUTONLARI */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <button type="button" onClick={() => setSectorModalOpen(false)} className="super-admin-btn-secondary">
+                  Vazgeç
+                </button>
+                <button type="submit" disabled={processingId === 'save-sector'} className="super-admin-btn-corporate">
+                  {processingId === 'save-sector' ? <RefreshCw style={{ width: 14, height: 14 }} className="animate-spin" /> : <Save style={{ width: 14, height: 14 }} />}
+                  <span>{editingSector ? 'Değişiklikleri Kaydet' : 'Sektörü Kaydet'}</span>
+                </button>
               </div>
             </form>
           </div>

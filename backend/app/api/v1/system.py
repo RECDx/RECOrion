@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
 import uuid
 from app.db.session import get_db
-from app.db.models import SystemPermission
+from app.db.models import SystemPermission, TenantRole, Actor
 
 router = APIRouter(prefix="/system", tags=["Sistem Yönetimi & İzin Kataloğu (RECDx Süper Admin)"])
 
@@ -106,6 +107,237 @@ async def delete_system_permission(perm_id: uuid.UUID, db: AsyncSession = Depend
     await db.delete(perm)
     await db.commit()
     return {"success": True, "message": f"'{perm.code}' izin tanımı başarıyla silindi."}
+
+
+# ==========================================
+# SİSTEM YETKİ ROLLERİ YÖNETİMİ (Madde 1)
+# ==========================================
+
+class RoleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    permissions: List[str] = []
+    is_system: bool = True
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[List[str]] = None
+    is_system: Optional[bool] = None
+
+class RoleResponse(BaseModel):
+    id: uuid.UUID
+    tenant_id: Optional[uuid.UUID] = None
+    name: str
+    description: Optional[str] = None
+    permissions: list = []
+    is_system: bool = False
+    created_at: Optional[datetime] = None
+    actor_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+DEFAULT_SYSTEM_ROLES = [
+    {
+        "name": "Süper Yönetici (Platform Admin)",
+        "description": "RECOrion platformunun tam yetkili yöneticisi. Tüm sistem, müşteri ve güvenlik ayarlarını yönetebilir.",
+        "permissions": ["*"],
+        "is_system": True
+    },
+    {
+        "name": "Kurumsal Operasyon & Müşteri Yöneticisi",
+        "description": "Müşteri ve kiralama paketlerini, onay süreçlerini ve bildirim zamanlayıcılarını yönetir.",
+        "permissions": ["tenant:view", "tenant:create", "tenant:edit", "lead:approve", "plan:view", "schedule:view", "schedule:trigger", "template:edit", "audit:read"],
+        "is_system": True
+    },
+    {
+        "name": "Güvenlik & Uyum Denetçisi (SecOps & Compliance)",
+        "description": "Erişim loglarını, rol tanımlarını ve RBAC izin hiyerarşisini denetler.",
+        "permissions": ["rbac:audit", "audit:read", "role:view", "security:manage"],
+        "is_system": True
+    },
+    {
+        "name": "Yapay Zeka Mimarisi & Ajan Lideri",
+        "description": "EVREN modellerini yapılandırır, otonom ajanları ve görev dağılımlarını orkestre eder.",
+        "permissions": ["agent:create", "agent:edit", "agent:hire", "agent:dismiss", "model:config", "project:manage", "chat:access"],
+        "is_system": True
+    },
+    {
+        "name": "Standart Kurumsal Kullanıcı",
+        "description": "Temel sohbet, proje takibi ve hafıza arama yetkilerine sahip standart kullanıcı.",
+        "permissions": ["chat:access", "project:view", "memory:read"],
+        "is_system": True
+    }
+]
+
+@router.get("/roles", response_model=List[RoleResponse])
+async def list_system_roles(db: AsyncSession = Depends(get_db)):
+    """
+    Sistem genelindeki yetki rollerini ve her role atanmış aktör/kullanıcı sayısını listeler (Madde 1).
+    Eğer henüz rol tanımlanmamışsa varsayılan kurumsal sistem rollerini otomatik tohumlar (seed).
+    """
+    stmt = (
+        select(TenantRole, func.count(Actor.id).label("actor_count"))
+        .outerjoin(Actor, Actor.role_id == TenantRole.id)
+        .where(TenantRole.tenant_id.is_(None))
+        .group_by(TenantRole.id)
+        .order_by(TenantRole.is_system.desc(), TenantRole.created_at.asc())
+    )
+    rows = (await db.execute(stmt)).all()
+
+    # Eğer hiç sistem rolü yoksa varsayılanları tohumla
+    if not rows:
+        perms_res = await db.execute(select(SystemPermission.code))
+        all_perms = perms_res.scalars().all()
+
+        for d in DEFAULT_SYSTEM_ROLES:
+            perms = list(all_perms) if d["permissions"] == ["*"] else d["permissions"]
+            role_obj = TenantRole(
+                tenant_id=None,
+                name=d["name"],
+                description=d["description"],
+                permissions=perms,
+                is_system=d["is_system"]
+            )
+            db.add(role_obj)
+        await db.commit()
+
+        # Yeniden çek
+        rows = (await db.execute(stmt)).all()
+
+    result = []
+    for role_obj, actor_count in rows:
+        result.append(RoleResponse(
+            id=role_obj.id,
+            tenant_id=role_obj.tenant_id,
+            name=role_obj.name,
+            description=role_obj.description,
+            permissions=role_obj.permissions or [],
+            is_system=role_obj.is_system,
+            created_at=role_obj.created_at,
+            actor_count=actor_count
+        ))
+    return result
+
+@router.post("/roles", response_model=RoleResponse)
+async def create_system_role(payload: RoleCreate, db: AsyncSession = Depends(get_db)):
+    """
+    Süper Yönetici tarafından yeni bir Yetki Rolü tanımlanması (Madde 1).
+    Alanlar:
+    - Rol Adı (name)
+    - Rol Açıklama (description)
+    - İzin Kataloğundan Çoklu Seçilen İzinler (permissions)
+    """
+    cleaned_name = payload.name.strip()
+    if not cleaned_name:
+        raise HTTPException(status_code=400, detail="Rol adı zorunludur.")
+
+    existing = await db.execute(
+        select(TenantRole).where(TenantRole.tenant_id.is_(None), TenantRole.name == cleaned_name)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail=f"'{cleaned_name}' adında bir yetki rolü zaten mevcut.")
+
+    role = TenantRole(
+        tenant_id=None,
+        name=cleaned_name,
+        description=payload.description.strip() if payload.description else None,
+        permissions=payload.permissions or [],
+        is_system=payload.is_system
+    )
+    db.add(role)
+    await db.commit()
+    await db.refresh(role)
+
+    return RoleResponse(
+        id=role.id,
+        tenant_id=role.tenant_id,
+        name=role.name,
+        description=role.description,
+        permissions=role.permissions or [],
+        is_system=role.is_system,
+        created_at=role.created_at,
+        actor_count=0
+    )
+
+@router.put("/roles/{role_id}", response_model=RoleResponse)
+async def update_system_role(role_id: uuid.UUID, payload: RoleUpdate, db: AsyncSession = Depends(get_db)):
+    """
+    Mevcut Yetki Rolünü güncelleme (Madde 1).
+    """
+    role = await db.get(TenantRole, role_id)
+    if not role:
+        raise HTTPException(status_code=404, detail="Yetki rolü bulunamadı.")
+
+    if payload.name is not None:
+        cleaned_name = payload.name.strip()
+        if not cleaned_name:
+            raise HTTPException(status_code=400, detail="Rol adı boş bırakılamaz.")
+        existing = await db.execute(
+            select(TenantRole).where(
+                TenantRole.tenant_id.is_(None),
+                TenantRole.name == cleaned_name,
+                TenantRole.id != role_id
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail=f"'{cleaned_name}' adında başka bir rol mevcut.")
+        role.name = cleaned_name
+
+    if payload.description is not None:
+        role.description = payload.description.strip() if payload.description else None
+
+    if payload.permissions is not None:
+        role.permissions = payload.permissions
+
+    if payload.is_system is not None:
+        role.is_system = payload.is_system
+
+    await db.commit()
+    await db.refresh(role)
+
+    actor_count_res = await db.execute(
+        select(func.count(Actor.id)).where(Actor.role_id == role.id)
+    )
+    actor_count = actor_count_res.scalar() or 0
+
+    return RoleResponse(
+        id=role.id,
+        tenant_id=role.tenant_id,
+        name=role.name,
+        description=role.description,
+        permissions=role.permissions or [],
+        is_system=role.is_system,
+        created_at=role.created_at,
+        actor_count=actor_count
+    )
+
+@router.delete("/roles/{role_id}")
+async def delete_system_role(role_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Yetki Rolünü sistemden silme (Madde 1).
+    Eğer role atanmış kullanıcı/aktör varsa silme engellenir.
+    """
+    role = await db.get(TenantRole, role_id)
+    if not role:
+        raise HTTPException(status_code=404, detail="Yetki rolü bulunamadı.")
+
+    actor_count_res = await db.execute(
+        select(func.count(Actor.id)).where(Actor.role_id == role_id)
+    )
+    actor_count = actor_count_res.scalar() or 0
+
+    if actor_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bu yetki rolüne atanmış {actor_count} adet aktif kullanıcı/aktör bulunmaktadır. Silmeden önce kullanıcıların rollerini değiştiriniz."
+        )
+
+    await db.delete(role)
+    await db.commit()
+    return {"success": True, "message": f"'{role.name}' yetki rolü başarıyla silindi."}
+
 
 class SettingUpdatePayload(BaseModel):
     model_code: str

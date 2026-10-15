@@ -1,0 +1,981 @@
+{
+  "sectors": [
+    {
+      "code": "A",
+      "name": "AĞAÇ İŞLERİ",
+      "icon": "🌲"
+    },
+    {
+      "code": "B",
+      "name": "EĞLENCE, DİNLENME, ORGANİZASYON",
+      "icon": "🎭"
+    },
+    {
+      "code": "C",
+      "name": "ELEKTRİK, ELEKTRONİK, BİLGİSAYAR",
+      "icon": "💻"
+    },
+    {
+      "code": "D",
+      "name": "GIDA, TARIM",
+      "icon": "🌾"
+    },
+    {
+      "code": "E",
+      "name": "GİYİM, DERİ ÜRÜN, EV TEKSTİLİ, DOKUMA",
+      "icon": "👗"
+    },
+    {
+      "code": "F",
+      "name": "HEDİYELİK EŞYA, EĞİTİM, BASIM, FOTOĞRAF, ÇEŞİTLİ MALLAR",
+      "icon": "🎁"
+    },
+    {
+      "code": "G",
+      "name": "KUAFÖR, BERBER, TEMİZLİK, SPOR, KOZMETİK, SAĞLIK",
+      "icon": "✂️"
+    },
+    {
+      "code": "H",
+      "name": "METAL, OTOMOTİV, MAKİNE",
+      "icon": "🚗"
+    },
+    {
+      "code": "I",
+      "name": "PAZAR, SEYYAR",
+      "icon": "🛒"
+    },
+    {
+      "code": "J",
+      "name": "ULAŞTIRMA HİZMETLERİ",
+      "icon": "🚚"
+    },
+    {
+      "code": "K",
+      "name": "YAPI SANATLARI",
+      "icon": "🏗️"
+    }
+  ],
+  "professions": [
+    {
+      "code": "A.01",
+      "sector_code": "A",
+      "name": "İkinci el eşya ticareti"
+    },
+    {
+      "code": "A.02",
+      "sector_code": "A",
+      "name": "Kerestecilik"
+    },
+    {
+      "code": "A.03",
+      "sector_code": "A",
+      "name": "Marangozluk"
+    },
+    {
+      "code": "A.04",
+      "sector_code": "A",
+      "name": "Mobilya boyacılığı"
+    },
+    {
+      "code": "A.05",
+      "sector_code": "A",
+      "name": "Mobilya döşemeciliği"
+    },
+    {
+      "code": "A.06",
+      "sector_code": "A",
+      "name": "Mobilya imalatı"
+    },
+    {
+      "code": "A.07",
+      "sector_code": "A",
+      "name": "Mobilya ticareti"
+    },
+    {
+      "code": "A.08",
+      "sector_code": "A",
+      "name": "Yakacak imalatı, ticareti"
+    },
+    {
+      "code": "B.01",
+      "sector_code": "B",
+      "name": "Ajans, organizasyon faaliyetleri"
+    },
+    {
+      "code": "B.02",
+      "sector_code": "B",
+      "name": "Düğün salonu işletmeciliği"
+    },
+    {
+      "code": "B.03",
+      "sector_code": "B",
+      "name": "Eğlence yerleri işletmeciliği"
+    },
+    {
+      "code": "B.04",
+      "sector_code": "B",
+      "name": "Gazinoculuk"
+    },
+    {
+      "code": "B.05",
+      "sector_code": "B",
+      "name": "Kahvehanecilik, kıraathanecilik"
+    },
+    {
+      "code": "B.06",
+      "sector_code": "B",
+      "name": "Lokal işletmeciliği"
+    },
+    {
+      "code": "B.07",
+      "sector_code": "B",
+      "name": "Otel, pansiyon, yurt işletmeciliği"
+    },
+    {
+      "code": "B.08",
+      "sector_code": "B",
+      "name": "Oyun salonu, internet kafe işletmeciliği"
+    },
+    {
+      "code": "B.09",
+      "sector_code": "B",
+      "name": "Ses, sahne sanatçılığı"
+    },
+    {
+      "code": "B.10",
+      "sector_code": "B",
+      "name": "Şans oyunları bayiliği"
+    },
+    {
+      "code": "C.01",
+      "sector_code": "C",
+      "name": "Asansör, yürüyen merdiven kurulumu, bakımı, onarımı"
+    },
+    {
+      "code": "C.02",
+      "sector_code": "C",
+      "name": "Beyaz eşya onarımı"
+    },
+    {
+      "code": "C.03",
+      "sector_code": "C",
+      "name": "Beyaz eşya ticareti"
+    },
+    {
+      "code": "C.04",
+      "sector_code": "C",
+      "name": "Bilgisayar kurulumu, onarımı, programlama, veri kurtarma"
+    },
+    {
+      "code": "C.05",
+      "sector_code": "C",
+      "name": "Elektrik makineleri imalatı, kurulumu, onarımı"
+    },
+    {
+      "code": "C.06",
+      "sector_code": "C",
+      "name": "Elektrik malzemeleri imalatı, ticareti"
+    },
+    {
+      "code": "C.07",
+      "sector_code": "C",
+      "name": "Elektrik sistemleri imalatı, kurulumu, onarımı"
+    },
+    {
+      "code": "C.08",
+      "sector_code": "C",
+      "name": "Elektrik tesisatçılığı"
+    },
+    {
+      "code": "C.09",
+      "sector_code": "C",
+      "name": "Elektrikli ev aletleri imalatı, onarımı"
+    },
+    {
+      "code": "C.10",
+      "sector_code": "C",
+      "name": "Elektrikli ev aletleri ticareti"
+    },
+    {
+      "code": "C.11",
+      "sector_code": "C",
+      "name": "Elektronik ürün imalatı, onarımı"
+    },
+    {
+      "code": "C.12",
+      "sector_code": "C",
+      "name": "Elektronik ürün ticareti"
+    },
+    {
+      "code": "C.13",
+      "sector_code": "C",
+      "name": "E-ticaret"
+    },
+    {
+      "code": "C.14",
+      "sector_code": "C",
+      "name": "Güvenlik sistemleri hizmetleri"
+    },
+    {
+      "code": "C.15",
+      "sector_code": "C",
+      "name": "Kayıtlı medyaların imalatı, kiralanması, ticareti"
+    },
+    {
+      "code": "C.16",
+      "sector_code": "C",
+      "name": "Telekomünikasyon cihazları onarımı"
+    },
+    {
+      "code": "C.17",
+      "sector_code": "C",
+      "name": "Telekomünikasyon cihazları ticareti"
+    },
+    {
+      "code": "D.01",
+      "sector_code": "D",
+      "name": "Aktar ürünleri imalatı, ticareti"
+    },
+    {
+      "code": "D.02",
+      "sector_code": "D",
+      "name": "Arıcılık"
+    },
+    {
+      "code": "D.03",
+      "sector_code": "D",
+      "name": "Bakkallık, bayilik, büfecilik"
+    },
+    {
+      "code": "D.04",
+      "sector_code": "D",
+      "name": "Balıkçılık"
+    },
+    {
+      "code": "D.05",
+      "sector_code": "D",
+      "name": "Besicilik, celeplik"
+    },
+    {
+      "code": "D.06",
+      "sector_code": "D",
+      "name": "Bitkisel ürünlerle ilgili faaliyetler"
+    },
+    {
+      "code": "D.07",
+      "sector_code": "D",
+      "name": "Börekçilik"
+    },
+    {
+      "code": "D.08",
+      "sector_code": "D",
+      "name": "Çeşitli gıdaların imalatı"
+    },
+    {
+      "code": "D.09",
+      "sector_code": "D",
+      "name": "Değirmencilik, zahirecilik"
+    },
+    {
+      "code": "D.10",
+      "sector_code": "D",
+      "name": "Dondurmacılık"
+    },
+    {
+      "code": "D.11",
+      "sector_code": "D",
+      "name": "Evcil hayvan bakımı, ticareti"
+    },
+    {
+      "code": "D.12",
+      "sector_code": "D",
+      "name": "Fırıncılık"
+    },
+    {
+      "code": "D.13",
+      "sector_code": "D",
+      "name": "Gübre, zirai ilaç imalatı, ticareti"
+    },
+    {
+      "code": "D.14",
+      "sector_code": "D",
+      "name": "Kantincilik"
+    },
+    {
+      "code": "D.15",
+      "sector_code": "D",
+      "name": "Kasaplık"
+    },
+    {
+      "code": "D.16",
+      "sector_code": "D",
+      "name": "Kuruyemiş imalatı, ticareti"
+    },
+    {
+      "code": "D.17",
+      "sector_code": "D",
+      "name": "Lokantacılık"
+    },
+    {
+      "code": "D.18",
+      "sector_code": "D",
+      "name": "Manavlık"
+    },
+    {
+      "code": "D.19",
+      "sector_code": "D",
+      "name": "Meşrubat imalatı, ticareti"
+    },
+    {
+      "code": "D.20",
+      "sector_code": "D",
+      "name": "Pastanecilik, tatlıcılık"
+    },
+    {
+      "code": "D.21",
+      "sector_code": "D",
+      "name": "Şarküteri ürünleri imalatı, ticareti"
+    },
+    {
+      "code": "D.22",
+      "sector_code": "D",
+      "name": "Şekercilik, çikolatacılık"
+    },
+    {
+      "code": "D.23",
+      "sector_code": "D",
+      "name": "Tavukçuluk"
+    },
+    {
+      "code": "D.24",
+      "sector_code": "D",
+      "name": "Yaş sebze, meyve ticareti"
+    },
+    {
+      "code": "D.25",
+      "sector_code": "D",
+      "name": "Yufkacılık, kadayıfçılık"
+    },
+    {
+      "code": "E.01",
+      "sector_code": "E",
+      "name": "Ayakkabıcılık"
+    },
+    {
+      "code": "E.02",
+      "sector_code": "E",
+      "name": "Çamaşırhane, kuru temizleme, ütücülük hizmetleri"
+    },
+    {
+      "code": "E.03",
+      "sector_code": "E",
+      "name": "Deri aksesuar imalatı, ticareti"
+    },
+    {
+      "code": "E.04",
+      "sector_code": "E",
+      "name": "Deri giyim eşyası imalatı, onarımı"
+    },
+    {
+      "code": "E.05",
+      "sector_code": "E",
+      "name": "Deri giyim eşyası ticareti"
+    },
+    {
+      "code": "E.06",
+      "sector_code": "E",
+      "name": "Dericilik"
+    },
+    {
+      "code": "E.07",
+      "sector_code": "E",
+      "name": "Dokumacılık"
+    },
+    {
+      "code": "E.08",
+      "sector_code": "E",
+      "name": "Ev tekstil ürünleri imalatı, ticareti"
+    },
+    {
+      "code": "E.09",
+      "sector_code": "E",
+      "name": "Halı yıkama hizmetleri"
+    },
+    {
+      "code": "E.10",
+      "sector_code": "E",
+      "name": "Halıcılık, kilimcilik"
+    },
+    {
+      "code": "E.11",
+      "sector_code": "E",
+      "name": "İkinci el tekstil ürünleri ticareti"
+    },
+    {
+      "code": "E.12",
+      "sector_code": "E",
+      "name": "Konfeksiyonculuk"
+    },
+    {
+      "code": "E.13",
+      "sector_code": "E",
+      "name": "Tasarım faaliyetleri"
+    },
+    {
+      "code": "E.14",
+      "sector_code": "E",
+      "name": "Tekstil baskıcılığı, boyacılığı"
+    },
+    {
+      "code": "E.15",
+      "sector_code": "E",
+      "name": "Terzilik"
+    },
+    {
+      "code": "E.16",
+      "sector_code": "E",
+      "name": "Tuhafiye imalatı, ticareti"
+    },
+    {
+      "code": "F.01",
+      "sector_code": "F",
+      "name": "Arzuhalcilik, danışmanlık, bilgi hizmetleri"
+    },
+    {
+      "code": "F.02",
+      "sector_code": "F",
+      "name": "Basın, yayım, iletişim"
+    },
+    {
+      "code": "F.03",
+      "sector_code": "F",
+      "name": "Bireysel sanatkârlık faaliyetleri"
+    },
+    {
+      "code": "F.04",
+      "sector_code": "F",
+      "name": "Çeşitli malların ticareti"
+    },
+    {
+      "code": "F.05",
+      "sector_code": "F",
+      "name": "Çiçekçilik"
+    },
+    {
+      "code": "F.06",
+      "sector_code": "F",
+      "name": "Fatura tahsilat bürosu işletmeciliği"
+    },
+    {
+      "code": "F.07",
+      "sector_code": "F",
+      "name": "Fotoğrafçılık"
+    },
+    {
+      "code": "F.08",
+      "sector_code": "F",
+      "name": "Fotokopicilik, tez yazımı"
+    },
+    {
+      "code": "F.09",
+      "sector_code": "F",
+      "name": "Hediyelik eşya imalatı, ticareti"
+    },
+    {
+      "code": "F.10",
+      "sector_code": "F",
+      "name": "Kağıt, kağıt ürünleri imalatı, ticareti"
+    },
+    {
+      "code": "F.11",
+      "sector_code": "F",
+      "name": "Kauçuk, plastik ürünlerin imalatı, ticareti"
+    },
+    {
+      "code": "F.12",
+      "sector_code": "F",
+      "name": "Kırtasiye imalatı, ticareti"
+    },
+    {
+      "code": "F.13",
+      "sector_code": "F",
+      "name": "Kitapçılık"
+    },
+    {
+      "code": "F.14",
+      "sector_code": "F",
+      "name": "Kreş işletmeciliği"
+    },
+    {
+      "code": "F.15",
+      "sector_code": "F",
+      "name": "Kurs işletmeciliği"
+    },
+    {
+      "code": "F.16",
+      "sector_code": "F",
+      "name": "Matbaacılık"
+    },
+    {
+      "code": "F.17",
+      "sector_code": "F",
+      "name": "Müzik aletleri imalatı, onarımı, ticareti"
+    },
+    {
+      "code": "F.18",
+      "sector_code": "F",
+      "name": "Oyuncak imalatı, ticareti"
+    },
+    {
+      "code": "F.19",
+      "sector_code": "F",
+      "name": "Reklamcılık, tabelacılık"
+    },
+    {
+      "code": "F.20",
+      "sector_code": "F",
+      "name": "Sanat eseri, antika ticareti"
+    },
+    {
+      "code": "F.21",
+      "sector_code": "F",
+      "name": "Tercümanlık"
+    },
+    {
+      "code": "F.22",
+      "sector_code": "F",
+      "name": "Züccaciye imalatı, ticareti"
+    },
+    {
+      "code": "G.01",
+      "sector_code": "G",
+      "name": "Alternatif tedavi merkezi işletmeciliği"
+    },
+    {
+      "code": "G.02",
+      "sector_code": "G",
+      "name": "Cenaze hizmetleri"
+    },
+    {
+      "code": "G.03",
+      "sector_code": "G",
+      "name": "Diş laboratuvarlarının faaliyetleri"
+    },
+    {
+      "code": "G.04",
+      "sector_code": "G",
+      "name": "Dövme salonu işletmeciliği"
+    },
+    {
+      "code": "G.05",
+      "sector_code": "G",
+      "name": "Erkek berberliği"
+    },
+    {
+      "code": "G.06",
+      "sector_code": "G",
+      "name": "Genel temizlik, haşere kontrol faaliyetleri"
+    },
+    {
+      "code": "G.07",
+      "sector_code": "G",
+      "name": "Güzellik salonu işletmeciliği"
+    },
+    {
+      "code": "G.08",
+      "sector_code": "G",
+      "name": "Hasta bakıcılığı"
+    },
+    {
+      "code": "G.09",
+      "sector_code": "G",
+      "name": "Kadın kuaförlüğü"
+    },
+    {
+      "code": "G.10",
+      "sector_code": "G",
+      "name": "Kaplıca, hamam işletmeciliği"
+    },
+    {
+      "code": "G.11",
+      "sector_code": "G",
+      "name": "Kozmetik imalatı, ticareti"
+    },
+    {
+      "code": "G.12",
+      "sector_code": "G",
+      "name": "Optik ürünlerin imalatı, ticareti"
+    },
+    {
+      "code": "G.13",
+      "sector_code": "G",
+      "name": "Spor malzemeleri imalatı, ticareti"
+    },
+    {
+      "code": "G.14",
+      "sector_code": "G",
+      "name": "Spor tesisi işletmeciliği"
+    },
+    {
+      "code": "G.15",
+      "sector_code": "G",
+      "name": "Temizlik malzemeleri imalatı, ticareti"
+    },
+    {
+      "code": "G.16",
+      "sector_code": "G",
+      "name": "Tıbbi malzemelerin imalatı, ticareti"
+    },
+    {
+      "code": "G.17",
+      "sector_code": "G",
+      "name": "Tuvalet işletmeciliği"
+    },
+    {
+      "code": "H.01",
+      "sector_code": "H",
+      "name": "Alüminyum ürün imalatı"
+    },
+    {
+      "code": "H.02",
+      "sector_code": "H",
+      "name": "At arabası imalatı, onarımı"
+    },
+    {
+      "code": "H.03",
+      "sector_code": "H",
+      "name": "Bakırcılık"
+    },
+    {
+      "code": "H.04",
+      "sector_code": "H",
+      "name": "Çilingirlik"
+    },
+    {
+      "code": "H.05",
+      "sector_code": "H",
+      "name": "Demir, çelik eşya imalatı, ticareti"
+    },
+    {
+      "code": "H.06",
+      "sector_code": "H",
+      "name": "Deniz taşıtları imalatı, onarımı, ticareti"
+    },
+    {
+      "code": "H.07",
+      "sector_code": "H",
+      "name": "Dökümcülük"
+    },
+    {
+      "code": "H.08",
+      "sector_code": "H",
+      "name": "Ev aletleri imalatı, onarımı, ticareti"
+    },
+    {
+      "code": "H.09",
+      "sector_code": "H",
+      "name": "Hurdacılık"
+    },
+    {
+      "code": "H.10",
+      "sector_code": "H",
+      "name": "İklimlendirme, soğutma sistemi imalatı, kurulumu, onarımı"
+    },
+    {
+      "code": "H.11",
+      "sector_code": "H",
+      "name": "Kalaycılık, kaplamacılık"
+    },
+    {
+      "code": "H.12",
+      "sector_code": "H",
+      "name": "Karoser imalatı, kaportacılık"
+    },
+    {
+      "code": "H.13",
+      "sector_code": "H",
+      "name": "Kuyumculuk"
+    },
+    {
+      "code": "H.14",
+      "sector_code": "H",
+      "name": "Makine kurulumu, onarımı"
+    },
+    {
+      "code": "H.15",
+      "sector_code": "H",
+      "name": "Makine, yedek parça ticareti"
+    },
+    {
+      "code": "H.16",
+      "sector_code": "H",
+      "name": "Motosiklet, bisiklet imalatı, onarımı"
+    },
+    {
+      "code": "H.17",
+      "sector_code": "H",
+      "name": "Motosiklet, bisiklet ticareti"
+    },
+    {
+      "code": "H.18",
+      "sector_code": "H",
+      "name": "Oto bakım servisçiliği"
+    },
+    {
+      "code": "H.19",
+      "sector_code": "H",
+      "name": "Oto boyacılık"
+    },
+    {
+      "code": "H.20",
+      "sector_code": "H",
+      "name": "Oto döşemecilik"
+    },
+    {
+      "code": "H.21",
+      "sector_code": "H",
+      "name": "Oto elektrikçilik"
+    },
+    {
+      "code": "H.22",
+      "sector_code": "H",
+      "name": "Oto lastik onarımı"
+    },
+    {
+      "code": "H.23",
+      "sector_code": "H",
+      "name": "Oto lastik ticareti"
+    },
+    {
+      "code": "H.24",
+      "sector_code": "H",
+      "name": "Oto LPG montajı"
+    },
+    {
+      "code": "H.25",
+      "sector_code": "H",
+      "name": "Oto yedek parça imalatı"
+    },
+    {
+      "code": "H.26",
+      "sector_code": "H",
+      "name": "Oto yedek parça ticareti"
+    },
+    {
+      "code": "H.27",
+      "sector_code": "H",
+      "name": "Oto yıkama, yağlama"
+    },
+    {
+      "code": "H.28",
+      "sector_code": "H",
+      "name": "Saatçilik"
+    },
+    {
+      "code": "H.29",
+      "sector_code": "H",
+      "name": "Soba, banyo kazanı, şofben imalatı, onarımı, ticareti"
+    },
+    {
+      "code": "H.30",
+      "sector_code": "H",
+      "name": "Tenekecilik"
+    },
+    {
+      "code": "H.31",
+      "sector_code": "H",
+      "name": "Tornacılık"
+    },
+    {
+      "code": "H.32",
+      "sector_code": "H",
+      "name": "Tüp gaz bayiliği"
+    },
+    {
+      "code": "I.01",
+      "sector_code": "I",
+      "name": "Pazarda ayakkabı, tekstil ürünleri ticareti"
+    },
+    {
+      "code": "I.02",
+      "sector_code": "I",
+      "name": "Pazarda bitki, hayvan, su ürünleri ticareti"
+    },
+    {
+      "code": "I.03",
+      "sector_code": "I",
+      "name": "Pazarda çeşitli malların ticareti"
+    },
+    {
+      "code": "I.04",
+      "sector_code": "I",
+      "name": "Pazarda sebze, meyve ticareti"
+    },
+    {
+      "code": "I.05",
+      "sector_code": "I",
+      "name": "Pazarda yiyecek, içecek ticareti"
+    },
+    {
+      "code": "I.06",
+      "sector_code": "I",
+      "name": "Seyyar satıcılık"
+    },
+    {
+      "code": "J.01",
+      "sector_code": "J",
+      "name": "Akaryakıt ticareti"
+    },
+    {
+      "code": "J.02",
+      "sector_code": "J",
+      "name": "Durak, otopark işletmeciliği"
+    },
+    {
+      "code": "J.03",
+      "sector_code": "J",
+      "name": "Faytonculuk"
+    },
+    {
+      "code": "J.04",
+      "sector_code": "J",
+      "name": "İş makinesi işletmeciliği"
+    },
+    {
+      "code": "J.05",
+      "sector_code": "J",
+      "name": "Kara yolu ile yük taşımacılığı"
+    },
+    {
+      "code": "J.06",
+      "sector_code": "J",
+      "name": "Minibüsçülük"
+    },
+    {
+      "code": "J.07",
+      "sector_code": "J",
+      "name": "Nakliyat komisyonculuğu"
+    },
+    {
+      "code": "J.08",
+      "sector_code": "J",
+      "name": "Oto galericilik, oto kiralama"
+    },
+    {
+      "code": "J.09",
+      "sector_code": "J",
+      "name": "Oto kurtarıcılık"
+    },
+    {
+      "code": "J.10",
+      "sector_code": "J",
+      "name": "Otobüsçülük"
+    },
+    {
+      "code": "J.11",
+      "sector_code": "J",
+      "name": "Özel ambulans işletmeciliği"
+    },
+    {
+      "code": "J.12",
+      "sector_code": "J",
+      "name": "Servis aracı işletmeciliği"
+    },
+    {
+      "code": "J.13",
+      "sector_code": "J",
+      "name": "Su yolu taşımacılığı"
+    },
+    {
+      "code": "J.14",
+      "sector_code": "J",
+      "name": "Taksicilik"
+    },
+    {
+      "code": "J.15",
+      "sector_code": "J",
+      "name": "Trafik müşavirliği, iş takipçiliği"
+    },
+    {
+      "code": "J.16",
+      "sector_code": "J",
+      "name": "Yük taşımacılığını destekleyici faaliyetler"
+    },
+    {
+      "code": "K.01",
+      "sector_code": "K",
+      "name": "Boya, kimyasal ürünlerin imalatı"
+    },
+    {
+      "code": "K.02",
+      "sector_code": "K",
+      "name": "Boya, kimyasal ürünlerin ticareti"
+    },
+    {
+      "code": "K.03",
+      "sector_code": "K",
+      "name": "Camcılık"
+    },
+    {
+      "code": "K.04",
+      "sector_code": "K",
+      "name": "Çevre düzenleme, peyzaj faaliyetleri"
+    },
+    {
+      "code": "K.05",
+      "sector_code": "K",
+      "name": "Emlakçılık"
+    },
+    {
+      "code": "K.06",
+      "sector_code": "K",
+      "name": "Hırdavatçılık"
+    },
+    {
+      "code": "K.07",
+      "sector_code": "K",
+      "name": "İnşaat malzemeleri imalatı"
+    },
+    {
+      "code": "K.08",
+      "sector_code": "K",
+      "name": "İnşaat malzemeleri ticareti"
+    },
+    {
+      "code": "K.09",
+      "sector_code": "K",
+      "name": "İnşaatçılık"
+    },
+    {
+      "code": "K.10",
+      "sector_code": "K",
+      "name": "Mermer, taş, kum ocakçılığı"
+    },
+    {
+      "code": "K.11",
+      "sector_code": "K",
+      "name": "Prefabrik yapıların imalatı, kurulumu, ticareti"
+    },
+    {
+      "code": "K.12",
+      "sector_code": "K",
+      "name": "PVC ürün imalatı"
+    },
+    {
+      "code": "K.13",
+      "sector_code": "K",
+      "name": "PVC ürün ticareti"
+    },
+    {
+      "code": "K.14",
+      "sector_code": "K",
+      "name": "Sıhhi tesisatçılık"
+    },
+    {
+      "code": "K.15",
+      "sector_code": "K",
+      "name": "Sondajcılık"
+    }
+  ]
+}

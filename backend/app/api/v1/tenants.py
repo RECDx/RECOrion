@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, delete
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import uuid
 import re
 from app.db.session import get_db
-from app.db.models import Tenant, NaceCatalog, Plan, Actor, TenantLead, EmailTemplate
+from app.db.models import Tenant, Plan, Actor, TenantLead, EmailTemplate, Sector, Profession
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/tenants", tags=["Tenants (Şirketler)"])
@@ -63,16 +63,6 @@ class PlanUpdate(BaseModel):
     can_create_custom_titles: bool = False
     is_active: bool = True
 
-class NaceCreate(BaseModel):
-    code: str
-    title: str
-    sector_group: str
-    description: Optional[str] = None
-
-class NaceUpdate(BaseModel):
-    title: str
-    sector_group: str
-    description: Optional[str] = None
 
 class TenantCreate(BaseModel):
     slug: str
@@ -84,6 +74,8 @@ class TenantCreate(BaseModel):
     website: Optional[str] = None
     contact_email: Optional[str] = None
     plan_id: Optional[uuid.UUID] = None
+    sectors: List[str] = []
+    professions: List[str] = []
     nace_codes: List[str] = []
     sector_manifesto: Optional[str] = None
 
@@ -98,6 +90,8 @@ class TenantUpdate(BaseModel):
     is_active: bool = True
     sector_manifesto: Optional[str] = None
     plan_id: Optional[uuid.UUID] = None
+    sectors: List[str] = []
+    professions: List[str] = []
     nace_codes: List[str] = []
     package_expiry_date: Optional[str] = None
 
@@ -110,6 +104,8 @@ class AdminTenantCreate(BaseModel):
     website: Optional[str] = None
     contact_email: str
     plan_id: Optional[uuid.UUID] = None
+    sectors: List[str] = []
+    professions: List[str] = []
     nace_codes: List[str] = []
     admin_name: str = "Şirket Yöneticisi"
     admin_password: Optional[str] = None
@@ -118,6 +114,8 @@ class AdminTenantCreate(BaseModel):
 
 class ManifestoRequest(BaseModel):
     company_name: str
+    sectors: List[str] = []
+    professions: List[str] = []
     nace_codes: List[str] = []
     website: Optional[str] = None
 
@@ -141,6 +139,8 @@ class TenantResponse(BaseModel):
     contact_email: Optional[str] = None
     plan_id: Optional[uuid.UUID] = None
     plan_name: Optional[str] = None
+    sectors: list = []
+    professions: list = []
     nace_codes: list = []
     sector_manifesto: Optional[str] = None
     package_start_date: Optional[Any] = None
@@ -156,11 +156,15 @@ class TenantResponse(BaseModel):
         from_attributes = True
 
 @router.get("/plans", response_model=List[PlanResponse])
-async def list_plans(db: AsyncSession = Depends(get_db)):
+async def list_plans(active_only: bool = False, db: AsyncSession = Depends(get_db)):
     """
     Sistemdeki kiralama paketlerini listeler (Madde 7).
     """
-    result = await db.execute(select(Plan).order_by(Plan.monthly_price.asc()))
+    stmt = select(Plan)
+    if active_only:
+        stmt = stmt.where(Plan.is_active == True)
+    stmt = stmt.order_by(Plan.monthly_price.asc())
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 @router.post("/plans", response_model=PlanResponse)
@@ -273,156 +277,9 @@ def _turkish_search_variants(text: str) -> List[str]:
     variants.add(tr_lower)
     return [v for v in variants if v]
 
-@router.get("/nace-catalog")
-async def get_nace_catalog(
-    query: Optional[str] = Query(None, description="Kod veya faaliyet alanında arama"),
-    sector: Optional[str] = Query(None, description="Sektör grubu filtresi"),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Sistemdeki NACE Rev.2 faaliyet kodlarını listeler ve filtreler (Madde 12).
-    """
-    stmt = select(NaceCatalog)
-    if query:
-        patterns = _turkish_search_variants(query)
-        conditions = [NaceCatalog.code.ilike(f"%{query.strip()}%")]
-        for p in patterns:
-            conditions.append(NaceCatalog.title.ilike(f"%{p}%"))
-        stmt = stmt.where(or_(*conditions))
-    if sector:
-        stmt = stmt.where(NaceCatalog.sector_group == sector)
-
-    stmt = stmt.order_by(NaceCatalog.code.asc()).limit(limit).offset(offset)
-    result = await db.execute(stmt)
-    items = result.scalars().all()
-    return items
-
-@router.post("/nace-catalog")
-async def create_nace_code(payload: NaceCreate, db: AsyncSession = Depends(get_db)):
-    """
-    Yeni NACE Kodu Tanımlama (Madde 12).
-    """
-    code_clean = payload.code.strip()
-    existing = await db.get(NaceCatalog, code_clean)
-    if existing:
-        raise HTTPException(status_code=400, detail=f"'{code_clean}' kodlu NACE tanımı zaten mevcut.")
-
-    item = NaceCatalog(
-        code=code_clean,
-        title=payload.title.strip(),
-        sector_group=payload.sector_group.strip(),
-        description=payload.description
-    )
-    db.add(item)
-    await db.commit()
-    await db.refresh(item)
-    return item
-
-@router.get("/nace-catalog/{code}")
-async def get_nace_code(code: str, db: AsyncSession = Depends(get_db)):
-    item = await db.get(NaceCatalog, code.strip())
-    if not item:
-        raise HTTPException(status_code=404, detail="NACE kodu bulunamadı.")
-    return item
-
-@router.put("/nace-catalog/{code}")
-async def update_nace_code(code: str, payload: NaceUpdate, db: AsyncSession = Depends(get_db)):
-    """
-    NACE Kodu Güncelleme (Madde 12).
-    """
-    item = await db.get(NaceCatalog, code.strip())
-    if not item:
-        raise HTTPException(status_code=404, detail="NACE kodu bulunamadı.")
-
-    item.title = payload.title.strip()
-    item.sector_group = payload.sector_group.strip()
-    item.description = payload.description
-
-    await db.commit()
-    await db.refresh(item)
-    return item
-
-@router.delete("/nace-catalog/{code}")
-async def delete_nace_code(code: str, db: AsyncSession = Depends(get_db)):
-    """
-    NACE Kodu Silme (Madde 12).
-    """
-    item = await db.get(NaceCatalog, code.strip())
-    if not item:
-        raise HTTPException(status_code=404, detail="NACE kodu bulunamadı.")
-
-    await db.delete(item)
-    await db.commit()
-    return {"success": True, "message": f"'{item.code}' ({item.title}) NACE kodu başarıyla silindi."}
-
 @router.get("", response_model=List[TenantResponse])
 @router.get("/", response_model=List[TenantResponse])
 async def list_tenants(db: AsyncSession = Depends(get_db)):
-    import re
-    # 0. Henüz Tenant kaydı açılmamış bekleyen (PENDING) lead'leri otomatik senkronize et
-    pending_leads_res = await db.execute(select(TenantLead).where(TenantLead.status == "PENDING"))
-    pending_leads = pending_leads_res.scalars().all()
-    if pending_leads:
-        existing_tenants_res = await db.execute(select(Tenant))
-        existing_tenants = existing_tenants_res.scalars().all()
-        existing_slugs = {t.slug for t in existing_tenants}
-        created_any = False
-        for pl in pending_leads:
-            lead_slug_part = str(pl.id)[:6]
-            has_tenant = any(lead_slug_part in t.slug for t in existing_tenants)
-            if not has_tenant:
-                clean_slug = re.sub(r'[^a-zA-Z0-9]', '', pl.company_name.lower())[:16] or "tenant"
-                slug_cand = f"{clean_slug}_{lead_slug_part}"
-                if slug_cand in existing_slugs:
-                    slug_cand = f"{clean_slug}_{str(uuid.uuid4())[:6]}"
-                new_t = Tenant(
-                    slug=slug_cand,
-                    name=pl.company_name,
-                    tax_id=pl.tax_id,
-                    tax_office=pl.tax_office,
-                    phone=pl.phone,
-                    address=pl.address,
-                    website=pl.website,
-                    contact_email=pl.contact_email,
-                    plan_id=pl.plan_id,
-                    nace_codes=pl.nace_codes or [],
-                    sector_manifesto=pl.generated_manifesto,
-                    package_start_date=None,
-                    package_expiry_date=None,
-                    is_active=False
-                )
-                db.add(new_t)
-                await db.flush()
-
-                contact_name = "Şirket Yöneticisi"
-                pw_hash = None
-                if pl.notes:
-                    for part in pl.notes.split("|"):
-                        if "Yetkili:" in part:
-                            contact_name = part.replace("Yetkili:", "").strip()
-                        if "PasswordHash:" in part:
-                            pw_hash = part.replace("PasswordHash:", "").strip()
-
-                admin_actor = Actor(
-                    tenant_id=new_t.id,
-                    actor_type="HUMAN",
-                    display_name=f"{contact_name} (Yönetici)",
-                    email=pl.contact_email,
-                    phone=pl.phone,
-                    address=pl.address,
-                    role="COMPANY_ADMIN",
-                    password_hash=pw_hash,
-                    autonomy_level="L3",
-                    status="DISABLED"
-                )
-                db.add(admin_actor)
-                existing_slugs.add(slug_cand)
-                created_any = True
-        if created_any:
-            await db.commit()
-
     result = await db.execute(select(Tenant).order_by(Tenant.created_at.desc()))
     tenants = result.scalars().all()
 
@@ -462,6 +319,8 @@ async def list_tenants(db: AsyncSession = Depends(get_db)):
             "contact_email": t.contact_email,
             "plan_id": t.plan_id,
             "plan_name": plan_obj.name if plan_obj else "Belirtilmedi",
+            "sectors": t.sectors or [],
+            "professions": t.professions or [],
             "nace_codes": t.nace_codes or [],
             "sector_manifesto": t.sector_manifesto,
             "package_start_date": t.package_start_date,
@@ -475,8 +334,119 @@ async def list_tenants(db: AsyncSession = Depends(get_db)):
         })
     return enriched
 
+async def validate_unique_tax_info(
+    db: AsyncSession,
+    tax_id: Optional[str],
+    tax_office: Optional[str] = None,
+    exclude_tenant_id: Optional[uuid.UUID] = None
+):
+    """
+    Bir Müşteri için mükerrer kayıt olmaması adına Vergi No ve Vergi Dairesi tekilliğini denetler.
+    Aynı Vergi No ve Vergi Dairesinden başka bir şirket varsa HTTPException(400) fırlatır (Madde 2).
+    """
+    if not tax_id or not str(tax_id).strip():
+        return
+
+    clean_tax_id = str(tax_id).strip()
+    clean_tax_office = str(tax_office).strip() if tax_office else ""
+
+    stmt = select(Tenant).where(Tenant.tax_id == clean_tax_id)
+    if exclude_tenant_id:
+        stmt = stmt.where(Tenant.id != exclude_tenant_id)
+
+    res = await db.execute(stmt)
+    matching_tenants = res.scalars().all()
+
+    for t in matching_tenants:
+        t_office = (t.tax_office or "").strip()
+        if clean_tax_office and t_office:
+            if clean_tax_office.lower() == t_office.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"'{clean_tax_id}' Vergi Numarası ve '{clean_tax_office}' Vergi Dairesi ile kayıtlı bir şirket ('{t.name}') zaten mevcuttur. Mükerrer kayıt oluşturulamaz."
+                )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{clean_tax_id}' Vergi Numarası ile kayıtlı bir şirket ('{t.name}') zaten mevcuttur. Mükerrer kayıt oluşturulamaz."
+            )
+
+
+async def validate_unique_admin_email(
+    db: AsyncSession,
+    email: Optional[str],
+    exclude_actor_id: Optional[uuid.UUID] = None,
+    exclude_tenant_id: Optional[uuid.UUID] = None
+):
+    """
+    Müşteri Tanımlaması yapılırken Yönetici Mail adresi girildiğinde tekilliği kontrol eder.
+    Aynı mail adresi başka bir şirkette varsa HTTPException(400) fırlatır (Madde 3).
+    """
+    if not email or not str(email).strip():
+        return
+    clean_email = str(email).strip().lower()
+    stmt = select(Actor).where(func.lower(Actor.email) == clean_email)
+    if exclude_actor_id:
+        stmt = stmt.where(Actor.id != exclude_actor_id)
+    if exclude_tenant_id:
+        stmt = stmt.where(Actor.tenant_id != exclude_tenant_id)
+    res = await db.execute(stmt)
+    existing_actor = res.scalar_one_or_none()
+    if existing_actor:
+        actor_tenant = await db.get(Tenant, existing_actor.tenant_id) if existing_actor.tenant_id else None
+        company_info = f" ('{actor_tenant.name}')" if actor_tenant else ""
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{clean_email}' e-posta adresi ile kayıtlı bir kullanıcı{company_info} zaten mevcuttur. Lütfen farklı bir yönetici e-posta adresi giriniz."
+        )
+
+
+PUBLIC_EMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com",
+    "hotmail.com", "hotmail.com.tr", "outlook.com", "outlook.com.tr", "live.com", "msn.com", "windowslive.com",
+    "yahoo.com", "yahoo.com.tr", "ymail.com", "myyahoo.com",
+    "yandex.com", "yandex.com.tr", "ya.ru", "narod.ru",
+    "icloud.com", "me.com", "mac.com",
+    "mail.ru", "bk.ru", "inbox.ru", "list.ru",
+    "proton.me", "protonmail.com", "tutanota.com", "tutamail.com",
+    "zoho.com",
+    "gmx.com", "gmx.de", "gmx.net",
+    "aol.com", "aim.com"
+}
+
+def validate_corporate_email(email: Optional[str], field_name: str = "E-posta") -> str:
+    """
+    Müşterinin official (kurumsal) mail adresi ile kayıt edilmesini zorunlu kılar.
+    Genel/ücretsiz (gmail, hotmail vb.) adresleri engeller (Madde 2 & 3).
+    """
+    if not email or not str(email).strip():
+        raise HTTPException(status_code=400, detail=f"{field_name} adresi zorunludur.")
+    
+    clean_email = str(email).strip().lower()
+    if "@" not in clean_email:
+        raise HTTPException(status_code=400, detail=f"Geçerli bir {field_name.lower()} adresi giriniz.")
+    
+    parts = clean_email.split("@")
+    if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+        raise HTTPException(status_code=400, detail=f"Geçerli bir {field_name.lower()} adresi giriniz.")
+    
+    domain = parts[1].strip().lower()
+    if domain in PUBLIC_EMAIL_DOMAINS or any(domain == d or domain.endswith("." + d) for d in PUBLIC_EMAIL_DOMAINS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Müşteri kurumsal/official bir şirket e-posta adresi (şirket alan adı) ile kayıt edilmelidir. Genel/ücretsiz e-posta sağlayıcıları ('{domain}') kabul edilmemektedir."
+        )
+    return clean_email
+
+
 @router.post("/", response_model=TenantResponse)
 async def create_tenant(payload: TenantCreate, db: AsyncSession = Depends(get_db)):
+    # Official / Kurumsal e-posta kontrolü (Madde 2)
+    validate_corporate_email(payload.contact_email, "İletişim e-posta")
+
+    # Vergi No ve Vergi Dairesi mükerrerlik kontrolü (Madde 2)
+    await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
+
     # Slug benzersizlik kontrolü
     existing = await db.execute(select(Tenant).where(Tenant.slug == payload.slug))
     if existing.scalar_one_or_none():
@@ -495,7 +465,8 @@ async def create_tenant(payload: TenantCreate, db: AsyncSession = Depends(get_db
         website=payload.website,
         contact_email=payload.contact_email,
         plan_id=payload.plan_id,
-        nace_codes=payload.nace_codes,
+        sectors=payload.sectors or [],
+        professions=payload.professions or [],
         sector_manifesto=payload.sector_manifesto or f"{payload.name} kurumsal standartlar ve yapay zeka operasyon manifestosu.",
         package_start_date=start_date,
         package_expiry_date=expiry_date,
@@ -554,7 +525,8 @@ async def get_tenant_details(tenant_id: uuid.UUID, db: AsyncSession = Depends(ge
             "website": tenant.website,
             "contact_email": tenant.contact_email,
             "plan_id": str(tenant.plan_id) if tenant.plan_id else None,
-            "nace_codes": tenant.nace_codes or [],
+            "sectors": tenant.sectors or [],
+            "professions": tenant.professions or [],
             "sector_manifesto": tenant.sector_manifesto,
             "package_start_date": tenant.package_start_date.isoformat() if tenant.package_start_date else None,
             "package_expiry_date": tenant.package_expiry_date.isoformat() if tenant.package_expiry_date else None,
@@ -583,6 +555,9 @@ async def update_tenant(tenant_id: uuid.UUID, payload: TenantUpdate, db: AsyncSe
     if not tenant:
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
 
+    # Vergi No ve Vergi Dairesi mükerrerlik kontrolü (Madde 2)
+    await validate_unique_tax_info(db, payload.tax_id, payload.tax_office, exclude_tenant_id=tenant_id)
+
     prev_active = tenant.is_active
     tenant.name = payload.name.strip()
     tenant.tax_id = payload.tax_id
@@ -594,7 +569,8 @@ async def update_tenant(tenant_id: uuid.UUID, payload: TenantUpdate, db: AsyncSe
     tenant.is_active = payload.is_active
     tenant.sector_manifesto = payload.sector_manifesto
     tenant.plan_id = payload.plan_id
-    tenant.nace_codes = payload.nace_codes
+    tenant.sectors = payload.sectors or []
+    tenant.professions = payload.professions or []
     if payload.package_expiry_date:
         try:
             tenant.package_expiry_date = datetime.fromisoformat(payload.package_expiry_date.replace("Z", ""))
@@ -642,20 +618,116 @@ async def toggle_tenant_status(tenant_id: uuid.UUID, db: AsyncSession = Depends(
         "tenant_id": str(tenant.id)
     }
 
+
+@router.delete("/{tenant_id}")
+async def delete_tenant(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Süper Admin Şirket Silme (Madde 1):
+    Şirket içerisinde hiçbir departman, AI Ajanı, Proje eklenmemiş olması şartıyla şirketi ve ilişkili kayıtlarını siler.
+    """
+    from app.db.models import Department, Project, Actor, TenantLead, JobTitle, TenantRole
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
+
+    # 0. Ana Şirket Koruma Kontrolü (RECDx Teknoloji & Dijital Dönüşüm Danışmanlığı LTD. Şirketi Silinemez)
+    tenant_name_lower = (tenant.name or "").lower()
+    tenant_slug_lower = (tenant.slug or "").lower()
+    if tenant_slug_lower in ("recdx", "recdx_hq") or "recdx teknoloji" in tenant_name_lower or "dijital dönüşüm" in tenant_name_lower:
+        raise HTTPException(
+            status_code=400,
+            detail="RECDx Teknoloji & Dijital Dönüşüm Danışmanlığı LTD. Şirketi sistemin ana şirketidir ve silinemez!"
+        )
+
+    # 1. Departman kontrolü
+    dept_count = await db.scalar(
+        select(func.count(Department.id)).where(Department.tenant_id == tenant_id)
+    ) or 0
+    if dept_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{tenant.name}' şirketine ait {dept_count} adet tanımlı departman bulunmaktadır. Şirket silinmeden önce tüm departmanlar silinmelidir."
+        )
+
+    # 2. AI Ajanı kontrolü
+    agent_count = await db.scalar(
+        select(func.count(Actor.id)).where(
+            Actor.tenant_id == tenant_id,
+            Actor.actor_type == "AI_AGENT"
+        )
+    ) or 0
+    if agent_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{tenant.name}' şirketine ait {agent_count} adet tanımlı Yapay Zeka Ajanı bulunmaktadır. Şirket silinmeden önce tüm AI ajanları silinmelidir."
+        )
+
+    # 3. Proje kontrolü
+    project_count = await db.scalar(
+        select(func.count(Project.id)).where(Project.tenant_id == tenant_id)
+    ) or 0
+    if project_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{tenant.name}' şirketine ait {project_count} adet proje bulunmaktadır. Şirket silinmeden önce tüm projeler silinmelidir."
+        )
+
+    # 4. Şirkete ait lead/başvuru kayıtları varsa temizle
+    lead_res = await db.execute(
+        select(TenantLead).where(
+            (TenantLead.company_name == tenant.name) | (TenantLead.contact_email == tenant.contact_email)
+        )
+    )
+    for lead_item in lead_res.scalars().all():
+        await db.delete(lead_item)
+
+    # 5. Şirkete ait unvan ve roller varsa temizle
+    await db.execute(delete(JobTitle).where(JobTitle.tenant_id == tenant_id))
+    await db.execute(delete(TenantRole).where(TenantRole.tenant_id == tenant_id))
+
+    # 6. Şirketi sil (Actor kayıtları CASCADE ile temizlenir)
+    company_name = tenant.name
+    await db.delete(tenant)
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"'{company_name}' şirketi sistemden başarıyla silindi.",
+        "tenant_id": str(tenant_id)
+    }
+
+
 @router.put("/{tenant_id}/admin-user")
 async def update_tenant_admin_user(tenant_id: uuid.UUID, payload: TenantAdminUpdate, db: AsyncSession = Depends(get_db)):
     """
     Şirket Admin rolündeki kullanıcının bilgilerini ve şifresini güncelleme (Madde 5).
+    Müşteri Admin ekranında girilen bilgiler hem Admin kullanıcısını hem de Müşteri kartını (Tenant) UPDATE eder (Madde 3).
     """
     from app.api.v1.auth import hash_password
+
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Şirket kaydı bulunamadı.")
+
+    clean_email = payload.email.strip().lower()
+
     actor = None
     if payload.actor_id:
         actor = await db.get(Actor, payload.actor_id)
-    else:
+    
+    if not actor:
         # Şirketin ilk COMPANY_ADMIN kullanıcısını bul
         stmt = select(Actor).where(Actor.tenant_id == tenant_id, Actor.role == "COMPANY_ADMIN").limit(1)
         res = await db.execute(stmt)
         actor = res.scalar_one_or_none()
+
+    # Yönetici e-posta tekillik kontrolü (farklı bir şirkete ait olmamalı)
+    await validate_unique_admin_email(
+        db, 
+        clean_email, 
+        exclude_actor_id=actor.id if actor else None,
+        exclude_tenant_id=tenant_id
+    )
 
     if not actor:
         # Eğer hiç admin yoksa oluştur
@@ -663,7 +735,7 @@ async def update_tenant_admin_user(tenant_id: uuid.UUID, payload: TenantAdminUpd
             tenant_id=tenant_id,
             actor_type="HUMAN",
             display_name=payload.display_name.strip(),
-            email=payload.email.strip().lower(),
+            email=clean_email,
             phone=payload.phone,
             address=payload.address,
             role="COMPANY_ADMIN",
@@ -673,21 +745,46 @@ async def update_tenant_admin_user(tenant_id: uuid.UUID, payload: TenantAdminUpd
         db.add(actor)
     else:
         actor.display_name = payload.display_name.strip()
-        actor.email = payload.email.strip().lower()
+        actor.email = clean_email
         actor.phone = payload.phone
-        actor.address = payload.address
+        if payload.address:
+            actor.address = payload.address
 
     if payload.new_password and len(payload.new_password.strip()) >= 6:
         actor.password_hash = hash_password(payload.new_password.strip())
 
+    # ========================================================
+    # MÜŞTERİ KARTINI (TENANT) DA UPDATE ET (Madde 3 Hatası Çözümü)
+    # ========================================================
+    tenant.contact_email = clean_email
+    if payload.phone:
+        tenant.phone = payload.phone
+    if payload.address and not tenant.address:
+        tenant.address = payload.address
+
+    # Varsa ilgili başvuru (lead) kaydını da güncelle
+    lead_stmt = select(TenantLead).where(
+        (TenantLead.company_name == tenant.name) | (TenantLead.contact_email == clean_email)
+    ).limit(1)
+    lead_res = await db.execute(lead_stmt)
+    lead = lead_res.scalar_one_or_none()
+    if lead:
+        lead.contact_email = clean_email
+        if payload.phone:
+            lead.phone = payload.phone
+
     await db.commit()
     await db.refresh(actor)
+    await db.refresh(tenant)
+
     return {
         "success": True,
-        "message": f"Şirket yöneticisi '{actor.display_name}' ({actor.email}) başarıyla güncellendi.",
+        "message": f"Şirket yöneticisi '{actor.display_name}' ({actor.email}) ve '{tenant.name}' müşteri kartı başarıyla güncellendi.",
         "actor_id": str(actor.id),
+        "tenant_id": str(tenant.id),
         "display_name": actor.display_name,
-        "email": actor.email
+        "email": actor.email,
+        "phone": actor.phone
     }
 
 @router.post("/{tenant_id}/generate-password")
@@ -793,6 +890,8 @@ class PurchaseRequest(BaseModel):
     contact_name: str
     contact_email: str
     password: str
+    sectors: List[str] = []
+    professions: List[str] = []
     nace_codes: List[str] = []
 
 
@@ -836,7 +935,7 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
     """
     Resmi RECOrion Web Sitesinden Paket Satın Alma / Kiralama Başvurusu.
     - Plan kontrolü yapar
-    - NACE kodlarını çözümler ve AI ile Kurumsal Manifesto üretir
+    - Sektör ve Meslek tanımları ile Kurumsal Manifesto üretir (Madde 1)
     - Odoo 19 üzerinde res.partner ve sale.order (teklif) oluşturur
     - info@recdx.com adresine bildirim gönderir
     - Müşteri e-postasına profesyonel onay e-postası gönderir
@@ -847,31 +946,34 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
     from app.services.notification_service import NotificationService
     from app.services.odoo_service import OdooService
 
+    # Official / Kurumsal e-posta zorunluluğu (Madde 3)
+    validate_corporate_email(payload.contact_email, "İletişim e-posta")
+
+    # Vergi No ve Vergi Dairesi mükerrerlik kontrolü (Madde 2)
+    await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
+
+    # Yönetici E-Posta tekillik kontrolü (Madde 3)
+    await validate_unique_admin_email(db, payload.contact_email)
+
     # 1. Planı bul
     p_res = await db.execute(select(Plan).where(Plan.code == payload.plan_code.upper()))
     plan = p_res.scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail=f"'{payload.plan_code}' kodlu kiralama paketi bulunamadı.")
 
-    # 2. Seçilen NACE kodlarının başlıklarını sorgula
-    nace_items = []
-    if payload.nace_codes:
-        n_res = await db.execute(select(NaceCatalog).where(NaceCatalog.code.in_(payload.nace_codes)))
-        for nc in n_res.scalars().all():
-            nace_items.append({"code": nc.code, "title": nc.title, "sector_group": nc.sector_group})
-
-    # 3. AI ile Kurumsal Manifesto Üret
+    # 2. AI ile Kurumsal Manifesto Üret (Sektör ve Meslek Tanımları ile)
     manifesto_data = ManifestoService.generate_manifesto(
         company_name=payload.company_name,
-        nace_items=nace_items,
+        sectors=payload.sectors,
+        professions=payload.professions,
         website=payload.website
     )
 
-    # 4. Güvenli Şifre Hashleme (SHA-256 + Salt)
+    # 3. Güvenli Şifre Hashleme (SHA-256 + Salt)
     salt = "recorion_tenant_salt_2026"
     pw_hash = hashlib.sha256(f"{salt}_{payload.password}".encode("utf-8")).hexdigest()
 
-    # 5. Odoo 19 res.partner & sale.order Entegrasyonu (A maddesi)
+    # 4. Odoo 19 res.partner & sale.order Entegrasyonu (A maddesi)
     odoo_partner_id = None
     odoo_order_id = None
     odoo_order_name = None
@@ -900,7 +1002,7 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
         import logging
         logging.getLogger("recorion_odoo").error(f"Odoo işlemi sırasında istisna: {e}")
 
-    # 6. Lead Kaydını Oluştur
+    # 5. Lead Kaydını Oluştur
     lead = TenantLead(
         plan_id=plan.id,
         company_name=payload.company_name,
@@ -910,7 +1012,9 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
         phone=payload.phone,
         website=payload.website,
         contact_email=payload.contact_email,
-        nace_codes=payload.nace_codes,
+        sectors=payload.sectors or [],
+        professions=payload.professions or [],
+        nace_codes=[],
         generated_manifesto=manifesto_data["manifesto"],
         assigned_skills=manifesto_data["assigned_skills"],
         odoo_partner_id=odoo_partner_id,
@@ -938,7 +1042,8 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
         website=payload.website,
         contact_email=payload.contact_email,
         plan_id=plan.id,
-        nace_codes=payload.nace_codes or [],
+        sectors=payload.sectors or [],
+        professions=payload.professions or [],
         sector_manifesto=manifesto_data["manifesto"],
         package_start_date=None,
         package_expiry_date=None,
@@ -947,7 +1052,7 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
     db.add(pending_tenant)
     await db.flush()
 
-    # 6.2. Şirket Yöneticisi Aktörü Oluştur (DISABLED / ONAY BEKLİYOR)
+    # 6.2. Şirket Yöneticisi Aktörü Oluştur (IDLE)
     pending_admin_actor = Actor(
         tenant_id=pending_tenant.id,
         actor_type="HUMAN",
@@ -958,7 +1063,7 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
         role="COMPANY_ADMIN",
         password_hash=pw_hash,
         autonomy_level="L3",
-        status="DISABLED"
+        status="IDLE"
     )
     db.add(pending_admin_actor)
     await db.commit()
@@ -977,7 +1082,8 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
         "plan_name": plan.name,
         "monthly_price": float(plan.monthly_price),
         "currency": plan.currency,
-        "nace_codes": payload.nace_codes,
+        "sectors": payload.sectors,
+        "professions": payload.professions,
         "generated_manifesto": manifesto_data["manifesto"],
         "odoo_order_name": odoo_order_name
     }
@@ -1040,15 +1146,32 @@ async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
     start_date = datetime.utcnow()
     expiry_date = start_date + timedelta(days=365)
 
-    # 3. Mevcut unapproved Tenant var mı kontrol et, varsa aktif et, yoksa oluştur
+    # 3. Mevcut Tenant var mı kontrol et, varsa aktif et, yoksa oluştur
     lead_slug_part = str(lead.id)[:6]
-    existing_tenant_res = await db.execute(
-        select(Tenant).where(
-            (Tenant.slug.contains(lead_slug_part)) | 
-            ((Tenant.name == lead.company_name) & (Tenant.contact_email == lead.contact_email))
+    tenant = None
+
+    # Öncelikle lead id ile üretilmiş slug eşleşmesine bak
+    if lead_slug_part:
+        existing_by_slug = await db.execute(
+            select(Tenant).where(Tenant.slug.contains(lead_slug_part)).order_by(Tenant.created_at.desc())
         )
-    )
-    tenant = existing_tenant_res.scalar_one_or_none()
+        tenant = existing_by_slug.scalars().first()
+
+    # Bulunamazsa şirket adı ve e-posta eşleşmesine bak
+    if not tenant:
+        existing_by_info = await db.execute(
+            select(Tenant).where(
+                (Tenant.name == lead.company_name) & (Tenant.contact_email == lead.contact_email)
+            ).order_by(Tenant.created_at.desc())
+        )
+        tenant = existing_by_info.scalars().first()
+
+    # Hala bulunamazsa sadece ada göre en son oluşturulanı ara
+    if not tenant:
+        existing_by_name = await db.execute(
+            select(Tenant).where(Tenant.name == lead.company_name).order_by(Tenant.created_at.desc())
+        )
+        tenant = existing_by_name.scalars().first()
 
     if tenant:
         tenant.is_active = True
@@ -1056,8 +1179,10 @@ async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
         tenant.package_expiry_date = expiry_date
         if not tenant.plan_id:
             tenant.plan_id = lead.plan_id
-        if not tenant.nace_codes:
-            tenant.nace_codes = lead.nace_codes
+        if not tenant.sectors:
+            tenant.sectors = lead.sectors
+        if not tenant.professions:
+            tenant.professions = lead.professions
         if not tenant.sector_manifesto:
             tenant.sector_manifesto = lead.generated_manifesto
     else:
@@ -1071,7 +1196,8 @@ async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
             website=lead.website,
             contact_email=lead.contact_email,
             plan_id=lead.plan_id,
-            nace_codes=lead.nace_codes,
+            sectors=lead.sectors or [],
+            professions=lead.professions or [],
             sector_manifesto=lead.generated_manifesto,
             package_start_date=start_date,
             package_expiry_date=expiry_date,
@@ -1094,9 +1220,9 @@ async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
                 initial_pw = part.replace("InitialPassword:", "").strip()
 
     admin_actor_res = await db.execute(
-        select(Actor).where(Actor.tenant_id == tenant.id, Actor.role == "COMPANY_ADMIN")
+        select(Actor).where(Actor.tenant_id == tenant.id, Actor.role == "COMPANY_ADMIN").order_by(Actor.created_at.desc())
     )
-    admin_actor = admin_actor_res.scalar_one_or_none()
+    admin_actor = admin_actor_res.scalars().first()
     if admin_actor:
         admin_actor.status = "IDLE"
         if pw_hash and not admin_actor.password_hash:
@@ -1116,7 +1242,11 @@ async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
 
     # 5. Odoo Siparişini Onayla (Varsa)
     if lead.odoo_order_id:
-        OdooService.confirm_sale_order(lead.odoo_order_id)
+        try:
+            OdooService.confirm_sale_order(lead.odoo_order_id)
+        except Exception as odoo_err:
+            import logging
+            logging.getLogger(__name__).warning(f"Odoo sipariş onaylama atlandı / hata: {odoo_err}")
 
     # 6. Lead durumunu güncelle
     lead.status = "APPROVED"
@@ -1139,13 +1269,17 @@ async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
         "login_url": "http://localhost:5173/"
     }
 
-    tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER"))
-    welcome_tmpl = tmpl_res.scalar_one_or_none()
+    tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER").order_by(EmailTemplate.created_at.desc()))
+    welcome_tmpl = tmpl_res.scalars().first()
     email_sent = False
-    if welcome_tmpl:
-        email_sent = NotificationService.render_and_send_template(lead.contact_email, welcome_tmpl, welcome_ctx)
-    else:
-        email_sent = NotificationService.send_customer_account_activated_notification(welcome_ctx)
+    try:
+        if welcome_tmpl:
+            email_sent = NotificationService.render_and_send_template(lead.contact_email, welcome_tmpl, welcome_ctx)
+        else:
+            email_sent = NotificationService.send_customer_account_activated_notification(welcome_ctx)
+    except Exception as email_err:
+        import logging
+        logging.getLogger(__name__).warning(f"Aktivasyon e-postası gönderilemedi: {email_err}")
 
     return {
         "success": True,
@@ -1217,6 +1351,23 @@ async def admin_create_tenant(payload: AdminTenantCreate, db: AsyncSession = Dep
     import secrets
     import string
 
+    clean_tax_id = payload.tax_id.strip() if payload.tax_id else ""
+    # Official / Kurumsal e-posta zorunluluğu (Madde 2)
+    clean_email = validate_corporate_email(payload.contact_email, "İletişim e-posta")
+    clean_name = payload.name.strip() if payload.name else ""
+
+    # Mevcut bir şirket var mı kontrol et (aynı vergi no, aynı email veya aynı ünvan ile)
+    existing_tenant = None
+    if clean_tax_id:
+        t_res = await db.execute(select(Tenant).where(Tenant.tax_id == clean_tax_id))
+        existing_tenant = t_res.scalars().first()
+    if not existing_tenant and clean_email:
+        t_res = await db.execute(select(Tenant).where(func.lower(Tenant.contact_email) == clean_email))
+        existing_tenant = t_res.scalars().first()
+    if not existing_tenant and clean_name:
+        t_res = await db.execute(select(Tenant).where(func.lower(Tenant.name) == clean_name.lower()))
+        existing_tenant = t_res.scalars().first()
+
     # 1. Slug üret
     clean_slug = re.sub(r'[^a-zA-Z0-9]', '', payload.name.lower())[:16] or "tenant"
     rnd_suffix = str(uuid.uuid4())[:6]
@@ -1231,74 +1382,191 @@ async def admin_create_tenant(payload: AdminTenantCreate, db: AsyncSession = Dep
 
     # 3. NACE kodlarını alıp Manifesto oluştur
     nace_items = []
-    if payload.nace_codes:
-        n_res = await db.execute(select(NaceCatalog).where(NaceCatalog.code.in_(payload.nace_codes)))
-        for nc in n_res.scalars().all():
-            nace_items.append({"code": nc.code, "title": nc.title, "sector_group": nc.sector_group})
-    
     manifesto_data = ManifestoService.generate_manifesto(
         company_name=payload.name,
-        nace_items=nace_items,
+        sectors=payload.sectors,
+        professions=payload.professions,
         website=payload.website
     )
 
-    # 4. Paket Tarihleri (Onay durumuna göre)
-    if payload.activate_package:
-        start_date = datetime.utcnow()
-        expiry_date = start_date + timedelta(days=365)
-        is_active = True
-        actor_status = "IDLE"
+    start_date = None
+    expiry_date = None
+
+    if existing_tenant:
+        # Şirket zaten sistemde mevcut; mükerrer insert YAPMA, kartı UPDATE et! (Madde 3 Hatası Çözümü)
+        await validate_unique_tax_info(db, payload.tax_id, payload.tax_office, exclude_tenant_id=existing_tenant.id)
+        await validate_unique_admin_email(db, clean_email, exclude_tenant_id=existing_tenant.id)
+
+        existing_tenant.name = payload.name.strip()
+        existing_tenant.tax_id = payload.tax_id
+        existing_tenant.tax_office = payload.tax_office
+        existing_tenant.phone = payload.phone
+        existing_tenant.address = payload.address
+        existing_tenant.website = payload.website
+        existing_tenant.contact_email = clean_email
+        if payload.plan_id:
+            existing_tenant.plan_id = payload.plan_id
+        if payload.sectors:
+            existing_tenant.sectors = payload.sectors
+        if payload.professions:
+            existing_tenant.professions = payload.professions
+        existing_tenant.sector_manifesto = manifesto_data["manifesto"]
+
+        tenant = existing_tenant
+
+        # Admin Actor'ü bul veya oluştur (Yetkili kullanıcı)
+        act_res = await db.execute(select(Actor).where(Actor.tenant_id == tenant.id, Actor.role == "COMPANY_ADMIN").limit(1))
+        admin_actor = act_res.scalar_one_or_none()
+        if not admin_actor:
+            admin_actor = Actor(
+                tenant_id=tenant.id,
+                actor_type="HUMAN",
+                display_name=payload.admin_name.strip() if payload.admin_name and payload.admin_name.strip() else f"{payload.name} Yöneticisi",
+                email=clean_email,
+                phone=payload.phone,
+                role="COMPANY_ADMIN",
+                password_hash=hash_password(plain_password),
+                autonomy_level="L3",
+                status="IDLE"
+            )
+            db.add(admin_actor)
+        else:
+            if payload.admin_name and payload.admin_name.strip():
+                admin_actor.display_name = payload.admin_name.strip()
+            admin_actor.email = clean_email
+            admin_actor.phone = payload.phone
+            admin_actor.status = "IDLE"
+            if payload.admin_password and payload.admin_password.strip():
+                admin_actor.password_hash = hash_password(payload.admin_password.strip())
+            elif plain_password:
+                admin_actor.password_hash = hash_password(plain_password)
     else:
-        start_date = None
-        expiry_date = None
-        is_active = False
-        actor_status = "DISABLED"
+        # Yeni Şirket Ekle
+        await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
+        await validate_unique_admin_email(db, clean_email)
 
-    tenant = Tenant(
-        slug=slug_candidate,
-        name=payload.name.strip(),
-        tax_id=payload.tax_id,
-        tax_office=payload.tax_office,
-        phone=payload.phone,
-        address=payload.address,
-        website=payload.website,
-        contact_email=payload.contact_email.strip().lower(),
-        plan_id=payload.plan_id,
-        nace_codes=payload.nace_codes,
-        sector_manifesto=manifesto_data["manifesto"],
-        package_start_date=start_date,
-        package_expiry_date=expiry_date,
-        is_active=is_active
-    )
-    db.add(tenant)
-    await db.flush()
+        tenant = Tenant(
+            slug=slug_candidate,
+            name=payload.name.strip(),
+            tax_id=payload.tax_id,
+            tax_office=payload.tax_office,
+            phone=payload.phone,
+            address=payload.address,
+            website=payload.website,
+            contact_email=clean_email,
+            plan_id=payload.plan_id,
+            sectors=payload.sectors or [],
+            professions=payload.professions or [],
+            sector_manifesto=manifesto_data["manifesto"],
+            package_start_date=start_date,
+            package_expiry_date=expiry_date,
+            is_active=True
+        )
+        db.add(tenant)
+        await db.flush()
 
-    # 5. Admin Actor oluştur
-    admin_actor = Actor(
-        tenant_id=tenant.id,
-        actor_type="HUMAN",
-        display_name=payload.admin_name.strip() or f"{payload.name} Yöneticisi",
-        email=payload.contact_email.strip().lower(),
-        role="COMPANY_ADMIN",
-        password_hash=hash_password(plain_password),
-        autonomy_level="L3",
-        status=actor_status
-    )
-    db.add(admin_actor)
+        admin_actor = Actor(
+            tenant_id=tenant.id,
+            actor_type="HUMAN",
+            display_name=payload.admin_name.strip() if payload.admin_name and payload.admin_name.strip() else f"{payload.name} Yöneticisi",
+            email=clean_email,
+            phone=payload.phone,
+            role="COMPANY_ADMIN",
+            password_hash=hash_password(plain_password),
+            autonomy_level="L3",
+            status="IDLE"
+        )
+        db.add(admin_actor)
 
-    # 6. TenantLead ile de senkronize et
-    lead = TenantLead(
-        company_name=tenant.name,
-        contact_email=tenant.contact_email,
-        phone=tenant.phone,
-        tax_id=tenant.tax_id,
-        tax_office=tenant.tax_office,
-        website=tenant.website,
-        address=tenant.address,
-        plan_id=tenant.plan_id,
-        status="APPROVED" if is_active else "PENDING"
+    # 5.1 Odoo 19 Entegrasyonu: Müşteri Partneri ve Satış Siparişi Aç (Madde 2)
+    from app.services.odoo_service import OdooService
+    odoo_partner_id = None
+    odoo_order_id = None
+    odoo_order_name = None
+
+    try:
+        plan_obj = await db.get(Plan, payload.plan_id) if payload.plan_id else None
+        plan_code = plan_obj.code if plan_obj else "STARTER"
+
+        odoo_partner_id = OdooService.get_or_create_partner(
+            company_name=payload.name.strip(),
+            contact_email=payload.contact_email.strip().lower(),
+            phone=payload.phone or "",
+            address=payload.address or "",
+            website=payload.website or "",
+            tax_id=payload.tax_id or ""
+        )
+
+        if odoo_partner_id:
+            so_res = OdooService.create_sale_order(
+                partner_id=odoo_partner_id,
+                plan_code=plan_code,
+                address=payload.address
+            )
+            if so_res.get("success"):
+                odoo_order_id = so_res.get("order_id")
+                odoo_order_name = so_res.get("order_name")
+                import logging
+                logging.getLogger("recorion_odoo").info(
+                    f"✓ Süper Admin müşteri kaydı: Odoo Siparişi başarıyla oluşturuldu -> Ref: {odoo_order_name} (ID: {odoo_order_id})"
+                )
+    except Exception as odoo_err:
+        import logging
+        logging.getLogger("recorion_odoo").error(f"Süper Admin müşteri eklerken Odoo entegrasyon hatası: {odoo_err}")
+
+    # 6. TenantLead ile senkronize et
+    lead = None
+    l_res = await db.execute(
+        select(TenantLead).where(
+            or_(
+                TenantLead.tax_id == tenant.tax_id,
+                func.lower(TenantLead.contact_email) == clean_email,
+                func.lower(TenantLead.company_name) == tenant.name.lower()
+            )
+        ).order_by(TenantLead.created_at.desc()).limit(1)
     )
-    db.add(lead)
+    lead = l_res.scalars().first()
+
+    if lead:
+        lead.company_name = tenant.name
+        lead.contact_email = tenant.contact_email
+        lead.phone = tenant.phone
+        lead.tax_id = tenant.tax_id
+        lead.tax_office = tenant.tax_office
+        lead.website = tenant.website
+        lead.address = tenant.address
+        lead.plan_id = tenant.plan_id
+        lead.sectors = payload.sectors or []
+        lead.professions = tenant.professions or []
+        lead.generated_manifesto = tenant.sector_manifesto
+        lead.status = "APPROVED"
+        if odoo_partner_id:
+            lead.odoo_partner_id = odoo_partner_id
+        if odoo_order_id:
+            lead.odoo_order_id = odoo_order_id
+        if odoo_order_name:
+            lead.odoo_order_name = odoo_order_name
+        lead.notes = f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | InitialPassword: {plain_password} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
+    else:
+        lead = TenantLead(
+            company_name=tenant.name,
+            contact_email=tenant.contact_email,
+            phone=tenant.phone,
+            tax_id=tenant.tax_id,
+            tax_office=tenant.tax_office,
+            website=tenant.website,
+            address=tenant.address,
+            plan_id=tenant.plan_id,
+            sectors=payload.sectors or [],
+            professions=payload.professions or [],
+            generated_manifesto=tenant.sector_manifesto,
+            odoo_partner_id=odoo_partner_id,
+            odoo_order_id=odoo_order_id,
+            odoo_order_name=odoo_order_name,
+            status="APPROVED",
+            notes=f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | InitialPassword: {plain_password} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
+        )
+        db.add(lead)
 
     await db.commit()
     await db.refresh(tenant)
@@ -1317,29 +1585,34 @@ async def admin_create_tenant(payload: AdminTenantCreate, db: AsyncSession = Dep
             "password": plain_password,
             "plan_name": plan_title,
             "package_expiry_date": expiry_date.strftime("%d.%m.%Y") if expiry_date else "Onay Bekliyor",
-            "odoo_order_name": "Süper Admin Doğrudan Kayıt",
+            "odoo_order_name": odoo_order_name or "Süper Admin Doğrudan Kayıt",
             "login_url": "http://localhost:5173/"
         }
 
-        tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER"))
-        welcome_tmpl = tmpl_res.scalar_one_or_none()
+        tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER").order_by(EmailTemplate.created_at.desc()))
+        welcome_tmpl = tmpl_res.scalars().first()
         if welcome_tmpl:
             email_sent = NotificationService.render_and_send_template(tenant.contact_email, welcome_tmpl, welcome_ctx)
         else:
             email_sent = NotificationService.send_customer_account_activated_notification(welcome_ctx)
 
-    msg = f"'{tenant.name}' kurumu başarıyla oluşturuldu ve paketi aktif edildi." if is_active else f"'{tenant.name}' kurumu paketi başlatılmadan (onay bekleyen olarak) kaydedildi."
+    msg = f"'{tenant.name}' kurumu ve yetkili kullanıcısı ({admin_actor.display_name}) başarıyla kaydedildi."
+    if odoo_order_name:
+        msg += f" Odoo 19 Satış Siparişi oluşturuldu: {odoo_order_name}."
 
     return {
         "success": True,
         "message": msg,
         "tenant_id": str(tenant.id),
         "slug": tenant.slug,
+        "admin_name": admin_actor.display_name,
         "admin_email": admin_actor.email,
         "admin_password": plain_password,
-        "is_active": is_active,
+        "is_active": tenant.is_active,
         "package_expiry_date": expiry_date.isoformat() if expiry_date else None,
-        "welcome_email_sent": email_sent
+        "welcome_email_sent": email_sent,
+        "odoo_order_id": odoo_order_id,
+        "odoo_order_name": odoo_order_name
     }
 
 
@@ -1463,18 +1736,14 @@ async def send_manual_expiration_reminder(tenant_id: uuid.UUID, db: AsyncSession
 @router.post("/generate-manifesto")
 async def generate_company_manifesto_endpoint(payload: ManifestoRequest, db: AsyncSession = Depends(get_db)):
     """
-    Şirket adı ve seçilen NACE kodlarına göre Kurumsal AI Manifestosu üretir (Madde 13).
+    Şirket adı ve seçilen Sektör / Meslek gruplarına göre Kurumsal AI Manifestosu üretir.
     """
     from app.services.manifesto_service import ManifestoService
-    nace_items = []
-    if payload.nace_codes:
-        n_res = await db.execute(select(NaceCatalog).where(NaceCatalog.code.in_(payload.nace_codes)))
-        for nc in n_res.scalars().all():
-            nace_items.append({"code": nc.code, "title": nc.title, "sector_group": nc.sector_group})
 
     data = ManifestoService.generate_manifesto(
         company_name=payload.company_name,
-        nace_items=nace_items,
+        sectors=payload.sectors,
+        professions=payload.professions,
         website=payload.website
     )
     return data

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from pydantic import BaseModel
 from typing import Optional, List
 import hashlib
@@ -56,7 +56,40 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     stmt = select(Actor).where(func.lower(Actor.email) == clean_email)
     result = await db.execute(stmt)
-    matching_actors = result.scalars().all()
+    matching_actors = list(result.scalars().all())
+
+    # 1. Şirketin contact_email'i üzerinden şirket yöneticisini bul
+    if not matching_actors:
+        t_stmt = select(Tenant).where(func.lower(Tenant.contact_email) == clean_email)
+        t_res = await db.execute(t_stmt)
+        matched_tenants = t_res.scalars().all()
+        if matched_tenants:
+            t_ids = [t.id for t in matched_tenants]
+            act_stmt = select(Actor).where(Actor.tenant_id.in_(t_ids), Actor.role == "COMPANY_ADMIN")
+            act_res = await db.execute(act_stmt)
+            matching_actors.extend(act_res.scalars().all())
+
+    # 2. Şirket adı veya slug üzerinden şirket yöneticisini bul (örn: siriusmes, sirius)
+    if not matching_actors:
+        t_search = select(Tenant).where(
+            or_(
+                func.lower(Tenant.slug).ilike(f"%{clean_email}%"),
+                func.lower(Tenant.name).ilike(f"%{clean_email}%")
+            )
+        )
+        t_search_res = await db.execute(t_search)
+        matched_tenants = t_search_res.scalars().all()
+        if matched_tenants:
+            t_ids = [t.id for t in matched_tenants]
+            act_stmt = select(Actor).where(Actor.tenant_id.in_(t_ids), Actor.role == "COMPANY_ADMIN")
+            act_res = await db.execute(act_stmt)
+            matching_actors.extend(act_res.scalars().all())
+
+    # 3. Aktör ad/soyad (display_name) üzerinden bul
+    if not matching_actors:
+        act_name_stmt = select(Actor).where(func.lower(Actor.display_name).ilike(f"%{clean_email}%"))
+        act_name_res = await db.execute(act_name_stmt)
+        matching_actors.extend(act_name_res.scalars().all())
 
     if not matching_actors:
         raise HTTPException(status_code=401, detail="Geçersiz kullanıcı adı veya şifre.")
@@ -89,6 +122,51 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     tenant = tenant_res.scalar_one_or_none()
     tenant_name = tenant.name if tenant else "Bilinmeyen Kurum"
     tenant_slug = tenant.slug if tenant else "unknown"
+
+    # Süper Admin dışındaki kullanıcılar için onay ve aktiflik denetimleri (Madde 1 & 2)
+    if actor.role != "SUPER_ADMIN":
+        if not tenant:
+            raise HTTPException(status_code=403, detail="Kullanıcıya atanmış geçerli bir şirket kaydı bulunamadı.")
+
+        # Madde 2: Müşteri tanımı pasife alındıktan sonra sisteme giremez
+        if not tenant.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail=f"'{tenant.name}' şirket hesabı pasife alınmıştır. Sisteme giriş yapamazsınız. Lütfen sistem yöneticiniz ile iletişime geçiniz."
+            )
+
+        if getattr(actor, "status", None) == "DISABLED":
+            raise HTTPException(
+                status_code=403,
+                detail="Kullanıcı hesabınız pasife alınmıştır. Sisteme giriş yapamazsınız."
+            )
+
+        # Madde 1: Müşteri satın alması yapıldıktan sonra Süper Yönetici tarafından onaylanmamış ise sisteme login olamaz
+        from app.db.models import TenantLead
+        lead_stmt = select(TenantLead).where(
+            (TenantLead.contact_email == actor.email) | (TenantLead.company_name == tenant.name)
+        ).order_by(TenantLead.created_at.desc()).limit(1)
+        lead_res = await db.execute(lead_stmt)
+        lead_obj = lead_res.scalar_one_or_none()
+
+        if lead_obj and lead_obj.status == "PENDING":
+            raise HTTPException(
+                status_code=403,
+                detail=f"'{tenant.name}' için satın alma başvurunuz henüz Süper Yönetici tarafından onaylanmamıştır. Başvurunuz onaylandığında e-posta ile bilgilendirileceksiniz."
+            )
+
+        if lead_obj and lead_obj.status == "REJECTED":
+            raise HTTPException(
+                status_code=403,
+                detail=f"'{tenant.name}' için yapılan satın alma başvurusu reddedilmiştir."
+            )
+
+        # Şirket paket bitiş tarihi yoksa da henüz onaylanmamış sayılır
+        if not tenant.package_expiry_date:
+            raise HTTPException(
+                status_code=403,
+                detail=f"'{tenant.name}' şirketinin abonelik paketi henüz Süper Yönetici tarafından onaylanıp aktif edilmemiştir."
+            )
 
     # Rol bazlı izinleri belirle
     permissions = []
