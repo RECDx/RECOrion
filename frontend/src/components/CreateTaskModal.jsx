@@ -30,7 +30,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSave, actors }) {
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0, 0, 0, 0.75)',
+      background: 'rgb(var(--rgb-shade) / calc(0.75 * var(--shade-k)))',
       backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
@@ -39,12 +39,12 @@ export default function CreateTaskModal({ isOpen, onClose, onSave, actors }) {
       padding: '20px'
     }}>
       <div style={{
-        background: '#111622',
+        background: 'var(--sf-111622)',
         border: '1px solid var(--border-highlight)',
         borderRadius: '16px',
         width: '100%',
         maxWidth: '480px',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.8)',
+        boxShadow: '0 20px 40px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
         overflow: 'hidden'
       }}>
         {/* Header */}
@@ -82,7 +82,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSave, actors }) {
                 border: '1px solid var(--border-subtle)',
                 borderRadius: '8px',
                 padding: '8px 12px',
-                color: '#fff',
+                color: 'var(--nt-ffffff)',
                 fontSize: '0.85rem',
                 outline: 'none'
               }}
@@ -104,7 +104,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSave, actors }) {
                 border: '1px solid var(--border-subtle)',
                 borderRadius: '8px',
                 padding: '8px 12px',
-                color: '#fff',
+                color: 'var(--nt-ffffff)',
                 fontSize: '0.85rem',
                 outline: 'none',
                 resize: 'none'
@@ -112,7 +112,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSave, actors }) {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
                 Atanan AI Personeli
@@ -126,7 +126,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSave, actors }) {
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '8px',
                   padding: '8px 10px',
-                  color: '#38bdf8',
+                  color: 'var(--ac-38bdf8)',
                   fontSize: '0.8rem',
                   outline: 'none'
                 }}
@@ -152,7 +152,7 @@ export default function CreateTaskModal({ isOpen, onClose, onSave, actors }) {
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '8px',
                   padding: '8px 10px',
-                  color: '#fff',
+                  color: 'var(--nt-ffffff)',
                   fontSize: '0.8rem',
                   outline: 'none'
                 }}

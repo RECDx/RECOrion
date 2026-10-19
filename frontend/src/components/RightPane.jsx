@@ -55,17 +55,17 @@ export default function RightPane({
           borderRadius: '12px',
           background: 'var(--gradient-card)',
           border: '1px solid rgba(16, 185, 129, 0.3)',
-          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)'
+          boxShadow: '0 4px 15px rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#34d399', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--ac-34d399)', display: 'flex', alignItems: 'center', gap: '5px' }}>
               <ShieldCheck size={14} />
               GÖREV KALİTE KAPISI
             </span>
             <span className="badge" style={{
               fontSize: '0.62rem',
               background: gateStatus === 'APPROVED' ? 'rgba(16, 185, 129, 0.2)' : gateStatus === 'REVISION' ? 'rgba(244, 63, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-              color: gateStatus === 'APPROVED' ? '#34d399' : gateStatus === 'REVISION' ? '#f43f5e' : '#fbbf24'
+              color: gateStatus === 'APPROVED' ? 'var(--ac-34d399)' : gateStatus === 'REVISION' ? '#f43f5e' : 'var(--ac-fbbf24)'
             }}>
               {gateStatus === 'APPROVED' ? '✓ ONAYLANDI' : gateStatus === 'REVISION' ? '↺ REVİZYON' : '⏳ ONAY BEKLİYOR'}
             </span>
@@ -75,7 +75,7 @@ export default function RightPane({
             AI Personeli tarafından üretilen kod ve doküman artefaktları deterministik doğrulama kriterlerini karşılamadan iş akışında ilerleyemez.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <button 
               onClick={handleApprove}
               className="btn btn-success"
@@ -99,11 +99,11 @@ export default function RightPane({
         <div style={{
           padding: '12px',
           borderRadius: '10px',
-          background: 'rgba(255, 255, 255, 0.02)',
+          background: 'rgb(var(--rgb-ov) / 0.02)',
           border: '1px solid var(--border-subtle)'
         }}>
           <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-dim)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <FileCode2 size={13} color="#38bdf8" />
+            <FileCode2 size={13} color="var(--ac-38bdf8)" />
             ÜRETİLEN ARTEFAKT (MINIO S3)
           </div>
 
@@ -115,9 +115,9 @@ export default function RightPane({
             fontSize: '0.72rem',
             color: '#a5f3fc',
             lineHeight: 1.5,
-            border: '1px solid rgba(255, 255, 255, 0.05)'
+            border: '1px solid rgb(var(--rgb-ov) / 0.05)'
           }}>
-            <div style={{ color: '#818cf8', marginBottom: '4px' }}>// Görev Teslimatı:</div>
+            <div style={{ color: 'var(--ac-818cf8)', marginBottom: '4px' }}>// Görev Teslimatı:</div>
             <div>[MİMARİ_PLAN_V1.md]</div>
             <div style={{ color: 'var(--text-dim)', fontSize: '0.65rem', marginTop: '4px' }}>
               Depolama: recorion-artifacts/projects/{selectedTask?.project_id?.slice(0, 8)}/
@@ -133,7 +133,7 @@ export default function RightPane({
           </div>
 
           {/* Scope Tabs */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '10px' }}>
+          <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '10px' }}>
             <button 
               onClick={() => setActiveTab('GLOBAL')}
               className="btn btn-secondary"
@@ -142,7 +142,7 @@ export default function RightPane({
                 padding: '6px',
                 background: activeTab === 'GLOBAL' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
                 borderColor: activeTab === 'GLOBAL' ? '#6366f1' : 'var(--border-subtle)',
-                color: activeTab === 'GLOBAL' ? '#818cf8' : 'var(--text-muted)'
+                color: activeTab === 'GLOBAL' ? 'var(--ac-818cf8)' : 'var(--text-muted)'
               }}
             >
               <Building2 size={12} />
@@ -156,7 +156,7 @@ export default function RightPane({
                 padding: '6px',
                 background: activeTab === 'AGENT' ? 'rgba(6, 182, 212, 0.25)' : 'transparent',
                 borderColor: activeTab === 'AGENT' ? '#06b6d4' : 'var(--border-subtle)',
-                color: activeTab === 'AGENT' ? '#22d3ee' : 'var(--text-muted)'
+                color: activeTab === 'AGENT' ? 'var(--ac-22d3ee)' : 'var(--text-muted)'
               }}
             >
               <Bot size={12} />
@@ -177,13 +177,13 @@ export default function RightPane({
                   style={{
                     padding: '10px',
                     borderRadius: '8px',
-                    background: 'rgba(255, 255, 255, 0.02)',
+                    background: 'rgb(var(--rgb-ov) / 0.02)',
                     border: '1px solid var(--border-subtle)',
                     fontSize: '0.75rem'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontWeight: '600', color: m.scope === 'GLOBAL' ? '#818cf8' : '#22d3ee' }}>
+                    <span style={{ fontWeight: '600', color: m.scope === 'GLOBAL' ? 'var(--ac-818cf8)' : 'var(--ac-22d3ee)' }}>
                       {m.scope === 'GLOBAL' ? '🏢 Kurumsal Know-How' : '🤖 Ajan Tecrübesi'}
                     </span>
                     <span style={{ fontSize: '0.62rem', color: 'var(--text-dim)' }}>
@@ -206,7 +206,7 @@ export default function RightPane({
                         width: '100%',
                         justifyContent: 'center',
                         borderColor: 'rgba(99, 102, 241, 0.3)',
-                        color: '#a5b4fc'
+                        color: 'var(--ac-a5b4fc)'
                       }}
                     >
                       <ArrowUpRight size={11} />

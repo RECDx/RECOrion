@@ -56,7 +56,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(5, 8, 16, 0.85)',
+      background: 'rgb(var(--rgb-sf-050810) / 0.85)',
       backdropFilter: 'blur(10px)',
       display: 'flex',
       alignItems: 'center',
@@ -65,7 +65,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
       padding: '20px'
     }}>
       <div style={{
-        background: '#0d131f',
+        background: 'var(--sf-0d131f)',
         border: '1px solid rgba(99, 102, 241, 0.35)',
         borderRadius: '16px',
         width: '100%',
@@ -73,13 +73,13 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
         maxHeight: '90vh',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.9)',
+        boxShadow: '0 25px 60px rgb(var(--rgb-shade) / calc(0.9 * var(--shade-k)))',
         overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{
           padding: '18px 24px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -99,10 +99,10 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
               👑
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: 'var(--nt-f8fafc)' }}>
                 RECDx Süper Admin - Müşteri Başvuruları & Odoo Onay Masası
               </h3>
-              <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--nt-94a3b8)' }}>
                 Gelen paket taleplerini inceleyin; ödeme teyidinden sonra satışı onaylayıp müşteriye giriş bilgilerini gönderin.
               </p>
             </div>
@@ -113,9 +113,9 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
               disabled={loading}
               title="Yenile"
               style={{
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#cbd5e1',
+                background: 'rgb(var(--rgb-ov) / 0.06)',
+                border: '1px solid rgb(var(--rgb-ov) / 0.15)',
+                color: 'var(--nt-cbd5e1)',
                 padding: '6px 12px',
                 borderRadius: '8px',
                 cursor: 'pointer',
@@ -133,7 +133,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#94a3b8',
+                color: 'var(--nt-94a3b8)',
                 cursor: 'pointer',
                 padding: '6px'
               }}
@@ -151,7 +151,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
             borderRadius: '10px',
             background: feedback.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
             border: feedback.type === 'success' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
-            color: feedback.type === 'success' ? '#34d399' : '#f87171',
+            color: feedback.type === 'success' ? 'var(--ac-34d399)' : 'var(--ac-f87171)',
             fontSize: '0.875rem'
           }}>
             {feedback.text}
@@ -161,7 +161,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
         {/* Body List */}
         <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
           {leads.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--nt-64748b)' }}>
               <ShoppingCart size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
               <p style={{ margin: 0, fontSize: '0.95rem' }}>Henüz bekleyen satın alma veya kiralama başvurusu bulunmuyor.</p>
             </div>
@@ -175,7 +175,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
                   <div 
                     key={lead.id}
                     style={{
-                      background: 'rgba(17, 24, 39, 0.7)',
+                      background: 'rgb(var(--rgb-sf-111827) / 0.7)',
                       border: isApproved ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
                       borderRadius: '12px',
                       padding: '16px 20px',
@@ -187,7 +187,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
                   >
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '1.05rem', fontWeight: '700', color: '#f8fafc' }}>
+                        <span style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--nt-f8fafc)' }}>
                           {lead.company_name}
                         </span>
                         <span style={{
@@ -196,7 +196,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
                           fontSize: '0.72rem',
                           fontWeight: '600',
                           background: isApproved ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                          color: isApproved ? '#34d399' : '#fbbf24',
+                          color: isApproved ? 'var(--ac-34d399)' : 'var(--ac-fbbf24)',
                           border: isApproved ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(245, 158, 11, 0.4)'
                         }}>
                           {isApproved ? '✓ AKTİF / ONAYLANDI' : '⏳ ÖDEME BEKLİYOR'}
@@ -208,7 +208,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
                             fontSize: '0.72rem',
                             fontWeight: '600',
                             background: 'rgba(99, 102, 241, 0.15)',
-                            color: '#a5b4fc',
+                            color: 'var(--ac-a5b4fc)',
                             border: '1px solid rgba(99, 102, 241, 0.3)'
                           }}>
                             Odoo Ref: {lead.odoo_order_name}
@@ -216,19 +216,19 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', fontSize: '0.8rem', color: '#94a3b8' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', fontSize: '0.8rem', color: 'var(--nt-94a3b8)' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Mail size={13} color="#60a5fa" /> {lead.contact_email}
+                          <Mail size={13} color="var(--ac-60a5fa)" /> {lead.contact_email}
                         </span>
                         {lead.phone && (
                           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Phone size={13} color="#34d399" /> {lead.phone}
+                            <Phone size={13} color="var(--ac-34d399)" /> {lead.phone}
                           </span>
                         )}
                         {lead.tax_id && (
                           <span>VKN: {lead.tax_id}</span>
                         )}
-                        <span style={{ color: '#64748b' }}>
+                        <span style={{ color: 'var(--nt-64748b)' }}>
                           Tarih: {new Date(lead.created_at).toLocaleString('tr-TR')}
                         </span>
                       </div>
@@ -262,7 +262,7 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
                           display: 'flex',
                           alignItems: 'center',
                           gap: '6px',
-                          color: '#34d399',
+                          color: 'var(--ac-34d399)',
                           fontSize: '0.825rem',
                           fontWeight: '600',
                           background: 'rgba(16, 185, 129, 0.1)',
@@ -285,13 +285,13 @@ export default function AdminLeadsModal({ isOpen, onClose }) {
         {/* Footer */}
         <div style={{
           padding: '14px 24px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          background: 'rgba(0, 0, 0, 0.2)',
+          borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
+          background: 'rgb(var(--rgb-shade) / calc(0.2 * var(--shade-k)))',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           fontSize: '0.8rem',
-          color: '#64748b'
+          color: 'var(--nt-64748b)'
         }}>
           <span>
             💡 <b>A.9 İş Akışı:</b> 'Onayla ve Aktif Et' butonuna tıklandığında Odoo 19 üzerindeki teklif resmileştirilir, şirket tenant ortamı oluşturulur ve müşteriye kullanıcı adı/şifre e-postası gönderilir.

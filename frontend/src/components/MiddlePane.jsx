@@ -67,7 +67,7 @@ export default function MiddlePane({
   };
 
   return (
-    <main className="pane" style={{ background: '#0a0d14' }}>
+    <main className="pane" style={{ background: 'var(--sf-0a0d14)' }}>
       {/* Pane Header: Task & Selected AI Agent Context */}
       <div className="pane-header" style={{ padding: '10px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -81,7 +81,7 @@ export default function MiddlePane({
             justifyContent: 'center',
             border: '1px solid rgba(99, 102, 241, 0.3)'
           }}>
-            <Bot size={18} color="#818cf8" />
+            <Bot size={18} color="var(--ac-818cf8)" />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -94,7 +94,7 @@ export default function MiddlePane({
             </div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
               Öncelik: <b style={{ color: '#f43f5e' }}>{selectedTask?.priority || 'HIGH'}</b> • 
-              Durum: <b style={{ color: '#38bdf8' }}>{selectedTask?.status || 'IN_PROGRESS'}</b> • 
+              Durum: <b style={{ color: 'var(--ac-38bdf8)' }}>{selectedTask?.status || 'IN_PROGRESS'}</b> • 
               Kolektif Hafıza: <b style={{ color: '#10b981' }}>NS_GLOBAL & NS_AGENT Aktif</b>
             </div>
           </div>
@@ -107,8 +107,8 @@ export default function MiddlePane({
             value={selectedModel}
             onChange={(e) => onSelectModel(e.target.value)}
             style={{
-              background: 'rgba(17, 24, 39, 0.9)',
-              color: '#38bdf8',
+              background: 'rgb(var(--rgb-sf-111827) / 0.9)',
+              color: 'var(--ac-38bdf8)',
               border: '1px solid rgba(99, 102, 241, 0.35)',
               borderRadius: '6px',
               padding: '4px 8px',
@@ -135,10 +135,10 @@ export default function MiddlePane({
             maxWidth: '480px',
             padding: '30px',
             borderRadius: '16px',
-            background: 'rgba(255, 255, 255, 0.02)',
+            background: 'rgb(var(--rgb-ov) / 0.02)',
             border: '1px dashed var(--border-subtle)'
           }}>
-            <Sparkles size={36} color="#818cf8" style={{ marginBottom: '12px' }} />
+            <Sparkles size={36} color="var(--ac-818cf8)" style={{ marginBottom: '12px' }} />
             <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '6px' }}>
               RECOrion Otonom Çalışma Alanı
             </h3>
@@ -162,17 +162,17 @@ export default function MiddlePane({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {isUser ? (
-                      <span style={{ fontWeight: '700', fontSize: '0.78rem', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontWeight: '700', fontSize: '0.78rem', color: 'var(--ac-818cf8)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <User size={13} />
                         Cüneyt (Yönetici)
                       </span>
                     ) : isA2A ? (
-                      <span style={{ fontWeight: '700', fontSize: '0.78rem', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontWeight: '700', fontSize: '0.78rem', color: 'var(--ac-c084fc)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Zap size={13} />
                         🤖 Ajanlar Arası Müzakere
                       </span>
                     ) : (
-                      <span style={{ fontWeight: '700', fontSize: '0.78rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontWeight: '700', fontSize: '0.78rem', color: 'var(--ac-38bdf8)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Bot size={13} />
                         AI Personeli
                       </span>
@@ -215,7 +215,7 @@ export default function MiddlePane({
 
                 {/* Citations & Memory Chips */}
                 {m.citations && m.citations.length > 0 && (
-                  <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                     <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <BookOpen size={11} /> 2 Kademeli Kolektif Hafıza Kaynakları:
                     </div>
@@ -237,8 +237,8 @@ export default function MiddlePane({
         {/* Live Thinking Pulse */}
         {isLoading && (
           <div className="chat-bubble chat-bubble-ai thinking-pulse" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Brain size={18} color="#818cf8" />
-            <span style={{ fontSize: '0.85rem', color: '#c084fc', fontWeight: '600' }}>
+            <Brain size={18} color="var(--ac-818cf8)" />
+            <span style={{ fontSize: '0.85rem', color: 'var(--ac-c084fc)', fontWeight: '600' }}>
               AI Personeli düşünüyor, kolektif hafıza ve EVREN modeli taranıyor...
             </span>
           </div>
@@ -251,7 +251,7 @@ export default function MiddlePane({
       <div style={{
         padding: '14px 20px',
         borderTop: '1px solid var(--border-subtle)',
-        background: 'rgba(10, 14, 24, 0.85)',
+        background: 'rgb(var(--rgb-sf-0a0e18) / 0.85)',
         backdropFilter: 'blur(10px)'
       }}>
         <form onSubmit={handleSend}>
@@ -293,7 +293,7 @@ export default function MiddlePane({
                 flex: 1,
                 background: 'transparent',
                 border: 'none',
-                color: '#f8fafc',
+                color: 'var(--nt-f8fafc)',
                 fontSize: '0.875rem',
                 fontFamily: 'var(--font-sans)',
                 resize: 'none',

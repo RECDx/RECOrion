@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ThemeToggle from '../ui/ThemeToggle';
 import { 
   Sparkles, 
   Activity, 
@@ -45,7 +46,7 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
       </div>
 
       {/* Center: Tenant & Infrastructure Indicators */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+      <div className="navbar-center" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         {/* Active Company / Tenant */}
         <div style={{
           display: 'flex',
@@ -53,24 +54,24 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
           gap: '8px',
           padding: '6px 14px',
           borderRadius: '20px',
-          background: 'rgba(255, 255, 255, 0.04)',
+          background: 'rgb(var(--rgb-ov) / 0.04)',
           border: '1px solid var(--border-subtle)',
           fontSize: '0.825rem'
         }}>
           <Layers size={14} color="#06b6d4" />
           <span style={{ color: 'var(--text-muted)' }}>Kurum:</span>
-          <span style={{ fontWeight: '600', color: '#f8fafc' }}>
+          <span style={{ fontWeight: '600', color: 'var(--nt-f8fafc)' }}>
             {tenant?.name || 'RECOrion Teknoloji A.Ş.'}
           </span>
-          <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#22d3ee', fontSize: '0.65rem' }}>
+          <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.12)', color: 'var(--ac-22d3ee)', fontSize: '0.65rem' }}>
             NACE 62.01
           </span>
         </div>
 
         {/* Live Cluster Health Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.775rem' }}>
+        <div className="ui-hide-tablet" style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.775rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-muted)' }} title="Dark DB: PostgreSQL 16">
-            <Database size={13} color="#60a5fa" />
+            <Database size={13} color="var(--ac-60a5fa)" />
             <span>Postgres</span>
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: health?.services?.postgres === 'healthy' ? '#10b981' : '#f43f5e' }}></span>
           </div>
@@ -90,16 +91,16 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
       </div>
 
       {/* Right: Active EVREN Model Selector & User Profile */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div className="navbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         {/* EVREN Model Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="ui-hide-tablet" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Aktif Model:</span>
           <select 
             value={selectedModel}
             onChange={(e) => onSelectModel(e.target.value)}
             style={{
-              background: 'rgba(17, 24, 39, 0.8)',
-              color: '#38bdf8',
+              background: 'rgb(var(--rgb-sf-111827) / 0.8)',
+              color: 'var(--ac-38bdf8)',
               border: '1px solid rgba(6, 182, 212, 0.35)',
               borderRadius: '8px',
               padding: '5px 10px',
@@ -118,6 +119,8 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
           </select>
         </div>
 
+        <ThemeToggle compact />
+
         {/* Official Web & Paketler Butonu */}
         {onGoToOfficialSite && (
           <button
@@ -130,7 +133,7 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
               borderRadius: '8px',
               background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(6, 182, 212, 0.15) 100%)',
               border: '1px solid rgba(99, 102, 241, 0.35)',
-              color: '#a5b4fc',
+              color: 'var(--ac-a5b4fc)',
               fontSize: '0.775rem',
               fontWeight: '600',
               cursor: 'pointer',
@@ -154,7 +157,7 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
               borderRadius: '8px',
               background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.25) 100%)',
               border: '1px solid rgba(245, 158, 11, 0.6)',
-              color: '#fbbf24',
+              color: 'var(--ac-fbbf24)',
               fontSize: '0.775rem',
               fontWeight: '700',
               cursor: 'pointer',
@@ -178,7 +181,7 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
               borderRadius: '8px',
               background: 'linear-gradient(135deg, rgba(113, 52, 226, 0.2) 0%, rgba(20, 108, 235, 0.2) 100%)',
               border: '1px solid rgba(113, 52, 226, 0.5)',
-              color: '#c084fc',
+              color: 'var(--ac-c084fc)',
               fontSize: '0.775rem',
               fontWeight: '700',
               cursor: 'pointer',
@@ -191,13 +194,13 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
         )}
 
         {/* Human Admin Profile */}
-        <div style={{
+        <div className="ui-hide-mobile" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
           padding: '4px 10px',
           borderRadius: '8px',
-          background: 'rgba(255, 255, 255, 0.03)',
+          background: 'rgb(var(--rgb-ov) / 0.03)',
           border: '1px solid var(--border-subtle)'
         }}>
           <div style={{
@@ -218,7 +221,7 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
             <div style={{ fontSize: '0.8rem', fontWeight: '600' }}>
               {currentUser?.display_name || 'Cüneyt Admin'}
             </div>
-            <div style={{ fontSize: '0.675rem', color: currentUser?.role === 'SUPER_ADMIN' ? '#38bdf8' : 'var(--text-muted)' }}>
+            <div style={{ fontSize: '0.675rem', color: currentUser?.role === 'SUPER_ADMIN' ? 'var(--ac-38bdf8)' : 'var(--text-muted)' }}>
               {currentUser?.role === 'SUPER_ADMIN' ? '👑 RECDx Süper Admin' : (currentUser?.role || 'Müşteri Şirket Yöneticisi')}
             </div>
           </div>
@@ -231,7 +234,7 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
             style={{
               background: 'rgba(239, 68, 68, 0.1)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#f87171',
+              color: 'var(--ac-f87171)',
               borderRadius: '8px',
               padding: '6px 10px',
               fontSize: '0.75rem',

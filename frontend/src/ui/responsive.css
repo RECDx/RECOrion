@@ -1,0 +1,171 @@
+/* ==============================================================================
+   RECOrion Responsive Yerleşim
+   Kesme noktaları:  ≤1280px küçük masaüstü · ≤1024px tablet · ≤640px telefon
+   Satır içi stillerle yazılmış alanlar için ızgara sınıfları (ui-grid-2/3) ve
+   genel güvenlik ağları burada; !important satır içi stili ezmek için gereklidir.
+   ============================================================================== */
+
+html { -webkit-text-size-adjust: 100%; }
+img, video, canvas, iframe { max-width: 100%; }
+
+/* ---------- Satır içi ızgaralar (theme-codemod tarafından sınıflandırıldı) ---------- */
+@media (max-width: 1024px) {
+  .ui-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 640px) {
+  .ui-grid-2, .ui-grid-3 { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* ---------- Süper Admin konsolu ---------- */
+.super-admin-mobile-backdrop { display: none; }
+
+@media (max-width: 1280px) {
+  .super-admin-content { padding: 20px 22px 80px 22px; }
+}
+
+@media (max-width: 1024px) {
+  .super-admin-layout { height: 100dvh; }
+  .super-admin-sidebar,
+  .super-admin-sidebar.collapsed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 86vw) !important;
+    z-index: 900;
+    transform: translateX(-105%);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .super-admin-sidebar.mobile-open { transform: none; }
+  /* Daraltılmış görünüm çekmece içinde anlamsız: tam menüyü göster */
+  .super-admin-sidebar.collapsed .super-admin-brand-name,
+  .super-admin-sidebar.collapsed .super-admin-brand-sub,
+  .super-admin-sidebar.collapsed .super-admin-nav-item span,
+  .super-admin-sidebar.collapsed .super-admin-sidebar-footer span { display: inline !important; }
+  .super-admin-sidebar-toggle-btn { display: none !important; }
+
+  .super-admin-mobile-backdrop.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 850;
+    background: var(--overlay-backdrop);
+    backdrop-filter: blur(3px);
+  }
+  .super-admin-header { padding: 0 14px; gap: 10px; }
+  .super-admin-header-title { min-width: 0; font-size: 0.85rem; }
+  .super-admin-header-title > span:nth-child(-n+2) { display: none; }
+  .super-admin-header-title > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .super-admin-content { padding: 16px 16px 80px 16px; gap: 18px; }
+  .super-admin-card-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+  .super-admin-modal-overlay { padding: 12px; }
+}
+
+@media (max-width: 640px) {
+  .super-admin-user-btn > div:last-child { display: none; }
+  .super-admin-content { padding: 12px 12px 72px 12px; }
+  .super-admin-modal-overlay { padding: 0; align-items: stretch; }
+  .super-admin-modal-box { max-width: none !important; max-height: 100dvh; height: 100dvh; border-radius: 0; padding: 18px 16px; }
+  .super-admin-page-header > * { width: 100%; }
+}
+
+/* ---------- Şirket Yönetim Merkezi ---------- */
+@media (max-width: 1024px) {
+  .company-admin-root { height: 100dvh !important; }
+  .company-admin-header { height: auto !important; min-height: 60px; padding: 10px 14px !important; flex-wrap: wrap; gap: 10px; }
+  .company-admin-header > * { min-width: 0; }
+  .company-admin-header-actions { flex-wrap: wrap; justify-content: flex-end; }
+  /* Sol menü üstte yatay, kaydırılabilir sekme çubuğuna dönüşür */
+  .company-admin-body { flex-direction: column; }
+  .company-admin-sidebar { width: 100% !important; padding: 8px 10px !important; border-right: none !important; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
+  .company-admin-sidebar > div:first-child > div:first-child { display: none; } /* "ORGANİZASYON YÖNETİMİ" başlığı */
+  .company-admin-sidebar > div:not(:first-child) { display: none; }             /* alt bilgi kutuları */
+  .company-admin-tabs { flex-direction: row !important; overflow-x: auto; scrollbar-width: none; gap: 6px !important; }
+  .company-admin-tabs::-webkit-scrollbar { display: none; }
+  .company-admin-tabs > * { flex-shrink: 0; white-space: nowrap; width: auto !important; }
+  .company-admin-content { padding: 16px !important; }
+}
+@media (max-width: 640px) {
+  .company-admin-content { padding: 12px !important; }
+}
+
+/* ---------- Work Space (üç bölmeli çalışma alanı) ---------- */
+.pane-switcher { display: none; }
+
+@media (max-width: 1280px) {
+  .tri-pane-container { grid-template-columns: 270px 1fr 300px; }
+}
+
+@media (max-width: 1024px) {
+  .work-area-layout { height: 100dvh; width: 100%; }
+  .top-navbar { height: auto; min-height: 56px; padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .navbar-actions { gap: 8px !important; flex-wrap: wrap; justify-content: flex-end; }
+  .navbar-actions button { padding: 6px 10px !important; }
+  .navbar-center { gap: 10px !important; }
+  .pane-switcher {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+  }
+  .pane-switcher button {
+    flex: 1;
+    padding: 8px 6px;
+    border-radius: 9px;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .pane-switcher button.active { background: var(--gradient-brand); color: #ffffff; border-color: transparent; }
+  .tri-pane-container { grid-template-columns: minmax(0, 1fr); height: auto; flex: 1; min-height: 0; }
+  .tri-pane-container > .pane { display: none; }
+  .tri-pane-container[data-active-pane="left"] > .pane:nth-child(1),
+  .tri-pane-container[data-active-pane="middle"] > .pane:nth-child(2),
+  .tri-pane-container[data-active-pane="right"] > .pane:nth-child(3) { display: flex; }
+}
+
+@media (max-width: 640px) {
+  .top-navbar { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .navbar-center { display: none !important; }
+  .navbar-actions { justify-content: flex-start; }
+}
+
+/* ---------- Resmi web sitesi ---------- */
+@media (max-width: 1024px) {
+  .landing-header { padding: 0 20px; }
+  .hero-title { font-size: 2.4rem; }
+  .plans-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .landing-header { padding: 10px 14px; height: auto; flex-wrap: wrap; gap: 10px; }
+  .brand-subtitle { display: none; }
+  .landing-nav-actions { gap: 8px; flex-wrap: wrap; }
+  .landing-hero { padding: 36px 16px 28px 16px; }
+  .hero-title { font-size: 1.85rem; line-height: 1.2; }
+  .hero-desc { font-size: 0.95rem; }
+  .hero-stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .section-title { font-size: 1.5rem; }
+  .plans-grid { grid-template-columns: minmax(0, 1fr); }
+  .plan-card { padding: 20px; }
+  .purchase-modal-card-3d, .login-modal-card-3d { max-width: none !important; width: 100% !important; border-radius: 0 !important; min-height: 100dvh; }
+  .purchase-modal-backdrop-3d { padding: 0 !important; align-items: stretch !important; }
+  .form-row-2 { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* ---------- Genel güvenlik ağları (satır içi stiller) ---------- */
+@media (max-width: 1024px) {
+  /* Geniş içerik tabloları yatay kaydırılır (ui-table hariç: o mobilde karta döner) */
+  table:not(.ui-table) { display: block; max-width: 100%; overflow-x: auto; }
+}
+@media (max-width: 640px) {
+  /* Uçtan uca hizalanmış satırlar dar ekranda alt satıra kayar */
+  [style*="justify-content: space-between"] { flex-wrap: wrap; row-gap: 10px; }
+  /* Sabit konumlu tam ekran katmanlar (satır içi modallar) kenar boşluğu bırakmasın */
+  [style*="position: fixed"][style*="inset: 0"] { padding: 0 !important; }
+  input, select, textarea { font-size: 16px; } /* iOS'ta odaklanınca yakınlaşmayı önler */
+}

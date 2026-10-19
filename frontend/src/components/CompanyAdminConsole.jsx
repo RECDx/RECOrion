@@ -51,6 +51,8 @@ import {
   Link as LinkIcon
 } from 'lucide-react';
 import { api } from '../api';
+import ThemeToggle from '../ui/ThemeToggle';
+import { notify, toast } from '../ui/feedback';
 
 export default function CompanyAdminConsole({
   currentUser,
@@ -126,7 +128,6 @@ export default function CompanyAdminConsole({
   const [isSavingDept, setIsSavingDept] = useState(false);
   const [deptToDelete, setDeptToDelete] = useState(null);
   const [isDeletingDept, setIsDeletingDept] = useState(false);
-  const [toastMessage, setToastMessage] = useState(null);
 
   // =========================================================================
   // MADDE 2: ŞİRKET ÜNVANLARI & RECORION AI KONTROL MOTORU STATE
@@ -304,9 +305,9 @@ export default function CompanyAdminConsole({
     expandedPromptId
   ]);
 
+  // Bildirimler ortak toast sistemiyle gösterilir (src/ui/feedback.js)
   const showToast = (text, type = 'success') => {
-    setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 3500);
+    (toast[type] || toast.info)(text);
   };
 
   const getActiveTenantId = () => {
@@ -1815,42 +1816,17 @@ export default function CompanyAdminConsole({
       display: 'flex',
       flexDirection: 'column',
       height: '100vh',
-      backgroundColor: '#0a0d14',
-      color: '#f8fafc',
+      backgroundColor: 'var(--sf-0a0d14)',
+      color: 'var(--nt-f8fafc)',
       fontFamily: 'var(--font-sans)',
       overflow: 'hidden'
     }}>
-      {/* Toast Bildirimi */}
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          right: '24px',
-          zIndex: 9999,
-          background: toastMessage.type === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(16, 185, 129, 0.95)',
-          color: '#ffffff',
-          padding: '12px 20px',
-          borderRadius: '10px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          fontSize: '0.875rem',
-          fontWeight: '600',
-          backdropFilter: 'blur(8px)',
-          animation: 'slideIn 0.3s ease-out'
-        }}>
-          {toastMessage.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
-          <span>{toastMessage.text}</span>
-        </div>
-      )}
-
       {/* ÜST TOPBAR */}
-      <header style={{
+      <header className="company-admin-header" style={{
         height: '64px',
         padding: '0 24px',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
-        background: 'rgba(17, 22, 34, 0.85)',
+        borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
+        background: 'rgb(var(--rgb-sf-111622) / 0.85)',
         backdropFilter: 'blur(16px)',
         display: 'flex',
         alignItems: 'center',
@@ -1874,12 +1850,12 @@ export default function CompanyAdminConsole({
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontWeight: '800', fontSize: '1.15rem', letterSpacing: '-0.02em', color: '#ffffff' }}>
+              <span style={{ fontWeight: '800', fontSize: '1.15rem', letterSpacing: '-0.02em', color: 'var(--nt-ffffff)' }}>
                 {tenant?.name || 'Müşteri Yönetim Konsolu'}
               </span>
               <span style={{
                 background: 'rgba(113, 52, 226, 0.18)',
-                color: '#c084fc',
+                color: 'var(--ac-c084fc)',
                 border: '1px solid rgba(113, 52, 226, 0.35)',
                 fontSize: '0.675rem',
                 fontWeight: '700',
@@ -1892,7 +1868,7 @@ export default function CompanyAdminConsole({
               {tenant?.nace_codes && tenant.nace_codes.length > 0 && (
                 <span style={{
                   background: 'rgba(6, 182, 212, 0.12)',
-                  color: '#22d3ee',
+                  color: 'var(--ac-22d3ee)',
                   border: '1px solid rgba(6, 182, 212, 0.3)',
                   fontSize: '0.675rem',
                   fontWeight: '600',
@@ -1903,14 +1879,16 @@ export default function CompanyAdminConsole({
                 </span>
               )}
             </div>
-            <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: 0 }}>
+            <p style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)', margin: 0 }}>
               RECOrion Otonom Yapay Zeka & Departman Yönetim Merkezi
             </p>
           </div>
         </div>
 
         {/* Sağ: Aksiyon Butonları & Kullanıcı */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="company-admin-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <ThemeToggle className="ui-hide-mobile" />
+          <ThemeToggle compact className="ui-show-mobile-only" />
           {/* Çalışma Alanına Geçiş Butonu */}
           {onSwitchToWorkspace && (
             <button
@@ -1923,7 +1901,7 @@ export default function CompanyAdminConsole({
                 borderRadius: '8px',
                 background: 'linear-gradient(135deg, rgba(20, 108, 235, 0.2) 0%, rgba(113, 52, 226, 0.2) 100%)',
                 border: '1px solid rgba(20, 108, 235, 0.45)',
-                color: '#60a5fa',
+                color: 'var(--ac-60a5fa)',
                 fontSize: '0.8rem',
                 fontWeight: '600',
                 cursor: 'pointer',
@@ -1948,7 +1926,7 @@ export default function CompanyAdminConsole({
                 borderRadius: '8px',
                 background: 'rgba(245, 158, 11, 0.15)',
                 border: '1px solid rgba(245, 158, 11, 0.4)',
-                color: '#fbbf24',
+                color: 'var(--ac-fbbf24)',
                 fontSize: '0.775rem',
                 fontWeight: '600',
                 cursor: 'pointer'
@@ -1969,9 +1947,9 @@ export default function CompanyAdminConsole({
                 gap: '6px',
                 padding: '7px 12px',
                 borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                color: '#cbd5e1',
+                background: 'rgb(var(--rgb-ov) / 0.05)',
+                border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                color: 'var(--nt-cbd5e1)',
                 fontSize: '0.775rem',
                 fontWeight: '500',
                 cursor: 'pointer'
@@ -1988,8 +1966,8 @@ export default function CompanyAdminConsole({
             gap: '8px',
             padding: '5px 12px',
             borderRadius: '8px',
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
+            background: 'rgb(var(--rgb-ov) / 0.03)',
+            border: '1px solid rgb(var(--rgb-ov) / 0.08)'
           }}>
             <div style={{
               width: '28px',
@@ -2006,10 +1984,10 @@ export default function CompanyAdminConsole({
               {currentUser?.display_name?.charAt(0) || 'Y'}
             </div>
             <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#f8fafc' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--nt-f8fafc)' }}>
                 {currentUser?.display_name || 'Yetkili Yönetici'}
               </div>
-              <div style={{ fontSize: '0.675rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.675rem', color: 'var(--nt-94a3b8)' }}>
                 {currentUser?.role === 'SUPER_ADMIN' ? '👑 Platform Süper Admin' : 'Yetkili Personel'}
               </div>
             </div>
@@ -2022,7 +2000,7 @@ export default function CompanyAdminConsole({
               style={{
                 background: 'rgba(239, 68, 68, 0.1)',
                 border: '1px solid rgba(239, 68, 68, 0.25)',
-                color: '#f87171',
+                color: 'var(--ac-f87171)',
                 borderRadius: '8px',
                 padding: '7px 11px',
                 fontSize: '0.75rem',
@@ -2038,12 +2016,12 @@ export default function CompanyAdminConsole({
       </header>
 
       {/* ANA GÖVDE: SOL MENÜ + SAĞ İÇERİK */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* SOL YAN MENÜ (SIDEBAR) */}
-        <aside style={{
+      <div className="company-admin-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* SOL YAN MENÜ (SIDEBAR) - tablet/telefonda üstte yatay sekme çubuğu */}
+        <aside className="company-admin-sidebar" style={{
           width: '260px',
-          background: '#0d111a',
-          borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'var(--sf-0d111a)',
+          borderRight: '1px solid rgb(var(--rgb-ov) / 0.08)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -2053,7 +2031,7 @@ export default function CompanyAdminConsole({
             <div style={{
               fontSize: '0.675rem',
               fontWeight: '700',
-              color: '#64748b',
+              color: 'var(--nt-64748b)',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
               padding: '6px 12px',
@@ -2062,7 +2040,7 @@ export default function CompanyAdminConsole({
               ORGANİZASYON YÖNETİMİ
             </div>
 
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <nav className="company-admin-tabs" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {/* TAB 0: KULLANICILAR (İNSAN PERSONEL - Madde 1) */}
               <button
                 onClick={() => setActiveTab('USERS')}
@@ -2074,7 +2052,7 @@ export default function CompanyAdminConsole({
                   borderRadius: '10px',
                   background: activeTab === 'USERS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
                   border: activeTab === 'USERS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'USERS' ? '#ffffff' : '#94a3b8',
+                  color: activeTab === 'USERS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                   fontSize: '0.85rem',
                   fontWeight: activeTab === 'USERS' ? '700' : '500',
                   cursor: 'pointer',
@@ -2082,14 +2060,14 @@ export default function CompanyAdminConsole({
                   transition: 'all 0.15s'
                 }}
               >
-                <Users size={18} color={activeTab === 'USERS' ? '#818cf8' : '#64748b'} />
+                <Users size={18} color={activeTab === 'USERS' ? 'var(--ac-818cf8)' : 'var(--nt-64748b)'} />
                 <span style={{ flex: 1 }}>Kullanıcı Yönetimi</span>
                 <span style={{
                   fontSize: '0.7rem',
-                  background: userQuota.is_limit_reached ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                  background: userQuota.is_limit_reached ? 'rgba(239, 68, 68, 0.2)' : 'rgb(var(--rgb-ov) / 0.08)',
                   padding: '2px 7px',
                   borderRadius: '12px',
-                  color: userQuota.is_limit_reached ? '#f87171' : '#cbd5e1'
+                  color: userQuota.is_limit_reached ? 'var(--ac-f87171)' : 'var(--nt-cbd5e1)'
                 }}>
                   {userQuota.active_users} / {userQuota.max_users}
                 </span>
@@ -2106,7 +2084,7 @@ export default function CompanyAdminConsole({
                   borderRadius: '10px',
                   background: activeTab === 'DEPARTMENTS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
                   border: activeTab === 'DEPARTMENTS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'DEPARTMENTS' ? '#ffffff' : '#94a3b8',
+                  color: activeTab === 'DEPARTMENTS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                   fontSize: '0.85rem',
                   fontWeight: activeTab === 'DEPARTMENTS' ? '700' : '500',
                   cursor: 'pointer',
@@ -2114,14 +2092,14 @@ export default function CompanyAdminConsole({
                   transition: 'all 0.15s'
                 }}
               >
-                <Building2 size={18} color={activeTab === 'DEPARTMENTS' ? '#a855f7' : '#64748b'} />
+                <Building2 size={18} color={activeTab === 'DEPARTMENTS' ? '#a855f7' : 'var(--nt-64748b)'} />
                 <span style={{ flex: 1 }}>Departmanlar</span>
                 <span style={{
                   fontSize: '0.7rem',
-                  background: 'rgba(255, 255, 255, 0.08)',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
                   padding: '2px 7px',
                   borderRadius: '12px',
-                  color: '#cbd5e1'
+                  color: 'var(--nt-cbd5e1)'
                 }}>
                   {departments.length}
                 </span>
@@ -2138,7 +2116,7 @@ export default function CompanyAdminConsole({
                   borderRadius: '10px',
                   background: activeTab === 'JOB_TITLES' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
                   border: activeTab === 'JOB_TITLES' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'JOB_TITLES' ? '#ffffff' : '#94a3b8',
+                  color: activeTab === 'JOB_TITLES' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                   fontSize: '0.85rem',
                   fontWeight: activeTab === 'JOB_TITLES' ? '700' : '500',
                   cursor: 'pointer',
@@ -2146,14 +2124,14 @@ export default function CompanyAdminConsole({
                   transition: 'all 0.15s'
                 }}
               >
-                <Briefcase size={18} color={activeTab === 'JOB_TITLES' ? '#38bdf8' : '#64748b'} />
+                <Briefcase size={18} color={activeTab === 'JOB_TITLES' ? 'var(--ac-38bdf8)' : 'var(--nt-64748b)'} />
                 <span style={{ flex: 1 }}>Ünvan Tanımları</span>
                 <span style={{
                   fontSize: '0.7rem',
-                  background: 'rgba(255, 255, 255, 0.08)',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
                   padding: '2px 7px',
                   borderRadius: '12px',
-                  color: '#cbd5e1'
+                  color: 'var(--nt-cbd5e1)'
                 }}>
                   {jobTitles.length}
                 </span>
@@ -2170,7 +2148,7 @@ export default function CompanyAdminConsole({
                   borderRadius: '10px',
                   background: activeTab === 'AI_AGENTS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
                   border: activeTab === 'AI_AGENTS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'AI_AGENTS' ? '#ffffff' : '#94a3b8',
+                  color: activeTab === 'AI_AGENTS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                   fontSize: '0.85rem',
                   fontWeight: activeTab === 'AI_AGENTS' ? '700' : '500',
                   cursor: 'pointer',
@@ -2178,12 +2156,12 @@ export default function CompanyAdminConsole({
                   transition: 'all 0.15s'
                 }}
               >
-                <Bot size={18} color={activeTab === 'AI_AGENTS' ? '#10b981' : '#64748b'} />
+                <Bot size={18} color={activeTab === 'AI_AGENTS' ? '#10b981' : 'var(--nt-64748b)'} />
                 <span style={{ flex: 1 }}>AI Ajan İşe Alım</span>
                 <span style={{
                   fontSize: '0.65rem',
                   background: 'rgba(16, 185, 129, 0.2)',
-                  color: '#34d399',
+                  color: 'var(--ac-34d399)',
                   padding: '2px 6px',
                   borderRadius: '4px'
                 }}>
@@ -2202,7 +2180,7 @@ export default function CompanyAdminConsole({
                   borderRadius: '10px',
                   background: activeTab === 'MANIFESTO' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
                   border: activeTab === 'MANIFESTO' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'MANIFESTO' ? '#ffffff' : '#94a3b8',
+                  color: activeTab === 'MANIFESTO' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                   fontSize: '0.85rem',
                   fontWeight: activeTab === 'MANIFESTO' ? '700' : '500',
                   cursor: 'pointer',
@@ -2210,7 +2188,7 @@ export default function CompanyAdminConsole({
                   transition: 'all 0.15s'
                 }}
               >
-                <FileText size={18} color={activeTab === 'MANIFESTO' ? '#f59e0b' : '#64748b'} />
+                <FileText size={18} color={activeTab === 'MANIFESTO' ? '#f59e0b' : 'var(--nt-64748b)'} />
                 <span style={{ flex: 1 }}>Sektörel Manifesto</span>
               </button>
             </nav>
@@ -2218,14 +2196,14 @@ export default function CompanyAdminConsole({
 
           {/* Alt Bilgi Kartı */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
+            background: 'rgb(var(--rgb-ov) / 0.03)',
+            border: '1px solid rgb(var(--rgb-ov) / 0.06)',
             borderRadius: '10px',
             padding: '12px',
             fontSize: '0.75rem',
-            color: '#94a3b8'
+            color: 'var(--nt-94a3b8)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: '#f8fafc', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: 'var(--nt-f8fafc)', marginBottom: '4px' }}>
               <Shield size={14} color="#7134e2" />
               <span>RLS İzolasyonu Aktif</span>
             </div>
@@ -2234,7 +2212,7 @@ export default function CompanyAdminConsole({
         </aside>
 
         {/* SAĞ ANA İÇERİK ALANI */}
-        <main style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
+        <main className="company-admin-content" style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
           {/* ========================================================================= */}
           {/* MADDE 1: KULLANICI YÖNETİMİ (İNSAN PERSONEL) SEKMESİ */}
           {/* ========================================================================= */}
@@ -2250,10 +2228,10 @@ export default function CompanyAdminConsole({
                 gap: '16px'
               }}>
                 <div>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#ffffff' }}>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: 'var(--nt-ffffff)' }}>
                     Kullanıcı Yönetimi
                   </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                     Şirketinizin insan personellerini tanımlayın, departman/ünvan atayın, Süper Yöneticinin rollerini ve ek izinlerini belirleyin.
                   </p>
                 </div>
@@ -2265,9 +2243,9 @@ export default function CompanyAdminConsole({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#cbd5e1',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                      color: 'var(--nt-cbd5e1)',
                       padding: '8px 12px',
                       borderRadius: '8px',
                       fontSize: '0.8rem',
@@ -2306,7 +2284,7 @@ export default function CompanyAdminConsole({
 
               {/* PAKET KOTA GÖSTERGE KARTI */}
               <div style={{
-                background: 'linear-gradient(135deg, rgba(20, 27, 45, 0.9) 0%, rgba(13, 17, 26, 0.95) 100%)',
+                background: 'linear-gradient(135deg, rgb(var(--rgb-sf-141b2d) / 0.9) 0%, rgb(var(--rgb-sf-0d111a) / 0.95) 100%)',
                 border: '1px solid ' + (userQuota.is_limit_reached ? 'rgba(239, 68, 68, 0.4)' : 'rgba(113, 52, 226, 0.3)'),
                 borderRadius: '14px',
                 padding: '18px 22px',
@@ -2316,7 +2294,7 @@ export default function CompanyAdminConsole({
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: '16px',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
+                boxShadow: '0 8px 24px rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))'
               }}>
                 <div style={{ flex: 1, minWidth: '280px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
@@ -2331,19 +2309,19 @@ export default function CompanyAdminConsole({
                     }}>
                       {userQuota.plan_name || 'Kurumsal Paket'}
                     </span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#f8fafc' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--nt-f8fafc)' }}>
                       İnsan Kullanıcı Kotası
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '1.75rem', fontWeight: '900', color: userQuota.is_limit_reached ? '#f87171' : '#ffffff' }}>
+                    <span style={{ fontSize: '1.75rem', fontWeight: '900', color: userQuota.is_limit_reached ? 'var(--ac-f87171)' : 'var(--nt-ffffff)' }}>
                       {userQuota.active_users}
                     </span>
-                    <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: '600' }}>
+                    <span style={{ fontSize: '1rem', color: 'var(--nt-64748b)', fontWeight: '600' }}>
                       / {userQuota.max_users} Kullanıcı
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '12px' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', marginLeft: '12px' }}>
                       (Kalan Kontenjan: <strong style={{ color: userQuota.is_limit_reached ? '#ef4444' : '#10b981' }}>{Math.max(0, userQuota.max_users - userQuota.active_users)}</strong>)
                     </span>
                   </div>
@@ -2352,7 +2330,7 @@ export default function CompanyAdminConsole({
                   <div style={{
                     width: '100%',
                     height: '8px',
-                    background: 'rgba(255, 255, 255, 0.08)',
+                    background: 'rgb(var(--rgb-ov) / 0.08)',
                     borderRadius: '8px',
                     overflow: 'hidden'
                   }}>
@@ -2361,7 +2339,7 @@ export default function CompanyAdminConsole({
                       width: `${Math.min(100, Math.round(((userQuota.active_users || 0) / (userQuota.max_users || 1)) * 100))}%`,
                       background: userQuota.is_limit_reached
                         ? 'linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)'
-                        : 'linear-gradient(90deg, #10b981 0%, #38bdf8 100%)',
+                        : 'linear-gradient(90deg, #10b981 0%, var(--ac-38bdf8) 100%)',
                       borderRadius: '8px',
                       transition: 'width 0.4s ease-out'
                     }} />
@@ -2381,15 +2359,15 @@ export default function CompanyAdminConsole({
                 }}>
                   {userQuota.is_limit_reached ? (
                     <>
-                      <AlertCircle size={24} color="#f87171" style={{ flexShrink: 0 }} />
-                      <div style={{ fontSize: '0.78rem', color: '#fca5a5', lineHeight: 1.35 }}>
+                      <AlertCircle size={24} color="var(--ac-f87171)" style={{ flexShrink: 0 }} />
+                      <div style={{ fontSize: '0.78rem', color: 'var(--ac-fca5a5)', lineHeight: 1.35 }}>
                         <strong>Azami Kota Doldu:</strong> Satın aldığınız paketin kullanıcı limitine ulaştınız. Yeni kullanıcı eklemek için paketinizi yükseltin veya mevcut bir hesabı pasife alın.
                       </div>
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 size={24} color="#34d399" style={{ flexShrink: 0 }} />
-                      <div style={{ fontSize: '0.78rem', color: '#86efac', lineHeight: 1.35 }}>
+                      <CheckCircle2 size={24} color="var(--ac-34d399)" style={{ flexShrink: 0 }} />
+                      <div style={{ fontSize: '0.78rem', color: 'var(--ac-86efac)', lineHeight: 1.35 }}>
                         <strong>Kota Uygun:</strong> Satın aldığınız paket kapsamında {Math.max(0, userQuota.max_users - userQuota.active_users)} adet daha kullanıcı tanımlayabilirsiniz.
                       </div>
                     </>
@@ -2413,7 +2391,7 @@ export default function CompanyAdminConsole({
                     flex: 1,
                     maxWidth: '360px'
                   }}>
-                    <Search size={15} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <Search size={15} color="var(--nt-64748b)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                     <input
                       type="text"
                       placeholder="Ad soyad veya e-posta ile ara..."
@@ -2421,11 +2399,11 @@ export default function CompanyAdminConsole({
                       onChange={(e) => setUserSearch(e.target.value)}
                       style={{
                         width: '100%',
-                        background: 'rgba(255, 255, 255, 0.04)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'rgb(var(--rgb-ov) / 0.04)',
+                        border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                         borderRadius: '8px',
                         padding: '8px 12px 8px 34px',
-                        color: '#ffffff',
+                        color: 'var(--nt-ffffff)',
                         fontSize: '0.85rem',
                         outline: 'none'
                       }}
@@ -2440,7 +2418,7 @@ export default function CompanyAdminConsole({
                           transform: 'translateY(-50%)',
                           background: 'none',
                           border: 'none',
-                          color: '#64748b',
+                          color: 'var(--nt-64748b)',
                           cursor: 'pointer',
                           fontSize: '12px'
                         }}
@@ -2451,7 +2429,7 @@ export default function CompanyAdminConsole({
                   </div>
 
                   {/* Durum Filtresi */}
-                  <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', padding: '3px' }}>
+                  <div style={{ display: 'flex', background: 'rgb(var(--rgb-ov) / 0.05)', borderRadius: '8px', padding: '3px' }}>
                     <button
                       onClick={() => setUserStatusFilter('ALL')}
                       style={{
@@ -2459,7 +2437,7 @@ export default function CompanyAdminConsole({
                         borderRadius: '6px',
                         border: 'none',
                         background: userStatusFilter === 'ALL' ? '#7134e2' : 'transparent',
-                        color: userStatusFilter === 'ALL' ? '#ffffff' : '#94a3b8',
+                        color: userStatusFilter === 'ALL' ? '#ffffff' : 'var(--nt-94a3b8)',
                         fontSize: '0.75rem',
                         fontWeight: '600',
                         cursor: 'pointer'
@@ -2474,7 +2452,7 @@ export default function CompanyAdminConsole({
                         borderRadius: '6px',
                         border: 'none',
                         background: userStatusFilter === 'ACTIVE' ? '#10b981' : 'transparent',
-                        color: userStatusFilter === 'ACTIVE' ? '#ffffff' : '#94a3b8',
+                        color: userStatusFilter === 'ACTIVE' ? '#ffffff' : 'var(--nt-94a3b8)',
                         fontSize: '0.75rem',
                         fontWeight: '600',
                         cursor: 'pointer'
@@ -2489,7 +2467,7 @@ export default function CompanyAdminConsole({
                         borderRadius: '6px',
                         border: 'none',
                         background: userStatusFilter === 'DISABLED' ? '#ef4444' : 'transparent',
-                        color: userStatusFilter === 'DISABLED' ? '#ffffff' : '#94a3b8',
+                        color: userStatusFilter === 'DISABLED' ? '#ffffff' : 'var(--nt-94a3b8)',
                         fontSize: '0.75rem',
                         fontWeight: '600',
                         cursor: 'pointer'
@@ -2505,11 +2483,11 @@ export default function CompanyAdminConsole({
                       value={userDeptFilter}
                       onChange={(e) => setUserDeptFilter(e.target.value)}
                       style={{
-                        background: '#131826',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'var(--sf-131826)',
+                        border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                         borderRadius: '8px',
                         padding: '8px 12px',
-                        color: '#cbd5e1',
+                        color: 'var(--nt-cbd5e1)',
                         fontSize: '0.8rem',
                         outline: 'none',
                         cursor: 'pointer'
@@ -2524,15 +2502,15 @@ export default function CompanyAdminConsole({
                 </div>
 
                 {/* Görünüm Seçici (Cards / List) */}
-                <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '8px', padding: '3px' }}>
+                <div style={{ display: 'flex', background: 'rgb(var(--rgb-ov) / 0.05)', borderRadius: '8px', padding: '3px' }}>
                   <button
                     onClick={() => setUserViewMode('CARDS')}
                     style={{
                       padding: '6px 12px',
                       borderRadius: '6px',
                       border: 'none',
-                      background: userViewMode === 'CARDS' ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                      color: userViewMode === 'CARDS' ? '#ffffff' : '#94a3b8',
+                      background: userViewMode === 'CARDS' ? 'rgb(var(--rgb-ov) / 0.15)' : 'transparent',
+                      color: userViewMode === 'CARDS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       fontSize: '0.75rem',
                       fontWeight: '600',
                       cursor: 'pointer'
@@ -2546,8 +2524,8 @@ export default function CompanyAdminConsole({
                       padding: '6px 12px',
                       borderRadius: '6px',
                       border: 'none',
-                      background: userViewMode === 'LIST' ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                      color: userViewMode === 'LIST' ? '#ffffff' : '#94a3b8',
+                      background: userViewMode === 'LIST' ? 'rgb(var(--rgb-ov) / 0.15)' : 'transparent',
+                      color: userViewMode === 'LIST' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       fontSize: '0.75rem',
                       fontWeight: '600',
                       cursor: 'pointer'
@@ -2560,7 +2538,7 @@ export default function CompanyAdminConsole({
 
               {/* YÜKLENİYOR DURUMU */}
               {isLoadingUsers && (
-                <div style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8' }}>
+                <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--nt-94a3b8)' }}>
                   <RefreshCw size={28} className="spin" style={{ margin: '0 auto 12px auto', display: 'block', color: '#7134e2' }} />
                   <div>Kullanıcılar yükleniyor...</div>
                 </div>
@@ -2569,8 +2547,8 @@ export default function CompanyAdminConsole({
               {/* BOŞ LİSTE DURUMU */}
               {!isLoadingUsers && filteredUsers.length === 0 && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.5)',
-                  border: '1px dashed rgba(255, 255, 255, 0.12)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.5)',
+                  border: '1px dashed rgb(var(--rgb-ov) / 0.12)',
                   borderRadius: '16px',
                   padding: '60px 20px',
                   textAlign: 'center'
@@ -2587,10 +2565,10 @@ export default function CompanyAdminConsole({
                   }}>
                     <Users size={32} color="#a855f7" />
                   </div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', margin: '0 0 6px 0' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: '0 0 6px 0' }}>
                     {users.length === 0 ? 'Henüz Tanımlı İnsan Personel Yok' : 'Filtreye Uygun Kullanıcı Bulunamadı'}
                   </h3>
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', maxWidth: '440px', margin: '0 auto 20px auto' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', maxWidth: '440px', margin: '0 auto 20px auto' }}>
                     {users.length === 0
                       ? 'Satın aldığınız paket kotası dahilinde ilk insan personelinizi tanımlayarak yetkilendirmeye başlayın.'
                       : 'Arama kriterlerinize veya departman filtresine uygun personel kaydı bulunamadı.'}
@@ -2619,7 +2597,7 @@ export default function CompanyAdminConsole({
               {!isLoadingUsers && filteredUsers.length > 0 && userViewMode === 'CARDS' && (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
                   gap: '20px'
                 }}>
                   {filteredUsers.map((u) => {
@@ -2636,14 +2614,14 @@ export default function CompanyAdminConsole({
                       <div
                         key={u.id}
                         style={{
-                          background: 'rgba(17, 22, 34, 0.85)',
-                          border: isPassive ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(255, 255, 255, 0.08)',
+                          background: 'rgb(var(--rgb-sf-111622) / 0.85)',
+                          border: isPassive ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
                           borderRadius: '14px',
                           padding: '20px',
                           display: 'flex',
                           flexDirection: 'column',
                           justifyContent: 'space-between',
-                          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+                          boxShadow: '0 4px 20px rgb(var(--rgb-shade) / calc(0.2 * var(--shade-k)))',
                           transition: 'all 0.2s',
                           position: 'relative',
                           overflow: 'hidden'
@@ -2658,7 +2636,7 @@ export default function CompanyAdminConsole({
                                 height: '42px',
                                 borderRadius: '10px',
                                 background: isPassive
-                                  ? 'linear-gradient(135deg, #475569 0%, #334155 100%)'
+                                  ? 'linear-gradient(135deg, var(--nt-475569) 0%, var(--nt-334155) 100%)'
                                   : 'linear-gradient(135deg, #7134e2 0%, #146ceb 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -2671,7 +2649,7 @@ export default function CompanyAdminConsole({
                                 {initials}
                               </div>
                               <div>
-                                <h4 style={{ fontSize: '1rem', fontWeight: '700', color: '#ffffff', margin: 0, lineHeight: 1.2 }}>
+                                <h4 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: 0, lineHeight: 1.2 }}>
                                   {u.display_name}
                                 </h4>
                                 <div style={{
@@ -2679,7 +2657,7 @@ export default function CompanyAdminConsole({
                                   alignItems: 'center',
                                   gap: '6px',
                                   fontSize: '0.75rem',
-                                  color: '#94a3b8',
+                                  color: 'var(--nt-94a3b8)',
                                   marginTop: '3px'
                                 }}>
                                   <span>{u.email}</span>
@@ -2688,7 +2666,7 @@ export default function CompanyAdminConsole({
                                     style={{
                                       background: 'none',
                                       border: 'none',
-                                      color: '#64748b',
+                                      color: 'var(--nt-64748b)',
                                       cursor: 'pointer',
                                       padding: 0,
                                       display: 'flex',
@@ -2712,7 +2690,7 @@ export default function CompanyAdminConsole({
                               fontSize: '0.7rem',
                               fontWeight: '700',
                               background: isPassive ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                              color: isPassive ? '#f87171' : '#34d399',
+                              color: isPassive ? 'var(--ac-f87171)' : 'var(--ac-34d399)',
                               border: isPassive ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)'
                             }}>
                               {isPassive ? <UserX size={11} /> : <UserCheck size={11} />}
@@ -2726,39 +2704,39 @@ export default function CompanyAdminConsole({
                             flexDirection: 'column',
                             gap: '8px',
                             padding: '12px',
-                            background: 'rgba(255, 255, 255, 0.02)',
+                            background: 'rgb(var(--rgb-ov) / 0.02)',
                             borderRadius: '10px',
-                            border: '1px solid rgba(255, 255, 255, 0.04)',
+                            border: '1px solid rgb(var(--rgb-ov) / 0.04)',
                             marginBottom: '16px'
                           }}>
                             {/* Departman */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-                              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <Building2 size={13} color="#a855f7" /> Departman:
                               </span>
-                              <span style={{ color: u.department_name ? '#cbd5e1' : '#64748b', fontWeight: '500' }}>
+                              <span style={{ color: u.department_name ? 'var(--nt-cbd5e1)' : 'var(--nt-64748b)', fontWeight: '500' }}>
                                 {u.department_name || 'Atanmamış'}
                               </span>
                             </div>
 
                             {/* Ünvan */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-                              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Briefcase size={13} color="#38bdf8" /> Ünvan:
+                              <span style={{ color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Briefcase size={13} color="var(--ac-38bdf8)" /> Ünvan:
                               </span>
-                              <span style={{ color: u.job_title_name ? '#cbd5e1' : '#64748b', fontWeight: '500' }}>
+                              <span style={{ color: u.job_title_name ? 'var(--nt-cbd5e1)' : 'var(--nt-64748b)', fontWeight: '500' }}>
                                 {u.job_title_name || 'Atanmamış'}
                               </span>
                             </div>
 
                             {/* Sistem Yetki Rolü */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-                              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Shield size={13} color="#818cf8" /> Sistem Rolü:
+                              <span style={{ color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Shield size={13} color="var(--ac-818cf8)" /> Sistem Rolü:
                               </span>
                               <span style={{
                                 background: 'rgba(129, 140, 248, 0.15)',
-                                color: '#a5b4fc',
+                                color: 'var(--ac-a5b4fc)',
                                 padding: '2px 8px',
                                 borderRadius: '6px',
                                 fontWeight: '700',
@@ -2771,7 +2749,7 @@ export default function CompanyAdminConsole({
 
                           {/* İzin Kataloğu Ek İzinleri */}
                           <div style={{ marginBottom: '16px' }}>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '600', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontWeight: '600', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                               İzin Kataloğu Ek İzinleri
                             </div>
                             {u.extra_permissions && u.extra_permissions.length > 0 ? (
@@ -2783,7 +2761,7 @@ export default function CompanyAdminConsole({
                                       fontSize: '0.675rem',
                                       background: 'rgba(245, 158, 11, 0.12)',
                                       border: '1px solid rgba(245, 158, 11, 0.25)',
-                                      color: '#fbbf24',
+                                      color: 'var(--ac-fbbf24)',
                                       padding: '2px 7px',
                                       borderRadius: '4px',
                                       fontFamily: 'monospace'
@@ -2794,7 +2772,7 @@ export default function CompanyAdminConsole({
                                 ))}
                               </div>
                             ) : (
-                              <span style={{ fontSize: '0.72rem', color: '#475569', fontStyle: 'italic' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--nt-475569)', fontStyle: 'italic' }}>
                                 Ek izin tanımlanmadı (Rol izinleri geçerli)
                               </span>
                             )}
@@ -2807,7 +2785,7 @@ export default function CompanyAdminConsole({
                           alignItems: 'center',
                           justifyContent: 'flex-end',
                           gap: '8px',
-                          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                          borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)',
                           paddingTop: '14px'
                         }}>
                           <button
@@ -2816,9 +2794,9 @@ export default function CompanyAdminConsole({
                               display: 'flex',
                               alignItems: 'center',
                               gap: '6px',
-                              background: 'rgba(255, 255, 255, 0.05)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              color: '#cbd5e1',
+                              background: 'rgb(var(--rgb-ov) / 0.05)',
+                              border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                              color: 'var(--nt-cbd5e1)',
                               padding: '6px 12px',
                               borderRadius: '6px',
                               fontSize: '0.75rem',
@@ -2827,7 +2805,7 @@ export default function CompanyAdminConsole({
                               transition: 'all 0.15s'
                             }}
                           >
-                            <Edit3 size={13} color="#38bdf8" />
+                            <Edit3 size={13} color="var(--ac-38bdf8)" />
                             <span>Düzenle</span>
                           </button>
 
@@ -2839,7 +2817,7 @@ export default function CompanyAdminConsole({
                               gap: '6px',
                               background: 'rgba(239, 68, 68, 0.08)',
                               border: '1px solid rgba(239, 68, 68, 0.2)',
-                              color: '#f87171',
+                              color: 'var(--ac-f87171)',
                               padding: '6px 12px',
                               borderRadius: '6px',
                               fontSize: '0.75rem',
@@ -2861,14 +2839,14 @@ export default function CompanyAdminConsole({
               {/* LİSTE / TABLO GÖRÜNÜMÜ */}
               {!isLoadingUsers && filteredUsers.length > 0 && userViewMode === 'LIST' && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.7)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.7)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   borderRadius: '14px',
                   overflowX: 'auto'
                 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
                     <thead>
-                      <tr style={{ background: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', color: '#94a3b8' }}>
+                      <tr style={{ background: 'rgb(var(--rgb-ov) / 0.03)', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)', color: 'var(--nt-94a3b8)' }}>
                         <th style={{ padding: '14px 18px', fontWeight: '700' }}>KULLANICI</th>
                         <th style={{ padding: '14px 18px', fontWeight: '700' }}>E-POSTA</th>
                         <th style={{ padding: '14px 18px', fontWeight: '700' }}>DEPARTMAN</th>
@@ -2883,23 +2861,23 @@ export default function CompanyAdminConsole({
                       {filteredUsers.map((u) => {
                         const isPassive = u.status === 'DISABLED';
                         return (
-                          <tr key={u.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                            <td style={{ padding: '14px 18px', color: '#ffffff', fontWeight: '600' }}>
+                          <tr key={u.id} style={{ borderBottom: '1px solid rgb(var(--rgb-ov) / 0.04)' }}>
+                            <td style={{ padding: '14px 18px', color: 'var(--nt-ffffff)', fontWeight: '600' }}>
                               {u.display_name}
                             </td>
-                            <td style={{ padding: '14px 18px', color: '#cbd5e1' }}>
+                            <td style={{ padding: '14px 18px', color: 'var(--nt-cbd5e1)' }}>
                               {u.email}
                             </td>
-                            <td style={{ padding: '14px 18px', color: u.department_name ? '#cbd5e1' : '#64748b' }}>
+                            <td style={{ padding: '14px 18px', color: u.department_name ? 'var(--nt-cbd5e1)' : 'var(--nt-64748b)' }}>
                               {u.department_name || '-'}
                             </td>
-                            <td style={{ padding: '14px 18px', color: u.job_title_name ? '#cbd5e1' : '#64748b' }}>
+                            <td style={{ padding: '14px 18px', color: u.job_title_name ? 'var(--nt-cbd5e1)' : 'var(--nt-64748b)' }}>
                               {u.job_title_name || '-'}
                             </td>
                             <td style={{ padding: '14px 18px' }}>
                               <span style={{
                                 background: 'rgba(129, 140, 248, 0.15)',
-                                color: '#a5b4fc',
+                                color: 'var(--ac-a5b4fc)',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 fontWeight: '700',
@@ -2912,7 +2890,7 @@ export default function CompanyAdminConsole({
                               {u.extra_permissions && u.extra_permissions.length > 0 ? (
                                 <span style={{
                                   background: 'rgba(245, 158, 11, 0.15)',
-                                  color: '#fbbf24',
+                                  color: 'var(--ac-fbbf24)',
                                   padding: '2px 7px',
                                   borderRadius: '4px',
                                   fontSize: '0.7rem',
@@ -2921,7 +2899,7 @@ export default function CompanyAdminConsole({
                                   +{u.extra_permissions.length} İzin
                                 </span>
                               ) : (
-                                <span style={{ color: '#475569', fontSize: '0.72rem' }}>-</span>
+                                <span style={{ color: 'var(--nt-475569)', fontSize: '0.72rem' }}>-</span>
                               )}
                             </td>
                             <td style={{ padding: '14px 18px' }}>
@@ -2931,7 +2909,7 @@ export default function CompanyAdminConsole({
                                 fontSize: '0.7rem',
                                 fontWeight: '700',
                                 background: isPassive ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                                color: isPassive ? '#f87171' : '#34d399'
+                                color: isPassive ? 'var(--ac-f87171)' : 'var(--ac-34d399)'
                               }}>
                                 {isPassive ? 'Pasif' : 'Aktif'}
                               </span>
@@ -2941,9 +2919,9 @@ export default function CompanyAdminConsole({
                                 <button
                                   onClick={() => handleOpenEditUser(u)}
                                   style={{
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: '#38bdf8',
+                                    background: 'rgb(var(--rgb-ov) / 0.05)',
+                                    border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                                    color: 'var(--ac-38bdf8)',
                                     padding: '5px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -2957,7 +2935,7 @@ export default function CompanyAdminConsole({
                                   style={{
                                     background: 'rgba(239, 68, 68, 0.08)',
                                     border: '1px solid rgba(239, 68, 68, 0.2)',
-                                    color: '#f87171',
+                                    color: 'var(--ac-f87171)',
                                     padding: '5px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -2993,10 +2971,10 @@ export default function CompanyAdminConsole({
                 gap: '16px'
               }}>
                 <div>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#ffffff' }}>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: 'var(--nt-ffffff)' }}>
                     Şirket Departmanları Tanımlama
                   </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                     Sistemi kullanacak operasyonel, idari ve teknik departmanları tanımlayın ve yönetin.
                   </p>
                 </div>
@@ -3008,9 +2986,9 @@ export default function CompanyAdminConsole({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#cbd5e1',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                      color: 'var(--nt-cbd5e1)',
                       padding: '8px 12px',
                       borderRadius: '8px',
                       fontSize: '0.8rem',
@@ -3050,13 +3028,13 @@ export default function CompanyAdminConsole({
               {/* İstatistik & Özet Sayaçları */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
                 gap: '16px',
                 marginBottom: '24px'
               }}>
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -3075,18 +3053,18 @@ export default function CompanyAdminConsole({
                     <Building2 size={22} color="#a855f7" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--nt-ffffff)' }}>
                       {departments.length}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Tanımlı Departman
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -3105,18 +3083,18 @@ export default function CompanyAdminConsole({
                     <Users size={22} color="#10b981" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--nt-ffffff)' }}>
                       {departments.reduce((acc, d) => acc + (d.actor_count || 0), 0)}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Atanmış Aktif Personel / Ajan
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -3135,10 +3113,10 @@ export default function CompanyAdminConsole({
                     <CheckCircle2 size={22} color="#3b82f6" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--nt-ffffff)' }}>
                       %100
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Sistem Entegrasyon Durumu
                     </div>
                   </div>
@@ -3155,7 +3133,7 @@ export default function CompanyAdminConsole({
                 flexWrap: 'wrap'
               }}>
                 <div style={{ position: 'relative', flex: 1, maxWidth: '380px' }}>
-                  <Search size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '12px' }} />
+                  <Search size={16} color="var(--nt-64748b)" style={{ position: 'absolute', left: '12px', top: '12px' }} />
                   <input
                     type="text"
                     placeholder="Departman adı veya açıklama ile ara..."
@@ -3163,11 +3141,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setDeptSearch(e.target.value)}
                     style={{
                       width: '100%',
-                      background: 'rgba(17, 24, 39, 0.7)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      background: 'rgb(var(--rgb-sf-111827) / 0.7)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                       borderRadius: '8px',
                       padding: '9px 12px 9px 36px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none'
                     }}
@@ -3177,9 +3155,9 @@ export default function CompanyAdminConsole({
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: 'rgba(17, 24, 39, 0.6)',
+                  background: 'rgb(var(--rgb-sf-111827) / 0.6)',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   padding: '3px'
                 }}>
                   <button
@@ -3187,7 +3165,7 @@ export default function CompanyAdminConsole({
                     style={{
                       background: deptViewMode === 'CARDS' ? 'rgba(113, 52, 226, 0.35)' : 'transparent',
                       border: 'none',
-                      color: deptViewMode === 'CARDS' ? '#ffffff' : '#94a3b8',
+                      color: deptViewMode === 'CARDS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       padding: '5px 12px',
                       borderRadius: '6px',
                       fontSize: '0.775rem',
@@ -3202,7 +3180,7 @@ export default function CompanyAdminConsole({
                     style={{
                       background: deptViewMode === 'LIST' ? 'rgba(113, 52, 226, 0.35)' : 'transparent',
                       border: 'none',
-                      color: deptViewMode === 'LIST' ? '#ffffff' : '#94a3b8',
+                      color: deptViewMode === 'LIST' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       padding: '5px 12px',
                       borderRadius: '6px',
                       fontSize: '0.775rem',
@@ -3217,7 +3195,7 @@ export default function CompanyAdminConsole({
 
               {/* Yükleniyor Göstergesi */}
               {isLoadingDepts && (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+                <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--nt-94a3b8)' }}>
                   <RefreshCw size={28} className="spin" style={{ margin: '0 auto 12px auto', display: 'block' }} />
                   <span>Departmanlar yükleniyor...</span>
                 </div>
@@ -3226,8 +3204,8 @@ export default function CompanyAdminConsole({
               {/* Boş Durum (Empty State) */}
               {!isLoadingDepts && filteredDepartments.length === 0 && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.4)',
-                  border: '1px dashed rgba(255, 255, 255, 0.12)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.4)',
+                  border: '1px dashed rgb(var(--rgb-ov) / 0.12)',
                   borderRadius: '16px',
                   padding: '60px 20px',
                   textAlign: 'center',
@@ -3246,10 +3224,10 @@ export default function CompanyAdminConsole({
                   }}>
                     <Building2 size={32} color="#a855f7" />
                   </div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--nt-ffffff)', marginBottom: '8px' }}>
                     {deptSearch ? 'Eşleşen Departman Bulunamadı' : 'Henüz Tanımlı Departman Yok'}
                   </h3>
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '20px' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '20px' }}>
                     {deptSearch
                       ? `'${deptSearch}' aramasına uygun bir departman bulunamadı.`
                       : 'Şirketinizin organizasyon şemasını oluşturmak ve personellerinizi/AI ajanlarınızı konumlandırmak için ilk departmanınızı tanımlayın.'}
@@ -3279,7 +3257,7 @@ export default function CompanyAdminConsole({
               {!isLoadingDepts && filteredDepartments.length > 0 && deptViewMode === 'CARDS' && (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
                   gap: '20px'
                 }}>
                   {filteredDepartments.map((dept, index) => {
@@ -3295,14 +3273,14 @@ export default function CompanyAdminConsole({
                       <div
                         key={dept.id}
                         style={{
-                          background: 'linear-gradient(145deg, rgba(20, 27, 44, 0.75) 0%, rgba(13, 18, 30, 0.9) 100%)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          background: 'linear-gradient(145deg, rgb(var(--rgb-sf-141b2c) / 0.75) 0%, rgb(var(--rgb-sf-0d121e) / 0.9) 100%)',
+                          border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                           borderRadius: '16px',
                           padding: '22px',
                           display: 'flex',
                           flexDirection: 'column',
                           justifyContent: 'space-between',
-                          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                          boxShadow: '0 8px 24px rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
                           transition: 'all 0.2s ease',
                           position: 'relative'
                         }}
@@ -3317,15 +3295,15 @@ export default function CompanyAdminConsole({
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+                              boxShadow: '0 4px 12px rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))'
                             }}>
                               <Building2 size={22} color="#ffffff" />
                             </div>
 
                             <span style={{
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              color: '#94a3b8',
+                              background: 'rgb(var(--rgb-ov) / 0.06)',
+                              border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                              color: 'var(--nt-94a3b8)',
                               fontSize: '0.7rem',
                               fontWeight: '600',
                               padding: '3px 8px',
@@ -3339,23 +3317,23 @@ export default function CompanyAdminConsole({
                             </span>
                           </div>
 
-                          <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px', lineHeight: 1.3 }}>
+                          <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--nt-ffffff)', marginBottom: '8px', lineHeight: 1.3 }}>
                             {dept.name}
                           </h3>
 
-                          <p style={{ fontSize: '0.825rem', color: '#94a3b8', lineHeight: 1.5, minHeight: '44px', marginBottom: '16px' }}>
+                          <p style={{ fontSize: '0.825rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, minHeight: '44px', marginBottom: '16px' }}>
                             {dept.description || 'Bu departman için henüz özel açıklama girilmedi.'}
                           </p>
                         </div>
 
                         <div style={{
-                          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                           paddingTop: '14px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between'
                         }}>
-                          <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <Calendar size={13} />
                             <span>
                               {dept.created_at ? new Date(dept.created_at).toLocaleDateString('tr-TR') : 'Bugün'}
@@ -3366,9 +3344,9 @@ export default function CompanyAdminConsole({
                             <button
                               onClick={() => handleOpenEditDept(dept)}
                               style={{
-                                background: 'rgba(255, 255, 255, 0.06)',
-                                border: '1px solid rgba(255, 255, 255, 0.12)',
-                                color: '#e2e8f0',
+                                background: 'rgb(var(--rgb-ov) / 0.06)',
+                                border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                                color: 'var(--nt-e2e8f0)',
                                 padding: '6px 12px',
                                 borderRadius: '7px',
                                 fontSize: '0.75rem',
@@ -3389,7 +3367,7 @@ export default function CompanyAdminConsole({
                               style={{
                                 background: 'rgba(239, 68, 68, 0.1)',
                                 border: '1px solid rgba(239, 68, 68, 0.25)',
-                                color: '#f87171',
+                                color: 'var(--ac-f87171)',
                                 padding: '6px 10px',
                                 borderRadius: '7px',
                                 fontSize: '0.75rem',
@@ -3415,17 +3393,17 @@ export default function CompanyAdminConsole({
               {/* LİSTE GÖRÜNÜMÜ */}
               {!isLoadingDepts && filteredDepartments.length > 0 && deptViewMode === 'LIST' && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.7)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.7)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   borderRadius: '14px',
                   overflowX: 'auto'
                 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
                     <thead>
                       <tr style={{
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                        color: '#94a3b8',
+                        background: 'rgb(var(--rgb-ov) / 0.03)',
+                        borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
+                        color: 'var(--nt-94a3b8)',
                         fontSize: '0.75rem',
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em'
@@ -3439,7 +3417,7 @@ export default function CompanyAdminConsole({
                     </thead>
                     <tbody>
                       {filteredDepartments.map((dept) => (
-                        <tr key={dept.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <tr key={dept.id} style={{ borderBottom: '1px solid rgb(var(--rgb-ov) / 0.05)' }}>
                           <td style={{ padding: '16px 20px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                               <div style={{
@@ -3453,27 +3431,27 @@ export default function CompanyAdminConsole({
                               }}>
                                 <Building2 size={16} color="#a855f7" />
                               </div>
-                              <span style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.9rem' }}>
+                              <span style={{ fontWeight: '700', color: 'var(--nt-ffffff)', fontSize: '0.9rem' }}>
                                 {dept.name}
                               </span>
                             </div>
                           </td>
-                          <td style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.825rem', maxWidth: '350px' }}>
+                          <td style={{ padding: '16px 20px', color: 'var(--nt-94a3b8)', fontSize: '0.825rem', maxWidth: '350px' }}>
                             {dept.description || '—'}
                           </td>
                           <td style={{ padding: '16px 20px', textAlign: 'center' }}>
                             <span style={{
-                              background: 'rgba(255, 255, 255, 0.06)',
+                              background: 'rgb(var(--rgb-ov) / 0.06)',
                               padding: '3px 9px',
                               borderRadius: '12px',
                               fontSize: '0.75rem',
                               fontWeight: '600',
-                              color: '#cbd5e1'
+                              color: 'var(--nt-cbd5e1)'
                             }}>
                               {dept.actor_count || 0}
                             </span>
                           </td>
-                          <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.8rem' }}>
+                          <td style={{ padding: '16px 20px', color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>
                             {dept.created_at ? new Date(dept.created_at).toLocaleDateString('tr-TR') : '—'}
                           </td>
                           <td style={{ padding: '16px 20px', textAlign: 'right' }}>
@@ -3481,9 +3459,9 @@ export default function CompanyAdminConsole({
                               <button
                                 onClick={() => handleOpenEditDept(dept)}
                                 style={{
-                                  background: 'rgba(255, 255, 255, 0.06)',
-                                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                                  color: '#cbd5e1',
+                                  background: 'rgb(var(--rgb-ov) / 0.06)',
+                                  border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                                  color: 'var(--nt-cbd5e1)',
                                   padding: '5px 10px',
                                   borderRadius: '6px',
                                   fontSize: '0.75rem',
@@ -3498,7 +3476,7 @@ export default function CompanyAdminConsole({
                                 style={{
                                   background: 'rgba(239, 68, 68, 0.1)',
                                   border: '1px solid rgba(239, 68, 68, 0.25)',
-                                  color: '#f87171',
+                                  color: 'var(--ac-f87171)',
                                   padding: '5px 10px',
                                   borderRadius: '6px',
                                   fontSize: '0.75rem',
@@ -3535,12 +3513,12 @@ export default function CompanyAdminConsole({
               }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#ffffff' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: 'var(--nt-ffffff)' }}>
                       Şirket Ünvanları ve Rol Tanımları
                     </h2>
                     <span style={{
                       background: 'linear-gradient(135deg, rgba(113, 52, 226, 0.2) 0%, rgba(20, 108, 235, 0.2) 100%)',
-                      color: '#c084fc',
+                      color: 'var(--ac-c084fc)',
                       border: '1px solid rgba(113, 52, 226, 0.4)',
                       padding: '2px 8px',
                       borderRadius: '6px',
@@ -3550,7 +3528,7 @@ export default function CompanyAdminConsole({
                       MADDE 2: NACE & AI MOTORU
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                     Süper Yönetim Konsolu şablonlarından NACE uyumlu seçim yapın veya özel ünvan tanımlayın. RECOrion AI motoru yeni tanımları denetleyip ekosisteme kazandırır.
                   </p>
                 </div>
@@ -3562,9 +3540,9 @@ export default function CompanyAdminConsole({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#cbd5e1',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                      color: 'var(--nt-cbd5e1)',
                       padding: '8px 12px',
                       borderRadius: '8px',
                       fontSize: '0.8rem',
@@ -3604,13 +3582,13 @@ export default function CompanyAdminConsole({
               {/* İstatistik & Özet Sayaçları */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))',
                 gap: '16px',
                 marginBottom: '24px'
               }}>
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -3626,21 +3604,21 @@ export default function CompanyAdminConsole({
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    <Briefcase size={22} color="#38bdf8" />
+                    <Briefcase size={22} color="var(--ac-38bdf8)" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--nt-ffffff)' }}>
                       {jobTitles.length}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Şirkete Tanımlı Ünvan
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -3656,21 +3634,21 @@ export default function CompanyAdminConsole({
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    <Sparkles size={22} color="#c084fc" />
+                    <Sparkles size={22} color="var(--ac-c084fc)" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--nt-ffffff)' }}>
                       {jobTitles.filter(t => t.ai_review_status === 'PROMOTED_GLOBAL').length}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       RECOrion AI: Ana Şablona Eklenen
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -3689,10 +3667,10 @@ export default function CompanyAdminConsole({
                     <Users size={22} color="#10b981" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--nt-ffffff)' }}>
                       {jobTitles.reduce((acc, t) => acc + (t.actor_count || 0), 0)}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Ünvanı Taşıyan Aktör Sayısı
                     </div>
                   </div>
@@ -3709,7 +3687,7 @@ export default function CompanyAdminConsole({
                 flexWrap: 'wrap'
               }}>
                 <div style={{ position: 'relative', flex: 1, maxWidth: '380px' }}>
-                  <Search size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '12px' }} />
+                  <Search size={16} color="var(--nt-64748b)" style={{ position: 'absolute', left: '12px', top: '12px' }} />
                   <input
                     type="text"
                     placeholder="Ünvan adı, kategori veya açıklama ara..."
@@ -3717,11 +3695,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setTitleSearch(e.target.value)}
                     style={{
                       width: '100%',
-                      background: 'rgba(17, 24, 39, 0.7)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      background: 'rgb(var(--rgb-sf-111827) / 0.7)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                       borderRadius: '8px',
                       padding: '9px 12px 9px 36px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none'
                     }}
@@ -3731,9 +3709,9 @@ export default function CompanyAdminConsole({
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: 'rgba(17, 24, 39, 0.6)',
+                  background: 'rgb(var(--rgb-sf-111827) / 0.6)',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   padding: '3px'
                 }}>
                   <button
@@ -3741,7 +3719,7 @@ export default function CompanyAdminConsole({
                     style={{
                       background: titleViewMode === 'CARDS' ? 'rgba(113, 52, 226, 0.35)' : 'transparent',
                       border: 'none',
-                      color: titleViewMode === 'CARDS' ? '#ffffff' : '#94a3b8',
+                      color: titleViewMode === 'CARDS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       padding: '5px 12px',
                       borderRadius: '6px',
                       fontSize: '0.775rem',
@@ -3756,7 +3734,7 @@ export default function CompanyAdminConsole({
                     style={{
                       background: titleViewMode === 'LIST' ? 'rgba(113, 52, 226, 0.35)' : 'transparent',
                       border: 'none',
-                      color: titleViewMode === 'LIST' ? '#ffffff' : '#94a3b8',
+                      color: titleViewMode === 'LIST' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       padding: '5px 12px',
                       borderRadius: '6px',
                       fontSize: '0.775rem',
@@ -3771,7 +3749,7 @@ export default function CompanyAdminConsole({
 
               {/* Yükleniyor Göstergesi */}
               {isLoadingTitles && (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+                <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--nt-94a3b8)' }}>
                   <RefreshCw size={28} className="spin" style={{ margin: '0 auto 12px auto', display: 'block' }} />
                   <span>Şirket ünvanları yükleniyor...</span>
                 </div>
@@ -3780,8 +3758,8 @@ export default function CompanyAdminConsole({
               {/* Boş Durum */}
               {!isLoadingTitles && filteredJobTitles.length === 0 && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.4)',
-                  border: '1px dashed rgba(255, 255, 255, 0.12)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.4)',
+                  border: '1px dashed rgb(var(--rgb-ov) / 0.12)',
                   borderRadius: '16px',
                   padding: '60px 20px',
                   textAlign: 'center',
@@ -3798,12 +3776,12 @@ export default function CompanyAdminConsole({
                     justifyContent: 'center',
                     margin: '0 auto 16px auto'
                   }}>
-                    <Briefcase size={32} color="#38bdf8" />
+                    <Briefcase size={32} color="var(--ac-38bdf8)" />
                   </div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--nt-ffffff)', marginBottom: '8px' }}>
                     {titleSearch ? 'Eşleşen Ünvan Bulunamadı' : 'Henüz Şirketinize Tanımlı Ünvan Yok'}
                   </h3>
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '20px' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '20px' }}>
                     {titleSearch
                       ? `'${titleSearch}' aramasına uygun bir ünvan bulunamadı.`
                       : 'Şirketinizde çalışacak yapay zeka ajanları ve personeller için Süper Admin şablonlarından NACE bazlı ünvan seçebilir veya kendi özel ünvanınızı tanımlayabilirsiniz.'}
@@ -3833,7 +3811,7 @@ export default function CompanyAdminConsole({
               {!isLoadingTitles && filteredJobTitles.length > 0 && titleViewMode === 'CARDS' && (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 360px), 1fr))',
                   gap: '20px'
                 }}>
                   {filteredJobTitles.map((t) => {
@@ -3844,8 +3822,8 @@ export default function CompanyAdminConsole({
                       <div
                         key={t.id}
                         style={{
-                          background: 'linear-gradient(145deg, rgba(20, 27, 44, 0.75) 0%, rgba(13, 18, 30, 0.9) 100%)',
-                          border: isPromoted ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)',
+                          background: 'linear-gradient(145deg, rgb(var(--rgb-sf-141b2c) / 0.75) 0%, rgb(var(--rgb-sf-0d121e) / 0.9) 100%)',
+                          border: isPromoted ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
                           borderRadius: '16px',
                           padding: '22px',
                           display: 'flex',
@@ -3853,7 +3831,7 @@ export default function CompanyAdminConsole({
                           justifyContent: 'space-between',
                           boxShadow: isPromoted
                             ? '0 8px 30px rgba(113, 52, 226, 0.25), 0 0 15px rgba(168, 85, 247, 0.15)'
-                            : '0 8px 24px rgba(0, 0, 0, 0.4)',
+                            : '0 8px 24px rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
                           transition: 'all 0.2s ease',
                           position: 'relative'
                         }}
@@ -3864,7 +3842,7 @@ export default function CompanyAdminConsole({
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <span style={{
                                 background: 'rgba(56, 189, 248, 0.12)',
-                                color: '#38bdf8',
+                                color: 'var(--ac-38bdf8)',
                                 border: '1px solid rgba(56, 189, 248, 0.3)',
                                 fontSize: '0.675rem',
                                 fontWeight: '700',
@@ -3876,8 +3854,8 @@ export default function CompanyAdminConsole({
                               </span>
 
                               <span style={{
-                                background: 'rgba(255, 255, 255, 0.06)',
-                                color: '#cbd5e1',
+                                background: 'rgb(var(--rgb-ov) / 0.06)',
+                                color: 'var(--nt-cbd5e1)',
                                 fontSize: '0.675rem',
                                 fontWeight: '600',
                                 padding: '2px 8px',
@@ -3888,7 +3866,7 @@ export default function CompanyAdminConsole({
 
                               <span style={{
                                 background: 'rgba(16, 185, 129, 0.12)',
-                                color: '#34d399',
+                                color: 'var(--ac-34d399)',
                                 fontSize: '0.675rem',
                                 fontWeight: '700',
                                 padding: '2px 6px',
@@ -3900,7 +3878,7 @@ export default function CompanyAdminConsole({
                               {t.department_name && (
                                 <span style={{
                                   background: 'rgba(99, 102, 241, 0.15)',
-                                  color: '#a5b4fc',
+                                  color: 'var(--ac-a5b4fc)',
                                   border: '1px solid rgba(129, 140, 248, 0.3)',
                                   fontSize: '0.675rem',
                                   fontWeight: '700',
@@ -3913,8 +3891,8 @@ export default function CompanyAdminConsole({
                             </div>
 
                             <span style={{
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              color: '#94a3b8',
+                              background: 'rgb(var(--rgb-ov) / 0.06)',
+                              color: 'var(--nt-94a3b8)',
                               fontSize: '0.7rem',
                               fontWeight: '600',
                               padding: '2px 8px',
@@ -3932,7 +3910,7 @@ export default function CompanyAdminConsole({
                           <h3 style={{
                             fontSize: '1.2rem',
                             fontWeight: '800',
-                            color: '#ffffff',
+                            color: 'var(--nt-ffffff)',
                             marginBottom: '6px',
                             lineHeight: 1.3
                           }}>
@@ -3942,7 +3920,7 @@ export default function CompanyAdminConsole({
                           {/* Açıklama */}
                           <p style={{
                             fontSize: '0.825rem',
-                            color: '#94a3b8',
+                            color: 'var(--nt-94a3b8)',
                             lineHeight: 1.5,
                             marginBottom: '12px'
                           }}>
@@ -3951,8 +3929,8 @@ export default function CompanyAdminConsole({
 
                           {/* RECOrion AI Kontrol Değerlendirmesi Rozeti (Madde 2) */}
                           <div style={{
-                            background: isPromoted ? 'rgba(168, 85, 247, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                            border: isPromoted ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)',
+                            background: isPromoted ? 'rgba(168, 85, 247, 0.12)' : 'rgb(var(--rgb-ov) / 0.04)',
+                            border: isPromoted ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
                             borderRadius: '8px',
                             padding: '8px 12px',
                             marginBottom: '14px',
@@ -3961,22 +3939,22 @@ export default function CompanyAdminConsole({
                             gap: '8px'
                           }}>
                             {isPromoted ? (
-                              <Sparkles size={16} color="#c084fc" style={{ flexShrink: 0, marginTop: '2px' }} />
+                              <Sparkles size={16} color="var(--ac-c084fc)" style={{ flexShrink: 0, marginTop: '2px' }} />
                             ) : (
-                              <Building size={16} color="#60a5fa" style={{ flexShrink: 0, marginTop: '2px' }} />
+                              <Building size={16} color="var(--ac-60a5fa)" style={{ flexShrink: 0, marginTop: '2px' }} />
                             )}
                             <div>
                               <div style={{
                                 fontSize: '0.75rem',
                                 fontWeight: '700',
-                                color: isPromoted ? '#c084fc' : '#93c5fd',
+                                color: isPromoted ? 'var(--ac-c084fc)' : 'var(--ac-93c5fd)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px'
                               }}>
                                 <span>{isPromoted ? 'RECOrion AI: Ana Şablona Eklendi' : 'Şirkete Özel Yerel Ünvan'}</span>
                               </div>
-                              <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: 1.4, marginTop: '2px' }}>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--nt-cbd5e1)', lineHeight: 1.4, marginTop: '2px' }}>
                                 {t.ai_review_feedback || 'RECOrion AI motoru tarafından incelendi.'}
                               </div>
                             </div>
@@ -3984,8 +3962,8 @@ export default function CompanyAdminConsole({
 
                           {/* Sistem Rol Promptu Katlanabilir Alanı */}
                           <div style={{
-                            background: '#090d16',
-                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            background: 'var(--sf-090d16)',
+                            border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                             borderRadius: '8px',
                             padding: '10px 12px',
                             marginBottom: '16px'
@@ -3996,7 +3974,7 @@ export default function CompanyAdminConsole({
                               justifyContent: 'space-between',
                               marginBottom: '6px'
                             }}>
-                              <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--nt-94a3b8)', textTransform: 'uppercase' }}>
                                 Sistem Rol Promptu
                               </span>
                               <button
@@ -4004,7 +3982,7 @@ export default function CompanyAdminConsole({
                                 style={{
                                   background: 'transparent',
                                   border: 'none',
-                                  color: '#38bdf8',
+                                  color: 'var(--ac-38bdf8)',
                                   fontSize: '0.72rem',
                                   fontWeight: '600',
                                   cursor: 'pointer',
@@ -4024,7 +4002,7 @@ export default function CompanyAdminConsole({
                             <p style={{
                               fontFamily: 'var(--font-mono)',
                               fontSize: '0.75rem',
-                              color: '#cbd5e1',
+                              color: 'var(--nt-cbd5e1)',
                               lineHeight: 1.45,
                               margin: 0,
                               whiteSpace: 'pre-wrap',
@@ -4041,8 +4019,8 @@ export default function CompanyAdminConsole({
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '16px' }}>
                               {t.required_skills.slice(0, 5).map((skill, sIdx) => (
                                 <span key={sIdx} style={{
-                                  background: 'rgba(255, 255, 255, 0.05)',
-                                  color: '#cbd5e1',
+                                  background: 'rgb(var(--rgb-ov) / 0.05)',
+                                  color: 'var(--nt-cbd5e1)',
                                   fontSize: '0.675rem',
                                   padding: '2px 7px',
                                   borderRadius: '4px'
@@ -4051,7 +4029,7 @@ export default function CompanyAdminConsole({
                                 </span>
                               ))}
                               {t.required_skills.length > 5 && (
-                                <span style={{ fontSize: '0.675rem', color: '#64748b' }}>
+                                <span style={{ fontSize: '0.675rem', color: 'var(--nt-64748b)' }}>
                                   +{t.required_skills.length - 5}
                                 </span>
                               )}
@@ -4061,23 +4039,23 @@ export default function CompanyAdminConsole({
 
                         {/* Alt Aksiyon Butonları */}
                         <div style={{
-                          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                           paddingTop: '14px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between'
                         }}>
-                          <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                            Kod: <strong style={{ color: '#cbd5e1' }}>{t.code}</strong>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)' }}>
+                            Kod: <strong style={{ color: 'var(--nt-cbd5e1)' }}>{t.code}</strong>
                           </span>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <button
                               onClick={() => handleOpenEditTitle(t)}
                               style={{
-                                background: 'rgba(255, 255, 255, 0.06)',
-                                border: '1px solid rgba(255, 255, 255, 0.12)',
-                                color: '#e2e8f0',
+                                background: 'rgb(var(--rgb-ov) / 0.06)',
+                                border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                                color: 'var(--nt-e2e8f0)',
                                 padding: '6px 12px',
                                 borderRadius: '7px',
                                 fontSize: '0.75rem',
@@ -4097,7 +4075,7 @@ export default function CompanyAdminConsole({
                               style={{
                                 background: 'rgba(239, 68, 68, 0.1)',
                                 border: '1px solid rgba(239, 68, 68, 0.25)',
-                                color: '#f87171',
+                                color: 'var(--ac-f87171)',
                                 padding: '6px 10px',
                                 borderRadius: '7px',
                                 fontSize: '0.75rem',
@@ -4122,17 +4100,17 @@ export default function CompanyAdminConsole({
               {/* LİSTE GÖRÜNÜMÜ */}
               {!isLoadingTitles && filteredJobTitles.length > 0 && titleViewMode === 'LIST' && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.7)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.7)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   borderRadius: '14px',
                   overflowX: 'auto'
                 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '850px' }}>
                     <thead>
                       <tr style={{
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                        color: '#94a3b8',
+                        background: 'rgb(var(--rgb-ov) / 0.03)',
+                        borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
+                        color: 'var(--nt-94a3b8)',
                         fontSize: '0.75rem',
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em'
@@ -4149,19 +4127,19 @@ export default function CompanyAdminConsole({
                       {filteredJobTitles.map((t) => {
                         const isPromoted = t.ai_review_status === 'PROMOTED_GLOBAL';
                         return (
-                          <tr key={t.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <tr key={t.id} style={{ borderBottom: '1px solid rgb(var(--rgb-ov) / 0.05)' }}>
                             <td style={{ padding: '16px 20px' }}>
-                              <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.9rem' }}>
+                              <div style={{ fontWeight: '700', color: 'var(--nt-ffffff)', fontSize: '0.9rem' }}>
                                 {t.title}
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
-                                <span style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)', fontFamily: 'var(--font-mono)' }}>
                                   {t.code}
                                 </span>
                                 {t.department_name && (
                                   <span style={{
                                     fontSize: '0.675rem',
-                                    color: '#a5b4fc',
+                                    color: 'var(--ac-a5b4fc)',
                                     background: 'rgba(99, 102, 241, 0.15)',
                                     border: '1px solid rgba(129, 140, 248, 0.3)',
                                     padding: '1px 6px',
@@ -4176,7 +4154,7 @@ export default function CompanyAdminConsole({
                             <td style={{ padding: '16px 20px' }}>
                               <span style={{
                                 background: 'rgba(56, 189, 248, 0.12)',
-                                color: '#38bdf8',
+                                color: 'var(--ac-38bdf8)',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 fontSize: '0.72rem',
@@ -4187,9 +4165,9 @@ export default function CompanyAdminConsole({
                             </td>
                             <td style={{ padding: '16px 20px' }}>
                               <span style={{
-                                background: isPromoted ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                                color: isPromoted ? '#c084fc' : '#94a3b8',
-                                border: isPromoted ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                background: isPromoted ? 'rgba(168, 85, 247, 0.15)' : 'rgb(var(--rgb-ov) / 0.05)',
+                                color: isPromoted ? 'var(--ac-c084fc)' : 'var(--nt-94a3b8)',
+                                border: isPromoted ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 fontSize: '0.72rem',
@@ -4202,17 +4180,17 @@ export default function CompanyAdminConsole({
                                 {isPromoted ? 'Ana Şablona Eklendi' : 'Şirkete Özel'}
                               </span>
                             </td>
-                            <td style={{ padding: '16px 20px', color: '#cbd5e1', fontSize: '0.8rem' }}>
+                            <td style={{ padding: '16px 20px', color: 'var(--nt-cbd5e1)', fontSize: '0.8rem' }}>
                               🤖 {t.recommended_model_code || 'glm-5.3'}
                             </td>
                             <td style={{ padding: '16px 20px', textAlign: 'center' }}>
                               <span style={{
-                                background: 'rgba(255, 255, 255, 0.06)',
+                                background: 'rgb(var(--rgb-ov) / 0.06)',
                                 padding: '3px 9px',
                                 borderRadius: '12px',
                                 fontSize: '0.75rem',
                                 fontWeight: '600',
-                                color: '#cbd5e1'
+                                color: 'var(--nt-cbd5e1)'
                               }}>
                                 {t.actor_count || 0}
                               </span>
@@ -4222,9 +4200,9 @@ export default function CompanyAdminConsole({
                                 <button
                                   onClick={() => handleOpenEditTitle(t)}
                                   style={{
-                                    background: 'rgba(255, 255, 255, 0.06)',
-                                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                                    color: '#cbd5e1',
+                                    background: 'rgb(var(--rgb-ov) / 0.06)',
+                                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                                    color: 'var(--nt-cbd5e1)',
                                     padding: '5px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -4239,7 +4217,7 @@ export default function CompanyAdminConsole({
                                   style={{
                                     background: 'rgba(239, 68, 68, 0.1)',
                                     border: '1px solid rgba(239, 68, 68, 0.25)',
-                                    color: '#f87171',
+                                    color: 'var(--ac-f87171)',
                                     padding: '5px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -4277,12 +4255,12 @@ export default function CompanyAdminConsole({
               }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: '#ffffff' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: 'var(--nt-ffffff)' }}>
                       AI Ajanlarının İşe Alım / Tanımlama
                     </h2>
                     <span style={{
                       background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(56, 189, 248, 0.2) 100%)',
-                      color: '#34d399',
+                      color: 'var(--ac-34d399)',
                       border: '1px solid rgba(16, 185, 129, 0.4)',
                       padding: '2px 8px',
                       borderRadius: '6px',
@@ -4292,7 +4270,7 @@ export default function CompanyAdminConsole({
                       MADDE 3: DİJİTAL İŞ GÜCÜ
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                     Şirketiniz bünyesinde görev yapacak otonom yapay zeka personellerini işe alın, ünvan atayın ve çalışma durumlarını yönetin.
                   </p>
                 </div>
@@ -4304,9 +4282,9 @@ export default function CompanyAdminConsole({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#cbd5e1',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                      color: 'var(--nt-cbd5e1)',
                       padding: '8px 12px',
                       borderRadius: '8px',
                       fontSize: '0.8rem',
@@ -4330,13 +4308,13 @@ export default function CompanyAdminConsole({
                     borderRadius: '8px',
                     fontSize: '0.8rem'
                   }}>
-                    <span style={{ color: agentQuota.is_limit_reached ? '#f87171' : '#34d399', fontWeight: '700' }}>
+                    <span style={{ color: agentQuota.is_limit_reached ? 'var(--ac-f87171)' : 'var(--ac-34d399)', fontWeight: '700' }}>
                       {agentQuota.is_limit_reached ? '⚠️ Paket Kotası Doldu:' : '📊 Paket Kotası:'}
                     </span>
-                    <span style={{ color: '#ffffff', fontWeight: '800' }}>
+                    <span style={{ color: 'var(--nt-ffffff)', fontWeight: '800' }}>
                       {agentQuota.active_agents} / {agentQuota.max_agents} Ajan
                     </span>
-                    <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>
+                    <span style={{ color: 'var(--nt-94a3b8)', fontSize: '0.72rem' }}>
                       ({agentQuota.plan_name || 'Paket'})
                     </span>
                   </div>
@@ -4355,10 +4333,10 @@ export default function CompanyAdminConsole({
                       alignItems: 'center',
                       gap: '8px',
                       background: agentQuota.is_limit_reached
-                        ? 'rgba(255, 255, 255, 0.08)'
+                        ? 'rgb(var(--rgb-ov) / 0.08)'
                         : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      border: agentQuota.is_limit_reached ? '1px solid rgba(255, 255, 255, 0.12)' : 'none',
-                      color: agentQuota.is_limit_reached ? '#94a3b8' : '#ffffff',
+                      border: agentQuota.is_limit_reached ? '1px solid rgb(var(--rgb-ov) / 0.12)' : 'none',
+                      color: agentQuota.is_limit_reached ? 'var(--nt-94a3b8)' : '#ffffff',
                       padding: '9px 18px',
                       borderRadius: '8px',
                       fontSize: '0.85rem',
@@ -4379,13 +4357,13 @@ export default function CompanyAdminConsole({
               {/* İstatistik & Özet Sayaçları */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))',
                 gap: '16px',
                 marginBottom: '24px'
               }}>
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -4404,18 +4382,18 @@ export default function CompanyAdminConsole({
                     <Bot size={22} color="#10b981" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--nt-ffffff)' }}>
                       {aiAgents.length}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Toplam AI Ajan Kadrosu
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -4437,15 +4415,15 @@ export default function CompanyAdminConsole({
                     <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#22c55e' }}>
                       {aiAgents.filter(a => a.status !== 'DISABLED').length}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Aktif Görevde
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -4464,18 +4442,18 @@ export default function CompanyAdminConsole({
                     <UserX size={22} color="#ef4444" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#f87171' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--ac-f87171)' }}>
                       {aiAgents.filter(a => a.status === 'DISABLED').length}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Pasif / İşten Çıkarılan
                     </div>
                   </div>
                 </div>
 
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.6)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                   borderRadius: '12px',
                   padding: '16px 20px',
                   display: 'flex',
@@ -4491,13 +4469,13 @@ export default function CompanyAdminConsole({
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    <Briefcase size={22} color="#38bdf8" />
+                    <Briefcase size={22} color="var(--ac-38bdf8)" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#38bdf8' }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--ac-38bdf8)' }}>
                       {jobTitles.length}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                       Kullanılabilir Şirket Ünvanı
                     </div>
                   </div>
@@ -4514,13 +4492,13 @@ export default function CompanyAdminConsole({
                 flexWrap: 'wrap'
               }}>
                 {/* Sol: Arama Kutusu ve Durum Filtreleri */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '320px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 'min(100%, 320px)' }}>
                   <div style={{
                     position: 'relative',
                     flex: 1,
                     maxWidth: '380px'
                   }}>
-                    <Search size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <Search size={16} color="var(--nt-64748b)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                     <input
                       type="text"
                       placeholder="AI Ajan adı, model, ünvan veya departmanda ara..."
@@ -4528,11 +4506,11 @@ export default function CompanyAdminConsole({
                       onChange={(e) => setAgentSearch(e.target.value)}
                       style={{
                         width: '100%',
-                        background: 'rgba(17, 22, 34, 0.8)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'rgb(var(--rgb-sf-111622) / 0.8)',
+                        border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                         borderRadius: '8px',
                         padding: '9px 12px 9px 36px',
-                        color: '#ffffff',
+                        color: 'var(--nt-ffffff)',
                         fontSize: '0.85rem',
                         outline: 'none'
                       }}
@@ -4543,8 +4521,8 @@ export default function CompanyAdminConsole({
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    background: 'rgba(17, 22, 34, 0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: 'rgb(var(--rgb-sf-111622) / 0.8)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                     borderRadius: '8px',
                     padding: '3px'
                   }}>
@@ -4553,7 +4531,7 @@ export default function CompanyAdminConsole({
                       style={{
                         background: agentStatusFilter === 'ALL' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
                         border: 'none',
-                        color: agentStatusFilter === 'ALL' ? '#34d399' : '#94a3b8',
+                        color: agentStatusFilter === 'ALL' ? 'var(--ac-34d399)' : 'var(--nt-94a3b8)',
                         padding: '6px 12px',
                         borderRadius: '6px',
                         fontSize: '0.75rem',
@@ -4568,7 +4546,7 @@ export default function CompanyAdminConsole({
                       style={{
                         background: agentStatusFilter === 'ACTIVE' ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
                         border: 'none',
-                        color: agentStatusFilter === 'ACTIVE' ? '#4ade80' : '#94a3b8',
+                        color: agentStatusFilter === 'ACTIVE' ? 'var(--ac-4ade80)' : 'var(--nt-94a3b8)',
                         padding: '6px 12px',
                         borderRadius: '6px',
                         fontSize: '0.75rem',
@@ -4583,7 +4561,7 @@ export default function CompanyAdminConsole({
                       style={{
                         background: agentStatusFilter === 'DISABLED' ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
                         border: 'none',
-                        color: agentStatusFilter === 'DISABLED' ? '#f87171' : '#94a3b8',
+                        color: agentStatusFilter === 'DISABLED' ? 'var(--ac-f87171)' : 'var(--nt-94a3b8)',
                         padding: '6px 12px',
                         borderRadius: '6px',
                         fontSize: '0.75rem',
@@ -4600,17 +4578,17 @@ export default function CompanyAdminConsole({
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: 'rgba(17, 22, 34, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.8)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   borderRadius: '8px',
                   padding: '3px'
                 }}>
                   <button
                     onClick={() => setAgentViewMode('CARDS')}
                     style={{
-                      background: agentViewMode === 'CARDS' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                      background: agentViewMode === 'CARDS' ? 'rgb(var(--rgb-ov) / 0.1)' : 'transparent',
                       border: 'none',
-                      color: agentViewMode === 'CARDS' ? '#ffffff' : '#94a3b8',
+                      color: agentViewMode === 'CARDS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       padding: '6px 12px',
                       borderRadius: '6px',
                       fontSize: '0.75rem',
@@ -4623,9 +4601,9 @@ export default function CompanyAdminConsole({
                   <button
                     onClick={() => setAgentViewMode('LIST')}
                     style={{
-                      background: agentViewMode === 'LIST' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                      background: agentViewMode === 'LIST' ? 'rgb(var(--rgb-ov) / 0.1)' : 'transparent',
                       border: 'none',
-                      color: agentViewMode === 'LIST' ? '#ffffff' : '#94a3b8',
+                      color: agentViewMode === 'LIST' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                       padding: '6px 12px',
                       borderRadius: '6px',
                       fontSize: '0.75rem',
@@ -4652,8 +4630,8 @@ export default function CompanyAdminConsole({
                   gap: '16px'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <AlertCircle size={22} color="#fbbf24" style={{ flexShrink: 0 }} />
-                    <div style={{ fontSize: '0.85rem', color: '#fde68a' }}>
+                    <AlertCircle size={22} color="var(--ac-fbbf24)" style={{ flexShrink: 0 }} />
+                    <div style={{ fontSize: '0.85rem', color: 'var(--ac-fde68a)' }}>
                       <strong>Şirketinize henüz bir ünvan tanımlanmamış:</strong> AI Ajan işe alabilmek için ajana atanacak en az bir şirket ünvanı bulunmalıdır.
                     </div>
                   </div>
@@ -4662,7 +4640,7 @@ export default function CompanyAdminConsole({
                     style={{
                       background: 'rgba(245, 158, 11, 0.2)',
                       border: '1px solid rgba(245, 158, 11, 0.5)',
-                      color: '#fbbf24',
+                      color: 'var(--ac-fbbf24)',
                       padding: '7px 14px',
                       borderRadius: '8px',
                       fontSize: '0.8rem',
@@ -4679,8 +4657,8 @@ export default function CompanyAdminConsole({
               {/* Boş Durum (Hiç AI Ajan Yok) */}
               {filteredAIAgents.length === 0 && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.5)',
-                  border: '1px dashed rgba(255, 255, 255, 0.12)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.5)',
+                  border: '1px dashed rgb(var(--rgb-ov) / 0.12)',
                   borderRadius: '16px',
                   padding: '48px 24px',
                   textAlign: 'center',
@@ -4698,10 +4676,10 @@ export default function CompanyAdminConsole({
                   }}>
                     <Bot size={30} color="#10b981" />
                   </div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#ffffff', marginBottom: '6px' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--nt-ffffff)', marginBottom: '6px' }}>
                     {agentSearch ? 'Aramaya Uygun AI Ajan Bulunamadı' : 'Henüz İşe Alınmış AI Ajan Bulunmuyor'}
                   </h3>
-                  <p style={{ fontSize: '0.825rem', color: '#94a3b8', maxWidth: '440px', margin: '0 auto 20px auto' }}>
+                  <p style={{ fontSize: '0.825rem', color: 'var(--nt-94a3b8)', maxWidth: '440px', margin: '0 auto 20px auto' }}>
                     {agentSearch ? 'Farklı bir arama kriteri deneyin veya filtreleri sıfırlayın.' : 'Şirketiniz bünyesinde çalışacak ilk otonom yapay zeka personelini tanımlayarak operasyonel süreçleri otomatikleştirin.'}
                   </p>
                   <button
@@ -4727,7 +4705,7 @@ export default function CompanyAdminConsole({
               {agentViewMode === 'CARDS' && filteredAIAgents.length > 0 && (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 330px), 1fr))',
                   gap: '20px'
                 }}>
                   {filteredAIAgents.map((agent) => {
@@ -4736,7 +4714,7 @@ export default function CompanyAdminConsole({
                       <div
                         key={agent.id}
                         style={{
-                          background: isDismissed ? 'rgba(23, 20, 28, 0.6)' : 'rgba(17, 24, 39, 0.7)',
+                          background: isDismissed ? 'rgb(var(--rgb-sf-17141c) / 0.6)' : 'rgb(var(--rgb-sf-111827) / 0.7)',
                           border: isDismissed ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(16, 185, 129, 0.25)',
                           borderRadius: '16px',
                           padding: '20px',
@@ -4744,7 +4722,7 @@ export default function CompanyAdminConsole({
                           flexDirection: 'column',
                           justifyContent: 'space-between',
                           backdropFilter: 'blur(12px)',
-                          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                          boxShadow: '0 8px 24px rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
                           transition: 'all 0.2s',
                           position: 'relative',
                           overflow: 'hidden'
@@ -4770,13 +4748,13 @@ export default function CompanyAdminConsole({
                                 justifySelf: 'center',
                                 justifyContent: 'center'
                               }}>
-                                <Bot size={24} color={isDismissed ? '#f87171' : '#34d399'} />
+                                <Bot size={24} color={isDismissed ? 'var(--ac-f87171)' : 'var(--ac-34d399)'} />
                               </div>
                               <div>
-                                <h4 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: '#ffffff' }}>
+                                <h4 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)' }}>
                                   {agent.display_name}
                                 </h4>
-                                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>
                                   ID: {agent.id.slice(0, 8)}...
                                 </div>
                               </div>
@@ -4785,7 +4763,7 @@ export default function CompanyAdminConsole({
                             {/* Durum Rozeti */}
                             <span style={{
                               background: isDismissed ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                              color: isDismissed ? '#f87171' : '#4ade80',
+                              color: isDismissed ? 'var(--ac-f87171)' : 'var(--ac-4ade80)',
                               border: isDismissed ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(34, 197, 94, 0.3)',
                               padding: '3px 8px',
                               borderRadius: '6px',
@@ -4809,7 +4787,7 @@ export default function CompanyAdminConsole({
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
                             <span style={{
                               background: 'rgba(113, 52, 226, 0.15)',
-                              color: '#c084fc',
+                              color: 'var(--ac-c084fc)',
                               border: '1px solid rgba(113, 52, 226, 0.3)',
                               padding: '3px 8px',
                               borderRadius: '6px',
@@ -4824,7 +4802,7 @@ export default function CompanyAdminConsole({
 
                             <span style={{
                               background: 'rgba(56, 189, 248, 0.12)',
-                              color: '#38bdf8',
+                              color: 'var(--ac-38bdf8)',
                               border: '1px solid rgba(56, 189, 248, 0.3)',
                               padding: '3px 8px',
                               borderRadius: '6px',
@@ -4840,9 +4818,9 @@ export default function CompanyAdminConsole({
 
                             {agent.department_name && (
                               <span style={{
-                                background: 'rgba(255, 255, 255, 0.05)',
-                                color: '#cbd5e1',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                background: 'rgb(var(--rgb-ov) / 0.05)',
+                                color: 'var(--nt-cbd5e1)',
+                                border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 fontSize: '0.72rem',
@@ -4858,7 +4836,7 @@ export default function CompanyAdminConsole({
 
                             <span style={{
                               background: 'rgba(245, 158, 11, 0.12)',
-                              color: '#fbbf24',
+                              color: 'var(--ac-fbbf24)',
                               border: '1px solid rgba(245, 158, 11, 0.25)',
                               padding: '3px 6px',
                               borderRadius: '6px',
@@ -4872,7 +4850,7 @@ export default function CompanyAdminConsole({
                           {/* Açıklama */}
                           <p style={{
                             fontSize: '0.8rem',
-                            color: '#94a3b8',
+                            color: 'var(--nt-94a3b8)',
                             lineHeight: 1.45,
                             margin: '0 0 16px 0',
                             minHeight: '36px'
@@ -4882,34 +4860,34 @@ export default function CompanyAdminConsole({
 
                           {/* MADDE 3 ÖZEL BÖLÜM: İŞE ALIM VE İŞTEN ÇIKMA TARİHLERİ */}
                           <div style={{
-                            background: 'rgba(0, 0, 0, 0.35)',
-                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            background: 'rgb(var(--rgb-shade) / calc(0.35 * var(--shade-k)))',
+                            border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                             borderRadius: '10px',
                             padding: '12px 14px',
                             marginBottom: '16px',
                             fontSize: '0.775rem'
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                              <span style={{ color: 'var(--nt-94a3b8)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <Calendar size={13} color="#10b981" />
                                 <span>İşe Alım Tarihi:</span>
                               </span>
-                              <strong style={{ color: '#f8fafc' }}>
+                              <strong style={{ color: 'var(--nt-f8fafc)' }}>
                                 {agent.hired_at ? new Date(agent.hired_at).toLocaleDateString('tr-TR') : '—'}
                               </strong>
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <Clock size={13} color={isDismissed ? '#ef4444' : '#64748b'} />
+                              <span style={{ color: 'var(--nt-94a3b8)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <Clock size={13} color={isDismissed ? '#ef4444' : 'var(--nt-64748b)'} />
                                 <span>İşten Çıkma Tarihi:</span>
                               </span>
                               {isDismissed ? (
-                                <strong style={{ color: '#f87171', background: 'rgba(239, 68, 68, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
+                                <strong style={{ color: 'var(--ac-f87171)', background: 'rgba(239, 68, 68, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
                                   {agent.dismissed_at ? new Date(agent.dismissed_at).toLocaleDateString('tr-TR') : 'Pasif'}
                                 </strong>
                               ) : (
-                                <span style={{ color: '#34d399', fontWeight: '600' }}>
+                                <span style={{ color: 'var(--ac-34d399)', fontWeight: '600' }}>
                                   — (Görevde)
                                 </span>
                               )}
@@ -4923,16 +4901,16 @@ export default function CompanyAdminConsole({
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           gap: '8px',
-                          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                           paddingTop: '14px'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <button
                               onClick={() => handleOpenEditAgent(agent)}
                               style={{
-                                background: 'rgba(255, 255, 255, 0.06)',
-                                border: '1px solid rgba(255, 255, 255, 0.12)',
-                                color: '#cbd5e1',
+                                background: 'rgb(var(--rgb-ov) / 0.06)',
+                                border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                                color: 'var(--nt-cbd5e1)',
                                 padding: '6px 12px',
                                 borderRadius: '6px',
                                 fontSize: '0.75rem',
@@ -4954,7 +4932,7 @@ export default function CompanyAdminConsole({
                                 style={{
                                   background: 'rgba(239, 68, 68, 0.12)',
                                   border: '1px solid rgba(239, 68, 68, 0.3)',
-                                  color: '#f87171',
+                                  color: 'var(--ac-f87171)',
                                   padding: '6px 12px',
                                   borderRadius: '6px',
                                   fontSize: '0.75rem',
@@ -4975,7 +4953,7 @@ export default function CompanyAdminConsole({
                                 style={{
                                   background: 'rgba(34, 197, 94, 0.15)',
                                   border: '1px solid rgba(34, 197, 94, 0.4)',
-                                  color: '#4ade80',
+                                  color: 'var(--ac-4ade80)',
                                   padding: '6px 12px',
                                   borderRadius: '6px',
                                   fontSize: '0.75rem',
@@ -4998,7 +4976,7 @@ export default function CompanyAdminConsole({
                               style={{
                                 background: 'rgba(59, 130, 246, 0.12)',
                                 border: '1px solid rgba(59, 130, 246, 0.3)',
-                                color: '#60a5fa',
+                                color: 'var(--ac-60a5fa)',
                                 padding: '6px 12px',
                                 borderRadius: '6px',
                                 fontSize: '0.75rem',
@@ -5020,7 +4998,7 @@ export default function CompanyAdminConsole({
                             style={{
                               background: 'transparent',
                               border: 'none',
-                              color: '#64748b',
+                              color: 'var(--nt-64748b)',
                               cursor: 'pointer',
                               padding: '6px',
                               borderRadius: '6px'
@@ -5039,29 +5017,29 @@ export default function CompanyAdminConsole({
               {/* LİSTE GÖRÜNÜMÜ (Table View) */}
               {agentViewMode === 'LIST' && filteredAIAgents.length > 0 && (
                 <div style={{
-                  background: 'rgba(17, 22, 34, 0.7)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: 'rgb(var(--rgb-sf-111622) / 0.7)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   borderRadius: '16px',
                   overflow: 'hidden'
                 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                     <thead>
-                      <tr style={{ background: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' }}>AI AJAN ADI</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' }}>LLM MODELİ</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' }}>ŞİRKET ÜNVANI</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' }}>DEPARTMAN</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' }}>İŞE ALIM TARİHİ</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' }}>İŞTEN ÇIKMA TARİHİ</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8' }}>DURUM</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', textAlign: 'right' }}>İŞLEMLER</th>
+                      <tr style={{ background: 'rgb(var(--rgb-ov) / 0.03)', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>AI AJAN ADI</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>LLM MODELİ</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>ŞİRKET ÜNVANI</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>DEPARTMAN</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>İŞE ALIM TARİHİ</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>İŞTEN ÇIKMA TARİHİ</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>DURUM</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)', textAlign: 'right' }}>İŞLEMLER</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredAIAgents.map((agent) => {
                         const isDismissed = agent.status === 'DISABLED';
                         return (
-                          <tr key={agent.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <tr key={agent.id} style={{ borderBottom: '1px solid rgb(var(--rgb-ov) / 0.05)' }}>
                             <td style={{ padding: '16px 20px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <div style={{
@@ -5073,13 +5051,13 @@ export default function CompanyAdminConsole({
                                   alignItems: 'center',
                                   justifyContent: 'center'
                                 }}>
-                                  <Bot size={16} color={isDismissed ? '#f87171' : '#34d399'} />
+                                  <Bot size={16} color={isDismissed ? 'var(--ac-f87171)' : 'var(--ac-34d399)'} />
                                 </div>
                                 <div>
-                                  <span style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.9rem', display: 'block' }}>
+                                  <span style={{ fontWeight: '700', color: 'var(--nt-ffffff)', fontSize: '0.9rem', display: 'block' }}>
                                     {agent.display_name}
                                   </span>
-                                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)' }}>
                                     {agent.description?.slice(0, 45) || '—'}
                                   </span>
                                 </div>
@@ -5088,7 +5066,7 @@ export default function CompanyAdminConsole({
                             <td style={{ padding: '16px 20px' }}>
                               <span style={{
                                 background: 'rgba(113, 52, 226, 0.12)',
-                                color: '#c084fc',
+                                color: 'var(--ac-c084fc)',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 fontSize: '0.72rem',
@@ -5097,28 +5075,28 @@ export default function CompanyAdminConsole({
                                 🤖 {agent.model_code || 'glm-5.3'}
                               </span>
                             </td>
-                            <td style={{ padding: '16px 20px', color: '#38bdf8', fontSize: '0.825rem', fontWeight: '600' }}>
+                            <td style={{ padding: '16px 20px', color: 'var(--ac-38bdf8)', fontSize: '0.825rem', fontWeight: '600' }}>
                               {agent.job_title_name || '—'}
                             </td>
-                            <td style={{ padding: '16px 20px', color: '#cbd5e1', fontSize: '0.8rem' }}>
+                            <td style={{ padding: '16px 20px', color: 'var(--nt-cbd5e1)', fontSize: '0.8rem' }}>
                               {agent.department_name || 'Genel'}
                             </td>
-                            <td style={{ padding: '16px 20px', color: '#f8fafc', fontSize: '0.8rem' }}>
+                            <td style={{ padding: '16px 20px', color: 'var(--nt-f8fafc)', fontSize: '0.8rem' }}>
                               📅 {agent.hired_at ? new Date(agent.hired_at).toLocaleDateString('tr-TR') : '—'}
                             </td>
                             <td style={{ padding: '16px 20px', fontSize: '0.8rem' }}>
                               {isDismissed ? (
-                                <span style={{ color: '#f87171', background: 'rgba(239, 68, 68, 0.15)', padding: '2px 6px', borderRadius: '4px' }}>
+                                <span style={{ color: 'var(--ac-f87171)', background: 'rgba(239, 68, 68, 0.15)', padding: '2px 6px', borderRadius: '4px' }}>
                                   🚪 {agent.dismissed_at ? new Date(agent.dismissed_at).toLocaleDateString('tr-TR') : 'Pasif'}
                                 </span>
                               ) : (
-                                <span style={{ color: '#34d399' }}>— (Aktif)</span>
+                                <span style={{ color: 'var(--ac-34d399)' }}>— (Aktif)</span>
                               )}
                             </td>
                             <td style={{ padding: '16px 20px' }}>
                               <span style={{
                                 background: isDismissed ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                                color: isDismissed ? '#f87171' : '#4ade80',
+                                color: isDismissed ? 'var(--ac-f87171)' : 'var(--ac-4ade80)',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 fontSize: '0.7rem',
@@ -5132,9 +5110,9 @@ export default function CompanyAdminConsole({
                                 <button
                                   onClick={() => handleOpenEditAgent(agent)}
                                   style={{
-                                    background: 'rgba(255, 255, 255, 0.06)',
-                                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                                    color: '#cbd5e1',
+                                    background: 'rgb(var(--rgb-ov) / 0.06)',
+                                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                                    color: 'var(--nt-cbd5e1)',
                                     padding: '5px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -5149,7 +5127,7 @@ export default function CompanyAdminConsole({
                                   style={{
                                     background: 'rgba(59, 130, 246, 0.12)',
                                     border: '1px solid rgba(59, 130, 246, 0.3)',
-                                    color: '#60a5fa',
+                                    color: 'var(--ac-60a5fa)',
                                     padding: '5px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -5170,7 +5148,7 @@ export default function CompanyAdminConsole({
                                     style={{
                                       background: 'rgba(239, 68, 68, 0.1)',
                                       border: '1px solid rgba(239, 68, 68, 0.25)',
-                                      color: '#f87171',
+                                      color: 'var(--ac-f87171)',
                                       padding: '5px 10px',
                                       borderRadius: '6px',
                                       fontSize: '0.75rem',
@@ -5186,7 +5164,7 @@ export default function CompanyAdminConsole({
                                     style={{
                                       background: 'rgba(34, 197, 94, 0.12)',
                                       border: '1px solid rgba(34, 197, 94, 0.3)',
-                                      color: '#4ade80',
+                                      color: 'var(--ac-4ade80)',
                                       padding: '5px 10px',
                                       borderRadius: '6px',
                                       fontSize: '0.75rem',
@@ -5202,7 +5180,7 @@ export default function CompanyAdminConsole({
                                   style={{
                                     background: 'transparent',
                                     border: 'none',
-                                    color: '#64748b',
+                                    color: 'var(--nt-64748b)',
                                     padding: '5px',
                                     cursor: 'pointer'
                                   }}
@@ -5250,10 +5228,10 @@ export default function CompanyAdminConsole({
                     <FileText size={20} color="#f59e0b" />
                   </div>
                   <div>
-                    <h2 style={{ fontSize: '1.4rem', fontWeight: '800', margin: 0, color: '#ffffff', letterSpacing: '-0.02em' }}>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)', letterSpacing: '-0.02em' }}>
                       Kurumsal Manifesto & Stratejik Vizyon
                     </h2>
-                    <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--nt-94a3b8)', margin: '2px 0 0 0' }}>
                       Şirketinizin anayasasını, etik ilkelerini ve AI vizyonunu yönetin; dilediğiniz EVREN AI modeline manifestoyu düzenletin.
                     </p>
                   </div>
@@ -5268,9 +5246,9 @@ export default function CompanyAdminConsole({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: isManifestoUnchanged ? '#64748b' : '#cbd5e1',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                      color: isManifestoUnchanged ? 'var(--nt-64748b)' : 'var(--nt-cbd5e1)',
                       padding: '9px 15px',
                       borderRadius: '8px',
                       fontSize: '0.825rem',
@@ -5312,12 +5290,12 @@ export default function CompanyAdminConsole({
               {/* MADDE 1: ŞİRKET SEKTÖRLERİ & NACE FAALİYET ALANLARI DÜZENLEME PANELİ */}
               {/* ========================================================================= */}
               <div style={{
-                background: 'rgba(17, 22, 34, 0.75)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'rgb(var(--rgb-sf-111622) / 0.75)',
+                border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 borderRadius: '16px',
                 padding: '22px',
                 marginBottom: '22px',
-                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.35)'
+                boxShadow: '0 8px 30px rgb(var(--rgb-shade) / calc(0.35 * var(--shade-k)))'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -5330,13 +5308,13 @@ export default function CompanyAdminConsole({
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}>
-                      <Briefcase size={17} color="#38bdf8" />
+                      <Briefcase size={17} color="var(--ac-38bdf8)" />
                     </div>
                     <div>
-                      <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: '#ffffff' }}>
+                      <h3 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)' }}>
                         Şirket Sektörleri & NACE Faaliyet Alanları Düzenleme
                       </h3>
-                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '2px 0 0 0' }}>
                         Şirketinizin sektörlerini ve NACE kodlarını güncelleyin. Yapay zeka bu alanları kurumsal manifesto ve ajan kararlarında doğrudan referans alır.
                       </p>
                     </div>
@@ -5345,7 +5323,7 @@ export default function CompanyAdminConsole({
                   <div style={{
                     background: 'rgba(245, 158, 11, 0.1)',
                     border: '1px solid rgba(245, 158, 11, 0.25)',
-                    color: '#fbbf24',
+                    color: 'var(--ac-fbbf24)',
                     fontSize: '0.75rem',
                     fontWeight: '600',
                     padding: '4px 10px',
@@ -5362,13 +5340,13 @@ export default function CompanyAdminConsole({
                 {/* 2 Sütunlu Grid: Sol = Sektörler, Sağ = NACE Kodları */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))',
                   gap: '20px'
                 }}>
                   {/* SOL: SEKTÖRLER DÜZENLEME */}
                   <div style={{
-                    background: 'rgba(10, 14, 23, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    background: 'rgb(var(--rgb-sf-0a0e17) / 0.6)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                     borderRadius: '12px',
                     padding: '16px',
                     display: 'flex',
@@ -5376,10 +5354,10 @@ export default function CompanyAdminConsole({
                     gap: '12px'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--ac-c084fc)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Tag size={14} />
                         <span>Faaliyet Sektörleri</span>
-                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '500' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)', fontWeight: '500' }}>
                           ({manifestoSectors.length} seçili)
                         </span>
                       </label>
@@ -5390,7 +5368,7 @@ export default function CompanyAdminConsole({
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#f87171',
+                            color: 'var(--ac-f87171)',
                             fontSize: '0.7rem',
                             cursor: 'pointer',
                             fontWeight: '600'
@@ -5410,8 +5388,8 @@ export default function CompanyAdminConsole({
                       minHeight: '44px',
                       padding: '8px',
                       borderRadius: '8px',
-                      background: 'rgba(0, 0, 0, 0.35)',
-                      border: '1px solid rgba(255, 255, 255, 0.05)',
+                      background: 'rgb(var(--rgb-shade) / calc(0.35 * var(--shade-k)))',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.05)',
                       alignItems: 'center'
                     }}>
                       {manifestoSectors.map((sectorName) => (
@@ -5437,7 +5415,7 @@ export default function CompanyAdminConsole({
                             style={{
                               background: 'none',
                               border: 'none',
-                              color: '#c084fc',
+                              color: 'var(--ac-c084fc)',
                               cursor: 'pointer',
                               padding: 0,
                               lineHeight: 1,
@@ -5452,7 +5430,7 @@ export default function CompanyAdminConsole({
                         </span>
                       ))}
                       {manifestoSectors.length === 0 && (
-                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--nt-64748b)' }}>
                           Henüz sektör eklenmedi. Aşağıdan seçebilir veya ekleyebilirsiniz.
                         </span>
                       )}
@@ -5472,9 +5450,9 @@ export default function CompanyAdminConsole({
                         defaultValue=""
                         style={{
                           width: '100%',
-                          background: '#0d1322',
+                          background: 'var(--sf-0d1322)',
                           border: '1px solid rgba(113, 52, 226, 0.3)',
-                          color: '#f8fafc',
+                          color: 'var(--nt-f8fafc)',
                           padding: '8px 12px',
                           borderRadius: '8px',
                           fontSize: '0.78rem',
@@ -5503,9 +5481,9 @@ export default function CompanyAdminConsole({
                           placeholder="Örn: YENİLENEBİLİR ENERJİ..."
                           style={{
                             flex: 1,
-                            background: '#0d1322',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            color: '#f8fafc',
+                            background: 'var(--sf-0d1322)',
+                            border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                            color: 'var(--nt-f8fafc)',
                             padding: '8px 12px',
                             borderRadius: '8px',
                             fontSize: '0.78rem',
@@ -5517,9 +5495,9 @@ export default function CompanyAdminConsole({
                           onClick={handleAddCustomSector}
                           disabled={!customSectorInput.trim()}
                           style={{
-                            background: customSectorInput.trim() ? 'rgba(113, 52, 226, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                            background: customSectorInput.trim() ? 'rgba(113, 52, 226, 0.25)' : 'rgb(var(--rgb-ov) / 0.05)',
                             border: '1px solid rgba(113, 52, 226, 0.4)',
-                            color: customSectorInput.trim() ? '#c084fc' : '#64748b',
+                            color: customSectorInput.trim() ? 'var(--ac-c084fc)' : 'var(--nt-64748b)',
                             padding: '8px 14px',
                             borderRadius: '8px',
                             fontSize: '0.78rem',
@@ -5536,8 +5514,8 @@ export default function CompanyAdminConsole({
 
                   {/* SAĞ: NACE KODLARI DÜZENLEME & ARAMA */}
                   <div style={{
-                    background: 'rgba(10, 14, 23, 0.6)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    background: 'rgb(var(--rgb-sf-0a0e17) / 0.6)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                     borderRadius: '12px',
                     padding: '16px',
                     display: 'flex',
@@ -5546,10 +5524,10 @@ export default function CompanyAdminConsole({
                     position: 'relative'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--ac-38bdf8)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Hash size={14} />
                         <span>NACE Rev.2 Faaliyet Kodları</span>
-                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '500' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)', fontWeight: '500' }}>
                           ({manifestoNaceCodes.length} kod seçili)
                         </span>
                       </label>
@@ -5560,7 +5538,7 @@ export default function CompanyAdminConsole({
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#f87171',
+                            color: 'var(--ac-f87171)',
                             fontSize: '0.7rem',
                             cursor: 'pointer',
                             fontWeight: '600'
@@ -5582,8 +5560,8 @@ export default function CompanyAdminConsole({
                       overflowY: 'auto',
                       padding: '8px',
                       borderRadius: '8px',
-                      background: 'rgba(0, 0, 0, 0.35)',
-                      border: '1px solid rgba(255, 255, 255, 0.05)',
+                      background: 'rgb(var(--rgb-shade) / calc(0.35 * var(--shade-k)))',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.05)',
                       alignItems: 'center'
                     }}>
                       {manifestoNaceCodes.map((naceItem) => {
@@ -5599,7 +5577,7 @@ export default function CompanyAdminConsole({
                               gap: '6px',
                               background: 'rgba(56, 189, 248, 0.15)',
                               border: '1px solid rgba(56, 189, 248, 0.35)',
-                              color: '#38bdf8',
+                              color: 'var(--ac-38bdf8)',
                               padding: '3px 10px',
                               borderRadius: '20px',
                               fontSize: '0.75rem',
@@ -5614,7 +5592,7 @@ export default function CompanyAdminConsole({
                               style={{
                                 background: 'none',
                                 border: 'none',
-                                color: '#38bdf8',
+                                color: 'var(--ac-38bdf8)',
                                 cursor: 'pointer',
                                 padding: 0,
                                 lineHeight: 1,
@@ -5630,7 +5608,7 @@ export default function CompanyAdminConsole({
                         );
                       })}
                       {manifestoNaceCodes.length === 0 && (
-                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--nt-64748b)' }}>
                           Henüz NACE kodu eklenmedi. Arama kutusundan aratarak ekleyebilirsiniz.
                         </span>
                       )}
@@ -5639,7 +5617,7 @@ export default function CompanyAdminConsole({
                     {/* NACE Arama Inputu ve Canlı Sonuç Dropdown */}
                     <div style={{ position: 'relative' }}>
                       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                        <Search size={15} color="#64748b" style={{ position: 'absolute', left: '12px' }} />
+                        <Search size={15} color="var(--nt-64748b)" style={{ position: 'absolute', left: '12px' }} />
                         <input
                           type="text"
                           value={naceSearchQuery}
@@ -5655,9 +5633,9 @@ export default function CompanyAdminConsole({
                           placeholder="NACE kodu veya sektör ara (Örn: 13.20, Dokuma, Yazılım, 62.01)..."
                           style={{
                             width: '100%',
-                            background: '#0d1322',
+                            background: 'var(--sf-0d1322)',
                             border: '1px solid rgba(56, 189, 248, 0.3)',
-                            color: '#f8fafc',
+                            color: 'var(--nt-f8fafc)',
                             padding: '8px 12px 8px 36px',
                             borderRadius: '8px',
                             fontSize: '0.78rem',
@@ -5666,7 +5644,7 @@ export default function CompanyAdminConsole({
                         />
                         {isSearchingNace && (
                           <div style={{ position: 'absolute', right: '12px' }}>
-                            <RefreshCw size={13} className="spin" color="#38bdf8" />
+                            <RefreshCw size={13} className="spin" color="var(--ac-38bdf8)" />
                           </div>
                         )}
                       </div>
@@ -5679,13 +5657,13 @@ export default function CompanyAdminConsole({
                           left: 0,
                           right: 0,
                           marginTop: '6px',
-                          background: '#0f172a',
+                          background: 'var(--sf-0f172a)',
                           border: '1px solid rgba(56, 189, 248, 0.3)',
                           borderRadius: '8px',
                           maxHeight: '200px',
                           overflowY: 'auto',
                           zIndex: 100,
-                          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.6)',
+                          boxShadow: '0 10px 25px rgb(var(--rgb-shade) / calc(0.6 * var(--shade-k)))',
                           padding: '4px'
                         }}>
                           {naceSearchResults.map((nace) => {
@@ -5706,8 +5684,8 @@ export default function CompanyAdminConsole({
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   fontSize: '0.78rem',
-                                  color: isAlreadySelected ? '#38bdf8' : '#e2e8f0',
-                                  borderBottom: '1px solid rgba(255, 255, 255, 0.04)'
+                                  color: isAlreadySelected ? 'var(--ac-38bdf8)' : 'var(--nt-e2e8f0)',
+                                  borderBottom: '1px solid rgb(var(--rgb-ov) / 0.04)'
                                 }}
                                 onMouseEnter={(e) => {
                                   if (!isAlreadySelected) e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)';
@@ -5717,17 +5695,17 @@ export default function CompanyAdminConsole({
                                 }}
                               >
                                 <div>
-                                  <span style={{ fontWeight: '700', fontFamily: 'monospace', color: '#38bdf8', marginRight: '8px' }}>
+                                  <span style={{ fontWeight: '700', fontFamily: 'monospace', color: 'var(--ac-38bdf8)', marginRight: '8px' }}>
                                     {nace.code}
                                   </span>
                                   <span>{nace.title}</span>
                                   {nace.sector_group && (
-                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '6px' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)', marginLeft: '6px' }}>
                                       ({nace.sector_group})
                                     </span>
                                   )}
                                 </div>
-                                <span style={{ fontSize: '0.72rem', color: isAlreadySelected ? '#34d399' : '#38bdf8', fontWeight: '700' }}>
+                                <span style={{ fontSize: '0.72rem', color: isAlreadySelected ? 'var(--ac-34d399)' : 'var(--ac-38bdf8)', fontWeight: '700' }}>
                                   {isAlreadySelected ? '✓ Seçili' : '+ Ekle'}
                                 </span>
                               </div>
@@ -5751,25 +5729,25 @@ export default function CompanyAdminConsole({
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Sparkles size={18} color="#c084fc" />
-                    <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#ffffff' }}>
+                    <Sparkles size={18} color="var(--ac-c084fc)" />
+                    <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--nt-ffffff)' }}>
                       EVREN AI ile Kurumsal Manifestoyu Düzenle veya Baştan Üret
                     </span>
                   </div>
-                  <span style={{ fontSize: '0.725rem', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)' }}>
                     Müşteri paketinizde izin verilen modeller kullanılır
                   </span>
                 </div>
 
-                <div style={{
+                <div className="ui-grid-3" style={{
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(240px, 1fr) minmax(300px, 2fr) auto',
+                  gridTemplateColumns: 'minmax(min(100%, 240px), 1fr) minmax(min(100%, 300px), 2fr) auto',
                   gap: '14px',
                   alignItems: 'flex-end'
                 }}>
                   {/* Model Seçimi */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
                       Kullanılacak EVREN AI Modeli
                     </label>
                     <select
@@ -5778,9 +5756,9 @@ export default function CompanyAdminConsole({
                       disabled={isGeneratingManifesto}
                       style={{
                         width: '100%',
-                        background: '#0d1322',
+                        background: 'var(--sf-0d1322)',
                         border: '1px solid rgba(113, 52, 226, 0.4)',
-                        color: '#f8fafc',
+                        color: 'var(--nt-f8fafc)',
                         padding: '10px 12px',
                         borderRadius: '8px',
                         fontSize: '0.825rem',
@@ -5806,7 +5784,7 @@ export default function CompanyAdminConsole({
 
                   {/* Vurgu / Düzenleme Direktifi */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
                       Özel Vurgu veya Düzenleme Notu (Opsiyonel)
                     </label>
                     <input
@@ -5817,9 +5795,9 @@ export default function CompanyAdminConsole({
                       placeholder="Örn: Sürdürülebilirlik, sıfır hata ve dijital yapay zeka hızını öne çıkar..."
                       style={{
                         width: '100%',
-                        background: '#0d1322',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        color: '#f8fafc',
+                        background: 'var(--sf-0d1322)',
+                        border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                        color: 'var(--nt-f8fafc)',
                         padding: '10px 14px',
                         borderRadius: '8px',
                         fontSize: '0.825rem',
@@ -5861,21 +5839,21 @@ export default function CompanyAdminConsole({
 
               {/* DÜZENLENEBİLİR MANİFESTO EDİTÖRÜ */}
               <div style={{
-                background: 'rgba(17, 22, 34, 0.75)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'rgb(var(--rgb-sf-111622) / 0.75)',
+                border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 borderRadius: '14px',
                 padding: '20px 22px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#f8fafc' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--nt-f8fafc)' }}>
                     Kurumsal Manifesto Metni (Doğrudan Düzenlenebilir)
                   </label>
-                  <span style={{ fontSize: '0.725rem', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)' }}>
                     {manifestoText.length} Karakter | {manifestoText.split(/\s+/).filter(Boolean).length} Kelime
                   </span>
                 </div>
 
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0 0 12px 0' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '0 0 12px 0' }}>
                   Bu metin doğrudan klavyenizle serbestçe düzenlenebilir veya yukarıdaki AI motoruna zenginleştirilebilir. Tüm AI personelleriniz ve departmanlarınız kararlarında bu manifestoyu kurumsal anayasa olarak referans alır.
                 </p>
 
@@ -5886,20 +5864,20 @@ export default function CompanyAdminConsole({
                   placeholder="Şirketinizin Kurumsal Manifestosunu buraya yazın veya yukarıdaki EVREN AI modeline hazırlatın..."
                   style={{
                     width: '100%',
-                    background: 'rgba(10, 14, 23, 0.9)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'rgb(var(--rgb-sf-0a0e17) / 0.9)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '10px',
                     padding: '16px',
-                    color: '#f8fafc',
+                    color: 'var(--nt-f8fafc)',
                     fontSize: '0.875rem',
                     lineHeight: '1.65',
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                     resize: 'vertical',
                     outline: 'none',
-                    boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.5)'
+                    boxShadow: 'inset 0 2px 8px rgb(var(--rgb-shade) / calc(0.5 * var(--shade-k)))'
                   }}
                   onFocus={(e) => e.target.style.borderColor = '#7134e2'}
-                  onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
+                  onBlur={(e) => e.target.style.borderColor = 'rgb(var(--rgb-ov) / 0.12)'}
                 />
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: '14px' }}>
@@ -5942,7 +5920,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgb(var(--rgb-shade) / calc(0.75 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -5951,13 +5929,13 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#101524',
+            background: 'var(--sf-101524)',
             border: '1px solid rgba(113, 52, 226, 0.35)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '680px',
             maxHeight: '90vh',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(113, 52, 226, 0.25)',
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k))), 0 0 30px rgba(113, 52, 226, 0.25)',
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
@@ -5966,7 +5944,7 @@ export default function CompanyAdminConsole({
             {/* Modal Başlığı */}
             <div style={{
               padding: '18px 24px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -5985,10 +5963,10 @@ export default function CompanyAdminConsole({
                   <UserPlus size={18} color="#ffffff" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: '#ffffff' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)' }}>
                     {editingUser ? 'Kullanıcıyı Düzenle' : 'Kullanıcı Tanımlama'}
                   </h3>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                     Madde 1: Personel Kimlik, Rol, Şifre ve İzin Kataloğu Ek İzinleri
                   </span>
                 </div>
@@ -5999,7 +5977,7 @@ export default function CompanyAdminConsole({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--nt-94a3b8)',
                   fontSize: '1.25rem',
                   cursor: 'pointer',
                   padding: '4px',
@@ -6019,7 +5997,7 @@ export default function CompanyAdminConsole({
                   background: 'rgba(239, 68, 68, 0.15)',
                   border: '1px solid rgba(239, 68, 68, 0.3)',
                   borderRadius: '8px',
-                  color: '#fca5a5',
+                  color: 'var(--ac-fca5a5)',
                   fontSize: '0.8rem',
                   marginBottom: '18px',
                   display: 'flex',
@@ -6032,10 +6010,10 @@ export default function CompanyAdminConsole({
               )}
 
               {/* 1. Satır: Adı Soyadı & Email */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                    Adı Soyadı <span style={{ color: '#f87171' }}>*</span>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
+                    Adı Soyadı <span style={{ color: 'var(--ac-f87171)' }}>*</span>
                   </label>
                   <input
                     type="text"
@@ -6045,11 +6023,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setUserForm(prev => ({ ...prev, display_name: e.target.value }))}
                     style={{
                       width: '100%',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none'
                     }}
@@ -6057,8 +6035,8 @@ export default function CompanyAdminConsole({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
-                    Email (Kullanıcı Adı) <span style={{ color: '#f87171' }}>*</span>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
+                    Email (Kullanıcı Adı) <span style={{ color: 'var(--ac-f87171)' }}>*</span>
                   </label>
                   <input
                     type="email"
@@ -6068,11 +6046,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
                     style={{
                       width: '100%',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none'
                     }}
@@ -6081,9 +6059,9 @@ export default function CompanyAdminConsole({
               </div>
 
               {/* 2. Satır: Departman & Ünvan Seçimi */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
                     Departman
                   </label>
                   <select
@@ -6091,11 +6069,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setUserForm(prev => ({ ...prev, department_id: e.target.value }))}
                     style={{
                       width: '100%',
-                      background: '#131826',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'var(--sf-131826)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -6109,7 +6087,7 @@ export default function CompanyAdminConsole({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
                     Ünvan
                   </label>
                   <select
@@ -6117,11 +6095,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setUserForm(prev => ({ ...prev, job_title_id: e.target.value }))}
                     style={{
                       width: '100%',
-                      background: '#131826',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'var(--sf-131826)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -6137,17 +6115,17 @@ export default function CompanyAdminConsole({
 
               {/* 3. Satır: Şifre ve Güçlü Şifre Oluşturucu */}
               <div style={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid rgba(255, 255, 255, 0.07)',
+                background: 'rgb(var(--rgb-ov) / 0.02)',
+                border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                 borderRadius: '10px',
                 padding: '14px',
                 marginBottom: '16px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Lock size={14} color="#a855f7" />
                     <span>Giriş Şifresi</span>
-                    {!editingUser && <span style={{ color: '#f87171' }}>*</span>}
+                    {!editingUser && <span style={{ color: 'var(--ac-f87171)' }}>*</span>}
                   </label>
 
                   <button
@@ -6156,7 +6134,7 @@ export default function CompanyAdminConsole({
                     style={{
                       background: 'rgba(113, 52, 226, 0.2)',
                       border: '1px solid rgba(113, 52, 226, 0.4)',
-                      color: '#c084fc',
+                      color: 'var(--ac-c084fc)',
                       padding: '4px 10px',
                       borderRadius: '6px',
                       fontSize: '0.725rem',
@@ -6180,11 +6158,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setUserForm(prev => ({ ...prev, password: e.target.value }))}
                     style={{
                       width: '100%',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'rgb(var(--rgb-ov) / 0.05)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 40px 10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       fontFamily: showPassword ? 'monospace' : 'inherit',
                       outline: 'none'
@@ -6198,7 +6176,7 @@ export default function CompanyAdminConsole({
                       right: '10px',
                       background: 'none',
                       border: 'none',
-                      color: '#94a3b8',
+                      color: 'var(--nt-94a3b8)',
                       cursor: 'pointer',
                       padding: '4px'
                     }}
@@ -6218,7 +6196,7 @@ export default function CompanyAdminConsole({
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: '#38bdf8',
+                        color: 'var(--ac-38bdf8)',
                         fontSize: '0.7rem',
                         cursor: 'pointer',
                         padding: 0
@@ -6232,29 +6210,29 @@ export default function CompanyAdminConsole({
 
               {/* 4. Satır: Kullanıcı Aktif / Pasif */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '8px' }}>
                   Kullanıcı Durumu
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div
                     onClick={() => setUserForm(prev => ({ ...prev, status: 'ACTIVE' }))}
                     style={{
                       padding: '12px',
                       borderRadius: '10px',
-                      background: userForm.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.02)',
-                      border: '1px solid ' + (userForm.status === 'ACTIVE' ? '#10b981' : 'rgba(255, 255, 255, 0.08)'),
+                      background: userForm.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.12)' : 'rgb(var(--rgb-ov) / 0.02)',
+                      border: '1px solid ' + (userForm.status === 'ACTIVE' ? '#10b981' : 'rgb(var(--rgb-ov) / 0.08)'),
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '10px'
                     }}
                   >
-                    <UserCheck size={18} color={userForm.status === 'ACTIVE' ? '#10b981' : '#64748b'} />
+                    <UserCheck size={18} color={userForm.status === 'ACTIVE' ? '#10b981' : 'var(--nt-64748b)'} />
                     <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: userForm.status === 'ACTIVE' ? '#ffffff' : '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: userForm.status === 'ACTIVE' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)' }}>
                         Aktif
                       </div>
-                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)' }}>
                         Sisteme giriş yapabilir, oturum açabilir
                       </div>
                     </div>
@@ -6265,20 +6243,20 @@ export default function CompanyAdminConsole({
                     style={{
                       padding: '12px',
                       borderRadius: '10px',
-                      background: userForm.status === 'DISABLED' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.02)',
-                      border: '1px solid ' + (userForm.status === 'DISABLED' ? '#ef4444' : 'rgba(255, 255, 255, 0.08)'),
+                      background: userForm.status === 'DISABLED' ? 'rgba(239, 68, 68, 0.12)' : 'rgb(var(--rgb-ov) / 0.02)',
+                      border: '1px solid ' + (userForm.status === 'DISABLED' ? '#ef4444' : 'rgb(var(--rgb-ov) / 0.08)'),
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '10px'
                     }}
                   >
-                    <UserX size={18} color={userForm.status === 'DISABLED' ? '#ef4444' : '#64748b'} />
+                    <UserX size={18} color={userForm.status === 'DISABLED' ? '#ef4444' : 'var(--nt-64748b)'} />
                     <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: userForm.status === 'DISABLED' ? '#ffffff' : '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: userForm.status === 'DISABLED' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)' }}>
                         Pasif
                       </div>
-                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)' }}>
                         Girişi engellenir, kota harcamaz
                       </div>
                     </div>
@@ -6288,7 +6266,7 @@ export default function CompanyAdminConsole({
 
               {/* 5. Satır: Sistem Yetki Rolleri (Süper Yöneticinin Tanımladığı) */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
                   Sistem Yetki Rolü (Süper Yöneticinin Tanımladığı)
                 </label>
                 <select
@@ -6296,11 +6274,11 @@ export default function CompanyAdminConsole({
                   onChange={(e) => setUserForm(prev => ({ ...prev, role_id: e.target.value }))}
                   style={{
                     width: '100%',
-                    background: '#131826',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--sf-131826)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '8px',
                     padding: '10px 12px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.85rem',
                     outline: 'none',
                     cursor: 'pointer',
@@ -6328,15 +6306,15 @@ export default function CompanyAdminConsole({
                       fontSize: '0.75rem'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: '700', color: '#a5b4fc' }}>
+                        <span style={{ fontWeight: '700', color: 'var(--ac-a5b4fc)' }}>
                           Rol Tanımı: {selectedRole.name}
                         </span>
-                        <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                        <span style={{ color: 'var(--nt-94a3b8)', fontSize: '0.7rem' }}>
                           {selectedRole.permissions?.length || 0} adet temel yetki
                         </span>
                       </div>
                       {selectedRole.description && (
-                        <div style={{ color: '#94a3b8', marginBottom: '6px' }}>
+                        <div style={{ color: 'var(--nt-94a3b8)', marginBottom: '6px' }}>
                           {selectedRole.description}
                         </div>
                       )}
@@ -6344,17 +6322,17 @@ export default function CompanyAdminConsole({
                         {(selectedRole.permissions || []).slice(0, 8).map((p, idx) => (
                           <span key={idx} style={{
                             fontSize: '0.65rem',
-                            background: 'rgba(255, 255, 255, 0.06)',
+                            background: 'rgb(var(--rgb-ov) / 0.06)',
                             padding: '1px 6px',
                             borderRadius: '3px',
-                            color: '#cbd5e1',
+                            color: 'var(--nt-cbd5e1)',
                             fontFamily: 'monospace'
                           }}>
                             {p}
                           </span>
                         ))}
                         {(selectedRole.permissions || []).length > 8 && (
-                          <span style={{ fontSize: '0.65rem', color: '#818cf8', padding: '1px 4px' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--ac-818cf8)', padding: '1px 4px' }}>
                             +{selectedRole.permissions.length - 8} daha...
                           </span>
                         )}
@@ -6366,27 +6344,27 @@ export default function CompanyAdminConsole({
 
               {/* 6. Satır: İzin Kataloğundan Ek İzin Alanı */}
               <div style={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'rgb(var(--rgb-ov) / 0.02)',
+                border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 borderRadius: '12px',
                 padding: '16px',
                 marginBottom: '16px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <div>
-                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Tag size={14} color="#f59e0b" />
                       <span>İzin Kataloğundan Ek İzinler</span>
                     </label>
-                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)' }}>
                       Seçilen rolün dışındaki özel yetkileri bu alandan personele doğrudan atayabilirsiniz.
                     </span>
                   </div>
 
                   <span style={{
                     fontSize: '0.72rem',
-                    background: (userForm.extra_permissions?.length || 0) > 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                    color: (userForm.extra_permissions?.length || 0) > 0 ? '#fbbf24' : '#64748b',
+                    background: (userForm.extra_permissions?.length || 0) > 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgb(var(--rgb-ov) / 0.05)',
+                    color: (userForm.extra_permissions?.length || 0) > 0 ? 'var(--ac-fbbf24)' : 'var(--nt-64748b)',
                     padding: '2px 8px',
                     borderRadius: '12px',
                     fontWeight: '700'
@@ -6398,7 +6376,7 @@ export default function CompanyAdminConsole({
                 {/* Modül Filtreleri ve İzin Arama */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
                   <div style={{ position: 'relative', flex: 1, minWidth: '160px' }}>
-                    <Search size={13} color="#64748b" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <Search size={13} color="var(--nt-64748b)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                     <input
                       type="text"
                       placeholder="İzin ara..."
@@ -6406,11 +6384,11 @@ export default function CompanyAdminConsole({
                       onChange={(e) => setPermSearch(e.target.value)}
                       style={{
                         width: '100%',
-                        background: 'rgba(255, 255, 255, 0.04)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'rgb(var(--rgb-ov) / 0.04)',
+                        border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                         borderRadius: '6px',
                         padding: '6px 10px 6px 28px',
-                        color: '#ffffff',
+                        color: 'var(--nt-ffffff)',
                         fontSize: '0.75rem',
                         outline: 'none'
                       }}
@@ -6421,11 +6399,11 @@ export default function CompanyAdminConsole({
                     value={permModuleFilter}
                     onChange={(e) => setPermModuleFilter(e.target.value)}
                     style={{
-                      background: '#131826',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      background: 'var(--sf-131826)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                       borderRadius: '6px',
                       padding: '6px 10px',
-                      color: '#cbd5e1',
+                      color: 'var(--nt-cbd5e1)',
                       fontSize: '0.75rem',
                       outline: 'none'
                     }}
@@ -6445,9 +6423,9 @@ export default function CompanyAdminConsole({
                 <div style={{
                   maxHeight: '180px',
                   overflowY: 'auto',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                   borderRadius: '8px',
-                  background: 'rgba(10, 14, 23, 0.6)',
+                  background: 'rgb(var(--rgb-sf-0a0e17) / 0.6)',
                   padding: '6px'
                 }}>
                   {systemPermissions
@@ -6473,7 +6451,7 @@ export default function CompanyAdminConsole({
                             borderRadius: '6px',
                             cursor: 'pointer',
                             background: isChecked ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
+                            borderBottom: '1px solid rgb(var(--rgb-ov) / 0.03)',
                             transition: 'background 0.15s'
                           }}
                         >
@@ -6485,13 +6463,13 @@ export default function CompanyAdminConsole({
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '0.78rem', fontWeight: '600', color: isChecked ? '#fbbf24' : '#e2e8f0' }}>
+                              <span style={{ fontSize: '0.78rem', fontWeight: '600', color: isChecked ? 'var(--ac-fbbf24)' : 'var(--nt-e2e8f0)' }}>
                                 {p.name}
                               </span>
                               <span style={{
                                 fontSize: '0.65rem',
-                                color: '#94a3b8',
-                                background: 'rgba(255, 255, 255, 0.05)',
+                                color: 'var(--nt-94a3b8)',
+                                background: 'rgb(var(--rgb-ov) / 0.05)',
                                 padding: '1px 5px',
                                 borderRadius: '3px',
                                 fontFamily: 'monospace'
@@ -6500,7 +6478,7 @@ export default function CompanyAdminConsole({
                               </span>
                             </div>
                             {p.description && (
-                              <div style={{ fontSize: '0.675rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <div style={{ fontSize: '0.675rem', color: 'var(--nt-64748b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {p.description}
                               </div>
                             )}
@@ -6509,7 +6487,7 @@ export default function CompanyAdminConsole({
                       );
                     })}
                   {systemPermissions.length === 0 && (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '0.75rem' }}>
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--nt-64748b)', fontSize: '0.75rem' }}>
                       İzin kataloğu yükleniyor...
                     </div>
                   )}
@@ -6522,7 +6500,7 @@ export default function CompanyAdminConsole({
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 gap: '10px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 paddingTop: '18px',
                 marginTop: '10px'
               }}>
@@ -6530,9 +6508,9 @@ export default function CompanyAdminConsole({
                   type="button"
                   onClick={() => setIsUserModalOpen(false)}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#cbd5e1',
+                    background: 'rgb(var(--rgb-ov) / 0.05)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                    color: 'var(--nt-cbd5e1)',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '0.85rem',
@@ -6581,7 +6559,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgb(var(--rgb-shade) / calc(0.75 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -6590,12 +6568,12 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#101524',
+            background: 'var(--sf-101524)',
             border: '1px solid rgba(239, 68, 68, 0.35)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '440px',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(239, 68, 68, 0.2)',
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k))), 0 0 30px rgba(239, 68, 68, 0.2)',
             overflow: 'hidden',
             padding: '24px',
             animation: 'fadeIn 0.2s ease-out'
@@ -6609,22 +6587,22 @@ export default function CompanyAdminConsole({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#f87171'
+                color: 'var(--ac-f87171)'
               }}>
                 <Trash2 size={22} />
               </div>
               <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: '#ffffff' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)' }}>
                   Kullanıcıyı Sil
                 </h3>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                   Bu işlem geri alınamaz
                 </span>
               </div>
             </div>
 
-            <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: '20px' }}>
-              <strong style={{ color: '#ffffff' }}>{userToDelete.display_name}</strong> ({userToDelete.email}) kullanıcısını silmek istediğinize emin misiniz? Bu kullanıcı sisteme giriş yapamayacak ve açtığı oturumlar sonlandırılacaktır.
+            <p style={{ fontSize: '0.85rem', color: 'var(--nt-cbd5e1)', lineHeight: 1.5, marginBottom: '20px' }}>
+              <strong style={{ color: 'var(--nt-ffffff)' }}>{userToDelete.display_name}</strong> ({userToDelete.email}) kullanıcısını silmek istediğinize emin misiniz? Bu kullanıcı sisteme giriş yapamayacak ve açtığı oturumlar sonlandırılacaktır.
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
@@ -6632,9 +6610,9 @@ export default function CompanyAdminConsole({
                 type="button"
                 onClick={() => setUserToDelete(null)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#cbd5e1',
+                  background: 'rgb(var(--rgb-ov) / 0.05)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                  color: 'var(--nt-cbd5e1)',
                   padding: '8px 16px',
                   borderRadius: '8px',
                   fontSize: '0.85rem',
@@ -6682,7 +6660,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgb(var(--rgb-shade) / calc(0.75 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -6691,18 +6669,18 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#101524',
+            background: 'var(--sf-101524)',
             border: '1px solid rgba(113, 52, 226, 0.35)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '540px',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(113, 52, 226, 0.25)',
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k))), 0 0 30px rgba(113, 52, 226, 0.25)',
             overflow: 'hidden',
             animation: 'fadeIn 0.2s ease-out'
           }}>
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -6721,10 +6699,10 @@ export default function CompanyAdminConsole({
                   <Building2 size={18} color="#ffffff" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: '#ffffff' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)' }}>
                     {editingDept ? 'Departmanı Düzenle' : 'Yeni Departman Tanımla'}
                   </h3>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                     Madde 1: Departman Adı ve Açıklama Bilgileri
                   </span>
                 </div>
@@ -6735,7 +6713,7 @@ export default function CompanyAdminConsole({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--nt-94a3b8)',
                   cursor: 'pointer',
                   padding: '4px'
                 }}
@@ -6751,7 +6729,7 @@ export default function CompanyAdminConsole({
                   border: '1px solid rgba(239, 68, 68, 0.4)',
                   borderRadius: '8px',
                   padding: '10px 14px',
-                  color: '#f87171',
+                  color: 'var(--ac-f87171)',
                   fontSize: '0.825rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -6764,7 +6742,7 @@ export default function CompanyAdminConsole({
               )}
 
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                   Departman Adı <span style={{ color: '#f43f5e' }}>*</span>
                 </label>
                 <input
@@ -6775,11 +6753,11 @@ export default function CompanyAdminConsole({
                   autoFocus
                   style={{
                     width: '100%',
-                    background: '#0a0d14',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--sf-0a0d14)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '8px',
                     padding: '11px 14px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.9rem',
                     outline: 'none'
                   }}
@@ -6787,7 +6765,7 @@ export default function CompanyAdminConsole({
               </div>
 
               <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                   Departman Açıklaması
                 </label>
                 <textarea
@@ -6797,11 +6775,11 @@ export default function CompanyAdminConsole({
                   rows={4}
                   style={{
                     width: '100%',
-                    background: '#0a0d14',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--sf-0a0d14)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '8px',
                     padding: '11px 14px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.85rem',
                     outline: 'none',
                     lineHeight: 1.5,
@@ -6815,16 +6793,16 @@ export default function CompanyAdminConsole({
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 gap: '12px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 paddingTop: '18px'
               }}>
                 <button
                   type="button"
                   onClick={() => setIsDeptModalOpen(false)}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#cbd5e1',
+                    background: 'rgb(var(--rgb-ov) / 0.06)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                    color: 'var(--nt-cbd5e1)',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '0.85rem',
@@ -6882,7 +6860,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -6891,13 +6869,13 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#101524',
+            background: 'var(--sf-101524)',
             border: '1px solid rgba(113, 52, 226, 0.45)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '680px',
             maxHeight: '90vh',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(113, 52, 226, 0.3)',
+            boxShadow: '0 20px 60px rgb(var(--rgb-shade) / calc(0.9 * var(--shade-k))), 0 0 35px rgba(113, 52, 226, 0.3)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -6906,7 +6884,7 @@ export default function CompanyAdminConsole({
             {/* Modal Başlığı */}
             <div style={{
               padding: '18px 24px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -6926,10 +6904,10 @@ export default function CompanyAdminConsole({
                   <Briefcase size={18} color="#ffffff" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: '#ffffff' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)' }}>
                     {editingTitle ? 'Ünvanı Düzenle' : 'Şirket Ünvanı Tanımla'}
                   </h3>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                     Madde 2: NACE Sektörel Şablon Seçimi & Otomatik Rol Promptu
                   </span>
                 </div>
@@ -6940,7 +6918,7 @@ export default function CompanyAdminConsole({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--nt-94a3b8)',
                   cursor: 'pointer',
                   padding: '4px'
                 }}
@@ -6957,7 +6935,7 @@ export default function CompanyAdminConsole({
                   border: '1px solid rgba(239, 68, 68, 0.4)',
                   borderRadius: '8px',
                   padding: '10px 14px',
-                  color: '#f87171',
+                  color: 'var(--ac-f87171)',
                   fontSize: '0.825rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -6980,9 +6958,9 @@ export default function CompanyAdminConsole({
                 alignItems: 'flex-start',
                 gap: '10px'
               }}>
-                <Sparkles size={18} color="#c084fc" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div style={{ fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.45 }}>
-                  <strong style={{ color: '#ffffff' }}>RECOrion AI Otonom Denetim Motoru:</strong> Tanımlayacağınız ünvan ve Sistem Rol Promptu, kaydettiğiniz anda RECOrion AI modeli tarafından incelenecek; sistem geneli ve sektör için faydalı görülenler otomatik olarak Ana Sistem Şablonuna eklenecektir.
+                <Sparkles size={18} color="var(--ac-c084fc)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ fontSize: '0.78rem', color: 'var(--nt-cbd5e1)', lineHeight: 1.45 }}>
+                  <strong style={{ color: 'var(--nt-ffffff)' }}>RECOrion AI Otonom Denetim Motoru:</strong> Tanımlayacağınız ünvan ve Sistem Rol Promptu, kaydettiğiniz anda RECOrion AI modeli tarafından incelenecek; sistem geneli ve sektör için faydalı görülenler otomatik olarak Ana Sistem Şablonuna eklenecektir.
                 </div>
               </div>
 
@@ -6990,7 +6968,7 @@ export default function CompanyAdminConsole({
               {/* 1. BAĞLI DEPARTMAN SEÇİMİ (Madde 2)                                      */}
               {/* ========================================================================= */}
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '700', color: '#38bdf8', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '700', color: 'var(--ac-38bdf8)', marginBottom: '6px' }}>
                   🏢 Bağlı Departman {departments.length > 0 && <span style={{ color: '#f43f5e' }}>*</span>}
                 </label>
                 {departments.length > 0 ? (
@@ -7000,11 +6978,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setTitleForm({ ...titleForm, department_id: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
+                      background: 'var(--sf-0a0d14)',
                       border: '1px solid rgba(56, 189, 248, 0.35)',
                       borderRadius: '8px',
                       padding: '10px 14px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.875rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -7023,7 +7001,7 @@ export default function CompanyAdminConsole({
                     borderRadius: '8px',
                     background: 'rgba(239, 68, 68, 0.1)',
                     border: '1px solid rgba(239, 68, 68, 0.3)',
-                    color: '#fca5a5',
+                    color: 'var(--ac-fca5a5)',
                     fontSize: '0.8rem',
                     display: 'flex',
                     alignItems: 'center',
@@ -7040,10 +7018,10 @@ export default function CompanyAdminConsole({
               {/* ========================================================================= */}
               {!editingTitle && (
                 <div style={{ marginBottom: '18px' }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '8px' }}>
                     Ünvan Kaynağı ve Tanımlama Yöntemi:
                   </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <button
                       type="button"
                       onClick={() => {
@@ -7053,9 +7031,9 @@ export default function CompanyAdminConsole({
                       style={{
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: titleCreationMode === 'TEMPLATE' ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
-                        background: titleCreationMode === 'TEMPLATE' ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.03)',
-                        color: titleCreationMode === 'TEMPLATE' ? '#ffffff' : '#94a3b8',
+                        border: titleCreationMode === 'TEMPLATE' ? '1px solid var(--ac-38bdf8)' : '1px solid rgb(var(--rgb-ov) / 0.1)',
+                        background: titleCreationMode === 'TEMPLATE' ? 'rgba(56, 189, 248, 0.18)' : 'rgb(var(--rgb-ov) / 0.03)',
+                        color: titleCreationMode === 'TEMPLATE' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                         cursor: 'pointer',
                         fontSize: '0.825rem',
                         fontWeight: '700',
@@ -7065,7 +7043,7 @@ export default function CompanyAdminConsole({
                         gap: '6px'
                       }}
                     >
-                      <Tag size={15} color={titleCreationMode === 'TEMPLATE' ? '#38bdf8' : '#94a3b8'} />
+                      <Tag size={15} color={titleCreationMode === 'TEMPLATE' ? 'var(--ac-38bdf8)' : 'var(--nt-94a3b8)'} />
                       <span>Sistem Tanımlamalarından Seçin</span>
                     </button>
 
@@ -7078,9 +7056,9 @@ export default function CompanyAdminConsole({
                       style={{
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: titleCreationMode === 'CUSTOM' ? '1px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.1)',
-                        background: titleCreationMode === 'CUSTOM' ? 'rgba(192, 132, 252, 0.18)' : 'rgba(255, 255, 255, 0.03)',
-                        color: titleCreationMode === 'CUSTOM' ? '#ffffff' : '#94a3b8',
+                        border: titleCreationMode === 'CUSTOM' ? '1px solid var(--ac-c084fc)' : '1px solid rgb(var(--rgb-ov) / 0.1)',
+                        background: titleCreationMode === 'CUSTOM' ? 'rgba(192, 132, 252, 0.18)' : 'rgb(var(--rgb-ov) / 0.03)',
+                        color: titleCreationMode === 'CUSTOM' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                         cursor: 'pointer',
                         fontSize: '0.825rem',
                         fontWeight: '700',
@@ -7090,7 +7068,7 @@ export default function CompanyAdminConsole({
                         gap: '6px'
                       }}
                     >
-                      <Briefcase size={15} color={titleCreationMode === 'CUSTOM' ? '#c084fc' : '#94a3b8'} />
+                      <Briefcase size={15} color={titleCreationMode === 'CUSTOM' ? 'var(--ac-c084fc)' : 'var(--nt-94a3b8)'} />
                       <span>Sektör Seçerek Kendi Ünvanını Yaz</span>
                     </button>
                   </div>
@@ -7102,7 +7080,7 @@ export default function CompanyAdminConsole({
               {/* ========================================================================= */}
               {!editingTitle && titleCreationMode === 'TEMPLATE' && (
                 <div style={{
-                  background: 'rgba(17, 24, 39, 0.8)',
+                  background: 'rgb(var(--rgb-sf-111827) / 0.8)',
                   border: '1px solid rgba(56, 189, 248, 0.3)',
                   borderRadius: '12px',
                   padding: '16px',
@@ -7116,7 +7094,7 @@ export default function CompanyAdminConsole({
                     flexWrap: 'wrap',
                     gap: '8px'
                   }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: 'var(--ac-38bdf8)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Tag size={15} />
                       <span>Sektörel Şablon Ünvanları (Seçilince Rol Promptu Otomatik Yüklenir)</span>
                     </label>
@@ -7131,9 +7109,9 @@ export default function CompanyAdminConsole({
                             setTemplateFilterNaceOnly(true);
                           }}
                           style={{
-                            background: templateSectorFilter === 'COMPANY_SECTORS' ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                            border: templateSectorFilter === 'COMPANY_SECTORS' ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
-                            color: templateSectorFilter === 'COMPANY_SECTORS' ? '#ffffff' : '#94a3b8',
+                            background: templateSectorFilter === 'COMPANY_SECTORS' ? 'rgba(56, 189, 248, 0.25)' : 'rgb(var(--rgb-ov) / 0.05)',
+                            border: templateSectorFilter === 'COMPANY_SECTORS' ? '1px solid var(--ac-38bdf8)' : '1px solid rgb(var(--rgb-ov) / 0.1)',
+                            color: templateSectorFilter === 'COMPANY_SECTORS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                             padding: '3px 8px',
                             borderRadius: '6px',
                             fontSize: '0.7rem',
@@ -7144,7 +7122,7 @@ export default function CompanyAdminConsole({
                             gap: '4px'
                           }}
                         >
-                          <Star size={11} color={templateSectorFilter === 'COMPANY_SECTORS' ? '#38bdf8' : '#94a3b8'} />
+                          <Star size={11} color={templateSectorFilter === 'COMPANY_SECTORS' ? 'var(--ac-38bdf8)' : 'var(--nt-94a3b8)'} />
                           <span>🏢 Şirket Sektörlerim ({companySectorsList.join(', ')})</span>
                         </button>
                       )}
@@ -7158,9 +7136,9 @@ export default function CompanyAdminConsole({
                             setTemplateFilterNaceOnly(false);
                           }}
                           style={{
-                            background: templateSectorFilter === secName ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.04)',
-                            border: templateSectorFilter === secName ? '1px solid #818cf8' : '1px solid rgba(255, 255, 255, 0.08)',
-                            color: templateSectorFilter === secName ? '#ffffff' : '#94a3b8',
+                            background: templateSectorFilter === secName ? 'rgba(99, 102, 241, 0.35)' : 'rgb(var(--rgb-ov) / 0.04)',
+                            border: templateSectorFilter === secName ? '1px solid var(--ac-818cf8)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
+                            color: templateSectorFilter === secName ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                             padding: '3px 8px',
                             borderRadius: '6px',
                             fontSize: '0.7rem',
@@ -7179,9 +7157,9 @@ export default function CompanyAdminConsole({
                           setTemplateFilterNaceOnly(false);
                         }}
                         style={{
-                          background: templateSectorFilter === 'ALL' ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                          border: templateSectorFilter === 'ALL' ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
-                          color: templateSectorFilter === 'ALL' ? '#ffffff' : '#94a3b8',
+                          background: templateSectorFilter === 'ALL' ? 'rgba(56, 189, 248, 0.25)' : 'rgb(var(--rgb-ov) / 0.05)',
+                          border: templateSectorFilter === 'ALL' ? '1px solid var(--ac-38bdf8)' : '1px solid rgb(var(--rgb-ov) / 0.1)',
+                          color: templateSectorFilter === 'ALL' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                           padding: '3px 8px',
                           borderRadius: '6px',
                           fontSize: '0.7rem',
@@ -7200,11 +7178,11 @@ export default function CompanyAdminConsole({
                       onClick={() => setTemplateComboboxOpen(!templateComboboxOpen)}
                       style={{
                         width: '100%',
-                        background: '#0a0d14',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        background: 'var(--sf-0a0d14)',
+                        border: '1px solid rgb(var(--rgb-ov) / 0.15)',
                         borderRadius: '8px',
                         padding: '10px 14px',
-                        color: selectedTemplate ? '#ffffff' : '#94a3b8',
+                        color: selectedTemplate ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                         fontSize: '0.85rem',
                         cursor: 'pointer',
                         display: 'flex',
@@ -7215,12 +7193,12 @@ export default function CompanyAdminConsole({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
                         {selectedTemplate ? (
                           <>
-                            <span style={{ fontWeight: '700', color: '#38bdf8' }}>{selectedTemplate.title}</span>
-                            <span style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 6px', borderRadius: '4px', color: '#94a3b8' }}>
+                            <span style={{ fontWeight: '700', color: 'var(--ac-38bdf8)' }}>{selectedTemplate.title}</span>
+                            <span style={{ fontSize: '0.7rem', background: 'rgb(var(--rgb-ov) / 0.08)', padding: '2px 6px', borderRadius: '4px', color: 'var(--nt-94a3b8)' }}>
                               {selectedTemplate.category}
                             </span>
                             {selectedTemplate.is_sector_recommended && (
-                              <span style={{ fontSize: '0.675rem', background: 'rgba(99, 102, 241, 0.3)', color: '#a5b4fc', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                              <span style={{ fontSize: '0.675rem', background: 'rgba(99, 102, 241, 0.3)', color: 'var(--ac-a5b4fc)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
                                 📁 Şirket Sektörü
                               </span>
                             )}
@@ -7229,7 +7207,7 @@ export default function CompanyAdminConsole({
                           <span>Şablon seçmek için tıklayın (Seçilince Rol Promptu otomatik yüklenecektir)...</span>
                         )}
                       </div>
-                      <ChevronDown size={16} color="#64748b" />
+                      <ChevronDown size={16} color="var(--nt-64748b)" />
                     </div>
 
                     {/* Combobox Açılır Liste */}
@@ -7239,10 +7217,10 @@ export default function CompanyAdminConsole({
                         top: '105%',
                         left: 0,
                         right: 0,
-                        background: '#0f1422',
+                        background: 'var(--sf-0f1422)',
                         border: '1px solid rgba(56, 189, 248, 0.4)',
                         borderRadius: '8px',
-                        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.8)',
+                        boxShadow: '0 12px 30px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
                         zIndex: 20,
                         maxHeight: '260px',
                         display: 'flex',
@@ -7250,7 +7228,7 @@ export default function CompanyAdminConsole({
                         overflow: 'hidden'
                       }}>
                         {/* Arama Inputu */}
-                        <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                        <div style={{ padding: '8px 10px', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                           <input
                             type="text"
                             placeholder="Şablon ünvanlarda ara..."
@@ -7260,11 +7238,11 @@ export default function CompanyAdminConsole({
                             autoFocus
                             style={{
                               width: '100%',
-                              background: '#070a10',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
+                              background: 'var(--sf-070a10)',
+                              border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                               borderRadius: '6px',
                               padding: '6px 10px',
-                              color: '#ffffff',
+                              color: 'var(--nt-ffffff)',
                               fontSize: '0.8rem',
                               outline: 'none'
                             }}
@@ -7279,7 +7257,7 @@ export default function CompanyAdminConsole({
                               onClick={() => handleSelectSystemTemplate(tpl)}
                               style={{
                                 padding: '10px 14px',
-                                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                borderBottom: '1px solid rgb(var(--rgb-ov) / 0.05)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -7290,10 +7268,10 @@ export default function CompanyAdminConsole({
                               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                             >
                               <div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#ffffff' }}>
+                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--nt-ffffff)' }}>
                                   {tpl.title}
                                 </div>
-                                <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)' }}>
                                   {tpl.description ? tpl.description.slice(0, 60) + '...' : tpl.category}
                                 </div>
                               </div>
@@ -7303,7 +7281,7 @@ export default function CompanyAdminConsole({
                                   <span style={{
                                     fontSize: '0.65rem',
                                     background: 'rgba(99, 102, 241, 0.3)',
-                                    color: '#c7d2fe',
+                                    color: 'var(--ac-c7d2fe)',
                                     padding: '2px 6px',
                                     borderRadius: '4px',
                                     fontWeight: '700'
@@ -7313,8 +7291,8 @@ export default function CompanyAdminConsole({
                                 )}
                                 <span style={{
                                   fontSize: '0.65rem',
-                                  background: 'rgba(255, 255, 255, 0.08)',
-                                  color: '#cbd5e1',
+                                  background: 'rgb(var(--rgb-ov) / 0.08)',
+                                  color: 'var(--nt-cbd5e1)',
                                   padding: '2px 6px',
                                   borderRadius: '4px'
                                 }}>
@@ -7325,7 +7303,7 @@ export default function CompanyAdminConsole({
                           ))}
 
                           {filteredTemplates.length === 0 && (
-                            <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
+                            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--nt-94a3b8)', fontSize: '0.8rem' }}>
                               Eşleşen sistem şablonu bulunamadı. Filtreyi 'Tüm Sektörler' olarak değiştirebilirsiniz.
                             </div>
                           )}
@@ -7333,7 +7311,7 @@ export default function CompanyAdminConsole({
                       </div>
                     )}
                   </div>
-                  <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '6px', display: 'block' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)', marginTop: '6px', display: 'block' }}>
                     * Şablon seçtiğinizde ünvan adı, sektörü ve <strong>Sistem Rol Promptu</strong> otomatik olarak aşağıdaki forma aktarılır.
                   </span>
                 </div>
@@ -7342,9 +7320,9 @@ export default function CompanyAdminConsole({
               {/* ========================================================================= */}
               {/* 3. ÜNVAN ADI & SEKTÖREL KATEGORİ (Madde 2: Sektör seçerek kendi ünvanını yazar) */}
               {/* ========================================================================= */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                     Ünvan Adı <span style={{ color: '#f43f5e' }}>*</span>
                   </label>
                   <input
@@ -7354,11 +7332,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setTitleForm({ ...titleForm, title: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'var(--sf-0a0d14)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 14px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.875rem',
                       outline: 'none'
                     }}
@@ -7366,7 +7344,7 @@ export default function CompanyAdminConsole({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                     Sektör / Kategori
                   </label>
                   <select
@@ -7374,11 +7352,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setTitleForm({ ...titleForm, category: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'var(--sf-0a0d14)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 14px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -7411,7 +7389,7 @@ export default function CompanyAdminConsole({
 
               {/* Ünvan Açıklaması */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                   Ünvan Açıklaması / Görev Tanımı
                 </label>
                 <input
@@ -7421,11 +7399,11 @@ export default function CompanyAdminConsole({
                   onChange={(e) => setTitleForm({ ...titleForm, description: e.target.value })}
                   style={{
                     width: '100%',
-                    background: '#0a0d14',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--sf-0a0d14)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '8px',
                     padding: '9px 14px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.85rem',
                     outline: 'none'
                   }}
@@ -7433,13 +7411,13 @@ export default function CompanyAdminConsole({
               </div>
 
               {/* Model Seçimi (Müşteri Paketindeki Modeller) & Otonomi Seviyesi (Madde 2) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)' }}>
                       Önerilen EVREN AI Modeli
                     </label>
-                    <span style={{ fontSize: '0.7rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--ac-38bdf8)', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
                       Paket Kapsamında
                     </span>
                   </div>
@@ -7448,11 +7426,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setTitleForm({ ...titleForm, recommended_model_code: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
+                      background: 'var(--sf-0a0d14)',
                       border: '1px solid rgba(56, 189, 248, 0.3)',
                       borderRadius: '8px',
                       padding: '9px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.825rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -7479,7 +7457,7 @@ export default function CompanyAdminConsole({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                     Otonomi Seviyesi
                   </label>
                   <select
@@ -7487,11 +7465,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setTitleForm({ ...titleForm, autonomy_level: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'var(--sf-0a0d14)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '9px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.825rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -7507,7 +7485,7 @@ export default function CompanyAdminConsole({
               {/* SİSTEM ROL PROMPTU (AI İle Yazdırılabilir veya Kullanıcı Kendisi Yazabilir - Madde 2) */}
               <div style={{ marginBottom: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: 'var(--ac-c084fc)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Sparkles size={14} />
                     <span>Sistem Rol Promptu (Persona & Talimatlar) <span style={{ color: '#f43f5e' }}>*</span></span>
                   </label>
@@ -7522,7 +7500,7 @@ export default function CompanyAdminConsole({
                         ? 'rgba(168, 85, 247, 0.2)'
                         : 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(56, 189, 248, 0.3))',
                       border: '1px solid rgba(168, 85, 247, 0.5)',
-                      color: '#f8fafc',
+                      color: 'var(--nt-f8fafc)',
                       padding: '5px 12px',
                       borderRadius: '6px',
                       fontSize: '0.75rem',
@@ -7536,7 +7514,7 @@ export default function CompanyAdminConsole({
                     }}
                     title="Seçili EVREN AI Modeli ile bu ünvana özel Sistem Rol Promptu oluştur"
                   >
-                    <Sparkles size={13} color={isGeneratingTitlePrompt ? '#e2e8f0' : '#d8b4fe'} />
+                    <Sparkles size={13} color={isGeneratingTitlePrompt ? 'var(--nt-e2e8f0)' : 'var(--ac-d8b4fe)'} />
                     <span>
                       {isGeneratingTitlePrompt
                         ? 'AI Promptu Yazıyor...'
@@ -7552,11 +7530,11 @@ export default function CompanyAdminConsole({
                   rows={8}
                   style={{
                     width: '100%',
-                    background: '#070a10',
+                    background: 'var(--sf-070a10)',
                     border: '1px solid rgba(168, 85, 247, 0.35)',
                     borderRadius: '8px',
                     padding: '12px 14px',
-                    color: '#f8fafc',
+                    color: 'var(--nt-f8fafc)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.8rem',
                     lineHeight: 1.5,
@@ -7564,14 +7542,14 @@ export default function CompanyAdminConsole({
                     resize: 'vertical'
                   }}
                 />
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)', marginTop: '4px', display: 'block' }}>
                   * İster seçili AI modeliyle otomatik yazdırın, ister şablondan yükleyin, isterseniz kendiniz dilediğiniz gibi düzenleyin.
                 </span>
               </div>
 
               {/* Gerekli Yetenekler */}
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                   Gerekli Yetenekler (Virgülle ayırınız)
                 </label>
                 <input
@@ -7581,11 +7559,11 @@ export default function CompanyAdminConsole({
                   onChange={(e) => setTitleForm({ ...titleForm, required_skills: e.target.value })}
                   style={{
                     width: '100%',
-                    background: '#0a0d14',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--sf-0a0d14)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '8px',
                     padding: '9px 14px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.85rem',
                     outline: 'none'
                   }}
@@ -7598,16 +7576,16 @@ export default function CompanyAdminConsole({
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 gap: '12px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 paddingTop: '18px'
               }}>
                 <button
                   type="button"
                   onClick={() => setIsTitleModalOpen(false)}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#cbd5e1',
+                    background: 'rgb(var(--rgb-ov) / 0.06)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                    color: 'var(--nt-cbd5e1)',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '0.85rem',
@@ -7665,7 +7643,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -7674,14 +7652,14 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#131826',
+            background: 'var(--sf-131826)',
             border: '1px solid rgba(239, 68, 68, 0.35)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '440px',
             padding: '24px',
             textAlign: 'center',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)'
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))'
           }}>
             <div style={{
               width: '52px',
@@ -7696,21 +7674,21 @@ export default function CompanyAdminConsole({
               <Trash2 size={26} color="#ef4444" />
             </div>
 
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--nt-ffffff)', marginBottom: '8px' }}>
               Departmanı Silmek İstiyor musunuz?
             </h3>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '22px' }}>
-              <strong style={{ color: '#f8fafc' }}>'{deptToDelete.name}'</strong> departmanı silinecektir.
+            <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '22px' }}>
+              <strong style={{ color: 'var(--nt-f8fafc)' }}>'{deptToDelete.name}'</strong> departmanı silinecektir.
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <button
                 onClick={() => setDeptToDelete(null)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#cbd5e1',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                  color: 'var(--nt-cbd5e1)',
                   padding: '9px 18px',
                   borderRadius: '8px',
                   fontSize: '0.85rem',
@@ -7755,7 +7733,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -7764,14 +7742,14 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#131826',
+            background: 'var(--sf-131826)',
             border: '1px solid rgba(239, 68, 68, 0.35)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '440px',
             padding: '24px',
             textAlign: 'center',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)'
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))'
           }}>
             <div style={{
               width: '52px',
@@ -7786,21 +7764,21 @@ export default function CompanyAdminConsole({
               <Trash2 size={26} color="#ef4444" />
             </div>
 
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--nt-ffffff)', marginBottom: '8px' }}>
               Ünvanı Silmek İstiyor musunuz?
             </h3>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '22px' }}>
-              <strong style={{ color: '#f8fafc' }}>'{titleToDelete.title}'</strong> ünvanı silinecektir. Bu ünvana atanmış AI personelleri veya çalışanların ünvan bağı boşa çıkacaktır.
+            <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '22px' }}>
+              <strong style={{ color: 'var(--nt-f8fafc)' }}>'{titleToDelete.title}'</strong> ünvanı silinecektir. Bu ünvana atanmış AI personelleri veya çalışanların ünvan bağı boşa çıkacaktır.
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <button
                 onClick={() => setTitleToDelete(null)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#cbd5e1',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                  color: 'var(--nt-cbd5e1)',
                   padding: '9px 18px',
                   borderRadius: '8px',
                   fontSize: '0.85rem',
@@ -7845,7 +7823,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -7854,13 +7832,13 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#101524',
+            background: 'var(--sf-101524)',
             border: '1px solid rgba(16, 185, 129, 0.45)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '680px',
             maxHeight: '90vh',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(16, 185, 129, 0.25)',
+            boxShadow: '0 20px 60px rgb(var(--rgb-shade) / calc(0.9 * var(--shade-k))), 0 0 35px rgba(16, 185, 129, 0.25)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -7869,7 +7847,7 @@ export default function CompanyAdminConsole({
             {/* Modal Başlığı */}
             <div style={{
               padding: '18px 24px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -7889,10 +7867,10 @@ export default function CompanyAdminConsole({
                   <Bot size={20} color="#ffffff" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: '#ffffff' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: 'var(--nt-ffffff)' }}>
                     {editingAgent ? 'AI Ajan Bilgilerini Düzenle' : 'Yeni AI Ajan İşe Alım / Tanımlama'}
                   </h3>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                     Madde 3: Ajan Adı, LLM Modeli, Şirket Ünvanı ve İşe Alım Tarihi
                   </span>
                 </div>
@@ -7903,7 +7881,7 @@ export default function CompanyAdminConsole({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--nt-94a3b8)',
                   cursor: 'pointer',
                   padding: '4px'
                 }}
@@ -7921,7 +7899,7 @@ export default function CompanyAdminConsole({
                   border: '1px solid rgba(239, 68, 68, 0.45)',
                   borderRadius: '8px',
                   padding: '12px 14px',
-                  color: '#fca5a5',
+                  color: 'var(--ac-fca5a5)',
                   fontSize: '0.825rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -7930,7 +7908,7 @@ export default function CompanyAdminConsole({
                 }}>
                   <AlertCircle size={18} color="#ef4444" style={{ flexShrink: 0 }} />
                   <div>
-                    <strong style={{ color: '#ffffff' }}>Paket AI Ajan Kotanız Dolmuştur:</strong> Satın aldığınız '{agentQuota.plan_name || 'Mevcut'}' paketinin azami sınırı {agentQuota.max_agents} ajandır ({agentQuota.active_agents} aktif ajanınız bulunuyor). Yeni ajan eklemek için paketinizi yükseltin veya mevcut bir ajanı pasife çekin.
+                    <strong style={{ color: 'var(--nt-ffffff)' }}>Paket AI Ajan Kotanız Dolmuştur:</strong> Satın aldığınız '{agentQuota.plan_name || 'Mevcut'}' paketinin azami sınırı {agentQuota.max_agents} ajandır ({agentQuota.active_agents} aktif ajanınız bulunuyor). Yeni ajan eklemek için paketinizi yükseltin veya mevcut bir ajanı pasife çekin.
                   </div>
                 </div>
               )}
@@ -7941,7 +7919,7 @@ export default function CompanyAdminConsole({
                   border: '1px solid rgba(239, 68, 68, 0.4)',
                   borderRadius: '8px',
                   padding: '10px 14px',
-                  color: '#f87171',
+                  color: 'var(--ac-f87171)',
                   fontSize: '0.825rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -7955,7 +7933,7 @@ export default function CompanyAdminConsole({
 
               {/* 1. AI Ajan Adı */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                   AI Ajan Adı <span style={{ color: '#f43f5e' }}>*</span>
                 </label>
                 <input
@@ -7966,11 +7944,11 @@ export default function CompanyAdminConsole({
                   autoFocus
                   style={{
                     width: '100%',
-                    background: '#0a0d14',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--sf-0a0d14)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '8px',
                     padding: '10px 14px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.9rem',
                     outline: 'none'
                   }}
@@ -7978,9 +7956,9 @@ export default function CompanyAdminConsole({
               </div>
 
               {/* 2. Şirket Ünvanı ve Departman Seçimi */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#38bdf8', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--ac-38bdf8)', marginBottom: '6px' }}>
                     Şirket Ünvanı (Madde 2'den Seçim) <span style={{ color: '#f43f5e' }}>*</span>
                   </label>
                   <select
@@ -7988,11 +7966,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => handleAgentJobTitleChange(e.target.value)}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
+                      background: 'var(--sf-0a0d14)',
                       border: '1px solid rgba(56, 189, 248, 0.4)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none'
                     }}
@@ -8004,17 +7982,17 @@ export default function CompanyAdminConsole({
                       </option>
                     ))}
                   </select>
-                  <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', marginTop: '4px', display: 'block' }}>
                     * Ünvan seçildiğinde önerilen LLM modeli ve Sistem Promptu otomatik aktarılır.
                   </span>
                 </div>
 
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: '#94a3b8' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-94a3b8)' }}>
                       Bağlı Departman
                     </label>
-                    <span style={{ fontSize: '0.675rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+                    <span style={{ fontSize: '0.675rem', color: 'var(--ac-38bdf8)', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
                       🔒 Ünvandan Otomatik Gelir
                     </span>
                   </div>
@@ -8023,11 +8001,11 @@ export default function CompanyAdminConsole({
                     disabled={true}
                     style={{
                       width: '100%',
-                      background: 'rgba(10, 13, 20, 0.75)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      background: 'rgb(var(--rgb-sf-0a0d14) / 0.75)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: agentForm.department_id ? '#38bdf8' : '#64748b',
+                      color: agentForm.department_id ? 'var(--ac-38bdf8)' : 'var(--nt-64748b)',
                       fontSize: '0.85rem',
                       outline: 'none',
                       cursor: 'not-allowed',
@@ -8041,20 +8019,20 @@ export default function CompanyAdminConsole({
                       </option>
                     ))}
                   </select>
-                  <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', marginTop: '4px', display: 'block' }}>
                     * Ünvan doğrudan bir departmana bağlı olduğu için değiştirilemez.
                   </span>
                 </div>
               </div>
 
               {/* 3. LLM Modeli ve Otonomi Seviyesi (Madde 4: Ünvandan otomatik gelir, değiştirilebilir) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px', marginBottom: '16px' }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '14px', marginBottom: '16px' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: '#c084fc' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: 'var(--ac-c084fc)' }}>
                       AI Ajan LLM Modeli <span style={{ color: '#f43f5e' }}>*</span>
                     </label>
-                    <span style={{ fontSize: '0.7rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--ac-38bdf8)', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
                       Değiştirilebilir
                     </span>
                   </div>
@@ -8063,11 +8041,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setAgentForm({ ...agentForm, model_code: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
+                      background: 'var(--sf-0a0d14)',
                       border: '1px solid rgba(168, 85, 247, 0.4)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -8095,10 +8073,10 @@ export default function CompanyAdminConsole({
 
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)' }}>
                       Otonomi Seviyesi
                     </label>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}>
                       Değiştirilebilir
                     </span>
                   </div>
@@ -8107,11 +8085,11 @@ export default function CompanyAdminConsole({
                     onChange={(e) => setAgentForm({ ...agentForm, autonomy_level: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0a0d14',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'var(--sf-0a0d14)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: '8px',
                       padding: '10px 12px',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       fontSize: '0.85rem',
                       outline: 'none',
                       cursor: 'pointer'
@@ -8135,11 +8113,11 @@ export default function CompanyAdminConsole({
                   onChange={(e) => setAgentForm({ ...agentForm, hired_at: e.target.value })}
                   style={{
                     width: '100%',
-                    background: '#0a0d14',
+                    background: 'var(--sf-0a0d14)',
                     border: '1px solid rgba(16, 185, 129, 0.35)',
                     borderRadius: '8px',
                     padding: '9px 14px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.875rem',
                     outline: 'none'
                   }}
@@ -8148,7 +8126,7 @@ export default function CompanyAdminConsole({
 
               {/* 5. AI Ajan Açıklaması */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                   AI Ajan Açıklaması / Özel Görev Notu
                 </label>
                 <textarea
@@ -8158,11 +8136,11 @@ export default function CompanyAdminConsole({
                   rows={2}
                   style={{
                     width: '100%',
-                    background: '#0a0d14',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--sf-0a0d14)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                     borderRadius: '8px',
                     padding: '9px 14px',
-                    color: '#ffffff',
+                    color: 'var(--nt-ffffff)',
                     fontSize: '0.85rem',
                     outline: 'none',
                     lineHeight: 1.45,
@@ -8174,7 +8152,7 @@ export default function CompanyAdminConsole({
               {/* 6. Sistem Rol Promptu & Sektör + Ünvan Deep Search Motoru */}
               <div style={{ marginBottom: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: 'var(--ac-c084fc)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Sparkles size={14} />
                     <span>Sistem Rol Promptu (Persona & Talimatlar) <span style={{ color: '#f43f5e' }}>*</span></span>
                   </label>
@@ -8190,7 +8168,7 @@ export default function CompanyAdminConsole({
                           ? 'rgba(59, 130, 246, 0.25)'
                           : 'linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(147, 51, 234, 0.35) 100%)',
                         border: '1px solid rgba(59, 130, 246, 0.6)',
-                        color: '#ffffff',
+                        color: 'var(--nt-ffffff)',
                         padding: '6px 14px',
                         borderRadius: '7px',
                         fontSize: '0.75rem',
@@ -8205,9 +8183,9 @@ export default function CompanyAdminConsole({
                       title="Şirketin sektörü ve bu sektörde bu ünvanın tam olarak ne iş yaptığı üzerine internette derinlemesine araştırma yap, ajanı eğit ve zengin sistem promptu oluştur"
                     >
                       {isDeepSearchingSectorTitle ? (
-                        <RefreshCw size={13} color="#93c5fd" style={{ animation: 'spin 1s linear infinite' }} />
+                        <RefreshCw size={13} color="var(--ac-93c5fd)" style={{ animation: 'spin 1s linear infinite' }} />
                       ) : (
-                        <Globe size={13} color="#60a5fa" />
+                        <Globe size={13} color="var(--ac-60a5fa)" />
                       )}
                       <span>
                         {isDeepSearchingSectorTitle
@@ -8224,9 +8202,9 @@ export default function CompanyAdminConsole({
                       style={{
                         background: isGeneratingAgentPrompt
                           ? 'rgba(168, 85, 247, 0.2)'
-                          : 'rgba(255, 255, 255, 0.05)',
+                          : 'rgb(var(--rgb-ov) / 0.05)',
                         border: '1px solid rgba(168, 85, 247, 0.4)',
-                        color: '#d8b4fe',
+                        color: 'var(--ac-d8b4fe)',
                         padding: '6px 12px',
                         borderRadius: '7px',
                         fontSize: '0.75rem',
@@ -8239,7 +8217,7 @@ export default function CompanyAdminConsole({
                       }}
                       title="Seçili model ile hızlı prompt taslağı üretir"
                     >
-                      <Sparkles size={12} color="#c084fc" />
+                      <Sparkles size={12} color="var(--ac-c084fc)" />
                       <span>
                         {isGeneratingAgentPrompt ? 'Yazıyor...' : '✨ Hızlı Prompt'}
                       </span>
@@ -8260,12 +8238,12 @@ export default function CompanyAdminConsole({
                     gap: '8px'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <RefreshCw size={18} color="#60a5fa" style={{ animation: 'spin 1.2s linear infinite' }} />
+                      <RefreshCw size={18} color="var(--ac-60a5fa)" style={{ animation: 'spin 1.2s linear infinite' }} />
                       <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#93c5fd' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--ac-93c5fd)' }}>
                           Şirket Sektörü & Ünvan Dinamikleri İnternette Derinlemesine Taranıyor...
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)' }}>
                           1) Şirketin sektörel mevzuat ve pazar dinamikleri araştırılıyor • 2) Sektörde bu ünvanın tam olarak ne iş yaptığı, görev ve süreçleri taranıyor • 3) AI personeli için uzmanlık kuralları ve sistem rol yönergesi sentezleniyor.
                         </div>
                       </div>
@@ -8277,43 +8255,43 @@ export default function CompanyAdminConsole({
                 {deepSearchSectorTitleResult && !isDeepSearchingSectorTitle && (
                   <div style={{
                     marginBottom: '14px',
-                    background: 'rgba(15, 23, 42, 0.85)',
+                    background: 'rgb(var(--rgb-sf-0f172a) / 0.85)',
                     border: '1px solid rgba(59, 130, 246, 0.45)',
                     borderRadius: '12px',
                     padding: '14px 16px',
-                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)'
+                    boxShadow: '0 4px 16px rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)', paddingBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <CheckCircle2 size={16} color="#4ade80" />
-                        <span style={{ fontSize: '0.825rem', fontWeight: '700', color: '#f8fafc' }}>
+                        <CheckCircle2 size={16} color="var(--ac-4ade80)" />
+                        <span style={{ fontSize: '0.825rem', fontWeight: '700', color: 'var(--nt-f8fafc)' }}>
                           Sektör & Ünvan Deep Search Analiz Raporu
                         </span>
                       </div>
-                      <span style={{ fontSize: '0.7rem', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.15)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--ac-93c5fd)', background: 'rgba(59, 130, 246, 0.15)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
                         {deepSearchSectorTitleResult.learnings_count || 0} Bilgi Maddesi Hazır
                       </span>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '10px', marginBottom: '10px' }}>
                       {/* Sektör Analiz Özeti */}
                       <div style={{ background: 'rgba(59, 130, 246, 0.06)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px', padding: '10px 12px' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: '700', color: '#60a5fa', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--ac-60a5fa)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <Building size={12} />
                           <span>ŞİRKET SEKTÖRÜ: {deepSearchSectorTitleResult.sector_name}</span>
                         </div>
-                        <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: 0, lineHeight: 1.45 }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', margin: 0, lineHeight: 1.45 }}>
                           {deepSearchSectorTitleResult.sector_summary || 'Sektör dinamikleri analiz edildi.'}
                         </p>
                       </div>
 
                       {/* Ünvan Görev ve Süreç Özeti */}
                       <div style={{ background: 'rgba(168, 85, 247, 0.06)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: '8px', padding: '10px 12px' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: '700', color: '#c084fc', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--ac-c084fc)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <Briefcase size={12} />
                           <span>SEKTÖREL ÜNVAN: {deepSearchSectorTitleResult.job_title_name}</span>
                         </div>
-                        <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: 0, lineHeight: 1.45 }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', margin: 0, lineHeight: 1.45 }}>
                           {deepSearchSectorTitleResult.job_title_summary || 'Ünvanın görev ve süreçleri analiz edildi.'}
                         </p>
                       </div>
@@ -8322,16 +8300,16 @@ export default function CompanyAdminConsole({
                     {/* Çıkarılan Öğrenim Maddeleri & Kaynaklar */}
                     {deepSearchSectorTitleResult.learnings && deepSearchSectorTitleResult.learnings.length > 0 && (
                       <div style={{ marginBottom: '10px' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: '600', color: '#94a3b8', marginBottom: '6px' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: '600', color: 'var(--nt-94a3b8)', marginBottom: '6px' }}>
                           Tespit Edilen Temel Yetkinlik & Kural Maddeleri:
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                           {deepSearchSectorTitleResult.learnings.slice(0, 4).map((l, idx) => (
                             <span key={idx} style={{
                               fontSize: '0.68rem',
-                              background: 'rgba(255, 255, 255, 0.05)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              color: '#e2e8f0',
+                              background: 'rgb(var(--rgb-ov) / 0.05)',
+                              border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                              color: 'var(--nt-e2e8f0)',
                               padding: '3px 8px',
                               borderRadius: '4px',
                               maxWidth: '100%',
@@ -8343,7 +8321,7 @@ export default function CompanyAdminConsole({
                             </span>
                           ))}
                           {deepSearchSectorTitleResult.learnings.length > 4 && (
-                            <span style={{ fontSize: '0.68rem', color: '#94a3b8', padding: '3px 6px' }}>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', padding: '3px 6px' }}>
                               +{deepSearchSectorTitleResult.learnings.length - 4} madde daha
                             </span>
                           )}
@@ -8354,7 +8332,7 @@ export default function CompanyAdminConsole({
                     {/* Bilgilendirme Notu */}
                     <div style={{
                       fontSize: '0.72rem',
-                      color: '#4ade80',
+                      color: 'var(--ac-4ade80)',
                       background: 'rgba(34, 197, 94, 0.1)',
                       border: '1px solid rgba(34, 197, 94, 0.25)',
                       padding: '6px 10px',
@@ -8363,7 +8341,7 @@ export default function CompanyAdminConsole({
                       alignItems: 'center',
                       gap: '6px'
                     }}>
-                      <Info size={13} color="#4ade80" />
+                      <Info size={13} color="var(--ac-4ade80)" />
                       <span>
                         Bu AI Ajanı kaydedildiğinde tüm bu kurallar ajanın kolektif hafızasına (Qdrant & MemoryItem) ve uzmanlık dokümanlarına otomatik kaydedilecektir.
                       </span>
@@ -8378,11 +8356,11 @@ export default function CompanyAdminConsole({
                   rows={6}
                   style={{
                     width: '100%',
-                    background: '#070a10',
+                    background: 'var(--sf-070a10)',
                     border: '1px solid rgba(168, 85, 247, 0.35)',
                     borderRadius: '8px',
                     padding: '12px 14px',
-                    color: '#f8fafc',
+                    color: 'var(--nt-f8fafc)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.8rem',
                     lineHeight: 1.5,
@@ -8390,7 +8368,7 @@ export default function CompanyAdminConsole({
                     resize: 'vertical'
                   }}
                 />
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)', marginTop: '4px', display: 'block' }}>
                   * Ünvandan otomatik yüklenir. 'Sektör & Ünvan Deep Search' butonu ile şirketin sektörü ve ünvanın ne iş yaptığı internette araştırılarak bu yönerge otomatik güncellenebilir.
                 </span>
               </div>
@@ -8401,16 +8379,16 @@ export default function CompanyAdminConsole({
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 gap: '12px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 paddingTop: '18px'
               }}>
                 <button
                   type="button"
                   onClick={() => setIsAgentModalOpen(false)}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#cbd5e1',
+                    background: 'rgb(var(--rgb-ov) / 0.06)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                    color: 'var(--nt-cbd5e1)',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '0.85rem',
@@ -8426,10 +8404,10 @@ export default function CompanyAdminConsole({
                   disabled={isSavingAgent || (!editingAgent && agentQuota.is_limit_reached)}
                   style={{
                     background: (!editingAgent && agentQuota.is_limit_reached)
-                      ? 'rgba(255, 255, 255, 0.08)'
+                      ? 'rgb(var(--rgb-ov) / 0.08)'
                       : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                    border: (!editingAgent && agentQuota.is_limit_reached) ? '1px solid rgba(255, 255, 255, 0.12)' : 'none',
-                    color: (!editingAgent && agentQuota.is_limit_reached) ? '#94a3b8' : '#ffffff',
+                    border: (!editingAgent && agentQuota.is_limit_reached) ? '1px solid rgb(var(--rgb-ov) / 0.12)' : 'none',
+                    color: (!editingAgent && agentQuota.is_limit_reached) ? 'var(--nt-94a3b8)' : '#ffffff',
                     padding: '9px 24px',
                     borderRadius: '8px',
                     fontSize: '0.85rem',
@@ -8470,7 +8448,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -8479,13 +8457,13 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#131826',
+            background: 'var(--sf-131826)',
             border: '1px solid rgba(239, 68, 68, 0.4)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '480px',
             padding: '26px',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)'
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))'
           }}>
             <div style={{
               width: '52px',
@@ -8500,16 +8478,16 @@ export default function CompanyAdminConsole({
               <UserX size={26} color="#ef4444" />
             </div>
 
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px', textAlign: 'center' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--nt-ffffff)', marginBottom: '6px', textAlign: 'center' }}>
               AI Ajanını İşten Çıkar / Pasife Al
             </h3>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '20px', textAlign: 'center' }}>
-              <strong style={{ color: '#f8fafc' }}>'{agentToTerminate.display_name}'</strong> adlı AI ajanının şirket içindeki aktif görevi sonlandırılacaktır.
+            <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '20px', textAlign: 'center' }}>
+              <strong style={{ color: 'var(--nt-f8fafc)' }}>'{agentToTerminate.display_name}'</strong> adlı AI ajanının şirket içindeki aktif görevi sonlandırılacaktır.
             </p>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                 🚪 İşten Çıkma / Pasife Çekilme Tarihi <span style={{ color: '#f43f5e' }}>*</span>
               </label>
               <input
@@ -8518,11 +8496,11 @@ export default function CompanyAdminConsole({
                 onChange={(e) => setTerminationDate(e.target.value)}
                 style={{
                   width: '100%',
-                  background: '#0a0d14',
+                  background: 'var(--sf-0a0d14)',
                   border: '1px solid rgba(239, 68, 68, 0.35)',
                   borderRadius: '8px',
                   padding: '9px 14px',
-                  color: '#ffffff',
+                  color: 'var(--nt-ffffff)',
                   fontSize: '0.875rem',
                   outline: 'none'
                 }}
@@ -8530,7 +8508,7 @@ export default function CompanyAdminConsole({
             </div>
 
             <div style={{ marginBottom: '22px' }}>
-              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
                 İşten Çıkarma / Pasife Çekme Nedeni
               </label>
               <textarea
@@ -8540,11 +8518,11 @@ export default function CompanyAdminConsole({
                 rows={2}
                 style={{
                   width: '100%',
-                  background: '#0a0d14',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: 'var(--sf-0a0d14)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.12)',
                   borderRadius: '8px',
                   padding: '9px 12px',
-                  color: '#ffffff',
+                  color: 'var(--nt-ffffff)',
                   fontSize: '0.825rem',
                   outline: 'none',
                   resize: 'vertical'
@@ -8557,9 +8535,9 @@ export default function CompanyAdminConsole({
                 type="button"
                 onClick={() => setAgentToTerminate(null)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#cbd5e1',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                  color: 'var(--nt-cbd5e1)',
                   padding: '9px 18px',
                   borderRadius: '8px',
                   fontSize: '0.85rem',
@@ -8605,7 +8583,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -8614,14 +8592,14 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#131826',
+            background: 'var(--sf-131826)',
             border: '1px solid rgba(239, 68, 68, 0.35)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '440px',
             padding: '24px',
             textAlign: 'center',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)'
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))'
           }}>
             <div style={{
               width: '52px',
@@ -8636,21 +8614,21 @@ export default function CompanyAdminConsole({
               <Trash2 size={26} color="#ef4444" />
             </div>
 
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--nt-ffffff)', marginBottom: '8px' }}>
               AI Ajanını Silmek İstiyor musunuz?
             </h3>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '22px' }}>
-              <strong style={{ color: '#f8fafc' }}>'{agentToDelete.display_name}'</strong> AI ajanı sistemden kalıcı olarak silinecektir.
+            <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '22px' }}>
+              <strong style={{ color: 'var(--nt-f8fafc)' }}>'{agentToDelete.display_name}'</strong> AI ajanı sistemden kalıcı olarak silinecektir.
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <button
                 onClick={() => setAgentToDelete(null)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#cbd5e1',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                  color: 'var(--nt-cbd5e1)',
                   padding: '9px 18px',
                   borderRadius: '8px',
                   fontSize: '0.85rem',
@@ -8695,7 +8673,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -8704,7 +8682,7 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#111827',
+            background: 'var(--sf-111827)',
             border: '1px solid rgba(59, 130, 246, 0.3)',
             borderRadius: '20px',
             width: '100%',
@@ -8712,17 +8690,17 @@ export default function CompanyAdminConsole({
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.9)',
+            boxShadow: '0 25px 60px rgb(var(--rgb-shade) / calc(0.9 * var(--shade-k)))',
             overflow: 'hidden'
           }}>
             {/* Modal Başlık */}
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: 'rgba(255, 255, 255, 0.02)'
+              background: 'rgb(var(--rgb-ov) / 0.02)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <div style={{
@@ -8735,16 +8713,16 @@ export default function CompanyAdminConsole({
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}>
-                  <BookOpen size={22} color="#60a5fa" />
+                  <BookOpen size={22} color="var(--ac-60a5fa)" />
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--nt-ffffff)', margin: 0 }}>
                       {selectedAgentForDocs.display_name} — Uzmanlık Dokümanları
                     </h3>
                     <span style={{
                       background: 'rgba(59, 130, 246, 0.15)',
-                      color: '#93c5fd',
+                      color: 'var(--ac-93c5fd)',
                       border: '1px solid rgba(59, 130, 246, 0.3)',
                       fontSize: '0.72rem',
                       fontWeight: '700',
@@ -8754,7 +8732,7 @@ export default function CompanyAdminConsole({
                       RAG / Kolektif Hafıza
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                     {selectedAgentForDocs.job_title_name ? `${selectedAgentForDocs.job_title_name} • ` : ''}
                     {selectedAgentForDocs.model_display_name || selectedAgentForDocs.model_code || 'AI Modeli'}
                   </p>
@@ -8766,7 +8744,7 @@ export default function CompanyAdminConsole({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--nt-94a3b8)',
                   cursor: 'pointer',
                   padding: '6px',
                   borderRadius: '6px'
@@ -8795,9 +8773,9 @@ export default function CompanyAdminConsole({
                 alignItems: 'flex-start',
                 gap: '12px'
               }}>
-                <Sparkles size={20} color="#60a5fa" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div style={{ fontSize: '0.825rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                  <strong style={{ color: '#ffffff' }}>Akıllı Vektör & Hibrit Hafıza Entegrasyonu:</strong> Yüklediğiniz dokümanların içeriği arka planda otomatik olarak analiz edilir, metinleri ayrıştırılır ve Qdrant kolektif vektör hafızasına (Qwen3-Embedding) kaydedilir. AI ajanı şirket süreçlerinde kararlar alırken bu dokümanlardaki verileri referans alır.
+                <Sparkles size={20} color="var(--ac-60a5fa)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ fontSize: '0.825rem', color: 'var(--nt-cbd5e1)', lineHeight: 1.5 }}>
+                  <strong style={{ color: 'var(--nt-ffffff)' }}>Akıllı Vektör & Hibrit Hafıza Entegrasyonu:</strong> Yüklediğiniz dokümanların içeriği arka planda otomatik olarak analiz edilir, metinleri ayrıştırılır ve Qdrant kolektif vektör hafızasına (Qwen3-Embedding) kaydedilir. AI ajanı şirket süreçlerinde kararlar alırken bu dokümanlardaki verileri referans alır.
                 </div>
               </div>
 
@@ -8805,10 +8783,10 @@ export default function CompanyAdminConsole({
               <div style={{
                 display: 'flex',
                 gap: '8px',
-                background: 'rgba(255, 255, 255, 0.03)',
+                background: 'rgb(var(--rgb-ov) / 0.03)',
                 padding: '4px',
                 borderRadius: '12px',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
+                border: '1px solid rgb(var(--rgb-ov) / 0.08)'
               }}>
                 <button
                   type="button"
@@ -8827,7 +8805,7 @@ export default function CompanyAdminConsole({
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                     background: docSourceTab === 'file' ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'transparent',
-                    color: docSourceTab === 'file' ? '#ffffff' : '#94a3b8'
+                    color: docSourceTab === 'file' ? '#ffffff' : 'var(--nt-94a3b8)'
                   }}
                 >
                   <FileText size={16} />
@@ -8850,8 +8828,8 @@ export default function CompanyAdminConsole({
                     fontWeight: '700',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
-                    background: docSourceTab === 'web' ? 'linear-gradient(135deg, #0284c7, #38bdf8)' : 'transparent',
-                    color: docSourceTab === 'web' ? '#ffffff' : '#94a3b8'
+                    background: docSourceTab === 'web' ? 'linear-gradient(135deg, #0284c7, var(--ac-38bdf8))' : 'transparent',
+                    color: docSourceTab === 'web' ? '#ffffff' : 'var(--nt-94a3b8)'
                   }}
                 >
                   <Globe size={16} />
@@ -8875,7 +8853,7 @@ export default function CompanyAdminConsole({
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                     background: docSourceTab === 'video' ? 'linear-gradient(135deg, #dc2626, #ef4444)' : 'transparent',
-                    color: docSourceTab === 'video' ? '#ffffff' : '#94a3b8'
+                    color: docSourceTab === 'video' ? '#ffffff' : 'var(--nt-94a3b8)'
                   }}
                 >
                   <Video size={16} />
@@ -8899,7 +8877,7 @@ export default function CompanyAdminConsole({
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                     background: docSourceTab === 'search' ? 'linear-gradient(135deg, #7c3aed, #a855f7)' : 'transparent',
-                    color: docSourceTab === 'search' ? '#ffffff' : '#94a3b8'
+                    color: docSourceTab === 'search' ? '#ffffff' : 'var(--nt-94a3b8)'
                   }}
                 >
                   <Search size={16} />
@@ -8949,34 +8927,34 @@ export default function CompanyAdminConsole({
                       margin: '0 auto 10px auto'
                     }}>
                       {isUploadingDoc ? (
-                        <RefreshCw size={22} color="#60a5fa" style={{ animation: 'spin 1s linear infinite' }} />
+                        <RefreshCw size={22} color="var(--ac-60a5fa)" style={{ animation: 'spin 1s linear infinite' }} />
                       ) : (
-                        <UploadCloud size={22} color="#60a5fa" />
+                        <UploadCloud size={22} color="var(--ac-60a5fa)" />
                       )}
                     </div>
 
                     {isUploadingDoc ? (
                       <div>
-                        <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: '#60a5fa', margin: '0 0 4px 0' }}>
+                        <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--ac-60a5fa)', margin: '0 0 4px 0' }}>
                           Doküman Yükleniyor ve Ayrıştırılıyor...
                         </h4>
-                        <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0 }}>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--nt-94a3b8)', margin: 0 }}>
                           Metinler çıkarılıyor ve ajanın hafıza vektör motoruna indeksleniyor. Lütfen bekleyiniz.
                         </p>
                       </div>
                     ) : (
                       <div>
-                        <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: '#ffffff', margin: '0 0 4px 0' }}>
+                        <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: '0 0 4px 0' }}>
                           Doküman Yüklemek İçin Tıklayın veya Dosyayı Sürükleyin
                         </h4>
-                        <p style={{ fontSize: '0.76rem', color: '#94a3b8', margin: '0 0 10px 0' }}>
+                        <p style={{ fontSize: '0.76rem', color: 'var(--nt-94a3b8)', margin: '0 0 10px 0' }}>
                           Desteklenen formatlar: PDF, Word (.docx), Excel (.xlsx), TXT, CSV, Markdown (Azami 50MB)
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>PDF</span>
-                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>WORD</span>
-                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.3)' }}>EXCEL</span>
-                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>TXT / CSV</span>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--ac-f87171)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>PDF</span>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--ac-60a5fa)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>WORD</span>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: 'var(--ac-4ade80)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>EXCEL</span>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: 'var(--ac-c084fc)', border: '1px solid rgba(168, 85, 247, 0.3)' }}>TXT / CSV</span>
                         </div>
                       </div>
                     )}
@@ -9006,13 +8984,13 @@ export default function CompanyAdminConsole({
                       justifyContent: 'center',
                       flexShrink: 0
                     }}>
-                      <Globe size={20} color="#38bdf8" />
+                      <Globe size={20} color="var(--ac-38bdf8)" />
                     </div>
                     <div>
-                      <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: '#ffffff', margin: 0 }}>
+                      <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: 0 }}>
                         Araştırma İçin Web Sayfası Tanımla
                       </h4>
-                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '2px 0 0 0' }}>
                         AI Ajanı sayfayı ziyaret ederek metinleri tarar ve kolektif hafızasına indeksler.
                       </p>
                     </div>
@@ -9020,7 +8998,7 @@ export default function CompanyAdminConsole({
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--nt-cbd5e1)', display: 'block', marginBottom: '4px' }}>
                         Web Sayfası URL'si *
                       </label>
                       <input
@@ -9032,11 +9010,11 @@ export default function CompanyAdminConsole({
                         disabled={isSubmittingWebLink}
                         style={{
                           width: '100%',
-                          background: 'rgba(0, 0, 0, 0.4)',
+                          background: 'rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
                           border: '1px solid rgba(56, 189, 248, 0.3)',
                           borderRadius: '8px',
                           padding: '10px 12px',
-                          color: '#ffffff',
+                          color: 'var(--nt-ffffff)',
                           fontSize: '0.825rem',
                           outline: 'none'
                         }}
@@ -9044,7 +9022,7 @@ export default function CompanyAdminConsole({
                     </div>
 
                     <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--nt-cbd5e1)', display: 'block', marginBottom: '4px' }}>
                         Konu / Kaynak Başlığı (Opsiyonel)
                       </label>
                       <input
@@ -9055,11 +9033,11 @@ export default function CompanyAdminConsole({
                         disabled={isSubmittingWebLink}
                         style={{
                           width: '100%',
-                          background: 'rgba(0, 0, 0, 0.4)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          background: 'rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
+                          border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                           borderRadius: '8px',
                           padding: '8px 12px',
-                          color: '#ffffff',
+                          color: 'var(--nt-ffffff)',
                           fontSize: '0.825rem',
                           outline: 'none'
                         }}
@@ -9072,9 +9050,9 @@ export default function CompanyAdminConsole({
                     disabled={isSubmittingWebLink || !webLinkUrl.trim()}
                     style={{
                       alignSelf: 'flex-end',
-                      background: isSubmittingWebLink ? 'rgba(56, 189, 248, 0.3)' : 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)',
+                      background: isSubmittingWebLink ? 'rgba(56, 189, 248, 0.3)' : 'linear-gradient(135deg, #0284c7 0%, var(--ac-38bdf8) 100%)',
                       border: 'none',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       padding: '10px 18px',
                       borderRadius: '8px',
                       fontSize: '0.825rem',
@@ -9126,10 +9104,10 @@ export default function CompanyAdminConsole({
                       <Video size={20} color="#ef4444" />
                     </div>
                     <div>
-                      <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: '#ffffff', margin: 0 }}>
+                      <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: 0 }}>
                         İzleyerek & Dinleyerek Öğrenme: YouTube Video Bağlantısı
                       </h4>
-                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '2px 0 0 0' }}>
                         AI Ajanı videonun başlığını, kanalını ve altyazı/konuşma transkriptini çıkarıp hafızasına indeksler.
                       </p>
                     </div>
@@ -9137,7 +9115,7 @@ export default function CompanyAdminConsole({
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--nt-cbd5e1)', display: 'block', marginBottom: '4px' }}>
                         YouTube Video URL'si *
                       </label>
                       <input
@@ -9149,11 +9127,11 @@ export default function CompanyAdminConsole({
                         disabled={isSubmittingVideoLink}
                         style={{
                           width: '100%',
-                          background: 'rgba(0, 0, 0, 0.4)',
+                          background: 'rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
                           border: '1px solid rgba(239, 68, 68, 0.3)',
                           borderRadius: '8px',
                           padding: '10px 12px',
-                          color: '#ffffff',
+                          color: 'var(--nt-ffffff)',
                           fontSize: '0.825rem',
                           outline: 'none'
                         }}
@@ -9161,7 +9139,7 @@ export default function CompanyAdminConsole({
                     </div>
 
                     <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--nt-cbd5e1)', display: 'block', marginBottom: '4px' }}>
                         Video Başlığı / Konu Notu (Opsiyonel)
                       </label>
                       <input
@@ -9172,11 +9150,11 @@ export default function CompanyAdminConsole({
                         disabled={isSubmittingVideoLink}
                         style={{
                           width: '100%',
-                          background: 'rgba(0, 0, 0, 0.4)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          background: 'rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
+                          border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                           borderRadius: '8px',
                           padding: '8px 12px',
-                          color: '#ffffff',
+                          color: 'var(--nt-ffffff)',
                           fontSize: '0.825rem',
                           outline: 'none'
                         }}
@@ -9191,7 +9169,7 @@ export default function CompanyAdminConsole({
                       alignSelf: 'flex-end',
                       background: isSubmittingVideoLink ? 'rgba(239, 68, 68, 0.3)' : 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
                       border: 'none',
-                      color: '#ffffff',
+                      color: 'var(--nt-ffffff)',
                       padding: '10px 18px',
                       borderRadius: '8px',
                       fontSize: '0.825rem',
@@ -9245,13 +9223,13 @@ export default function CompanyAdminConsole({
                         justifyContent: 'center',
                         flexShrink: 0
                       }}>
-                        <Globe size={22} color="#60a5fa" />
+                        <Globe size={22} color="var(--ac-60a5fa)" />
                       </div>
                       <div>
-                        <h4 style={{ fontSize: '0.925rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>
+                        <h4 style={{ fontSize: '0.925rem', fontWeight: '800', color: 'var(--nt-ffffff)', margin: 0 }}>
                           Şirket Sektörü & Ünvan Uzmanlık Araştırması
                         </h4>
-                        <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '3px 0 0 0' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', margin: '3px 0 0 0' }}>
                           Ajanın bağlı olduğu şirket sektörünü ve atanmış olduğu <strong>{selectedAgentForDocs?.job_title_name || 'ünvan'}</strong> görev kapsamını internette derinlemesine araştırıp hafızaya kaydeder.
                         </p>
                       </div>
@@ -9264,7 +9242,7 @@ export default function CompanyAdminConsole({
                       style={{
                         background: isExistingAgentDeepSearchingSectorTitle ? 'rgba(59, 130, 246, 0.3)' : 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
                         border: 'none',
-                        color: '#ffffff',
+                        color: 'var(--nt-ffffff)',
                         padding: '10px 18px',
                         borderRadius: '8px',
                         fontSize: '0.8rem',
@@ -9311,20 +9289,20 @@ export default function CompanyAdminConsole({
                         justifyContent: 'center',
                         flexShrink: 0
                       }}>
-                        <Search size={20} color="#c084fc" />
+                        <Search size={20} color="var(--ac-c084fc)" />
                       </div>
                       <div>
-                        <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: '#ffffff', margin: 0 }}>
+                        <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: 0 }}>
                           Özel Konulu Deep Search & Öğrenme Motoru
                         </h4>
-                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '2px 0 0 0' }}>
                           AI Ajanı belirlediğiniz spesifik konuda webde derin araştırma yapar, sayfaları sentezler ve elde ettiği uzmanlık bilgilerini hafızasına indeksler.
                         </p>
                       </div>
                     </div>
 
                     <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--nt-cbd5e1)', display: 'block', marginBottom: '4px' }}>
                         Araştırma Konusu / Pazar Sorusu *
                       </label>
                       <input
@@ -9336,11 +9314,11 @@ export default function CompanyAdminConsole({
                         disabled={isSubmittingDeepSearch}
                         style={{
                           width: '100%',
-                          background: 'rgba(0, 0, 0, 0.4)',
+                          background: 'rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
                           border: '1px solid rgba(168, 85, 247, 0.3)',
                           borderRadius: '8px',
                           padding: '10px 12px',
-                          color: '#ffffff',
+                          color: 'var(--nt-ffffff)',
                           fontSize: '0.825rem',
                           outline: 'none'
                         }}
@@ -9354,7 +9332,7 @@ export default function CompanyAdminConsole({
                         alignSelf: 'flex-end',
                         background: isSubmittingDeepSearch ? 'rgba(168, 85, 247, 0.3)' : 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
                         border: 'none',
-                        color: '#ffffff',
+                        color: 'var(--nt-ffffff)',
                         padding: '10px 18px',
                         borderRadius: '8px',
                         fontSize: '0.825rem',
@@ -9394,18 +9372,18 @@ export default function CompanyAdminConsole({
                   gap: '10px'
                 }}>
                   <AlertCircle size={18} color="#ef4444" style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: '0.8rem', color: '#fca5a5' }}>{uploadDocError}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--ac-fca5a5)' }}>{uploadDocError}</span>
                 </div>
               )}
 
               {/* Yüklü Dokümanlar ve Kaynaklar Listesi */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#ffffff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span>📚 Ajanın Öğrenme & Hafıza Kütüphanesi</span>
                     <span style={{
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      color: '#cbd5e1',
+                      background: 'rgb(var(--rgb-ov) / 0.08)',
+                      color: 'var(--nt-cbd5e1)',
                       padding: '2px 8px',
                       borderRadius: '10px',
                       fontSize: '0.75rem'
@@ -9416,23 +9394,23 @@ export default function CompanyAdminConsole({
                 </div>
 
                 {isLoadingDocs ? (
-                  <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
-                    <RefreshCw size={20} color="#60a5fa" style={{ animation: 'spin 1s linear infinite', marginBottom: '8px' }} />
+                  <div style={{ padding: '30px', textAlign: 'center', color: 'var(--nt-94a3b8)', fontSize: '0.85rem' }}>
+                    <RefreshCw size={20} color="var(--ac-60a5fa)" style={{ animation: 'spin 1s linear infinite', marginBottom: '8px' }} />
                     <div>Kaynaklar yükleniyor...</div>
                   </div>
                 ) : agentDocuments.length === 0 ? (
                   <div style={{
                     padding: '36px 20px',
                     textAlign: 'center',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    background: 'rgb(var(--rgb-ov) / 0.02)',
+                    border: '1px solid rgb(var(--rgb-ov) / 0.05)',
                     borderRadius: '14px'
                   }}>
-                    <BookOpen size={32} color="#64748b" style={{ margin: '0 auto 10px auto' }} />
-                    <h5 style={{ fontSize: '0.9rem', fontWeight: '700', color: '#cbd5e1', margin: '0 0 4px 0' }}>
+                    <BookOpen size={32} color="var(--nt-64748b)" style={{ margin: '0 auto 10px auto' }} />
+                    <h5 style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', margin: '0 0 4px 0' }}>
                       Henüz Kaynak veya Doküman Eklenmedi
                     </h5>
-                    <p style={{ fontSize: '0.78rem', color: '#64748b', margin: 0, maxWidth: '420px', marginInline: 'auto' }}>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--nt-64748b)', margin: 0, maxWidth: '420px', marginInline: 'auto' }}>
                       Bu AI ajanı için şirket süreç kılavuzları, araştırma web sayfaları veya eğitim videoları ekleyerek uzmanlık seviyesini artırabilirsiniz.
                     </p>
                   </div>
@@ -9462,8 +9440,8 @@ export default function CompanyAdminConsole({
                         <div
                           key={doc.id}
                           style={{
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            border: '1px solid rgba(255, 255, 255, 0.07)',
+                            background: 'rgb(var(--rgb-ov) / 0.03)',
+                            border: '1px solid rgb(var(--rgb-ov) / 0.07)',
                             borderRadius: '12px',
                             padding: '14px 16px',
                             transition: 'background 0.2s'
@@ -9509,15 +9487,15 @@ export default function CompanyAdminConsole({
                                 flexShrink: 0
                               }}>
                                 {isDeepSearch ? (
-                                  <Search size={20} color="#c084fc" />
+                                  <Search size={20} color="var(--ac-c084fc)" />
                                 ) : isWeb ? (
-                                  <Globe size={20} color="#38bdf8" />
+                                  <Globe size={20} color="var(--ac-38bdf8)" />
                                 ) : isYoutube ? (
                                   <Video size={20} color="#ef4444" />
                                 ) : isExcel ? (
-                                  <FileSpreadsheet size={20} color="#4ade80" />
+                                  <FileSpreadsheet size={20} color="var(--ac-4ade80)" />
                                 ) : (
-                                  <FileText size={20} color={isPdf ? '#f87171' : isWord ? '#60a5fa' : '#c084fc'} />
+                                  <FileText size={20} color={isPdf ? 'var(--ac-f87171)' : isWord ? 'var(--ac-60a5fa)' : 'var(--ac-c084fc)'} />
                                 )}
                               </div>
 
@@ -9526,7 +9504,7 @@ export default function CompanyAdminConsole({
                                   <span style={{
                                     fontSize: '0.85rem',
                                     fontWeight: '700',
-                                    color: '#ffffff',
+                                    color: 'var(--nt-ffffff)',
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis'
@@ -9553,29 +9531,29 @@ export default function CompanyAdminConsole({
                                       ? 'rgba(59, 130, 246, 0.2)'
                                       : 'rgba(168, 85, 247, 0.2)',
                                     color: isDeepSearch
-                                      ? '#d8b4fe'
+                                      ? 'var(--ac-d8b4fe)'
                                       : isWeb
-                                      ? '#7dd3fc'
+                                      ? 'var(--ac-7dd3fc)'
                                       : isYoutube
-                                      ? '#fca5a5'
+                                      ? 'var(--ac-fca5a5)'
                                       : isPdf
-                                      ? '#fca5a5'
+                                      ? 'var(--ac-fca5a5)'
                                       : isExcel
-                                      ? '#86efac'
+                                      ? 'var(--ac-86efac)'
                                       : isWord
-                                      ? '#93c5fd'
-                                      : '#d8b4fe'
+                                      ? 'var(--ac-93c5fd)'
+                                      : 'var(--ac-d8b4fe)'
                                   }}>
                                     {isDeepSearch ? '🔍 DEEP SEARCH' : isWeb ? 'WEB SAYFASI' : isYoutube ? 'YOUTUBE VİDEO' : doc.file_type}
                                   </span>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px', fontSize: '0.75rem', color: '#94a3b8' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px', fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                                   <span>{sizeStr}</span>
                                   <span>•</span>
                                   <span>{doc.created_at ? new Date(doc.created_at).toLocaleDateString('tr-TR') : '—'}</span>
                                   <span>•</span>
-                                  <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}>
+                                  <span style={{ color: 'var(--ac-34d399)', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}>
                                     <CheckCircle2 size={11} />
                                     {doc.status === 'INDEXED' ? 'Hafızada & İndeksli' : 'Eklendi'}
                                   </span>
@@ -9588,9 +9566,9 @@ export default function CompanyAdminConsole({
                               <button
                                 onClick={() => setPreviewDocId(isPreviewOpen ? null : doc.id)}
                                 style={{
-                                  background: isPreviewOpen ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                                  color: isPreviewOpen ? '#93c5fd' : '#cbd5e1',
+                                  background: isPreviewOpen ? 'rgba(59, 130, 246, 0.25)' : 'rgb(var(--rgb-ov) / 0.05)',
+                                  border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                                  color: isPreviewOpen ? 'var(--ac-93c5fd)' : 'var(--nt-cbd5e1)',
                                   padding: '6px 10px',
                                   borderRadius: '6px',
                                   fontSize: '0.75rem',
@@ -9615,7 +9593,7 @@ export default function CompanyAdminConsole({
                                   style={{
                                     background: isWeb ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)',
                                     border: `1px solid ${isWeb ? 'rgba(56, 189, 248, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                                    color: isWeb ? '#38bdf8' : '#f87171',
+                                    color: isWeb ? 'var(--ac-38bdf8)' : 'var(--ac-f87171)',
                                     padding: '6px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -9637,7 +9615,7 @@ export default function CompanyAdminConsole({
                                   onClick={(e) => {
                                     e.preventDefault();
                                     api.downloadAgentDocument(getActiveTenantId(), selectedAgentForDocs.id, doc.id, doc.original_name)
-                                      .catch((err) => alert(`Doküman indirilemedi: ${err.message}`));
+                                      .catch((err) => notify(`Doküman indirilemedi: ${err.message}`));
                                   }}
                                   target="_blank"
                                   rel="noreferrer"
@@ -9645,7 +9623,7 @@ export default function CompanyAdminConsole({
                                   style={{
                                     background: 'rgba(168, 85, 247, 0.12)',
                                     border: '1px solid rgba(168, 85, 247, 0.3)',
-                                    color: '#c084fc',
+                                    color: 'var(--ac-c084fc)',
                                     padding: '6px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -9667,15 +9645,15 @@ export default function CompanyAdminConsole({
                                   onClick={(e) => {
                                     e.preventDefault();
                                     api.downloadAgentDocument(getActiveTenantId(), selectedAgentForDocs.id, doc.id, doc.original_name)
-                                      .catch((err) => alert(`Doküman indirilemedi: ${err.message}`));
+                                      .catch((err) => notify(`Doküman indirilemedi: ${err.message}`));
                                   }}
                                   target="_blank"
                                   rel="noreferrer"
                                   download
                                   style={{
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: '#cbd5e1',
+                                    background: 'rgb(var(--rgb-ov) / 0.05)',
+                                    border: '1px solid rgb(var(--rgb-ov) / 0.1)',
+                                    color: 'var(--nt-cbd5e1)',
                                     padding: '6px 10px',
                                     borderRadius: '6px',
                                     fontSize: '0.75rem',
@@ -9699,7 +9677,7 @@ export default function CompanyAdminConsole({
                                 style={{
                                   background: 'rgba(239, 68, 68, 0.1)',
                                   border: '1px solid rgba(239, 68, 68, 0.25)',
-                                  color: '#f87171',
+                                  color: 'var(--ac-f87171)',
                                   padding: '6px 8px',
                                   borderRadius: '6px',
                                   fontSize: '0.75rem',
@@ -9720,22 +9698,22 @@ export default function CompanyAdminConsole({
                             <div style={{
                               marginTop: '12px',
                               padding: '12px 14px',
-                              background: 'rgba(0, 0, 0, 0.4)',
+                              background: 'rgb(var(--rgb-shade) / calc(0.4 * var(--shade-k)))',
                               border: '1px solid rgba(59, 130, 246, 0.25)',
                               borderRadius: '8px',
                               fontSize: '0.775rem'
                             }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                <span style={{ color: '#60a5fa', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ color: 'var(--ac-60a5fa)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                   <Sparkles size={12} />
                                   Ayrıştırılan Metin ve Hafıza Önizlemesi:
                                 </span>
-                                <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
+                                <span style={{ color: 'var(--nt-64748b)', fontSize: '0.7rem' }}>
                                   Qdrant RAG İndeksi
                                 </span>
                               </div>
                               <p style={{
-                                color: '#e2e8f0',
+                                color: 'var(--nt-e2e8f0)',
                                 margin: 0,
                                 lineHeight: 1.5,
                                 whiteSpace: 'pre-wrap',
@@ -9757,18 +9735,18 @@ export default function CompanyAdminConsole({
             {/* Modal Alt Kısım */}
             <div style={{
               padding: '14px 24px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
-              background: 'rgba(255, 255, 255, 0.02)'
+              background: 'rgb(var(--rgb-ov) / 0.02)'
             }}>
               <button
                 onClick={() => { setIsDocsModalOpen(false); setSelectedAgentForDocs(null); }}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#ffffff',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.15)',
+                  color: 'var(--nt-ffffff)',
                   padding: '8px 20px',
                   borderRadius: '8px',
                   fontSize: '0.825rem',
@@ -9793,7 +9771,7 @@ export default function CompanyAdminConsole({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
+          background: 'rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -9802,14 +9780,14 @@ export default function CompanyAdminConsole({
           padding: '20px'
         }}>
           <div style={{
-            background: '#131826',
+            background: 'var(--sf-131826)',
             border: '1px solid rgba(239, 68, 68, 0.35)',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '440px',
             padding: '24px',
             textAlign: 'center',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)'
+            boxShadow: '0 20px 50px rgb(var(--rgb-shade) / calc(0.8 * var(--shade-k)))'
           }}>
             <div style={{
               width: '52px',
@@ -9824,21 +9802,21 @@ export default function CompanyAdminConsole({
               <Trash2 size={26} color="#ef4444" />
             </div>
 
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--nt-ffffff)', marginBottom: '8px' }}>
               Dokümanı Silmek İstiyor musunuz?
             </h3>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '22px' }}>
-              <strong style={{ color: '#f8fafc' }}>'{docToDelete.original_name}'</strong> dokümanı ve bu dokümandan oluşturulan ajanın kolektif hafıza (vektör RAG) kayıtları kalıcı olarak silinecektir.
+            <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '22px' }}>
+              <strong style={{ color: 'var(--nt-f8fafc)' }}>'{docToDelete.original_name}'</strong> dokümanı ve bu dokümandan oluşturulan ajanın kolektif hafıza (vektör RAG) kayıtları kalıcı olarak silinecektir.
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <button
                 onClick={() => setDocToDelete(null)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#cbd5e1',
+                  background: 'rgb(var(--rgb-ov) / 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.12)',
+                  color: 'var(--nt-cbd5e1)',
                   padding: '9px 18px',
                   borderRadius: '8px',
                   fontSize: '0.85rem',

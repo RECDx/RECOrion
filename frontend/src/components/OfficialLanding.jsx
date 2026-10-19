@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, session } from '../api';
 import AdminLeadsModal from './AdminLeadsModal';
+import ThemeToggle from '../ui/ThemeToggle';
 import { 
   Building2, 
   Hash, 
@@ -32,6 +33,7 @@ import {
   Briefcase,
   GraduationCap
 } from 'lucide-react';
+import { notify } from '../ui/feedback';
 
 export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogout }) {
   const [plans, setPlans] = useState([]);
@@ -265,6 +267,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
           </div>
         </div>
         <div className="landing-nav-actions">
+          <ThemeToggle compact />
           {currentUser ? (
             <>
               <button
@@ -276,7 +279,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
               <button
                 className="btn btn-secondary"
                 onClick={onLogout}
-                style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', borderRadius: '12px', padding: '10px 18px' }}
+                style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--ac-f87171)', borderRadius: '12px', padding: '10px 18px' }}
               >
                 Çıkış Yap
               </button>
@@ -420,9 +423,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   alignItems: 'center',
                   justifyContent: 'center',
                   boxShadow: '0 0 16px rgba(113, 52, 226, 0.5)',
-                  border: '1px solid rgba(255,255,255,0.2)'
+                  border: '1px solid rgb(var(--rgb-ov) / 0.2)'
                 }}>
-                  <Package style={{ width: 22, height: 22, color: '#fff' }} />
+                  <Package style={{ width: 22, height: 22, color: 'var(--nt-ffffff)' }} />
                 </div>
                 <div>
                   <h3 className="purchase-modal-header-title">
@@ -430,7 +433,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   </h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
                     <span className="purchase-plan-badge-3d">
-                      <Sparkles style={{ width: 12, height: 12, color: '#38bdf8' }} />
+                      <Sparkles style={{ width: 12, height: 12, color: 'var(--ac-38bdf8)' }} />
                       <span>Kurumsal Bulut Paket</span>
                     </span>
                     <span className="purchase-price-tag-3d">
@@ -514,13 +517,13 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                 borderRadius: 12,
                 background: 'rgba(239, 68, 68, 0.15)',
                 border: '1px solid rgba(239, 68, 68, 0.35)',
-                color: '#fca5a5',
+                color: 'var(--ac-fca5a5)',
                 fontSize: '0.8rem',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8
               }}>
-                <AlertCircle style={{ width: 16, height: 16, color: '#f87171', flexShrink: 0 }} />
+                <AlertCircle style={{ width: 16, height: 16, color: 'var(--ac-f87171)', flexShrink: 0 }} />
                 <span>{errorMessage}</span>
               </div>
             )}
@@ -546,14 +549,14 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                 <div className="purchase-form-scroll-3d">
                   <div className="purchase-section-card-3d">
                     <div className="purchase-section-title-3d">
-                      <Building2 style={{ width: 15, height: 15, color: '#38bdf8' }} />
+                      <Building2 style={{ width: 15, height: 15, color: 'var(--ac-38bdf8)' }} />
                       <span>Kurumsal Kimlik ve Vergi Bilgileri</span>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 12 }}>
+                    <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 12 }}>
                       <div>
                         <label className="purchase-label-3d">
-                          <Building2 style={{ width: 13, height: 13, color: '#38bdf8' }} />
+                          <Building2 style={{ width: 13, height: 13, color: 'var(--ac-38bdf8)' }} />
                           <span>Şirket Ünvanı *</span>
                         </label>
                         <input 
@@ -569,7 +572,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
                       <div>
                         <label className="purchase-label-3d">
-                          <Hash style={{ width: 13, height: 13, color: '#a78bfa' }} />
+                          <Hash style={{ width: 13, height: 13, color: 'var(--ac-a78bfa)' }} />
                           <span>Vergi Kimlik No (VKN / TCKN) *</span>
                         </label>
                         <input 
@@ -585,7 +588,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
                       <div>
                         <label className="purchase-label-3d">
-                          <Landmark style={{ width: 13, height: 13, color: '#34d399' }} />
+                          <Landmark style={{ width: 13, height: 13, color: 'var(--ac-34d399)' }} />
                           <span>Vergi Dairesi</span>
                         </label>
                         <input 
@@ -602,11 +605,11 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
                   <div className="purchase-section-card-3d">
                     <div className="purchase-section-title-3d">
-                      <Phone style={{ width: 15, height: 15, color: '#fbbf24' }} />
+                      <Phone style={{ width: 15, height: 15, color: 'var(--ac-fbbf24)' }} />
                       <span>İletişim ve Resmi Adres</span>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                       <div>
                         <label className="purchase-label-3d">
                           <Mail style={{ width: 13, height: 13, color: '#f43f5e' }} />
@@ -623,14 +626,14 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           }}
                           className="purchase-input-field-3d"
                         />
-                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>
                           * Kurumsal official şirket alan adı zorunludur (Gmail, Hotmail vb. kabul edilmez).
                         </div>
                       </div>
 
                       <div>
                         <label className="purchase-label-3d">
-                          <Phone style={{ width: 13, height: 13, color: '#fbbf24' }} />
+                          <Phone style={{ width: 13, height: 13, color: 'var(--ac-fbbf24)' }} />
                           <span>Telefon Numarası *</span>
                         </label>
                         <input 
@@ -646,7 +649,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
                       <div>
                         <label className="purchase-label-3d">
-                          <Globe style={{ width: 13, height: 13, color: '#60a5fa' }} />
+                          <Globe style={{ width: 13, height: 13, color: 'var(--ac-60a5fa)' }} />
                           <span>Web Sitesi</span>
                         </label>
                         <input 
@@ -662,7 +665,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
                     <div>
                       <label className="purchase-label-3d">
-                        <MapPin style={{ width: 13, height: 13, color: '#c084fc' }} />
+                        <MapPin style={{ width: 13, height: 13, color: 'var(--ac-c084fc)' }} />
                         <span>Şirket Resmi Adresi</span>
                       </label>
                       <textarea 
@@ -701,20 +704,20 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   <div className="purchase-section-card-3d">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                       <div className="purchase-section-title-3d">
-                        <Briefcase style={{ width: 16, height: 16, color: '#818cf8' }} />
+                        <Briefcase style={{ width: 16, height: 16, color: 'var(--ac-818cf8)' }} />
                         <span>1. Faaliyet Sektörleri (T.C. Ticaret Bakanlığı)</span>
                       </div>
-                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                        Seçilen Sektör: <strong style={{ color: '#38bdf8' }}>{selectedSectors.length}</strong>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
+                        Seçilen Sektör: <strong style={{ color: 'var(--ac-38bdf8)' }}>{selectedSectors.length}</strong>
                       </span>
                     </div>
 
-                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--nt-94a3b8)', margin: 0, lineHeight: 1.5 }}>
                       Şirketinizin faaliyet gösterdiği ana sektörü/sektörleri seçiniz. Seçtiğiniz sektörlere ait resmi meslek grupları aşağıda otomatik filtrelenecektir.
                     </p>
 
                     {/* Sektör Seçim Butonları Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 4 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))', gap: 8, marginTop: 4 }}>
                       {sectors.map((sec) => {
                         const isSelected = selectedSectors.includes(sec.code);
                         return (
@@ -728,9 +731,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                               justifyContent: 'space-between',
                               padding: '8px 12px',
                               borderRadius: 10,
-                              background: isSelected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.03)',
-                              border: isSelected ? '1px solid rgba(129, 140, 248, 0.8)' : '1px solid rgba(255, 255, 255, 0.08)',
-                              color: isSelected ? '#ffffff' : '#cbd5e1',
+                              background: isSelected ? 'rgba(99, 102, 241, 0.25)' : 'rgb(var(--rgb-ov) / 0.03)',
+                              border: isSelected ? '1px solid rgba(129, 140, 248, 0.8)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
+                              color: isSelected ? 'var(--nt-ffffff)' : 'var(--nt-cbd5e1)',
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
                               textAlign: 'left'
@@ -748,7 +751,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                               width: 18,
                               height: 18,
                               borderRadius: '50%',
-                              background: isSelected ? '#10b981' : 'rgba(255,255,255,0.1)',
+                              background: isSelected ? '#10b981' : 'rgb(var(--rgb-ov) / 0.1)',
                               color: '#fff',
                               display: 'flex',
                               alignItems: 'center',
@@ -765,14 +768,14 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     </div>
 
                     {/* 2. MESLEK GRUPLARI (Filtreli) */}
-                    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <div className="purchase-section-title-3d">
-                          <GraduationCap style={{ width: 16, height: 16, color: '#38bdf8' }} />
+                          <GraduationCap style={{ width: 16, height: 16, color: 'var(--ac-38bdf8)' }} />
                           <span>2. Meslek Grupları (Seçili Sektörlere Göre Filtrelenmiş)</span>
                         </div>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                          Seçilen Meslek: <strong style={{ color: '#38bdf8' }}>{selectedProfessions.length}</strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
+                          Seçilen Meslek: <strong style={{ color: 'var(--ac-38bdf8)' }}>{selectedProfessions.length}</strong>
                         </span>
                       </div>
 
@@ -783,11 +786,11 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: 0 }}>
                             Seçili sektör(ler)e bağlı <strong>{professions.filter(pr => selectedSectors.includes(pr.sector_code)).length} meslek grubu</strong> bulundu. Şirketiniz bünyesindeki meslek alanlarını işaretleyiniz:
                           </p>
 
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 180, overflowY: 'auto', padding: 8, borderRadius: 8, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 180, overflowY: 'auto', padding: 8, borderRadius: 8, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                             {professions
                               .filter(pr => selectedSectors.includes(pr.sector_code))
                               .map((pr) => {
@@ -806,9 +809,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       gap: 6,
-                                      background: isAdded ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.03)',
-                                      border: isAdded ? '1px solid rgba(56, 189, 248, 0.6)' : '1px solid rgba(255, 255, 255, 0.08)',
-                                      color: isAdded ? '#38bdf8' : '#cbd5e1',
+                                      background: isAdded ? 'rgba(56, 189, 248, 0.25)' : 'rgb(var(--rgb-ov) / 0.03)',
+                                      border: isAdded ? '1px solid rgba(56, 189, 248, 0.6)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
+                                      color: isAdded ? 'var(--ac-38bdf8)' : 'var(--nt-cbd5e1)',
                                       transition: 'all 0.15s ease'
                                     }}
                                   >
@@ -836,7 +839,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     className="purchase-btn-next-3d" 
                     onClick={() => {
                       if (selectedSectors.length === 0) {
-                        alert("Lütfen en az bir faaliyet sektörü seçiniz.");
+                        notify("Lütfen en az bir faaliyet sektörü seçiniz.");
                         return;
                       }
                       setErrorMessage('');
@@ -854,17 +857,17 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
             {step === 3 && (
               <form onSubmit={handleSubmitPurchase} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                 <div className="purchase-form-scroll-3d">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
+                  <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
                     {/* Sol: Yetkili Kullanıcı ve Şifre */}
                     <div className="purchase-section-card-3d">
                       <div className="purchase-section-title-3d">
-                        <User style={{ width: 15, height: 15, color: '#38bdf8' }} />
+                        <User style={{ width: 15, height: 15, color: 'var(--ac-38bdf8)' }} />
                         <span>Yetkili Yönetici ve Hesap Bilgileri</span>
                       </div>
 
                       <div>
                         <label className="purchase-label-3d">
-                          <User style={{ width: 13, height: 13, color: '#cbd5e1' }} />
+                          <User style={{ width: 13, height: 13, color: 'var(--nt-cbd5e1)' }} />
                           <span>Yetkili Adı Soyadı *</span>
                         </label>
                         <input 
@@ -880,7 +883,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
                       <div>
                         <label className="purchase-label-3d">
-                          <Mail style={{ width: 13, height: 13, color: '#cbd5e1' }} />
+                          <Mail style={{ width: 13, height: 13, color: 'var(--nt-cbd5e1)' }} />
                           <span>Giriş E-Posta Adresi (Yönetim Paneli Girişi) *</span>
                         </label>
                         <input 
@@ -892,7 +895,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           onChange={(e) => setContactEmail(e.target.value)}
                           className="purchase-input-field-3d"
                         />
-                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4 }}>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>
                           * Kurumsal official şirket alan adı zorunludur (Gmail, Hotmail vb. kabul edilmez).
                         </div>
                       </div>
@@ -901,7 +904,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
                           <label className="purchase-label-3d" style={{ margin: 0 }}>
-                            <Lock style={{ width: 13, height: 13, color: '#cbd5e1' }} />
+                            <Lock style={{ width: 13, height: 13, color: 'var(--nt-cbd5e1)' }} />
                             <span>Giriş Şifresi *</span>
                           </label>
                           <button
@@ -938,11 +941,11 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                                 type="button"
                                 onClick={() => copyToClipboard(password, 'wizardpass')}
                                 style={{
-                                  background: 'rgba(255,255,255,0.08)',
+                                  background: 'rgb(var(--rgb-ov) / 0.08)',
                                   border: 'none',
                                   borderRadius: 6,
                                   padding: '4px 6px',
-                                  color: '#cbd5e1',
+                                  color: 'var(--nt-cbd5e1)',
                                   cursor: 'pointer',
                                   display: 'flex',
                                   alignItems: 'center',
@@ -951,7 +954,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                                 }}
                                 title="Şifreyi panoya kopyala"
                               >
-                                {copiedKey === 'wizardpass' ? <Check style={{ width: 12, height: 12, color: '#34d399' }} /> : <Copy style={{ width: 12, height: 12 }} />}
+                                {copiedKey === 'wizardpass' ? <Check style={{ width: 12, height: 12, color: 'var(--ac-34d399)' }} /> : <Copy style={{ width: 12, height: 12 }} />}
                               </button>
                             )}
                             <button
@@ -960,7 +963,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                               style={{
                                 background: 'transparent',
                                 border: 'none',
-                                color: '#94a3b8',
+                                color: 'var(--nt-94a3b8)',
                                 cursor: 'pointer',
                                 padding: 4,
                                 display: 'flex',
@@ -982,7 +985,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#c084fc', letterSpacing: '0.05em' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--ac-c084fc)', letterSpacing: '0.05em' }}>
                             SEÇİLEN KURUMSAL PAKET
                           </span>
                           <span className="purchase-plan-badge-3d">
@@ -990,17 +993,17 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           </span>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, padding: '10px 14px', borderRadius: 12, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#38bdf8', fontFamily: 'Outfit, sans-serif' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, padding: '10px 14px', borderRadius: 12, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                          <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--ac-38bdf8)', fontFamily: 'Outfit, sans-serif' }}>
                             {Number(selectedPlan.monthly_price).toLocaleString('tr-TR')} ₺
                           </span>
-                          <span style={{ fontSize: '0.775rem', color: '#94a3b8' }}>/ Ay (Yıllık Kurumsal Sözleşme)</span>
+                          <span style={{ fontSize: '0.775rem', color: 'var(--nt-94a3b8)' }}>/ Ay (Yıllık Kurumsal Sözleşme)</span>
                         </div>
 
                         {/* Paket Değiştirme Opsiyonu */}
                         {plans.length > 1 && (
                           <div>
-                            <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>
+                            <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 4 }}>
                               Farklı Bir Paket Seçmek İster misiniz?
                             </label>
                             <select
@@ -1019,23 +1022,23 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           </div>
                         )}
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.75rem', color: '#cbd5e1' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckCircle2 style={{ width: 14, height: 14, color: '#34d399' }} />
+                            <CheckCircle2 style={{ width: 14, height: 14, color: 'var(--ac-34d399)' }} />
                             <span><b>{selectedPlan.max_agents} AI Ajan</b> ve <b>{selectedPlan.max_humans} İnsan</b> Kullanıcı</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckCircle2 style={{ width: 14, height: 14, color: '#34d399' }} />
+                            <CheckCircle2 style={{ width: 14, height: 14, color: 'var(--ac-34d399)' }} />
                             <span><b>{selectedPlan.storage_gb} GB</b> İzole MinIO Bulut Depolama</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckCircle2 style={{ width: 14, height: 14, color: '#34d399' }} />
+                            <CheckCircle2 style={{ width: 14, height: 14, color: 'var(--ac-34d399)' }} />
                             <span><b>{selectedSectors.length} Sektör & {selectedProfessions.length} Meslek</b> Odaklı AI Manifestosu</span>
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(2,132,199,0.1)', border: '1px solid rgba(2,132,199,0.25)', fontSize: '0.72rem', color: '#7dd3fc', lineHeight: 1.4, marginTop: 10 }}>
+                      <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(2,132,199,0.1)', border: '1px solid rgba(2,132,199,0.25)', fontSize: '0.72rem', color: 'var(--ac-7dd3fc)', lineHeight: 1.4, marginTop: 10 }}>
                         📌 Başvuru tamamlandığında kurumsal hesabınız oluşturulacak ve <b>{contactEmail || 'kurumsal adresinize'}</b> aktivasyon mektubu iletilecektir.
                       </div>
                     </div>
@@ -1085,44 +1088,44 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       justifyContent: 'center',
                       fontSize: '1.8rem',
                       boxShadow: '0 0 25px rgba(16,185,129,0.5)',
-                      border: '1px solid rgba(255,255,255,0.3)'
+                      border: '1px solid rgb(var(--rgb-ov) / 0.3)'
                     }}>
                       🎉
                     </div>
 
                     <div>
-                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: 0 }}>
                         Kiralama Talebiniz Başarıyla Alındı!
                       </h3>
-                      <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>
                         '{companyName}' kurumu için sipariş kaydı oluşturuldu ve şirket ortamınız hazırlandı.
                       </p>
                     </div>
 
                     {/* Bildirim Durumları */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 650 }}>
-                      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: '#6ee7b7' }}>
-                        <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399', flexShrink: 0 }} />
+                    <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 650 }}>
+                      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: 'var(--ac-6ee7b7)' }}>
+                        <CheckCircle2 style={{ width: 16, height: 16, color: 'var(--ac-34d399)', flexShrink: 0 }} />
                         <span><b>info@recdx.com</b> adresine Süper Admin bildirimi gönderildi.</span>
                       </div>
-                      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: '#6ee7b7' }}>
-                        <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399', flexShrink: 0 }} />
+                      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: 'var(--ac-6ee7b7)' }}>
+                        <CheckCircle2 style={{ width: 16, height: 16, color: 'var(--ac-34d399)', flexShrink: 0 }} />
                         <span><b>{purchaseResult.contact_email}</b> adresinize kurumsal karşılama iletildi.</span>
                       </div>
                     </div>
 
                     {/* AI Manifestosu Önizleme */}
-                    <div style={{ width: '100%', maxWidth: 760, borderRadius: 14, background: '#080c18', border: '1px solid rgba(113,52,226,0.3)', overflow: 'hidden', textAlign: 'left' }}>
-                      <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.785rem', fontWeight: 700, color: '#c084fc' }}>
+                    <div style={{ width: '100%', maxWidth: 760, borderRadius: 14, background: 'var(--sf-080c18)', border: '1px solid rgba(113,52,226,0.3)', overflow: 'hidden', textAlign: 'left' }}>
+                      <div style={{ padding: '10px 14px', background: 'rgb(var(--rgb-ov) / 0.03)', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.785rem', fontWeight: 700, color: 'var(--ac-c084fc)' }}>
                           <Sparkles style={{ width: 14, height: 14 }} />
                           <span>RECOrion AI Tarafından Üretilen Kurumsal Manifesto</span>
                         </div>
-                        <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', color: '#38bdf8' }}>
+                        <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', color: 'var(--ac-38bdf8)' }}>
                           {purchaseResult.assigned_skills?.length || 0} Yetenek Atandı
                         </span>
                       </div>
-                      <pre style={{ margin: 0, padding: '12px 14px', fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.6, maxHeight: 160, overflowY: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                      <pre style={{ margin: 0, padding: '12px 14px', fontSize: '0.75rem', color: 'var(--nt-94a3b8)', lineHeight: 1.6, maxHeight: 160, overflowY: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
                         {purchaseResult.generated_manifesto}
                       </pre>
                     </div>
@@ -1131,7 +1134,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                     {purchaseResult.assigned_skills?.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 760 }}>
                         {purchaseResult.assigned_skills.map(s => (
-                          <span key={s} style={{ padding: '3px 10px', borderRadius: 999, background: 'rgba(113,52,226,0.2)', border: '1px solid rgba(113,52,226,0.4)', color: '#d8b4fe', fontSize: '0.72rem', fontWeight: 600 }}>
+                          <span key={s} style={{ padding: '3px 10px', borderRadius: 999, background: 'rgba(113,52,226,0.2)', border: '1px solid rgba(113,52,226,0.4)', color: 'var(--ac-d8b4fe)', fontSize: '0.72rem', fontWeight: 600 }}>
                             ✦ {s}
                           </span>
                         ))}
@@ -1165,12 +1168,12 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
       {isLoginModalOpen && (
         <div className="modal-backdrop">
           <div className="login-modal-card-3d">
-            <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 className="modal-title" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 className="modal-title" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>🔐 RECOrion Şirket Girişi</span>
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                   Yönetim veya çalışma alanı paneline güvenli erişim sağlayın.
                 </p>
               </div>
@@ -1179,7 +1182,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
             <form onSubmit={handleRealLogin} method="post" autoComplete="on" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               {loginError && (
-                <div style={{ padding: '10px 14px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ padding: '10px 14px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: 'var(--ac-fca5a5)', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>⚠️</span>
                   <span>{loginError}</span>
                 </div>
@@ -1187,7 +1190,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
               {/* Kurumsal E-Posta */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                <label htmlFor="login-username" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label htmlFor="login-username" style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>✉️ Kurumsal E-Posta Adresi</span>
                 </label>
                 <input 
@@ -1205,7 +1208,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
               {/* Şifre */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-                <label htmlFor="login-password" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label htmlFor="login-password" style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>🔑 Güvenli Şifre</span>
                 </label>
                 <input 
@@ -1223,7 +1226,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
               {/* Beni Hatırla (Remember Me) */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.82rem', color: '#cbd5e1', userSelect: 'none' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.82rem', color: 'var(--nt-cbd5e1)', userSelect: 'none' }}>
                   <input
                     type="checkbox"
                     name="remember"
@@ -1241,7 +1244,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                 <button type="submit" className="login-btn-submit-3d" disabled={isLoggingIn}>
                   {isLoggingIn ? (
                     <>
-                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }}></span>
+                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" style={{ width: 16, height: 16, border: '2px solid rgb(var(--rgb-ov) / 0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }}></span>
                       <span>Giriş Yapılıyor...</span>
                     </>
                   ) : (

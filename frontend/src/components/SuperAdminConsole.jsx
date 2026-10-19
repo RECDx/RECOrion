@@ -53,9 +53,12 @@ import {
   Image as ImageIcon,
   PauseCircle,
   PlayCircle,
-  Globe
+  Globe,
+  Menu
 } from 'lucide-react';
 import { api } from '../api';
+import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
+import ThemeToggle from '../ui/ThemeToggle';
 
 const TAB_SLUG_MAP = {
   DASHBOARD: 'dashboard',
@@ -288,6 +291,8 @@ export default function SuperAdminConsole({
 }) {
   // Sol Menü Daraltma / Genişletme State'i (Madde 4)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Tablet/telefonda sol menü açılır çekmece olarak çalışır
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isSavingTenantRef = useRef(false);
 
   // Aktif Menü Sekmesi (URL Hash Senkronize)
@@ -296,6 +301,7 @@ export default function SuperAdminConsole({
 
   const switchTab = (newTab, options = {}) => {
     setActiveTab(newTab);
+    setMobileNavOpen(false);
     const slug = TAB_SLUG_MAP[newTab] || 'dashboard';
     const targetHash = `#/super-admin/${slug}`;
     if (window.location.hash !== targetHash) {
@@ -348,7 +354,7 @@ export default function SuperAdminConsole({
 
   // Ortak Segmentli Kanban / Liste Seçici Bileşeni (Madde 2)
   const renderViewModeToggle = (mode, setMode) => (
-    <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', padding: 3, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+    <div style={{ display: 'flex', background: 'rgb(var(--rgb-ov) / 0.06)', padding: 3, borderRadius: 8, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
       <button
         type="button"
         onClick={() => setMode('KANBAN')}
@@ -358,7 +364,7 @@ export default function SuperAdminConsole({
           fontSize: '0.75rem',
           border: 'none',
           background: mode === 'KANBAN' ? '#7134e2' : 'transparent',
-          color: mode === 'KANBAN' ? '#fff' : '#94a3b8'
+          color: mode === 'KANBAN' ? '#fff' : 'var(--nt-94a3b8)'
         }}
         title="Kanban Kart Görünümü"
       >
@@ -374,7 +380,7 @@ export default function SuperAdminConsole({
           fontSize: '0.75rem',
           border: 'none',
           background: mode === 'LIST' ? '#7134e2' : 'transparent',
-          color: mode === 'LIST' ? '#fff' : '#94a3b8'
+          color: mode === 'LIST' ? '#fff' : 'var(--nt-94a3b8)'
         }}
         title="Liste Tablo Görünümü"
       >
@@ -411,7 +417,16 @@ export default function SuperAdminConsole({
 
   // UI & Geri Bildirim
   const [loading, setLoading] = useState(false);
-  const [actionFeedback, setActionFeedback] = useState(null);
+  // İşlem geri bildirimleri doğrudan ortak bildirim (toast) sistemiyle gösterilir.
+  // (Önceden state'e yazılıyordu; ardından çağrılan loadAllData() mesajı aynı anda
+  // sıfırladığı için başarı mesajları hiç görünmüyordu.) null ile çağrı etkisizdir.
+  // Şifre içeren mesajlar okunup kopyalanabilsin diye daha uzun süre ekranda kalır.
+  const setActionFeedback = (feedback) => {
+    if (!feedback?.text) return;
+    const type = ['success', 'error', 'warning', 'info'].includes(feedback.type) ? feedback.type : 'info';
+    const duration = /şifre|sifre|password/i.test(feedback.text) ? 30000 : undefined;
+    toast[type](feedback.text, { duration });
+  };
   const [processingId, setProcessingId] = useState(null);
   const [copiedKey, setCopiedKey] = useState(null);
 
@@ -823,7 +838,7 @@ export default function SuperAdminConsole({
 
   const handleGenerateManifestoForTenant = async () => {
     if (!tenantEditForm.name.trim()) {
-      alert("Lütfen önce şirket adını giriniz.");
+      notify("Lütfen önce şirket adını giriniz.");
       return;
     }
     try {
@@ -850,7 +865,7 @@ export default function SuperAdminConsole({
       ? `'${t.name}' şirketinin kartını PASİFE almak istediğinize emin misiniz?\n\nPasife alındığında şirket yöneticisi ve kullanıcıları sisteme giriş yapamayacaktır.`
       : `'${t.name}' şirketinin kartını tekrar AKTİFE almak istediğinize emin misiniz?\n\nAktife alındığında şirket kullanıcılarının sisteme erişimi açılacaktır.`;
 
-    if (!window.confirm(confirmMsg)) return;
+    if (!(await confirmDialog({ message: confirmMsg }))) return;
 
     try {
       setProcessingId('toggle-status-' + t.id);
@@ -860,7 +875,7 @@ export default function SuperAdminConsole({
         type: 'success',
         text: `✓ ${res.message || `'${t.name}' şirket durumu başarıyla güncellendi.`}`
       });
-      alert(`✓ İşlem Başarılı!\n\n${res.message || `'${t.name}' şirketi ${newStatus ? 'Aktif' : 'Pasif'} duruma getirildi.`}`);
+      notify(`✓ İşlem Başarılı!\n\n${res.message || `'${t.name}' şirketi ${newStatus ? 'Aktif' : 'Pasif'} duruma getirildi.`}`);
 
       // Eğer detay modalı bu şirket için açıksa formu da anında senkronize et
       if (selectedTenantDetails?.tenant?.id === t.id) {
@@ -874,7 +889,7 @@ export default function SuperAdminConsole({
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Şirket durumu değiştirilemedi: ' + err.message });
-      alert(`⚠️ Hata Alındı!\n\nŞirket durumu değiştirilemedi: ${err.message || 'Bilinmeyen hata'}`);
+      notify(`⚠️ Hata Alındı!\n\nŞirket durumu değiştirilemedi: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -892,11 +907,11 @@ export default function SuperAdminConsole({
   const handleDeleteTenant = async (t) => {
     if (!t?.id) return;
     if (isMainCompany(t)) {
-      alert("⚠️ RECDx Teknoloji & Dijital Dönüşüm Danışmanlığı LTD. Şirketi sistemin ana şirketidir ve SİLİNEMEZ!");
+      notify("⚠️ RECDx Teknoloji & Dijital Dönüşüm Danışmanlığı LTD. Şirketi sistemin ana şirketidir ve SİLİNEMEZ!");
       return;
     }
     const confirmText = `'${t.name}' şirketini sistemden kalıcı olarak SİLMEK istediğinize emin misiniz?\n\n⚠️ Dikkat: Bu işlem geri alınamaz!\n(Şirket içerisinde tanımlı departman, AI ajanı veya proje bulunması halinde silme işlemi engellenecektir.)`;
-    if (!window.confirm(confirmText)) return;
+    if (!(await confirmDialog({ message: confirmText }))) return;
 
     try {
       setProcessingId('delete-tenant-' + t.id);
@@ -905,7 +920,7 @@ export default function SuperAdminConsole({
         type: 'success',
         text: `✓ ${res.message || `'${t.name}' şirketi başarıyla silindi.`}`
       });
-      alert(`✓ İşlem Başarılı!\n\n${res.message || `'${t.name}' şirketi sistemden silindi.`}`);
+      notify(`✓ İşlem Başarılı!\n\n${res.message || `'${t.name}' şirketi sistemden silindi.`}`);
 
       // Eğer detay modalı açık ise kapat
       if (selectedTenantDetails?.tenant?.id === t.id) {
@@ -919,7 +934,7 @@ export default function SuperAdminConsole({
         type: 'error',
         text: 'Şirket silinemedi: ' + err.message
       });
-      alert(`⚠️ Şirket Silinemedi!\n\nSebep: ${err.message || 'Bilinmeyen hata'}`);
+      notify(`⚠️ Şirket Silinemedi!\n\nSebep: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -927,16 +942,16 @@ export default function SuperAdminConsole({
 
   // Manuel Paket Süre Dolum Hatırlatıcı Gönder (Madde 14)
   const handleSendManualReminder = async (t) => {
-    if (!window.confirm(`'${t.name}' şirketine (${t.contact_email}) paket kullanım süresi hatırlatıcı e-postası göndermek istiyor musunuz?`)) return;
+    if (!(await confirmDialog({ message: `'${t.name}' şirketine (${t.contact_email}) paket kullanım süresi hatırlatıcı e-postası göndermek istiyor musunuz?` }))) return;
     try {
       setProcessingId('reminder-' + t.id);
       const res = await api.sendManualReminder(t.id);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-      alert(`✓ E-Posta Başarıyla Gönderildi!\n\n${res.message || `'${t.name}' şirketine hatırlatıcı e-postası başarıyla iletildi.`}`);
+      notify(`✓ E-Posta Başarıyla Gönderildi!\n\n${res.message || `'${t.name}' şirketine hatırlatıcı e-postası başarıyla iletildi.`}`);
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Hatırlatıcı e-postası gönderilemedi: ' + err.message });
-      alert(`⚠️ E-Posta Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
+      notify(`⚠️ E-Posta Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
     } finally {
       setProcessingId(null);
     }
@@ -944,7 +959,7 @@ export default function SuperAdminConsole({
 
   // Kayıtlı Şirketler Ekranından Hızlı Onaylama
   const handleQuickApproveTenant = async (t) => {
-    if (!window.confirm(`'${t.name}' şirketinin üyeliğini ve 1 yıllık kurumsal paketini onaylamak istiyor musunuz?`)) return;
+    if (!(await confirmDialog({ message: `'${t.name}' şirketinin üyeliğini ve 1 yıllık kurumsal paketini onaylamak istiyor musunuz?` }))) return;
     try {
       setProcessingId('approve-' + t.id);
       await api.approveRegisteredTenant(t.id);
@@ -963,11 +978,11 @@ export default function SuperAdminConsole({
       setProcessingId('sched-' + sched.id);
       const res = await api.triggerSchedule(sched.id);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-      alert(`✓ Zamanlayıcı E-Postaları Başarıyla Gönderildi!\n\n${res.message || 'Kural işletildi.'}`);
+      notify(`✓ Zamanlayıcı E-Postaları Başarıyla Gönderildi!\n\n${res.message || 'Kural işletildi.'}`);
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Zamanlayıcı çalıştırılamadı: ' + err.message });
-      alert(`⚠️ Zamanlayıcı E-Postası Gönderilemedi!\n\nHata: ${err.message}`);
+      notify(`⚠️ Zamanlayıcı E-Postası Gönderilemedi!\n\nHata: ${err.message}`);
     } finally {
       setProcessingId(null);
     }
@@ -1067,7 +1082,7 @@ export default function SuperAdminConsole({
 
   const handleGenerateManifestoForNewTenant = async () => {
     if (!newTenantForm.name.trim()) {
-      alert("Lütfen önce şirket adını giriniz.");
+      notify("Lütfen önce şirket adını giriniz.");
       return;
     }
     try {
@@ -1091,7 +1106,7 @@ export default function SuperAdminConsole({
     if (e && e.preventDefault) e.preventDefault();
     if (isSavingTenantRef.current) return;
     if (!newTenantForm.name.trim() || !newTenantForm.contact_email.trim()) {
-      alert("Lütfen şirket adı ve e-posta adresini doldurunuz.");
+      notify("Lütfen şirket adı ve e-posta adresini doldurunuz.");
       return;
     }
 
@@ -1105,7 +1120,7 @@ export default function SuperAdminConsole({
     const emailParts = newTenantForm.contact_email.trim().toLowerCase().split('@');
     const domain = (emailParts[1] || '').trim();
     if (!domain || publicMailDomains.includes(domain) || publicMailDomains.some(d => domain.endsWith('.' + d))) {
-      alert(`⚠️ Kurumsal / Official E-Posta Zorunluluğu!\n\nMüşteri kaydı için şirkete ait resmi (official) bir şirket e-posta adresi gereklidir.\nGenel/ücretsiz (${domain || 'geçersiz'}) e-posta sağlayıcıları kabul edilmemektedir.\nLütfen 'adsoyad@sirketiniz.com' veya 'info@sirketiniz.com' gibi bir kurumsal adres giriniz.`);
+      notify(`⚠️ Kurumsal / Official E-Posta Zorunluluğu!\n\nMüşteri kaydı için şirkete ait resmi (official) bir şirket e-posta adresi gereklidir.\nGenel/ücretsiz (${domain || 'geçersiz'}) e-posta sağlayıcıları kabul edilmemektedir.\nLütfen 'adsoyad@sirketiniz.com' veya 'info@sirketiniz.com' gibi bir kurumsal adres giriniz.`);
       return;
     }
 
@@ -1153,7 +1168,7 @@ export default function SuperAdminConsole({
       });
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Müşteri ekleme hatası: ' + err.message });
-      alert(`⚠️ Müşteri Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
+      notify(`⚠️ Müşteri Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
       isSavingTenantRef.current = false;
@@ -1167,11 +1182,11 @@ export default function SuperAdminConsole({
       setProcessingId('welcome-' + t.id);
       const res = await api.sendManualWelcome(t.id);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-      alert(`✓ E-Posta Başarıyla Gönderildi!\n\n${res.message || `'${t.name}' şirketine kurumsal Hoş Geldiniz e-postası başarıyla iletildi.`}`);
+      notify(`✓ E-Posta Başarıyla Gönderildi!\n\n${res.message || `'${t.name}' şirketine kurumsal Hoş Geldiniz e-postası başarıyla iletildi.`}`);
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Hoş geldiniz e-postası gönderilemedi: ' + err.message });
-      alert(`⚠️ E-Posta Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
+      notify(`⚠️ E-Posta Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen bir hata oluştu.'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1272,17 +1287,17 @@ export default function SuperAdminConsole({
   const renderBlockStyleControls = (block) => (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 125px), 1fr))',
       gap: 6,
-      background: 'rgba(0,0,0,0.3)',
+      background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))',
       padding: '8px 10px',
       borderRadius: 6,
-      border: '1px solid rgba(255,255,255,0.06)',
+      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
       marginTop: 6
     }}>
       {/* Arka Plan Rengi */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>🎨 Arka Plan Rengi</span>
+        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>🎨 Arka Plan Rengi</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <input
             type="color"
@@ -1296,14 +1311,14 @@ export default function SuperAdminConsole({
             value={block.bgColor || ''}
             onChange={(e) => handleUpdateBlockField(block.id, 'bgColor', e.target.value)}
             placeholder={block.type === 'HEADER' ? '#1e1b4b' : block.type === 'FOOTER' ? '#060911' : '#0b0f19'}
-            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgb(var(--rgb-ov) / 0.05)', color: 'var(--nt-cbd5e1)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
           />
         </div>
       </div>
 
       {/* Yazı Rengi */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>✏️ Yazı Rengi</span>
+        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>✏️ Yazı Rengi</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <input
             type="color"
@@ -1317,18 +1332,18 @@ export default function SuperAdminConsole({
             value={block.textColor || ''}
             onChange={(e) => handleUpdateBlockField(block.id, 'textColor', e.target.value)}
             placeholder={block.type === 'HEADER' ? '#ffffff' : block.type === 'FOOTER' ? '#64748b' : '#cbd5e1'}
-            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgb(var(--rgb-ov) / 0.05)', color: 'var(--nt-cbd5e1)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
           />
         </div>
       </div>
 
       {/* Yazı Fontu */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>🔤 Yazı Fontu</span>
+        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>🔤 Yazı Fontu</span>
         <select
           value={block.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"}
           onChange={(e) => handleUpdateBlockField(block.id, 'fontFamily', e.target.value)}
-          style={{ fontSize: '0.65rem', padding: '3px 4px', background: '#0b0f19', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+          style={{ fontSize: '0.65rem', padding: '3px 4px', background: 'var(--sf-0b0f19)', color: 'var(--nt-e2e8f0)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
         >
           <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI / Standart</option>
           <option value="'Outfit', sans-serif">Outfit (Modern)</option>
@@ -1341,11 +1356,11 @@ export default function SuperAdminConsole({
 
       {/* Font Büyüklüğü */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700 }}>📏 Font Büyüklüğü</span>
+        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>📏 Font Büyüklüğü</span>
         <select
           value={block.fontSize || (block.type === 'HEADER' ? '26px' : block.type === 'FOOTER' ? '11px' : '14px')}
           onChange={(e) => handleUpdateBlockField(block.id, 'fontSize', e.target.value)}
-          style={{ fontSize: '0.65rem', padding: '3px 4px', background: '#0b0f19', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}
+          style={{ fontSize: '0.65rem', padding: '3px 4px', background: 'var(--sf-0b0f19)', color: 'var(--nt-e2e8f0)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
         >
           <option value="11px">11px (Çok Küçük)</option>
           <option value="12px">12px (Küçük)</option>
@@ -1364,7 +1379,7 @@ export default function SuperAdminConsole({
   );
 
   const handleTestSendFromModal = async () => {
-    const toEmail = prompt(`'${templateForm.name || "E-Posta"}' şablonunu test etmek için alıcı e-posta adresi giriniz:`, currentUser?.email || 'cuneyterdil@recdx.com');
+    const toEmail = (await promptDialog({ message: `'${templateForm.name || "E-Posta"}' şablonunu test etmek için alıcı e-posta adresi giriniz:`, defaultValue: currentUser?.email || 'cuneyterdil@recdx.com' }));
     if (!toEmail) return;
     try {
       setProcessingId('test-mail-modal');
@@ -1377,21 +1392,21 @@ export default function SuperAdminConsole({
           }
         });
         setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-        alert(`✓ Test e-postası '${toEmail}' adresine başarıyla gönderildi!`);
+        notify(`✓ Test e-postası '${toEmail}' adresine başarıyla gönderildi!`);
       } else {
         if (!templateForm.code.trim() || !templateForm.name.trim() || !templateForm.subject.trim()) {
-          alert("Lütfen önce şablon kodu, adı ve konusunu doldurunuz.");
+          notify("Lütfen önce şablon kodu, adı ve konusunu doldurunuz.");
           return;
         }
         const created = await api.createEmailTemplate(templateForm);
         setEditingTemplate(created);
         const res = await api.testSendEmailTemplate(created.id, { to_email: toEmail });
         setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-        alert(`✓ Şablon kaydedildi ve test e-postası '${toEmail}' adresine iletildi!`);
+        notify(`✓ Şablon kaydedildi ve test e-postası '${toEmail}' adresine iletildi!`);
         await loadAllData();
       }
     } catch (err) {
-      alert(`⚠️ Test e-postası iletilemedi:\n\n${err.message}`);
+      notify(`⚠️ Test e-postası iletilemedi:\n\n${err.message}`);
       setActionFeedback({ type: 'error', text: 'Test gönderim hatası: ' + err.message });
     } finally {
       setProcessingId(null);
@@ -1420,14 +1435,14 @@ export default function SuperAdminConsole({
   };
 
   const handleDeleteTemplate = async (tmpl) => {
-    if (!window.confirm(`'${tmpl.name}' (${tmpl.code}) e-posta şablonunu silmek istediğinize emin misiniz?\n\nNot: Bu şablon aktif zamanlayıcılarda veya sistem akışında kullanılmıyorsa silinebilir.`)) return;
+    if (!(await confirmDialog({ message: `'${tmpl.name}' (${tmpl.code}) e-posta şablonunu silmek istediğinize emin misiniz?\n\nNot: Bu şablon aktif zamanlayıcılarda veya sistem akışında kullanılmıyorsa silinebilir.`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId('del-tmpl-' + tmpl.id);
       await api.deleteEmailTemplate(tmpl.id);
       setActionFeedback({ type: 'success', text: `✓ '${tmpl.name}' şablonu silindi.` });
       await loadAllData();
     } catch (err) {
-      alert(`⚠️ E-POSTA ŞABLONU SİLİNEMEZ!\n\n${err.message}`);
+      notify(`⚠️ E-POSTA ŞABLONU SİLİNEMEZ!\n\n${err.message}`);
       setActionFeedback({ type: 'error', text: 'Şablon silinemedi: ' + err.message });
     } finally {
       setProcessingId(null);
@@ -1435,16 +1450,16 @@ export default function SuperAdminConsole({
   };
 
   const handleTestSendTemplate = async (tmpl) => {
-    const toEmail = prompt(`'${tmpl.name}' şablonunu test etmek için alıcı e-posta adresi giriniz:`, currentUser?.email || 'cuneyterdil@recdx.com');
+    const toEmail = (await promptDialog({ message: `'${tmpl.name}' şablonunu test etmek için alıcı e-posta adresi giriniz:`, defaultValue: currentUser?.email || 'cuneyterdil@recdx.com' }));
     if (!toEmail) return;
     try {
       setProcessingId('test-mail-' + tmpl.id);
       const res = await api.testSendEmailTemplate(tmpl.id, { to_email: toEmail });
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-      alert(`✓ Test E-Postası Başarıyla Gönderildi!\n\nAlıcı: ${toEmail}\n${res.message || 'E-posta SMTP üzerinden başarıyla iletildi.'}`);
+      notify(`✓ Test E-Postası Başarıyla Gönderildi!\n\nAlıcı: ${toEmail}\n${res.message || 'E-posta SMTP üzerinden başarıyla iletildi.'}`);
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Test e-postası gönderilemedi: ' + err.message });
-      alert(`⚠️ Test E-Postası Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen hata'}`);
+      notify(`⚠️ Test E-Postası Gönderilemedi!\n\nHata Alındı: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1498,7 +1513,7 @@ export default function SuperAdminConsole({
   };
 
   const handleDeleteSchedule = async (sched) => {
-    if (!window.confirm(`'${sched.name}' zamanlama kuralını silmek istediğinize emin misiniz?`)) return;
+    if (!(await confirmDialog({ message: `'${sched.name}' zamanlama kuralını silmek istediğinize emin misiniz?`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId('del-sched-' + sched.id);
       await api.deleteSchedule(sched.id);
@@ -1518,7 +1533,7 @@ export default function SuperAdminConsole({
       setProcessingId('save-tenant-admin');
       const res = await api.updateTenantAdmin(selectedTenantDetails.tenant.id, tenantAdminForm);
       setActionFeedback({ type: 'success', text: `✓ ${res.message}` });
-      alert(`✓ Yönetici ve Müşteri Kartı Güncellendi!\n\n${res.message || 'Yönetici bilgileri ve müşteri kartı başarıyla güncellendi.'}`);
+      notify(`✓ Yönetici ve Müşteri Kartı Güncellendi!\n\n${res.message || 'Yönetici bilgileri ve müşteri kartı başarıyla güncellendi.'}`);
       setTenantAdminForm(prev => ({ ...prev, new_password: '' }));
       setTenantEditForm(prev => ({
         ...prev,
@@ -1530,7 +1545,7 @@ export default function SuperAdminConsole({
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Yönetici güncelleme hatası: ' + err.message });
-      alert(`⚠️ Yönetici Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
+      notify(`⚠️ Yönetici Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1613,7 +1628,7 @@ export default function SuperAdminConsole({
   };
 
   const handleDeletePermission = async (perm) => {
-    if (!window.confirm(`'${perm.name}' (${perm.code}) iznini silmek istediğinize emin misiniz?`)) return;
+    if (!(await confirmDialog({ message: `'${perm.name}' (${perm.code}) iznini silmek istediğinize emin misiniz?`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId(perm.id);
       await api.deletePermission(perm.id);
@@ -1680,7 +1695,7 @@ export default function SuperAdminConsole({
   const handleSaveRole = async (e) => {
     e.preventDefault();
     if (!roleForm.name.trim()) {
-      alert("Lütfen rol adını giriniz.");
+      notify("Lütfen rol adını giriniz.");
       return;
     }
     try {
@@ -1706,14 +1721,14 @@ export default function SuperAdminConsole({
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Rol kaydedilemedi: ' + err.message });
-      alert(`⚠️ Rol Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
+      notify(`⚠️ Rol Kaydedilemedi!\n\nHata: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
   };
 
   const handleDeleteRole = async (role) => {
-    if (!window.confirm(`'${role.name}' yetki rolünü silmek istediğinize emin misiniz?`)) return;
+    if (!(await confirmDialog({ message: `'${role.name}' yetki rolünü silmek istediğinize emin misiniz?`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId('del-role-' + role.id);
       await api.deleteSystemRole(role.id);
@@ -1721,7 +1736,7 @@ export default function SuperAdminConsole({
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Rol silinemedi: ' + err.message });
-      alert(`⚠️ Rol Silinemedi!\n\nSebep: ${err.message || 'Bilinmeyen hata'}`);
+      notify(`⚠️ Rol Silinemedi!\n\nSebep: ${err.message || 'Bilinmeyen hata'}`);
     } finally {
       setProcessingId(null);
     }
@@ -1789,14 +1804,14 @@ export default function SuperAdminConsole({
   };
 
   const handleDeletePlan = async (plan) => {
-    if (!window.confirm(`'${plan.name}' (${plan.code}) kiralama paketini silmek istediğinize emin misiniz?\n\nNot: Bu paket hiçbir müşteri tarafından alınmamışsa silinebilir.`)) return;
+    if (!(await confirmDialog({ message: `'${plan.name}' (${plan.code}) kiralama paketini silmek istediğinize emin misiniz?\n\nNot: Bu paket hiçbir müşteri tarafından alınmamışsa silinebilir.`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId(plan.id);
       await api.deletePlan(plan.id);
       setActionFeedback({ type: 'success', text: `✓ '${plan.name}' paketi silindi.` });
       await loadAllData();
     } catch (err) {
-      alert(`⚠️ KİRALAMA PAKETİ SİLİNEMEZ!\n\n${err.message}`);
+      notify(`⚠️ KİRALAMA PAKETİ SİLİNEMEZ!\n\n${err.message}`);
       setActionFeedback({ type: 'error', text: 'Paket silinemedi: ' + err.message });
     } finally {
       setProcessingId(null);
@@ -1851,7 +1866,7 @@ export default function SuperAdminConsole({
   };
 
   const handleDeleteModel = async (model) => {
-    if (!window.confirm(`'${model.display_name}' modelini silmek istediğinize emin misiniz?`)) return;
+    if (!(await confirmDialog({ message: `'${model.display_name}' modelini silmek istediğinize emin misiniz?`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId(model.id);
       await api.deleteModel(model.id);
@@ -1905,7 +1920,7 @@ export default function SuperAdminConsole({
   const handleSaveProfession = async (e) => {
     e.preventDefault();
     if (!professionForm.code.trim() || !professionForm.name.trim() || !professionForm.sector_code.trim()) {
-      alert("Lütfen Meslek Kodu, Sektör Kodu ve Meslek Tanım Adı alanlarını doldurunuz.");
+      notify("Lütfen Meslek Kodu, Sektör Kodu ve Meslek Tanım Adı alanlarını doldurunuz.");
       return;
     }
     try {
@@ -1938,7 +1953,7 @@ export default function SuperAdminConsole({
   };
 
   const handleDeleteProfession = async (prof) => {
-    if (!window.confirm(`'${prof.code} - ${prof.name}' meslek tanımını silmek istediğinize emin misiniz?`)) return;
+    if (!(await confirmDialog({ message: `'${prof.code} - ${prof.name}' meslek tanımını silmek istediğinize emin misiniz?`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId(prof.code);
       await api.deleteProfession(prof.code);
@@ -1980,7 +1995,7 @@ export default function SuperAdminConsole({
   const handleSaveSector = async (e) => {
     e.preventDefault();
     if (!sectorForm.code.trim() || !sectorForm.name.trim()) {
-      alert("Lütfen Sektör Kodu ve Sektör Adı alanlarını doldurunuz.");
+      notify("Lütfen Sektör Kodu ve Sektör Adı alanlarını doldurunuz.");
       return;
     }
     try {
@@ -2015,7 +2030,7 @@ export default function SuperAdminConsole({
   };
 
   const handleDeleteSector = async (sec) => {
-    if (!window.confirm(`'${sec.code} - ${sec.name}' sektörünü ve bağlı meslek tanımlarını silmek istediğinize emin misiniz?`)) return;
+    if (!(await confirmDialog({ message: `'${sec.code} - ${sec.name}' sektörünü ve bağlı meslek tanımlarını silmek istediğinize emin misiniz?`, danger: true, confirmText: 'Evet, devam et' }))) return;
     try {
       setProcessingId(sec.code);
       await api.deleteSector(sec.code);
@@ -2121,7 +2136,8 @@ export default function SuperAdminConsole({
       {/* ======================================================== */}
       {/* SOL NAVBAR MENÜ (Kapanabilir 3D Sidebar - Madde 3 & 4)    */}
       {/* ======================================================== */}
-      <aside className={`super-admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      <div className={`super-admin-mobile-backdrop ${mobileNavOpen ? 'open' : ''}`} onClick={() => setMobileNavOpen(false)} />
+      <aside className={`super-admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-open' : ''}`}>
         {/* LOGO & KURUMSAL METİN (Madde 3: Kapanınca ikon üstte ortalanır) */}
         <div className="super-admin-sidebar-header" style={{ padding: sidebarCollapsed ? '16px 8px' : '16px 14px' }}>
           {sidebarCollapsed ? (
@@ -2169,7 +2185,7 @@ export default function SuperAdminConsole({
 
         {/* MENÜ LİSTESİ */}
         <nav className="super-admin-nav">
-          <div className="super-admin-nav-section-title">Genel & Operasyon</div>
+          <div className="super-admin-nav-section-title">Genel</div>
 
           {/* DASHBOARD (Madde 7) */}
           <button
@@ -2178,10 +2194,12 @@ export default function SuperAdminConsole({
             title="Dashboard (Genel Bakış)"
           >
             <div className="super-admin-nav-item-left">
-              <LayoutDashboard style={{ width: 17, height: 17, color: '#a78bfa' }} />
+              <LayoutDashboard style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
               {!sidebarCollapsed && <span>Dashboard (Genel Bakış)</span>}
             </div>
           </button>
+
+          <div className="super-admin-nav-section-title">Müşteriler</div>
 
           {/* BAŞVURU ONAY DURUM (Madde 8) */}
           <button
@@ -2190,7 +2208,7 @@ export default function SuperAdminConsole({
             title="Başvuru Onay Durum"
           >
             <div className="super-admin-nav-item-left">
-              <Clock style={{ width: 17, height: 17, color: '#38bdf8' }} />
+              <Clock style={{ width: 17, height: 17, color: 'var(--ac-38bdf8)' }} />
               {!sidebarCollapsed && <span>Başvuru Onay Durum</span>}
             </div>
             {leads.filter(l => l.status === 'PENDING').length > 0 && (
@@ -2215,15 +2233,62 @@ export default function SuperAdminConsole({
             title="Kayıtlı Şirketler"
           >
             <div className="super-admin-nav-item-left">
-              <Building2 style={{ width: 17, height: 17, color: '#818cf8' }} />
+              <Building2 style={{ width: 17, height: 17, color: 'var(--ac-818cf8)' }} />
               {!sidebarCollapsed && <span>Kayıtlı Şirketler</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{tenants.length}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{tenants.length}</span>
             )}
           </button>
 
-          <div className="super-admin-nav-section-title">Yetki & Paketler</div>
+          <div className="super-admin-nav-section-title">Katalog</div>
+
+          {/* SEKTÖR TANIMLARI (TİCARET BAKANLIĞI) */}
+          <button
+            onClick={() => { switchTab('SECTORS'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'SECTORS' ? 'active' : ''}`}
+            title="Sektör Tanımları (Ticaret Bakanlığı)"
+          >
+            <div className="super-admin-nav-item-left">
+              <Layers style={{ width: 17, height: 17, color: '#10b981' }} />
+              {!sidebarCollapsed && <span>Sektör Tanımları</span>}
+            </div>
+            {!sidebarCollapsed && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{sectors.length}</span>
+            )}
+          </button>
+
+          {/* MESLEK TANIMLARI (TİCARET BAKANLIĞI) */}
+          <button
+            onClick={() => { switchTab('PROFESSIONS'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'PROFESSIONS' ? 'active' : ''}`}
+            title="Meslek Grubu Tanımları (Ticaret Bakanlığı)"
+          >
+            <div className="super-admin-nav-item-left">
+              <Briefcase style={{ width: 17, height: 17, color: 'var(--ac-38bdf8)' }} />
+              {!sidebarCollapsed && <span>Meslek Tanımları</span>}
+            </div>
+            {!sidebarCollapsed && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{professions.length}</span>
+            )}
+          </button>
+
+          <div className="super-admin-nav-section-title">Ticari & Yetki</div>
+
+          {/* KİRALAMA PAKETLERİ */}
+          <button
+            onClick={() => { switchTab('PLANS'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'PLANS' ? 'active' : ''}`}
+            title="Kiralama Paketleri"
+          >
+            <div className="super-admin-nav-item-left">
+              <Package style={{ width: 17, height: 17, color: 'var(--ac-34d399)' }} />
+              {!sidebarCollapsed && <span>Kiralama Paketleri</span>}
+            </div>
+            {!sidebarCollapsed && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{plans.length}</span>
+            )}
+          </button>
 
           {/* İZİN KATALOĞU */}
           <button
@@ -2232,11 +2297,11 @@ export default function SuperAdminConsole({
             title="İzin Kataloğu (RBAC)"
           >
             <div className="super-admin-nav-item-left">
-              <KeyRound style={{ width: 17, height: 17, color: '#fbbf24' }} />
+              <KeyRound style={{ width: 17, height: 17, color: 'var(--ac-fbbf24)' }} />
               {!sidebarCollapsed && <span>İzin Kataloğu (RBAC)</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{permissions.length}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{permissions.length}</span>
             )}
           </button>
 
@@ -2251,22 +2316,7 @@ export default function SuperAdminConsole({
               {!sidebarCollapsed && <span>Yetki Rolleri</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{roles.length}</span>
-            )}
-          </button>
-
-          {/* KİRALAMA PAKETLERİ */}
-          <button
-            onClick={() => { switchTab('PLANS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'PLANS' ? 'active' : ''}`}
-            title="Kiralama Paketleri"
-          >
-            <div className="super-admin-nav-item-left">
-              <Package style={{ width: 17, height: 17, color: '#34d399' }} />
-              {!sidebarCollapsed && <span>Kiralama Paketleri</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{plans.length}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{roles.length}</span>
             )}
           </button>
 
@@ -2283,7 +2333,7 @@ export default function SuperAdminConsole({
               {!sidebarCollapsed && <span>E-Posta Şablonları</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{emailTemplates.length}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{emailTemplates.length}</span>
             )}
           </button>
 
@@ -2298,11 +2348,11 @@ export default function SuperAdminConsole({
               {!sidebarCollapsed && <span>Zamanlayıcılar (Schedules)</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{schedules.length}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{schedules.length}</span>
             )}
           </button>
 
-          <div className="super-admin-nav-section-title">Yapay Zeka & Sektörel</div>
+          <div className="super-admin-nav-section-title">Yapay Zeka</div>
 
           {/* GENEL AI MODELİ */}
           <button
@@ -2328,41 +2378,11 @@ export default function SuperAdminConsole({
             title="EVREN Modelleri"
           >
             <div className="super-admin-nav-item-left">
-              <Cpu style={{ width: 17, height: 17, color: '#a78bfa' }} />
+              <Cpu style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
               {!sidebarCollapsed && <span>EVREN Modelleri</span>}
             </div>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{models.length}</span>
-            )}
-          </button>
-
-          {/* SEKTÖR TANIMLARI (TİCARET BAKANLIĞI) */}
-          <button
-            onClick={() => { switchTab('SECTORS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'SECTORS' ? 'active' : ''}`}
-            title="Sektör Tanımları (Ticaret Bakanlığı)"
-          >
-            <div className="super-admin-nav-item-left">
-              <Layers style={{ width: 17, height: 17, color: '#10b981' }} />
-              {!sidebarCollapsed && <span>Sektör Tanımları</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{sectors.length}</span>
-            )}
-          </button>
-
-          {/* MESLEK TANIMLARI (TİCARET BAKANLIĞI) */}
-          <button
-            onClick={() => { switchTab('PROFESSIONS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'PROFESSIONS' ? 'active' : ''}`}
-            title="Meslek Grubu Tanımları (Ticaret Bakanlığı)"
-          >
-            <div className="super-admin-nav-item-left">
-              <Briefcase style={{ width: 17, height: 17, color: '#38bdf8' }} />
-              {!sidebarCollapsed && <span>Meslek Tanımları</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{professions.length}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{models.length}</span>
             )}
           </button>
         </nav>
@@ -2385,7 +2405,7 @@ export default function SuperAdminConsole({
               borderRadius: 12,
               fontSize: '0.785rem',
               fontWeight: 700,
-              color: '#38bdf8',
+              color: 'var(--ac-38bdf8)',
               background: 'rgba(56, 189, 248, 0.12)',
               border: '1px solid rgba(56, 189, 248, 0.3)',
               textDecoration: 'none',
@@ -2395,7 +2415,7 @@ export default function SuperAdminConsole({
             }}
             title="RECDx Resmi Web Sitesine Git (https://www.recdx.com - Yeni Sekmede Açılır)"
           >
-            <Globe style={{ width: 15, height: 15, color: '#38bdf8', flexShrink: 0 }} />
+            <Globe style={{ width: 15, height: 15, color: 'var(--ac-38bdf8)', flexShrink: 0 }} />
             {!sidebarCollapsed && <span>www.recdx.com</span>}
             {!sidebarCollapsed && <ExternalLink style={{ width: 12, height: 12, opacity: 0.8 }} />}
           </a>
@@ -2412,7 +2432,7 @@ export default function SuperAdminConsole({
               borderRadius: 12,
               fontSize: '0.785rem',
               fontWeight: 600,
-              color: '#f87171',
+              color: 'var(--ac-f87171)',
               background: 'rgba(239, 68, 68, 0.12)',
               border: '1px solid rgba(239, 68, 68, 0.25)',
               cursor: 'pointer',
@@ -2433,9 +2453,18 @@ export default function SuperAdminConsole({
         
         {/* ÜST HEADER */}
         <header className="super-admin-header">
+          <button
+            type="button"
+            className="ui-icon-btn ui-show-tablet"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Menüyü aç"
+            title="Menü"
+          >
+            <Menu size={18} />
+          </button>
           <div className="super-admin-header-title">
             <span>RECDx Süper Yönetim Konsolu</span>
-            <span style={{ color: '#64748b', fontSize: '0.8rem' }}>/</span>
+            <span style={{ color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>/</span>
             <span style={{ color: '#146ceb', fontSize: '0.825rem' }}>
               {activeTab === 'DASHBOARD' && 'Sistem Genel Bakış & Dashboard'}
               {activeTab === 'LEADS' && 'Başvuru Onay Durum Masası'}
@@ -2451,7 +2480,9 @@ export default function SuperAdminConsole({
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+            <ThemeToggle className="ui-hide-mobile" />
+            <ThemeToggle compact className="ui-show-mobile-only" />
             <button
               onClick={loadAllData}
               disabled={loading}
@@ -2470,11 +2501,11 @@ export default function SuperAdminConsole({
             >
               <div className="super-admin-user-avatar">MC</div>
               <div>
-                <div style={{ fontSize: '0.785rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: '0.785rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span>{currentUser?.display_name || 'Muhammed Cüneyt ERDİL'}</span>
                   <Settings style={{ width: 12, height: 12, opacity: 0.7 }} />
                 </div>
-                <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', fontFamily: 'monospace' }}>
                   {currentUser?.email || 'cuneyterdil@recdx.com'}
                 </div>
               </div>
@@ -2483,29 +2514,6 @@ export default function SuperAdminConsole({
         </header>
 
         {/* GERİ BİLDİRİM BANNERI */}
-        {actionFeedback && (
-          <div 
-            style={{
-              padding: '10px 28px',
-              fontSize: '0.785rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: actionFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              color: actionFeedback.type === 'success' ? '#6ee7b7' : '#fca5a5',
-              borderBottom: '1px solid ' + (actionFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)')
-            }}
-          >
-            <span>{actionFeedback.text}</span>
-            <button 
-              onClick={() => setActionFeedback(null)} 
-              style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}
-            >
-              ✕ Kapat
-            </button>
-          </div>
-        )}
-
         {/* İÇERİK GÖVDESİ */}
         <div className="super-admin-content">
           
@@ -2515,11 +2523,11 @@ export default function SuperAdminConsole({
               {/* Sayfa Başlığı */}
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <LayoutDashboard style={{ width: 22, height: 22, color: '#a78bfa' }} />
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <LayoutDashboard style={{ width: 22, height: 22, color: 'var(--ac-a78bfa)' }} />
                     <span>Süper Yönetim Kontrol Paneli (Dashboard)</span>
                   </h2>
-                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>
                     RECOrion platformunun kurumsal başvuru, şirket, yapay zeka modelleri ve altyapı metrikleri.
                   </p>
                 </div>
@@ -2530,7 +2538,7 @@ export default function SuperAdminConsole({
                     borderRadius: 999, 
                     background: 'rgba(16, 185, 129, 0.12)', 
                     border: '1px solid rgba(16, 185, 129, 0.3)',
-                    color: '#6ee7b7',
+                    color: 'var(--ac-6ee7b7)',
                     fontSize: '0.75rem',
                     fontWeight: 700,
                     display: 'flex',
@@ -2544,7 +2552,7 @@ export default function SuperAdminConsole({
               </div>
 
               {/* 3D KPI KARTLARI GRİDİ (Madde 7) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 18 }}>
                 
                 {/* KART 1: Aktif Edilmemiş Yeni Müşteri Sayısı (Tıklayınca Onaylanmamışlar Filtreli Açılır) */}
                 <div 
@@ -2554,10 +2562,10 @@ export default function SuperAdminConsole({
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-fbbf24)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Bekleyen Başvurular
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: 2 }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)', marginTop: 2 }}>
                         Aktif Edilmemiş Yeni Müşteriler
                       </div>
                     </div>
@@ -2570,14 +2578,14 @@ export default function SuperAdminConsole({
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
-                      color: '#fbbf24' 
+                      color: 'var(--ac-fbbf24)' 
                     }}>
                       <Clock style={{ width: 22, height: 22 }} />
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--nt-ffffff)', lineHeight: 1 }}>
                       {leads.filter(l => l.status === 'PENDING').length}
                     </span>
                     <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 700 }}>
@@ -2588,12 +2596,12 @@ export default function SuperAdminConsole({
                   <div style={{ 
                     marginTop: 14, 
                     paddingTop: 12, 
-                    borderTop: '1px solid rgba(255, 255, 255, 0.08)', 
+                    borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
                     fontSize: '0.725rem',
-                    color: '#fbbf24'
+                    color: 'var(--ac-fbbf24)'
                   }}>
                     <span style={{ fontWeight: 600 }}>Onay Listesine Git</span>
                     <ArrowRight style={{ width: 14, height: 14 }} />
@@ -2608,10 +2616,10 @@ export default function SuperAdminConsole({
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#c084fc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-c084fc)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Kurumsal Portföy
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: 2 }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)', marginTop: 2 }}>
                         Kayıtlı Şirketlerin Toplamı
                       </div>
                     </div>
@@ -2624,35 +2632,35 @@ export default function SuperAdminConsole({
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
-                      color: '#a78bfa' 
+                      color: 'var(--ac-a78bfa)' 
                     }}>
                       <Building2 style={{ width: 22, height: 22 }} />
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--nt-ffffff)', lineHeight: 1 }}>
                       {tenants.length}
                     </span>
-                    <span style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 700 }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--ac-c084fc)', fontWeight: 700 }}>
                       Kayıtlı Kurum / Şirket
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: '#cbd5e1', marginTop: 4 }}>
-                    <span style={{ color: '#34d399', fontWeight: 700 }}>{tenants.filter(t => t.is_active).length} Onaylı</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: 'var(--nt-cbd5e1)', marginTop: 4 }}>
+                    <span style={{ color: 'var(--ac-34d399)', fontWeight: 700 }}>{tenants.filter(t => t.is_active).length} Onaylı</span>
                     <span>•</span>
-                    <span style={{ color: '#fbbf24', fontWeight: 700 }}>{tenants.filter(t => !t.is_active).length} Onay Bekliyor</span>
+                    <span style={{ color: 'var(--ac-fbbf24)', fontWeight: 700 }}>{tenants.filter(t => !t.is_active).length} Onay Bekliyor</span>
                   </div>
 
                   <div style={{ 
                     marginTop: 14, 
                     paddingTop: 12, 
-                    borderTop: '1px solid rgba(255, 255, 255, 0.08)', 
+                    borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
                     fontSize: '0.725rem',
-                    color: '#c084fc'
+                    color: 'var(--ac-c084fc)'
                   }}>
                     <span style={{ fontWeight: 600 }}>Şirketler Listesini Aç</span>
                     <ArrowRight style={{ width: 14, height: 14 }} />
@@ -2668,10 +2676,10 @@ export default function SuperAdminConsole({
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-34d399)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Onaylanmış Portföy
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: 2 }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)', marginTop: 2 }}>
                         Odoo & Sistemde Aktif
                       </div>
                     </div>
@@ -2684,23 +2692,23 @@ export default function SuperAdminConsole({
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
-                      color: '#34d399' 
+                      color: 'var(--ac-34d399)' 
                     }}>
                       <CheckCircle2 style={{ width: 22, height: 22 }} />
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--nt-ffffff)', lineHeight: 1 }}>
                       {tenants.filter(t => t.is_active).length}
                     </span>
-                    <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700 }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--ac-34d399)', fontWeight: 700 }}>
                       Aktif / Onaylı Müşteri
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
-                    <span style={{ color: '#34d399', fontWeight: 700 }}>{leads.filter(l => l.status === 'APPROVED').length} Web Başvurusu</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>
+                    <span style={{ color: 'var(--ac-34d399)', fontWeight: 700 }}>{leads.filter(l => l.status === 'APPROVED').length} Web Başvurusu</span>
                     <span>•</span>
                     <span>{Math.max(0, tenants.filter(t => t.is_active).length - leads.filter(l => l.status === 'APPROVED').length)} Doğrudan Kurumsal</span>
                   </div>
@@ -2708,12 +2716,12 @@ export default function SuperAdminConsole({
                   <div style={{ 
                     marginTop: 14, 
                     paddingTop: 12, 
-                    borderTop: '1px solid rgba(255, 255, 255, 0.08)', 
+                    borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
                     fontSize: '0.725rem',
-                    color: '#34d399'
+                    color: 'var(--ac-34d399)'
                   }}>
                     <span style={{ fontWeight: 600 }}>Aktif Portföyü Gör</span>
                     <ArrowRight style={{ width: 14, height: 14 }} />
@@ -2729,10 +2737,10 @@ export default function SuperAdminConsole({
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-38bdf8)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Yapay Zeka Altyapısı
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: 2 }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)', marginTop: 2 }}>
                         Tanımlı EVREN Modelleri
                       </div>
                     </div>
@@ -2745,17 +2753,17 @@ export default function SuperAdminConsole({
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
-                      color: '#38bdf8' 
+                      color: 'var(--ac-38bdf8)' 
                     }}>
                       <Cpu style={{ width: 22, height: 22 }} />
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+                    <span style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--nt-ffffff)', lineHeight: 1 }}>
                       {models.length}
                     </span>
-                    <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700 }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--ac-38bdf8)', fontWeight: 700 }}>
                       LLM Muhakeme Motoru
                     </span>
                   </div>
@@ -2763,12 +2771,12 @@ export default function SuperAdminConsole({
                   <div style={{ 
                     marginTop: 14, 
                     paddingTop: 12, 
-                    borderTop: '1px solid rgba(255, 255, 255, 0.08)', 
+                    borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)', 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
                     fontSize: '0.725rem',
-                    color: '#38bdf8'
+                    color: 'var(--ac-38bdf8)'
                   }}>
                     <span style={{ fontWeight: 600 }}>Model Kataloğuna Git</span>
                     <ArrowRight style={{ width: 14, height: 14 }} />
@@ -2778,13 +2786,13 @@ export default function SuperAdminConsole({
               </div>
 
               {/* DASHBOARD ALT ALAN: Bekleyen Başvuru Özeti & Sistem Durumu */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20 }}>
                 
                 {/* SOL: Bekleyen Yeni Başvurular Önizleme */}
                 <div style={{ 
-                  background: 'linear-gradient(180deg, #101628 0%, #0d1222 100%)',
+                  background: 'linear-gradient(180deg, var(--sf-101628) 0%, var(--sf-0d1222) 100%)',
                   borderRadius: 18,
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   padding: 20,
                   display: 'flex',
                   flexDirection: 'column',
@@ -2793,7 +2801,7 @@ export default function SuperAdminConsole({
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Clock style={{ width: 18, height: 18, color: '#f59e0b' }} />
-                      <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff' }}>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                         Onay Bekleyen Son Başvurular
                       </h3>
                     </div>
@@ -2807,10 +2815,10 @@ export default function SuperAdminConsole({
                   </div>
 
                   {leads.filter(l => l.status === 'PENDING').length === 0 ? (
-                    <div style={{ padding: '36px 20px', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+                    <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--nt-64748b)', fontSize: '0.85rem' }}>
                       <CheckCircle2 style={{ width: 36, height: 36, color: '#10b981', margin: '0 auto 8px', opacity: 0.8 }} />
                       <div>Şu anda onay bekleyen yeni başvuru bulunmuyor.</div>
-                      <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 4 }}>Tüm müşteri talepleri işleme alındı.</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--nt-475569)', marginTop: 4 }}>Tüm müşteri talepleri işleme alındı.</div>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2818,7 +2826,7 @@ export default function SuperAdminConsole({
                         <div 
                           key={ld.id}
                           style={{
-                            background: 'rgba(255, 255, 255, 0.02)',
+                            background: 'rgb(var(--rgb-ov) / 0.02)',
                             border: '1px solid rgba(245, 158, 11, 0.2)',
                             borderRadius: 12,
                             padding: '12px 14px',
@@ -2829,15 +2837,15 @@ export default function SuperAdminConsole({
                           }}
                         >
                           <div>
-                            <div style={{ fontWeight: 800, color: '#fff', fontSize: '0.85rem' }}>
+                            <div style={{ fontWeight: 800, color: 'var(--nt-ffffff)', fontSize: '0.85rem' }}>
                               {ld.company_name}
                             </div>
-                            <div style={{ fontSize: '0.725rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)', display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
                               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <Mail style={{ width: 12, height: 12, color: '#818cf8' }} />
+                                <Mail style={{ width: 12, height: 12, color: 'var(--ac-818cf8)' }} />
                                 {ld.contact_email}
                               </span>
-                              <span style={{ color: '#38bdf8', fontWeight: 600 }}>
+                              <span style={{ color: 'var(--ac-38bdf8)', fontWeight: 600 }}>
                                 {ld.plan?.name || 'Paket Bilgisi'}
                               </span>
                             </div>
@@ -2864,17 +2872,17 @@ export default function SuperAdminConsole({
 
                 {/* SAĞ: Sistem Entegrasyonları ve Altyapı Özeti */}
                 <div style={{ 
-                  background: 'linear-gradient(180deg, #101628 0%, #0d1222 100%)',
+                  background: 'linear-gradient(180deg, var(--sf-101628) 0%, var(--sf-0d1222) 100%)',
                   borderRadius: 18,
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   padding: 20,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 16
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <ShieldCheck style={{ width: 18, height: 18, color: '#818cf8' }} />
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff' }}>
+                    <ShieldCheck style={{ width: 18, height: 18, color: 'var(--ac-818cf8)' }} />
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                       Altyapı & Entegrasyon Durumu
                     </h3>
                   </div>
@@ -2884,20 +2892,20 @@ export default function SuperAdminConsole({
                     <div style={{ 
                       padding: '10px 12px', 
                       borderRadius: 10, 
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: 'rgb(var(--rgb-ov) / 0.03)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Sparkles style={{ width: 15, height: 15, color: '#c084fc' }} />
+                        <Sparkles style={{ width: 15, height: 15, color: 'var(--ac-c084fc)' }} />
                         <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#fff' }}>EVREN LLM Gateway</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontFamily: 'monospace' }}>https://evren-llmapi.ssyz.org.tr/v1</div>
+                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>EVREN LLM Gateway</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', fontFamily: 'monospace' }}>https://evren-llmapi.ssyz.org.tr/v1</div>
                         </div>
                       </div>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#34d399', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 999 }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-34d399)', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 999 }}>
                         Aktif
                       </span>
                     </div>
@@ -2905,17 +2913,17 @@ export default function SuperAdminConsole({
                     <div style={{ 
                       padding: '10px 12px', 
                       borderRadius: 10, 
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: 'rgb(var(--rgb-ov) / 0.03)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Cpu style={{ width: 15, height: 15, color: '#38bdf8' }} />
+                        <Cpu style={{ width: 15, height: 15, color: 'var(--ac-38bdf8)' }} />
                         <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#fff' }}>Çekirdek Manifesto Modeli</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Ajan rolleri ve şirket manifestosu</div>
+                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>Çekirdek Manifesto Modeli</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>Ajan rolleri ve şirket manifestosu</div>
                         </div>
                       </div>
                       <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', background: '#7134e2', padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace' }}>
@@ -2926,20 +2934,20 @@ export default function SuperAdminConsole({
                     <div style={{ 
                       padding: '10px 12px', 
                       borderRadius: 10, 
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: 'rgb(var(--rgb-ov) / 0.03)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Layers style={{ width: 15, height: 15, color: '#fbbf24' }} />
+                        <Layers style={{ width: 15, height: 15, color: 'var(--ac-fbbf24)' }} />
                         <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#fff' }}>Odoo 19 ERP Modülleri</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>sale.order & res.partner senkronizasyonu</div>
+                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>Odoo 19 ERP Modülleri</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>sale.order & res.partner senkronizasyonu</div>
                         </div>
                       </div>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#34d399', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 999 }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-34d399)', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 999 }}>
                         Bağlı
                       </span>
                     </div>
@@ -2947,8 +2955,8 @@ export default function SuperAdminConsole({
                     <div style={{ 
                       padding: '10px 12px', 
                       borderRadius: 10, 
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: 'rgb(var(--rgb-ov) / 0.03)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between'
@@ -2956,11 +2964,11 @@ export default function SuperAdminConsole({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <KeyRound style={{ width: 15, height: 15, color: '#10b981' }} />
                         <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: '#fff' }}>Yetki & Rol Tanımları</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>RBAC kataloğu ve personel ünvanları</div>
+                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>Yetki & Rol Tanımları</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>RBAC kataloğu ve personel ünvanları</div>
                         </div>
                       </div>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#cbd5e1', fontFamily: 'monospace' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--nt-cbd5e1)', fontFamily: 'monospace' }}>
                         {permissions.length} İzin / {roles.length} Rol
                       </span>
                     </div>
@@ -2978,11 +2986,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Clock style={{ width: 20, height: 20, color: '#38bdf8' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Clock style={{ width: 20, height: 20, color: 'var(--ac-38bdf8)' }} />
                     <span>Başvuru Onay Durum Masası</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     Resmi siteden paket kiralayan müşterilerin Odoo 19 siparişleri ve onay süreçleri.
                   </p>
                 </div>
@@ -3013,7 +3021,7 @@ export default function SuperAdminConsole({
                   {renderViewModeToggle(leadViewMode, setLeadViewMode)}
 
                   <div style={{ width: 220, position: 'relative' }}>
-                    <Search style={{ width: 14, height: 14, position: 'absolute', left: 10, top: 11, color: '#64748b' }} />
+                    <Search style={{ width: 14, height: 14, position: 'absolute', left: 10, top: 11, color: 'var(--nt-64748b)' }} />
                     <input
                       type="text"
                       value={searchQuery}
@@ -3027,38 +3035,38 @@ export default function SuperAdminConsole({
               </div>
 
               {leadViewMode === 'KANBAN' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'start' }}>
+                <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'start' }}>
                   {/* Kolon 1: Onay Bekleyenler */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 14, border: '1px solid rgba(245,158,11,0.25)', padding: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 14 }}>
+                  <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', borderRadius: 14, border: '1px solid rgba(245,158,11,0.25)', padding: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.06)', marginBottom: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Clock style={{ width: 16, height: 16, color: '#fbbf24' }} />
-                        <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', margin: 0 }}>Onay Bekleyen Başvurular</h4>
+                        <Clock style={{ width: 16, height: 16, color: 'var(--ac-fbbf24)' }} />
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: 0 }}>Onay Bekleyen Başvurular</h4>
                       </div>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, background: 'rgba(245,158,11,0.2)', color: '#fbbf24', padding: '2px 8px', borderRadius: 999 }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, background: 'rgba(245,158,11,0.2)', color: 'var(--ac-fbbf24)', padding: '2px 8px', borderRadius: 999 }}>
                         {leads.filter(l => l.status === 'PENDING').length}
                       </span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {leads.filter(l => l.status === 'PENDING').filter(l => !searchQuery || l.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) || l.contact_email?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                        <div style={{ padding: '28px', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>
+                        <div style={{ padding: '28px', textAlign: 'center', color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>
                           Onay bekleyen başvuru bulunmuyor.
                         </div>
                       ) : (
                         leads.filter(l => l.status === 'PENDING').filter(l => !searchQuery || l.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) || l.contact_email?.toLowerCase().includes(searchQuery.toLowerCase())).map(lead => (
                           <div key={lead.id} className="super-admin-card" style={{ padding: 14, border: '1px solid rgba(245,158,11,0.25)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#34d399', fontWeight: 800 }}>
+                              <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--ac-34d399)', fontWeight: 800 }}>
                                 {lead.odoo_order_name || 'Odoo: Otomatik'}
                               </span>
-                              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(245,158,11,0.2)', padding: '2px 6px', borderRadius: 4 }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-fbbf24)', background: 'rgba(245,158,11,0.2)', padding: '2px 6px', borderRadius: 4 }}>
                                 ⏳ Onay Bekliyor
                               </span>
                             </div>
-                            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff', margin: '8px 0 4px 0' }}>{lead.company_name}</h4>
-                            <div style={{ fontSize: '0.725rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: '8px 0 4px 0' }}>{lead.company_name}</h4>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)', display: 'flex', flexDirection: 'column', gap: 3 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Mail style={{ width: 12, height: 12, color: '#818cf8' }} />
+                                <Mail style={{ width: 12, height: 12, color: 'var(--ac-818cf8)' }} />
                                 <span>{lead.contact_email}</span>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3066,8 +3074,8 @@ export default function SuperAdminConsole({
                                 <span>{lead.phone || '-'}</span>
                               </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a78bfa' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--ac-a78bfa)' }}>
                                 {lead.plan?.name || 'Standart Paket'}
                               </span>
                               <button
@@ -3088,36 +3096,36 @@ export default function SuperAdminConsole({
                   </div>
 
                   {/* Kolon 2: Onaylananlar */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 14, border: '1px solid rgba(16,185,129,0.25)', padding: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 14 }}>
+                  <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', borderRadius: 14, border: '1px solid rgba(16,185,129,0.25)', padding: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.06)', marginBottom: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399' }} />
-                        <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', margin: 0 }}>Onaylanan ve Aktif Başvurular</h4>
+                        <CheckCircle2 style={{ width: 16, height: 16, color: 'var(--ac-34d399)' }} />
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: 0 }}>Onaylanan ve Aktif Başvurular</h4>
                       </div>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, background: 'rgba(16,185,129,0.2)', color: '#34d399', padding: '2px 8px', borderRadius: 999 }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, background: 'rgba(16,185,129,0.2)', color: 'var(--ac-34d399)', padding: '2px 8px', borderRadius: 999 }}>
                         {leads.filter(l => l.status === 'APPROVED').length}
                       </span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {leads.filter(l => l.status === 'APPROVED').filter(l => !searchQuery || l.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) || l.contact_email?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                        <div style={{ padding: '28px', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>
+                        <div style={{ padding: '28px', textAlign: 'center', color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>
                           Henüz onaylanmış başvuru bulunmuyor.
                         </div>
                       ) : (
                         leads.filter(l => l.status === 'APPROVED').filter(l => !searchQuery || l.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) || l.contact_email?.toLowerCase().includes(searchQuery.toLowerCase())).map(lead => (
                           <div key={lead.id} className="super-admin-card" style={{ padding: 14, border: '1px solid rgba(16,185,129,0.25)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#34d399', fontWeight: 800 }}>
+                              <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--ac-34d399)', fontWeight: 800 }}>
                                 {lead.odoo_order_name || 'Odoo: Onaylandı'}
                               </span>
-                              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#34d399', background: 'rgba(16,185,129,0.2)', padding: '2px 6px', borderRadius: 4 }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-34d399)', background: 'rgba(16,185,129,0.2)', padding: '2px 6px', borderRadius: 4 }}>
                                 ✓ Aktif
                               </span>
                             </div>
-                            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff', margin: '8px 0 4px 0' }}>{lead.company_name}</h4>
-                            <div style={{ fontSize: '0.725rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: '8px 0 4px 0' }}>{lead.company_name}</h4>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)', display: 'flex', flexDirection: 'column', gap: 3 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Mail style={{ width: 12, height: 12, color: '#818cf8' }} />
+                                <Mail style={{ width: 12, height: 12, color: 'var(--ac-818cf8)' }} />
                                 <span>{lead.contact_email}</span>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3125,11 +3133,11 @@ export default function SuperAdminConsole({
                                 <span>{lead.phone || '-'}</span>
                               </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a78bfa' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--ac-a78bfa)' }}>
                                 {lead.plan?.name || 'Paket'}
                               </span>
-                              <span style={{ fontSize: '0.72rem', color: '#6ee7b7', fontWeight: 700 }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--ac-6ee7b7)', fontWeight: 700 }}>
                                 Aktivasyon Tamamlandı
                               </span>
                             </div>
@@ -3155,7 +3163,7 @@ export default function SuperAdminConsole({
                     <tbody>
                       {filteredLeads.length === 0 ? (
                         <tr>
-                          <td colSpan="6" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                          <td colSpan="6" style={{ textAlign: 'center', padding: '36px', color: 'var(--nt-64748b)' }}>
                             {leadApprovalFilter === 'PENDING'
                               ? 'Şu anda onay bekleyen müşteri başvurusu bulunmuyor.'
                               : 'Henüz onaylanmış müşteri başvurusu bulunmuyor.'}
@@ -3165,9 +3173,9 @@ export default function SuperAdminConsole({
                         filteredLeads.map((lead) => (
                           <tr key={lead.id}>
                             <td>
-                              <div style={{ fontWeight: 800, color: '#fff' }}>{lead.company_name}</div>
-                              <div style={{ fontSize: '0.725rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                <Mail style={{ width: 12, height: 12, color: '#818cf8' }} />
+                              <div style={{ fontWeight: 800, color: 'var(--nt-ffffff)' }}>{lead.company_name}</div>
+                              <div style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                <Mail style={{ width: 12, height: 12, color: 'var(--ac-818cf8)' }} />
                                 <span>{lead.contact_email}</span>
                               </div>
                             </td>
@@ -3176,25 +3184,25 @@ export default function SuperAdminConsole({
                                 <Phone style={{ width: 12, height: 12 }} />
                                 <span>{lead.phone || '-'}</span>
                               </div>
-                              <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 3 }}>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', marginTop: 3 }}>
                                 {lead.nace_codes && lead.nace_codes.length > 0 ? lead.nace_codes.slice(0, 2).join(', ') : 'NACE yok'}
                               </div>
                             </td>
                             <td>
-                              <span style={{ fontWeight: 700, color: '#fff' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--nt-ffffff)' }}>
                                 {lead.plan ? lead.plan.name : 'Standart Paket'}
                               </span>
                             </td>
-                            <td style={{ fontFamily: 'monospace', color: '#34d399', fontWeight: 700 }}>
+                            <td style={{ fontFamily: 'monospace', color: 'var(--ac-34d399)', fontWeight: 700 }}>
                               {lead.odoo_order_name || 'Otomatik'}
                             </td>
                             <td>
                               {lead.status === 'APPROVED' ? (
-                                <span style={{ background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800 }}>
+                                <span style={{ background: 'rgba(16,185,129,0.2)', color: 'var(--ac-6ee7b7)', border: '1px solid rgba(16,185,129,0.3)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800 }}>
                                   ✓ Onaylandı & Aktif
                                 </span>
                               ) : (
-                                <span style={{ background: 'rgba(245,158,11,0.2)', color: '#fcd34d', border: '1px solid rgba(245,158,11,0.3)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800 }}>
+                                <span style={{ background: 'rgba(245,158,11,0.2)', color: 'var(--ac-fcd34d)', border: '1px solid rgba(245,158,11,0.3)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800 }}>
                                   ⏳ Onay Bekliyor
                                 </span>
                               )}
@@ -3211,7 +3219,7 @@ export default function SuperAdminConsole({
                                   <span>Onayla & Aktif Et</span>
                                 </button>
                               ) : (
-                                <span style={{ fontSize: '0.725rem', color: '#64748b' }}>Aktivasyon Tamamlandı</span>
+                                <span style={{ fontSize: '0.725rem', color: 'var(--nt-64748b)' }}>Aktivasyon Tamamlandı</span>
                               )}
                             </td>
                           </tr>
@@ -3229,11 +3237,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Building2 style={{ width: 20, height: 20, color: '#818cf8' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Building2 style={{ width: 20, height: 20, color: 'var(--ac-818cf8)' }} />
                     <span>Kayıtlı Kurumlar ve Şirketler (Tenants)</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     Kayıtlı kurumlar, paket süreleri, 3 ay bitim alarmları, yönetici hesapları ve sözleşme durumları.
                   </p>
                 </div>
@@ -3250,7 +3258,7 @@ export default function SuperAdminConsole({
                   </button>
 
                   {/* Durum Filtresi (Tümü / Onaylananlar / Onay Bekleyenler) */}
-                  <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', padding: 3, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', background: 'rgb(var(--rgb-ov) / 0.06)', padding: 3, borderRadius: 8, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                     <button
                       onClick={() => setTenantStatusFilter('ALL')}
                       className="super-admin-btn-secondary"
@@ -3259,7 +3267,7 @@ export default function SuperAdminConsole({
                         fontSize: '0.75rem',
                         border: 'none',
                         background: tenantStatusFilter === 'ALL' ? '#7134e2' : 'transparent',
-                        color: tenantStatusFilter === 'ALL' ? '#fff' : '#94a3b8'
+                        color: tenantStatusFilter === 'ALL' ? '#fff' : 'var(--nt-94a3b8)'
                       }}
                       title="Tüm Şirketleri Listele"
                     >
@@ -3273,11 +3281,11 @@ export default function SuperAdminConsole({
                         fontSize: '0.75rem',
                         border: 'none',
                         background: tenantStatusFilter === 'APPROVED' ? 'rgba(16,185,129,0.3)' : 'transparent',
-                        color: tenantStatusFilter === 'APPROVED' ? '#34d399' : '#94a3b8'
+                        color: tenantStatusFilter === 'APPROVED' ? 'var(--ac-34d399)' : 'var(--nt-94a3b8)'
                       }}
                       title="Aktif Durumdaki Şirketleri Listele"
                     >
-                      <CheckCircle2 style={{ width: 13, height: 13, color: '#34d399' }} />
+                      <CheckCircle2 style={{ width: 13, height: 13, color: 'var(--ac-34d399)' }} />
                       <span>Aktif ({tenants.filter(t => t.is_active).length})</span>
                     </button>
                     <button
@@ -3288,17 +3296,17 @@ export default function SuperAdminConsole({
                         fontSize: '0.75rem',
                         border: 'none',
                         background: tenantStatusFilter === 'PENDING' ? 'rgba(239,68,68,0.25)' : 'transparent',
-                        color: tenantStatusFilter === 'PENDING' ? '#f87171' : '#94a3b8'
+                        color: tenantStatusFilter === 'PENDING' ? 'var(--ac-f87171)' : 'var(--nt-94a3b8)'
                       }}
                       title="Pasife Alınmış veya Onay Bekleyen Şirketleri Listele"
                     >
-                      <PauseCircle style={{ width: 13, height: 13, color: '#f87171' }} />
+                      <PauseCircle style={{ width: 13, height: 13, color: 'var(--ac-f87171)' }} />
                       <span>Pasif / Bekleyen ({tenants.filter(t => !t.is_active).length})</span>
                     </button>
                   </div>
 
                   {/* Kanban / Liste Format Butonları (Madde 8) */}
-                  <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', padding: 3, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', background: 'rgb(var(--rgb-ov) / 0.06)', padding: 3, borderRadius: 8, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                     <button
                       onClick={() => setTenantViewMode('KANBAN')}
                       className="super-admin-btn-secondary"
@@ -3307,7 +3315,7 @@ export default function SuperAdminConsole({
                         fontSize: '0.75rem',
                         border: 'none',
                         background: tenantViewMode === 'KANBAN' ? '#7134e2' : 'transparent',
-                        color: tenantViewMode === 'KANBAN' ? '#fff' : '#94a3b8'
+                        color: tenantViewMode === 'KANBAN' ? '#fff' : 'var(--nt-94a3b8)'
                       }}
                       title="Kanban Kart Görünümü"
                     >
@@ -3322,7 +3330,7 @@ export default function SuperAdminConsole({
                         fontSize: '0.75rem',
                         border: 'none',
                         background: tenantViewMode === 'LIST' ? '#7134e2' : 'transparent',
-                        color: tenantViewMode === 'LIST' ? '#fff' : '#94a3b8'
+                        color: tenantViewMode === 'LIST' ? '#fff' : 'var(--nt-94a3b8)'
                       }}
                       title="Liste Tablo Görünümü"
                     >
@@ -3333,7 +3341,7 @@ export default function SuperAdminConsole({
 
                   {/* Arama */}
                   <div style={{ width: 240, position: 'relative' }}>
-                    <Search style={{ width: 14, height: 14, position: 'absolute', left: 10, top: 11, color: '#64748b' }} />
+                    <Search style={{ width: 14, height: 14, position: 'absolute', left: 10, top: 11, color: 'var(--nt-64748b)' }} />
                     <input
                       type="text"
                       value={searchQuery}
@@ -3361,7 +3369,7 @@ export default function SuperAdminConsole({
                       <div>
                         {/* Üst Kısım: Logo & Onay Durum Rozeti (Madde 10) */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, rgba(113,52,226,0.4), rgba(20,108,235,0.4))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, rgba(113,52,226,0.4), rgba(20,108,235,0.4))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: 'var(--nt-ffffff)', border: '1px solid rgb(var(--rgb-ov) / 0.1)' }}>
                             {t.name.slice(0, 2).toUpperCase()}
                           </div>
 
@@ -3370,7 +3378,7 @@ export default function SuperAdminConsole({
                             {t.is_active ? (
                               <span style={{
                                 padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800,
-                                background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)',
+                                background: 'rgba(16,185,129,0.2)', color: 'var(--ac-6ee7b7)', border: '1px solid rgba(16,185,129,0.3)',
                                 display: 'flex', alignItems: 'center', gap: 4
                               }}>
                                 <CheckCircle2 style={{ width: 12, height: 12 }} />
@@ -3379,7 +3387,7 @@ export default function SuperAdminConsole({
                             ) : (
                               <span style={{
                                 padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800,
-                                background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)',
+                                background: 'rgba(239,68,68,0.2)', color: 'var(--ac-fca5a5)', border: '1px solid rgba(239,68,68,0.3)',
                                 display: 'flex', alignItems: 'center', gap: 4
                               }}>
                                 <PauseCircle style={{ width: 12, height: 12 }} />
@@ -3389,15 +3397,15 @@ export default function SuperAdminConsole({
                           </div>
                         </div>
 
-                        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', marginTop: 12 }}>{t.name}</h3>
+                        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginTop: 12 }}>{t.name}</h3>
 
                         {/* Açıklamalı Slug / Sistem Kimliği Etiketi (Madde 10 - Kullanıcı Sorusu Cevabı) */}
                         <div style={{ 
-                          fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(255,255,255,0.03)', 
+                          fontSize: '0.7rem', color: 'var(--nt-94a3b8)', background: 'rgb(var(--rgb-ov) / 0.03)', 
                           padding: '4px 8px', borderRadius: 6, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 
                         }}>
-                          <Tag style={{ width: 12, height: 12, color: '#38bdf8' }} />
-                          <span><strong>🔑 Sistem Kimliği / URL:</strong> <code style={{ color: '#38bdf8' }}>{t.slug}</code></span>
+                          <Tag style={{ width: 12, height: 12, color: 'var(--ac-38bdf8)' }} />
+                          <span><strong>🔑 Sistem Kimliği / URL:</strong> <code style={{ color: 'var(--ac-38bdf8)' }}>{t.slug}</code></span>
                         </div>
 
                         {/* Faaliyet Sektörleri Rozetleri (Madde 1) */}
@@ -3415,7 +3423,7 @@ export default function SuperAdminConsole({
                                     fontWeight: 700,
                                     background: 'rgba(99,102,241,0.2)',
                                     border: '1px solid rgba(129,140,248,0.4)',
-                                    color: '#c7d2fe',
+                                    color: 'var(--ac-c7d2fe)',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: 4
@@ -3430,19 +3438,19 @@ export default function SuperAdminConsole({
                         )}
 
                         {/* Paket & Bitiş Tarihi Bilgileri (Madde 10) */}
-                        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)', display: 'flex', flexDirection: 'column', gap: 5 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                            <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <Package style={{ width: 13, height: 13, color: '#a78bfa' }} /> Paket:
+                            <span style={{ color: 'var(--nt-94a3b8)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <Package style={{ width: 13, height: 13, color: 'var(--ac-a78bfa)' }} /> Paket:
                             </span>
-                            <span style={{ color: '#fff', fontWeight: 700 }}>{t.plan_name || 'Standart Kiralama'}</span>
+                            <span style={{ color: 'var(--nt-ffffff)', fontWeight: 700 }}>{t.plan_name || 'Standart Kiralama'}</span>
                           </div>
 
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                            <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <Calendar style={{ width: 13, height: 13, color: '#60a5fa' }} /> Kira Bitiş:
+                            <span style={{ color: 'var(--nt-94a3b8)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <Calendar style={{ width: 13, height: 13, color: 'var(--ac-60a5fa)' }} /> Kira Bitiş:
                             </span>
-                            <span style={{ color: !t.is_active ? '#fbbf24' : (t.is_warning_3_months ? '#f87171' : '#cbd5e1'), fontWeight: 700 }}>
+                            <span style={{ color: !t.is_active ? 'var(--ac-fbbf24)' : (t.is_warning_3_months ? 'var(--ac-f87171)' : 'var(--nt-cbd5e1)'), fontWeight: 700 }}>
                               {!t.is_active ? 'Onay Bekliyor / Pasif' : (t.package_expiry_date ? new Date(t.package_expiry_date).toLocaleDateString('tr-TR') : '1 Yıl')}
                             </span>
                           </div>
@@ -3453,7 +3461,7 @@ export default function SuperAdminConsole({
                           <div style={{
                             marginTop: 10, padding: '7px 10px', borderRadius: 8,
                             background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
-                            display: 'flex', alignItems: 'center', gap: 6, color: '#fca5a5', fontSize: '0.72rem', fontWeight: 700
+                            display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ac-fca5a5)', fontSize: '0.72rem', fontWeight: 700
                           }}>
                             <AlertTriangle style={{ width: 14, height: 14, color: '#ef4444', flexShrink: 0 }} />
                             <span>⚠️ Paket Bitimine 3 Aydan Az Kaldı! (Kalan: {t.days_remaining} gün)</span>
@@ -3465,25 +3473,25 @@ export default function SuperAdminConsole({
                           <div style={{
                             marginTop: 10, padding: '7px 10px', borderRadius: 8,
                             background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
-                            display: 'flex', alignItems: 'center', gap: 6, color: '#fca5a5', fontSize: '0.72rem', fontWeight: 700
+                            display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ac-fca5a5)', fontSize: '0.72rem', fontWeight: 700
                           }}>
-                            <PauseCircle style={{ width: 14, height: 14, color: '#f87171', flexShrink: 0 }} />
+                            <PauseCircle style={{ width: 14, height: 14, color: 'var(--ac-f87171)', flexShrink: 0 }} />
                             <span>⏸️ Şirket Kartı Pasif Durumda (Girişler Kapalı)</span>
                           </div>
                         )}
 
                         {/* İletişim Detayları */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, fontSize: '0.75rem', color: '#94a3b8' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Mail style={{ width: 13, height: 13, color: '#818cf8' }} />
+                            <Mail style={{ width: 13, height: 13, color: 'var(--ac-818cf8)' }} />
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.contact_email || 'E-posta yok'}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Phone style={{ width: 13, height: 13, color: '#34d399' }} />
+                            <Phone style={{ width: 13, height: 13, color: 'var(--ac-34d399)' }} />
                             <span>{t.phone || 'Telefon yok'}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <CreditCard style={{ width: 13, height: 13, color: '#fbbf24' }} />
+                            <CreditCard style={{ width: 13, height: 13, color: 'var(--ac-fbbf24)' }} />
                             <span>VKN: {t.tax_id || '-'} {t.tax_office ? `(${t.tax_office} V.D.)` : ''}</span>
                           </div>
                         </div>
@@ -3500,7 +3508,7 @@ export default function SuperAdminConsole({
                           gap: 6, 
                           marginTop: 16, 
                           paddingTop: 12, 
-                          borderTop: '1px solid rgba(255,255,255,0.08)',
+                          borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                           width: '100%',
                           overflowX: 'auto',
                           scrollbarWidth: 'thin'
@@ -3518,7 +3526,7 @@ export default function SuperAdminConsole({
                             padding: '6px 8px', 
                             fontSize: '0.72rem',
                             whiteSpace: 'nowrap',
-                            color: t.is_active ? '#f87171' : '#34d399',
+                            color: t.is_active ? 'var(--ac-f87171)' : 'var(--ac-34d399)',
                             borderColor: t.is_active ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.35)',
                             background: t.is_active ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'
                           }}
@@ -3548,7 +3556,7 @@ export default function SuperAdminConsole({
                             style={{
                               padding: '6px 8px',
                               fontSize: '0.72rem',
-                              color: '#f87171',
+                              color: 'var(--ac-f87171)',
                               borderColor: 'rgba(239,68,68,0.35)',
                               background: 'rgba(239,68,68,0.08)',
                               justifyContent: 'center'
@@ -3568,7 +3576,7 @@ export default function SuperAdminConsole({
                               padding: '6px 8px',
                               fontSize: '0.70rem',
                               fontWeight: 600,
-                              color: '#38bdf8',
+                              color: 'var(--ac-38bdf8)',
                               background: 'rgba(56, 189, 248, 0.08)',
                               border: '1px solid rgba(56, 189, 248, 0.25)',
                               borderRadius: '6px',
@@ -3611,7 +3619,7 @@ export default function SuperAdminConsole({
                             padding: '6px 8px', 
                             fontSize: '0.72rem', 
                             whiteSpace: 'nowrap',
-                            color: '#38bdf8', 
+                            color: 'var(--ac-38bdf8)', 
                             borderColor: 'rgba(56,189,248,0.3)' 
                           }}
                           title="Hoş Geldiniz E-postası Gönder"
@@ -3656,7 +3664,7 @@ export default function SuperAdminConsole({
                             onClick={() => onSwitchToCompanyAdmin(t)}
                             className="super-admin-btn-secondary"
                             title="Şirket Yönetim Paneline Geç (Departmanlar, Ünvanlar, AI Ajanlar)"
-                            style={{ flex: '0 0 auto', padding: '6px 8px', justifyContent: 'center', color: '#c084fc', borderColor: 'rgba(113,52,226,0.4)', background: 'rgba(113,52,226,0.1)' }}
+                            style={{ flex: '0 0 auto', padding: '6px 8px', justifyContent: 'center', color: 'var(--ac-c084fc)', borderColor: 'rgba(113,52,226,0.4)', background: 'rgba(113,52,226,0.1)' }}
                           >
                             <Building2 style={{ width: 14, height: 14 }} />
                           </button>
@@ -3688,7 +3696,7 @@ export default function SuperAdminConsole({
                     scrollbarWidth: 'thin'
                   }}
                 >
-                  <table className="super-admin-table" style={{ minWidth: 1550 }}>
+                  <table className="super-admin-table" style={{ minWidth: '1550px' }}>
                     <thead>
                       <tr>
                         <th style={{ whiteSpace: 'nowrap' }}>Durum</th>
@@ -3707,7 +3715,7 @@ export default function SuperAdminConsole({
                     <tbody>
                       {filteredTenants.length === 0 ? (
                         <tr>
-                          <td colSpan="11" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
+                          <td colSpan="11" style={{ textAlign: 'center', padding: '30px', color: 'var(--nt-94a3b8)' }}>
                             Aramaya uygun şirket kaydı bulunamadı.
                           </td>
                         </tr>
@@ -3717,11 +3725,11 @@ export default function SuperAdminConsole({
                             {/* 1. Onay & Aktiflik Durumu İkonu */}
                             <td style={{ whiteSpace: 'nowrap' }}>
                               {t.is_active ? (
-                                <span style={{ background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ background: 'rgba(16,185,129,0.2)', color: 'var(--ac-6ee7b7)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <CheckCircle2 style={{ width: 12, height: 12 }} /> Aktif
                                 </span>
                               ) : (
-                                <span style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ background: 'rgba(239,68,68,0.2)', color: 'var(--ac-fca5a5)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <PauseCircle style={{ width: 12, height: 12 }} /> Pasif
                                 </span>
                               )}
@@ -3729,8 +3737,8 @@ export default function SuperAdminConsole({
 
                             {/* 2. Firma Adı, Slug & Sektörler (Madde 1) */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              <div style={{ fontWeight: 800, color: '#fff' }}>{t.name}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#38bdf8', fontFamily: 'monospace' }}>
+                              <div style={{ fontWeight: 800, color: 'var(--nt-ffffff)' }}>{t.name}</div>
+                              <div style={{ fontSize: '0.68rem', color: 'var(--ac-38bdf8)', fontFamily: 'monospace' }}>
                                 URL: {t.slug}
                               </div>
                               {t.sectors && t.sectors.length > 0 && (
@@ -3747,7 +3755,7 @@ export default function SuperAdminConsole({
                                           fontWeight: 700,
                                           background: 'rgba(99,102,241,0.2)',
                                           border: '1px solid rgba(129,140,248,0.3)',
-                                          color: '#c7d2fe',
+                                          color: 'var(--ac-c7d2fe)',
                                           display: 'inline-flex',
                                           alignItems: 'center',
                                           gap: 3
@@ -3764,17 +3772,17 @@ export default function SuperAdminConsole({
 
                             {/* 3. Vergi No / Dairesi (Madde 12) */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              <div style={{ fontFamily: 'monospace', color: '#cbd5e1' }}>{t.tax_id || '-'}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{t.tax_office ? `${t.tax_office} V.D.` : 'V.D. Yok'}</div>
+                              <div style={{ fontFamily: 'monospace', color: 'var(--nt-cbd5e1)' }}>{t.tax_id || '-'}</div>
+                              <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>{t.tax_office ? `${t.tax_office} V.D.` : 'V.D. Yok'}</div>
                             </td>
 
                             {/* 4. Telefon */}
-                            <td style={{ fontSize: '0.75rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{t.phone || '-'}</td>
+                            <td style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', whiteSpace: 'nowrap' }}>{t.phone || '-'}</td>
 
                             {/* 5. Web Adres */}
                             <td style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
                               {t.website ? (
-                                <a href={t.website.startsWith('http') ? t.website : `https://${t.website}`} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+                                <a href={t.website.startsWith('http') ? t.website : `https://${t.website}`} target="_blank" rel="noreferrer" style={{ color: 'var(--ac-60a5fa)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
                                   <span>{t.website.replace('https://', '').replace('http://', '')}</span>
                                   <ExternalLink style={{ width: 11, height: 11 }} />
                                 </a>
@@ -3782,36 +3790,36 @@ export default function SuperAdminConsole({
                             </td>
 
                             {/* 6. Yönetici Adı */}
-                            <td style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap' }}>{t.admin_name || '-'}</td>
+                            <td style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--nt-e2e8f0)', whiteSpace: 'nowrap' }}>{t.admin_name || '-'}</td>
 
                             {/* 7. Email */}
-                            <td style={{ fontSize: '0.75rem', color: '#cbd5e1', whiteSpace: 'nowrap' }}>{t.contact_email || '-'}</td>
+                            <td style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', whiteSpace: 'nowrap' }}>{t.contact_email || '-'}</td>
 
                             {/* 8. Aldığı Paket */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              <span style={{ background: 'rgba(113,52,226,0.2)', color: '#c084fc', padding: '2px 7px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700 }}>
+                              <span style={{ background: 'rgba(113,52,226,0.2)', color: 'var(--ac-c084fc)', padding: '2px 7px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700 }}>
                                 {t.plan_name || 'Standart'}
                               </span>
                             </td>
 
                             {/* 9. Kira Bitiş Tarihi */}
-                            <td style={{ fontSize: '0.75rem', fontWeight: 700, color: !t.is_active ? '#fbbf24' : (t.is_warning_3_months ? '#f87171' : '#fff'), whiteSpace: 'nowrap' }}>
+                            <td style={{ fontSize: '0.75rem', fontWeight: 700, color: !t.is_active ? 'var(--ac-fbbf24)' : (t.is_warning_3_months ? 'var(--ac-f87171)' : 'var(--nt-ffffff)'), whiteSpace: 'nowrap' }}>
                               {!t.is_active ? 'Onay Bekliyor / Pasif' : (t.package_expiry_date ? new Date(t.package_expiry_date).toLocaleDateString('tr-TR') : '1 Yıl')}
                             </td>
 
                             {/* 10. 3 Ay Uyarısı */}
                             <td style={{ whiteSpace: 'nowrap' }}>
                               {!t.is_active ? (
-                                <span style={{ color: '#fca5a5', fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ color: 'var(--ac-fca5a5)', fontSize: '0.72rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <PauseCircle style={{ width: 12, height: 12 }} /> Pasif Durumda
                                 </span>
                               ) : t.is_warning_3_months ? (
-                                <span style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ background: 'rgba(239,68,68,0.2)', color: 'var(--ac-fca5a5)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <AlertTriangle style={{ width: 12, height: 12 }} />
                                   <span>3 Ay Kaldı ({t.days_remaining}g)</span>
                                 </span>
                               ) : (
-                                <span style={{ color: '#64748b', fontSize: '0.72rem' }}>Normal ({t.days_remaining}g)</span>
+                                <span style={{ color: 'var(--nt-64748b)', fontSize: '0.72rem' }}>Normal ({t.days_remaining}g)</span>
                               )}
                             </td>
 
@@ -3826,7 +3834,7 @@ export default function SuperAdminConsole({
                                   style={{
                                     padding: '5px 8px',
                                     fontSize: '0.72rem',
-                                    color: t.is_active ? '#f87171' : '#34d399',
+                                    color: t.is_active ? 'var(--ac-f87171)' : 'var(--ac-34d399)',
                                     borderColor: t.is_active ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.35)',
                                     background: t.is_active ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)'
                                   }}
@@ -3856,7 +3864,7 @@ export default function SuperAdminConsole({
                                     style={{
                                       padding: '5px 8px',
                                       fontSize: '0.72rem',
-                                      color: '#f87171',
+                                      color: 'var(--ac-f87171)',
                                       borderColor: 'rgba(239,68,68,0.35)',
                                       background: 'rgba(239,68,68,0.08)'
                                     }}
@@ -3875,7 +3883,7 @@ export default function SuperAdminConsole({
                                       padding: '5px 8px',
                                       fontSize: '0.70rem',
                                       fontWeight: 600,
-                                      color: '#38bdf8',
+                                      color: 'var(--ac-38bdf8)',
                                       background: 'rgba(56, 189, 248, 0.08)',
                                       border: '1px solid rgba(56, 189, 248, 0.25)',
                                       borderRadius: '6px',
@@ -3904,7 +3912,7 @@ export default function SuperAdminConsole({
                                   onClick={() => handleSendManualWelcome(t)}
                                   disabled={processingId === 'welcome-' + t.id}
                                   className="super-admin-btn-secondary"
-                                  style={{ padding: '5px 8px', fontSize: '0.72rem', color: '#38bdf8' }}
+                                  style={{ padding: '5px 8px', fontSize: '0.72rem', color: 'var(--ac-38bdf8)' }}
                                   title="Hoş Geldiniz E-postası Gönder"
                                 >
                                   {processingId === 'welcome-' + t.id ? (
@@ -3934,7 +3942,7 @@ export default function SuperAdminConsole({
                                   <button
                                     onClick={() => onSwitchToCompanyAdmin(t)}
                                     className="super-admin-btn-secondary"
-                                    style={{ padding: '5px 8px', color: '#c084fc', borderColor: 'rgba(113,52,226,0.4)', background: 'rgba(113,52,226,0.1)' }}
+                                    style={{ padding: '5px 8px', color: 'var(--ac-c084fc)', borderColor: 'rgba(113,52,226,0.4)', background: 'rgba(113,52,226,0.1)' }}
                                     title="Şirket Yönetim Paneline Geç (Departmanlar, Ünvanlar, AI Ajanlar)"
                                   >
                                     <Building2 style={{ width: 13, height: 13 }} />
@@ -3968,11 +3976,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <KeyRound style={{ width: 20, height: 20, color: '#fbbf24' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <KeyRound style={{ width: 20, height: 20, color: 'var(--ac-fbbf24)' }} />
                     <span>Sistem Yetki ve İzin Kataloğu (RBAC)</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     Modül bazlı yetkiler. Detayları inceleyebilir, güncelleyebilir veya yeni yetki tanımlayabilirsiniz.
                   </p>
                 </div>
@@ -4019,24 +4027,24 @@ export default function SuperAdminConsole({
                     <div key={perm.id} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <span style={{ background: 'rgba(20,108,235,0.2)', color: '#60a5fa', padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem', fontWeight: 700 }}>
+                          <span style={{ background: 'rgba(20,108,235,0.2)', color: 'var(--ac-60a5fa)', padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem', fontWeight: 700 }}>
                             {perm.module}
                           </span>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#a78bfa', fontSize: '0.75rem' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-a78bfa)', fontSize: '0.75rem' }}>
                             {perm.code}
                           </span>
                         </div>
-                        <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff', margin: '6px 0 4px 0' }}>{perm.name}</h4>
-                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '4px 0 10px 0', lineHeight: 1.4 }}>{perm.description || '-'}</p>
+                        <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: '6px 0 4px 0' }}>{perm.name}</h4>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '4px 0 10px 0', lineHeight: 1.4 }}>{perm.description || '-'}</p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
                           {(perm.default_for_roles || []).map((r, i) => (
-                            <span key={i} style={{ background: 'rgba(255,255,255,0.06)', color: '#cbd5e1', padding: '2px 6px', borderRadius: 4, fontSize: '0.65rem' }}>
+                            <span key={i} style={{ background: 'rgb(var(--rgb-ov) / 0.06)', color: 'var(--nt-cbd5e1)', padding: '2px 6px', borderRadius: 4, fontSize: '0.65rem' }}>
                               {r}
                             </span>
                           ))}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 14, paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                         <button
                           onClick={() => handleOpenPermissionModal(perm)}
                           className="super-admin-btn-secondary"
@@ -4049,7 +4057,7 @@ export default function SuperAdminConsole({
                         <button
                           onClick={() => handleDeletePermission(perm)}
                           className="super-admin-btn-secondary"
-                          style={{ padding: '5px 8px', color: '#f87171' }}
+                          style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                           title="Sil"
                         >
                           <Trash2 style={{ width: 13, height: 13 }} />
@@ -4073,20 +4081,20 @@ export default function SuperAdminConsole({
                     <tbody>
                       {filteredPermissions.map((perm) => (
                         <tr key={perm.id}>
-                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#a78bfa' }}>{perm.code}</td>
+                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-a78bfa)' }}>{perm.code}</td>
                           <td>
-                            <span style={{ background: 'rgba(20,108,235,0.2)', color: '#60a5fa', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem' }}>
+                            <span style={{ background: 'rgba(20,108,235,0.2)', color: 'var(--ac-60a5fa)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem' }}>
                               {perm.module}
                             </span>
                           </td>
                           <td>
-                            <div style={{ fontWeight: 700, color: '#fff' }}>{perm.name}</div>
-                            <div style={{ fontSize: '0.725rem', color: '#94a3b8' }}>{perm.description || '-'}</div>
+                            <div style={{ fontWeight: 700, color: 'var(--nt-ffffff)' }}>{perm.name}</div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)' }}>{perm.description || '-'}</div>
                           </td>
                           <td>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                               {perm.default_for_roles && perm.default_for_roles.map((r, i) => (
-                                <span key={i} style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 5px', borderRadius: 4, fontSize: '0.65rem' }}>
+                                <span key={i} style={{ background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 5px', borderRadius: 4, fontSize: '0.65rem' }}>
                                   {r}
                                 </span>
                               ))}
@@ -4104,7 +4112,7 @@ export default function SuperAdminConsole({
                             <button
                               onClick={() => handleDeletePermission(perm)}
                               className="super-admin-btn-secondary"
-                              style={{ padding: '5px 8px', color: '#f87171' }}
+                              style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                               title="Sil"
                             >
                               <Trash2 style={{ width: 13, height: 13 }} />
@@ -4125,11 +4133,11 @@ export default function SuperAdminConsole({
               {/* Sayfa Başlığı ve İşlemler */}
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <ShieldCheck style={{ width: 20, height: 20, color: '#10b981' }} />
                     <span>Yetki Rolleri Yönetimi (RBAC Roles)</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     Kullanıcı ve aktörlerin sistem üzerindeki Yetki Rollerini tanımlayın, İzin Kataloğundan yetkileri çoklu olarak eşleştirin.
                   </p>
                 </div>
@@ -4158,48 +4166,48 @@ export default function SuperAdminConsole({
               </div>
 
               {/* KPI Özet Kartları */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', border: '1px solid rgb(var(--rgb-ov) / 0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
                     <ShieldCheck style={{ width: 20, height: 20 }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Tanımlı Yetki Rolü</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>{roles.length}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)', fontWeight: 600 }}>Tanımlı Yetki Rolü</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--nt-ffffff)', fontFamily: 'monospace' }}>{roles.length}</div>
                   </div>
                 </div>
 
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(129,140,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8' }}>
+                <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', border: '1px solid rgb(var(--rgb-ov) / 0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(129,140,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ac-818cf8)' }}>
                     <Layers style={{ width: 20, height: 20 }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Sistem / Global Roller</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#818cf8', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)', fontWeight: 600 }}>Sistem / Global Roller</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--ac-818cf8)', fontFamily: 'monospace' }}>
                       {roles.filter(r => r.is_system).length}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', border: '1px solid rgb(var(--rgb-ov) / 0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
                     <KeyRound style={{ width: 20, height: 20 }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>İzin Kataloğu Havuzu</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fbbf24', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)', fontWeight: 600 }}>İzin Kataloğu Havuzu</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--ac-fbbf24)', fontFamily: 'monospace' }}>
                       {permissions.length} İzin
                     </div>
                   </div>
                 </div>
 
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8' }}>
+                <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', border: '1px solid rgb(var(--rgb-ov) / 0.06)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ac-38bdf8)' }}>
                     <User style={{ width: 20, height: 20 }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Atanmış Aktör / Personel</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#38bdf8', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)', fontWeight: 600 }}>Atanmış Aktör / Personel</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--ac-38bdf8)', fontFamily: 'monospace' }}>
                       {roles.reduce((acc, r) => acc + (r.actor_count || 0), 0)}
                     </div>
                   </div>
@@ -4219,8 +4227,8 @@ export default function SuperAdminConsole({
                           display: 'flex',
                           flexDirection: 'column',
                           justifyContent: 'space-between',
-                          border: role.is_system ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(255,255,255,0.08)',
-                          background: 'linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(0,0,0,0.25) 100%)'
+                          border: role.is_system ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
+                          background: 'linear-gradient(180deg, rgb(var(--rgb-ov) / 0.02) 0%, rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k))) 100%)'
                         }}
                       >
                         <div>
@@ -4233,7 +4241,7 @@ export default function SuperAdminConsole({
                                 padding: '2px 8px',
                                 borderRadius: 4,
                                 background: role.is_system ? 'rgba(16,185,129,0.2)' : 'rgba(129,140,248,0.2)',
-                                color: role.is_system ? '#34d399' : '#a78bfa',
+                                color: role.is_system ? 'var(--ac-34d399)' : 'var(--ac-a78bfa)',
                                 border: role.is_system ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(129,140,248,0.3)'
                               }}
                             >
@@ -4243,7 +4251,7 @@ export default function SuperAdminConsole({
                             <span
                               style={{
                                 fontSize: '0.68rem',
-                                color: role.actor_count > 0 ? '#38bdf8' : '#64748b',
+                                color: role.actor_count > 0 ? 'var(--ac-38bdf8)' : 'var(--nt-64748b)',
                                 fontWeight: 700,
                                 display: 'flex',
                                 alignItems: 'center',
@@ -4256,24 +4264,24 @@ export default function SuperAdminConsole({
                           </div>
 
                           {/* Rol Adı & Açıklaması */}
-                          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginBottom: 6, lineHeight: 1.3 }}>
+                          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginBottom: 6, lineHeight: 1.3 }}>
                             {role.name}
                           </h3>
-                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.45, minHeight: 38, marginBottom: 14 }}>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', lineHeight: 1.45, minHeight: 38, marginBottom: 14 }}>
                             {role.description || 'Bu yetki rolü için henüz bir açıklama girilmemiş.'}
                           </p>
 
                           {/* İzin Kataloğu Yetkileri */}
-                          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10, marginTop: 10 }}>
+                          <div style={{ borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)', paddingTop: 10, marginTop: 10 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                                 İzin Kataloğu Yetkileri
                               </span>
                               <span
                                 style={{
                                   fontSize: '0.68rem',
                                   fontWeight: 800,
-                                  color: rolePerms.length > 0 ? '#10b981' : '#f87171',
+                                  color: rolePerms.length > 0 ? '#10b981' : 'var(--ac-f87171)',
                                   background: rolePerms.length > 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
                                   padding: '1px 6px',
                                   borderRadius: 4
@@ -4285,7 +4293,7 @@ export default function SuperAdminConsole({
 
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minHeight: 48, maxHeight: 90, overflowY: 'auto' }}>
                               {rolePerms.length === 0 ? (
-                                <span style={{ fontSize: '0.7rem', color: '#64748b', fontStyle: 'italic' }}>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontStyle: 'italic' }}>
                                   Henüz izin kataloğundan yetki seçilmedi.
                                 </span>
                               ) : (
@@ -4300,9 +4308,9 @@ export default function SuperAdminConsole({
                                           fontFamily: 'monospace',
                                           padding: '2px 6px',
                                           borderRadius: 4,
-                                          background: 'rgba(255,255,255,0.06)',
-                                          color: '#e2e8f0',
-                                          border: '1px solid rgba(255,255,255,0.08)'
+                                          background: 'rgb(var(--rgb-ov) / 0.06)',
+                                          color: 'var(--nt-e2e8f0)',
+                                          border: '1px solid rgb(var(--rgb-ov) / 0.08)'
                                         }}
                                         title={pObj?.name || code}
                                       >
@@ -4318,7 +4326,7 @@ export default function SuperAdminConsole({
                                         padding: '2px 6px',
                                         borderRadius: 4,
                                         background: 'rgba(16,185,129,0.15)',
-                                        color: '#34d399',
+                                        color: 'var(--ac-34d399)',
                                         border: '1px solid rgba(16,185,129,0.3)'
                                       }}
                                     >
@@ -4339,7 +4347,7 @@ export default function SuperAdminConsole({
                             gap: 8,
                             marginTop: 16,
                             paddingTop: 12,
-                            borderTop: '1px solid rgba(255,255,255,0.08)'
+                            borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)'
                           }}
                         >
                           <button
@@ -4353,7 +4361,7 @@ export default function SuperAdminConsole({
                           <button
                             onClick={() => handleDeleteRole(role)}
                             className="super-admin-btn-secondary"
-                            style={{ color: '#f87171' }}
+                            style={{ color: 'var(--ac-f87171)' }}
                             title="Rolü Sil"
                           >
                             <Trash2 style={{ width: 13, height: 13 }} />
@@ -4383,7 +4391,7 @@ export default function SuperAdminConsole({
                         return (
                           <tr key={role.id}>
                             <td>
-                              <div style={{ fontWeight: 800, color: '#fff', fontSize: '0.85rem' }}>{role.name}</div>
+                              <div style={{ fontWeight: 800, color: 'var(--nt-ffffff)', fontSize: '0.85rem' }}>{role.name}</div>
                               <span
                                 style={{
                                   fontSize: '0.62rem',
@@ -4391,14 +4399,14 @@ export default function SuperAdminConsole({
                                   padding: '1px 6px',
                                   borderRadius: 4,
                                   background: role.is_system ? 'rgba(16,185,129,0.2)' : 'rgba(129,140,248,0.2)',
-                                  color: role.is_system ? '#34d399' : '#a78bfa'
+                                  color: role.is_system ? 'var(--ac-34d399)' : 'var(--ac-a78bfa)'
                                 }}
                               >
                                 {role.is_system ? 'SİSTEM ROLÜ' : 'ÖZEL ROL'}
                               </span>
                             </td>
                             <td>
-                              <div style={{ fontSize: '0.75rem', color: '#cbd5e1', maxWidth: 260, lineHeight: 1.4 }}>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', maxWidth: 260, lineHeight: 1.4 }}>
                                 {role.description || '-'}
                               </div>
                             </td>
@@ -4411,28 +4419,28 @@ export default function SuperAdminConsole({
                                     padding: '2px 6px',
                                     borderRadius: 4,
                                     background: 'rgba(16,185,129,0.15)',
-                                    color: '#34d399'
+                                    color: 'var(--ac-34d399)'
                                   }}
                                 >
                                   {rolePerms.length} İzin
                                 </span>
                                 {rolePerms.slice(0, 4).map(code => (
-                                  <span key={code} style={{ fontSize: '0.65rem', fontFamily: 'monospace', background: 'rgba(255,255,255,0.06)', padding: '2px 5px', borderRadius: 4, color: '#94a3b8' }}>
+                                  <span key={code} style={{ fontSize: '0.65rem', fontFamily: 'monospace', background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 5px', borderRadius: 4, color: 'var(--nt-94a3b8)' }}>
                                     {code}
                                   </span>
                                 ))}
                                 {rolePerms.length > 4 && (
-                                  <span style={{ fontSize: '0.65rem', color: '#64748b' }}>+{rolePerms.length - 4} diğer</span>
+                                  <span style={{ fontSize: '0.65rem', color: 'var(--nt-64748b)' }}>+{rolePerms.length - 4} diğer</span>
                                 )}
                               </div>
                             </td>
                             <td>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: role.actor_count > 0 ? '#38bdf8' : '#64748b' }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: role.actor_count > 0 ? 'var(--ac-38bdf8)' : 'var(--nt-64748b)' }}>
                                 {role.actor_count || 0} Aktör
                               </span>
                             </td>
                             <td>
-                              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)', fontFamily: 'monospace' }}>
                                 {role.created_at ? new Date(role.created_at).toLocaleDateString('tr-TR') : '-'}
                               </span>
                             </td>
@@ -4448,7 +4456,7 @@ export default function SuperAdminConsole({
                               <button
                                 onClick={() => handleDeleteRole(role)}
                                 className="super-admin-btn-secondary"
-                                style={{ padding: '5px 8px', color: '#f87171' }}
+                                style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                                 title="Sil"
                               >
                                 <Trash2 style={{ width: 13, height: 13 }} />
@@ -4469,11 +4477,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Package style={{ width: 20, height: 20, color: '#34d399' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Package style={{ width: 20, height: 20, color: 'var(--ac-34d399)' }} />
                     <span>Kiralama Paketleri Yönetimi</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     Abonelik paketlerinin detayları, fiyatlandırma, kotalar ve model yetkileri.
                   </p>
                 </div>
@@ -4493,47 +4501,47 @@ export default function SuperAdminConsole({
                     <div key={p.id} className="super-admin-card">
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.75rem', background: 'rgba(113,52,226,0.2)', color: '#c084fc', padding: '2px 8px', borderRadius: 4 }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.75rem', background: 'rgba(113,52,226,0.2)', color: 'var(--ac-c084fc)', padding: '2px 8px', borderRadius: 4 }}>
                             {p.code}
                           </span>
-                          <span style={{ fontSize: '0.68rem', fontWeight: 800, color: p.is_active ? '#34d399' : '#f87171' }}>
+                          <span style={{ fontSize: '0.68rem', fontWeight: 800, color: p.is_active ? 'var(--ac-34d399)' : 'var(--ac-f87171)' }}>
                             {p.is_active ? 'AKTİF' : 'PASİF'}
                           </span>
                         </div>
 
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', marginTop: 10 }}>{p.name}</h3>
-                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>{p.description}</p>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginTop: 10 }}>{p.name}</h3>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>{p.description}</p>
 
                         <div style={{ marginTop: 16, marginBottom: 16 }}>
-                          <span style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fff' }}>
+                          <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--nt-ffffff)' }}>
                             {Number(p.monthly_price).toLocaleString('tr-TR')}
                           </span>
-                          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: 4 }}>{p.currency} / ay</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', marginLeft: 4 }}>{p.currency} / ay</span>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 12 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)', paddingTop: 12 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: '#94a3b8' }}>İnsan Kullanıcı:</span>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>İnsan Kullanıcı:</span>
                             <b>{p.max_humans}</b>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: '#94a3b8' }}>AI Ajan Personel:</span>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>AI Ajan Personel:</span>
                             <b>{p.max_agents}</b>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: '#94a3b8' }}>Aylık Kredi:</span>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Aylık Kredi:</span>
                             <b>{p.monthly_credits}</b>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: '#94a3b8' }}>Özel AI Ünvan Tanımlama:</span>
-                            <b style={{ color: p.can_create_custom_titles ? '#34d399' : '#64748b' }}>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Özel AI Ünvan Tanımlama:</span>
+                            <b style={{ color: p.can_create_custom_titles ? 'var(--ac-34d399)' : 'var(--nt-64748b)' }}>
                               {p.can_create_custom_titles ? 'Evet' : 'Hayır'}
                             </b>
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, paddingTop: 14, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                         <button
                           onClick={() => handleOpenPlanModal(p)}
                           className="super-admin-btn-secondary"
@@ -4545,7 +4553,7 @@ export default function SuperAdminConsole({
                         <button
                           onClick={() => handleDeletePlan(p)}
                           className="super-admin-btn-secondary"
-                          style={{ color: '#f87171' }}
+                          style={{ color: 'var(--ac-f87171)' }}
                           title="Sil"
                         >
                           <Trash2 style={{ width: 13, height: 13 }} />
@@ -4572,23 +4580,23 @@ export default function SuperAdminConsole({
                       {plans.map((p) => (
                         <tr key={p.id}>
                           <td>
-                            <div style={{ fontWeight: 800, color: '#fff' }}>{p.name}</div>
-                            <div style={{ fontFamily: 'monospace', fontSize: '0.725rem', color: '#a78bfa' }}>{p.code}</div>
+                            <div style={{ fontWeight: 800, color: 'var(--nt-ffffff)' }}>{p.name}</div>
+                            <div style={{ fontFamily: 'monospace', fontSize: '0.725rem', color: 'var(--ac-a78bfa)' }}>{p.code}</div>
                           </td>
                           <td>
-                            <span style={{ fontWeight: 800, color: '#38bdf8' }}>{Number(p.monthly_price).toLocaleString('tr-TR')} {p.currency}</span>
-                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}> / ay</span>
+                            <span style={{ fontWeight: 800, color: 'var(--ac-38bdf8)' }}>{Number(p.monthly_price).toLocaleString('tr-TR')} {p.currency}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}> / ay</span>
                           </td>
                           <td>
-                            <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--nt-cbd5e1)' }}>
                               {p.max_humans} İnsan | {p.max_agents} Ajan | {p.monthly_credits} Kredi
                             </span>
                           </td>
                           <td>
-                            <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#cbd5e1' }}>{p.storage_gb} GB</span>
+                            <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--nt-cbd5e1)' }}>{p.storage_gb} GB</span>
                           </td>
                           <td>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: p.can_create_custom_titles ? '#34d399' : '#64748b' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: p.can_create_custom_titles ? 'var(--ac-34d399)' : 'var(--nt-64748b)' }}>
                               {p.can_create_custom_titles ? '✓ İzinli' : '✗ Kapalı'}
                             </span>
                           </td>
@@ -4596,7 +4604,7 @@ export default function SuperAdminConsole({
                             <span style={{
                               fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 999,
                               background: p.is_active ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                              color: p.is_active ? '#34d399' : '#f87171'
+                              color: p.is_active ? 'var(--ac-34d399)' : 'var(--ac-f87171)'
                             }}>
                               {p.is_active ? 'AKTİF' : 'PASİF'}
                             </span>
@@ -4613,7 +4621,7 @@ export default function SuperAdminConsole({
                             <button
                               onClick={() => handleDeletePlan(p)}
                               className="super-admin-btn-secondary"
-                              style={{ padding: '5px 8px', color: '#f87171' }}
+                              style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                               title="Sil"
                             >
                               <Trash2 style={{ width: 13, height: 13 }} />
@@ -4649,15 +4657,15 @@ export default function SuperAdminConsole({
                   <Sparkles style={{ width: 24, height: 24 }} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                     Çekirdek Genel AI Modeli (Manifesto & Ajan Rol Mimarı)
                   </h2>
-                  <p style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: 4, lineHeight: 1.5, maxWidth: 750 }}>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)', marginTop: 4, lineHeight: 1.5, maxWidth: 750 }}>
                     Seçilen NACE kodları bazında müşterilerin <strong>şirket manifestosunu yazan</strong> ve 
                     AI Ajan personel unvanlarının <strong>sistem rollerini/promptlarını oluşturan</strong> en güçlü EVREN modelini buradan seçebilirsiniz.
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: '0.8rem' }}>
-                    <span style={{ color: '#94a3b8' }}>Aktif Seçili Model:</span>
+                    <span style={{ color: 'var(--nt-94a3b8)' }}>Aktif Seçili Model:</span>
                     <span style={{ background: '#7134e2', color: '#fff', padding: '3px 10px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 800 }}>
                       {systemSettings.default_manifesto_model}
                     </span>
@@ -4676,12 +4684,12 @@ export default function SuperAdminConsole({
                       style={isSelected ? {
                         borderColor: '#7134e2',
                         boxShadow: '0 0 24px rgba(113,52,226,0.4)',
-                        background: '#12182c'
+                        background: 'var(--sf-12182c)'
                       } : { cursor: 'pointer' }}
                     >
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: '0.725rem', color: '#94a3b8' }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: '0.725rem', color: 'var(--nt-94a3b8)' }}>
                             {m.model_code}
                           </span>
                           {isSelected && (
@@ -4691,20 +4699,20 @@ export default function SuperAdminConsole({
                           )}
                         </div>
 
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginTop: 8 }}>{m.display_name}</h3>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginTop: 8 }}>{m.display_name}</h3>
 
                         <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                          <span style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontFamily: 'monospace' }}>
+                          <span style={{ background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontFamily: 'monospace' }}>
                             {m.model_type}
                           </span>
-                          <span style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontFamily: 'monospace' }}>
+                          <span style={{ background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontFamily: 'monospace' }}>
                             {m.context_window.toLocaleString()} token
                           </span>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Efor: {m.effort_coefficient}x</span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, paddingTop: 14, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>Efor: {m.effort_coefficient}x</span>
                         <button
                           disabled={isSelected}
                           className={isSelected ? "super-admin-btn-secondary" : "super-admin-btn-corporate"}
@@ -4725,11 +4733,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Cpu style={{ width: 20, height: 20, color: '#a78bfa' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Cpu style={{ width: 20, height: 20, color: 'var(--ac-a78bfa)' }} />
                     <span>EVREN Modelleri Kataloğu</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     TÜBİTAK BİLGEM EVREN modelleri ve sisteme yeni eklenebilecek modellerin yönetimi.
                   </p>
                 </div>
@@ -4757,31 +4765,31 @@ export default function SuperAdminConsole({
                     <div key={m.id} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <span style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem', color: '#cbd5e1' }}>
+                          <span style={{ background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem', color: 'var(--nt-cbd5e1)' }}>
                             {m.model_type}
                           </span>
                           <span style={{
                             padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 800,
                             background: m.status === 'ACTIVE' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                            color: m.status === 'ACTIVE' ? '#6ee7b7' : '#fca5a5'
+                            color: m.status === 'ACTIVE' ? 'var(--ac-6ee7b7)' : 'var(--ac-fca5a5)'
                           }}>
                             {m.status}
                           </span>
                         </div>
-                        <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#38bdf8', margin: '4px 0 2px 0' }}>{m.display_name}</h4>
-                        <div style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#94a3b8', marginBottom: 12 }}>{m.model_code}</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
+                        <h4 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--ac-38bdf8)', margin: '4px 0 2px 0' }}>{m.display_name}</h4>
+                        <div style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--nt-94a3b8)', marginBottom: 12 }}>{m.model_code}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)', paddingTop: 10 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: '#94a3b8' }}>Bağlam Penceresi:</span>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Bağlam Penceresi:</span>
                             <b style={{ fontFamily: 'monospace' }}>{m.context_window?.toLocaleString()} token</b>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: '#94a3b8' }}>Efor Katsayısı:</span>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Efor Katsayısı:</span>
                             <b style={{ fontFamily: 'monospace' }}>{m.effort_coefficient}x</b>
                           </div>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 14, paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                         <button
                           onClick={() => handleOpenModelModal(m)}
                           className="super-admin-btn-secondary"
@@ -4794,7 +4802,7 @@ export default function SuperAdminConsole({
                         <button
                           onClick={() => handleDeleteModel(m)}
                           className="super-admin-btn-secondary"
-                          style={{ padding: '5px 8px', color: '#f87171' }}
+                          style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                           title="Sil"
                         >
                           <Trash2 style={{ width: 13, height: 13 }} />
@@ -4820,10 +4828,10 @@ export default function SuperAdminConsole({
                     <tbody>
                       {filteredModels.map((m) => (
                         <tr key={m.id}>
-                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#fff' }}>{m.model_code}</td>
-                          <td style={{ fontWeight: 700, color: '#38bdf8' }}>{m.display_name}</td>
+                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--nt-ffffff)' }}>{m.model_code}</td>
+                          <td style={{ fontWeight: 700, color: 'var(--ac-38bdf8)' }}>{m.display_name}</td>
                           <td>
-                            <span style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem' }}>
+                            <span style={{ background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem' }}>
                               {m.model_type}
                             </span>
                           </td>
@@ -4833,7 +4841,7 @@ export default function SuperAdminConsole({
                             <span style={{
                               padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontWeight: 800,
                               background: m.status === 'ACTIVE' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                              color: m.status === 'ACTIVE' ? '#6ee7b7' : '#fca5a5'
+                              color: m.status === 'ACTIVE' ? 'var(--ac-6ee7b7)' : 'var(--ac-fca5a5)'
                             }}>
                               {m.status}
                             </span>
@@ -4849,7 +4857,7 @@ export default function SuperAdminConsole({
                             <button
                               onClick={() => handleDeleteModel(m)}
                               className="super-admin-btn-secondary"
-                              style={{ padding: '5px 8px', color: '#f87171' }}
+                              style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                             >
                               <Trash2 style={{ width: 13, height: 13 }} />
                             </button>
@@ -4870,11 +4878,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Layers style={{ width: 20, height: 20, color: '#10b981' }} />
                     <span>Sektör Tanımları (Ticaret Bakanlığı)</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     T.C. Ticaret Bakanlığı resmi sektör kataloğu ve bağlı meslek grupları yönetim modülü.
                   </p>
                 </div>
@@ -4909,29 +4917,29 @@ export default function SuperAdminConsole({
                                 <img
                                   src={sec.image_url}
                                   alt={sec.name}
-                                  style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.12)' }}
+                                  style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', border: '1px solid rgb(var(--rgb-ov) / 0.12)' }}
                                 />
                               ) : (
-                                <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem' }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.06)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem' }}>
                                   {sec.icon || '🏢'}
                                 </div>
                               )}
-                              <span style={{ fontSize: '0.85rem', fontFamily: 'monospace', fontWeight: 800, padding: '4px 10px', borderRadius: 6, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                              <span style={{ fontSize: '0.85rem', fontFamily: 'monospace', fontWeight: 800, padding: '4px 10px', borderRadius: 6, background: 'rgba(16, 185, 129, 0.15)', color: 'var(--ac-34d399)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                                 Sektör Kodu: {sec.code}
                               </span>
                             </div>
-                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: sec.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: sec.is_active ? '#4ade80' : '#f87171' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: sec.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: sec.is_active ? 'var(--ac-4ade80)' : 'var(--ac-f87171)' }}>
                               {sec.is_active ? '● Aktif' : '○ Pasif'}
                             </span>
                           </div>
 
-                          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginBottom: 6 }}>{sec.name}</h3>
-                          <p style={{ fontSize: '0.785rem', color: '#94a3b8', lineHeight: 1.4, marginBottom: 12 }}>
+                          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginBottom: 6 }}>{sec.name}</h3>
+                          <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', lineHeight: 1.4, marginBottom: 12 }}>
                             {sec.description || 'T.C. Ticaret Bakanlığı ana sektör tanımı.'}
                           </p>
 
-                          <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Bağlı Meslek Sayısı:</span>
+                          <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>Bağlı Meslek Sayısı:</span>
                             <button
                               onClick={() => {
                                 setProfessionsFilterSector(sec.code);
@@ -4939,14 +4947,14 @@ export default function SuperAdminConsole({
                                 setSearchQuery('');
                                 switchTab('PROFESSIONS');
                               }}
-                              style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--ac-38bdf8)', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}
                             >
                               {profCount} Meslek Tanımı →
                             </button>
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                           <button
                             onClick={() => handleOpenSectorModal(sec)}
                             className="super-admin-btn-corporate"
@@ -4958,7 +4966,7 @@ export default function SuperAdminConsole({
                           <button
                             onClick={() => handleDeleteSector(sec)}
                             className="super-admin-btn-secondary"
-                            style={{ padding: '6px 8px', color: '#f87171' }}
+                            style={{ padding: '6px 8px', color: 'var(--ac-f87171)' }}
                             title="Sektörü Sil"
                           >
                             <Trash2 style={{ width: 13, height: 13 }} />
@@ -4986,20 +4994,20 @@ export default function SuperAdminConsole({
                         const profCount = professions.filter(p => p.sector_code === sec.code).length;
                         return (
                           <tr key={sec.code}>
-                            <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#34d399', fontSize: '0.9rem' }}>{sec.code}</td>
-                            <td style={{ fontWeight: 800, color: '#fff' }}>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-34d399)', fontSize: '0.9rem' }}>{sec.code}</td>
+                            <td style={{ fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 {sec.image_url ? (
-                                  <img src={sec.image_url} alt={sec.name} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }} />
+                                  <img src={sec.image_url} alt={sec.name} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', border: '1px solid rgb(var(--rgb-ov) / 0.1)' }} />
                                 ) : (
-                                  <span style={{ fontSize: '1.25rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.05)' }}>
+                                  <span style={{ fontSize: '1.25rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, background: 'rgb(var(--rgb-ov) / 0.05)' }}>
                                     {sec.icon || '🏢'}
                                   </span>
                                 )}
                                 <span>{sec.name}</span>
                               </div>
                             </td>
-                            <td style={{ fontSize: '0.785rem', color: '#94a3b8' }}>{sec.description || '-'}</td>
+                            <td style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)' }}>{sec.description || '-'}</td>
                             <td>
                               <button
                                 onClick={() => {
@@ -5011,7 +5019,7 @@ export default function SuperAdminConsole({
                                 style={{
                                   background: 'rgba(56, 189, 248, 0.1)',
                                   border: '1px solid rgba(56, 189, 248, 0.3)',
-                                  color: '#38bdf8',
+                                  color: 'var(--ac-38bdf8)',
                                   padding: '3px 8px',
                                   borderRadius: 6,
                                   fontSize: '0.75rem',
@@ -5023,7 +5031,7 @@ export default function SuperAdminConsole({
                               </button>
                             </td>
                             <td>
-                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: sec.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: sec.is_active ? '#4ade80' : '#f87171' }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: sec.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: sec.is_active ? 'var(--ac-4ade80)' : 'var(--ac-f87171)' }}>
                                 {sec.is_active ? 'Aktif' : 'Pasif'}
                               </span>
                             </td>
@@ -5039,7 +5047,7 @@ export default function SuperAdminConsole({
                               <button
                                 onClick={() => handleDeleteSector(sec)}
                                 className="super-admin-btn-secondary"
-                                style={{ padding: '5px 8px', color: '#f87171' }}
+                                style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                                 title="Sil"
                               >
                                 <Trash2 style={{ width: 12, height: 12 }} />
@@ -5062,11 +5070,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Briefcase style={{ width: 20, height: 20, color: '#38bdf8' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Briefcase style={{ width: 20, height: 20, color: 'var(--ac-38bdf8)' }} />
                     <span>Meslek Grubu Tanımları (Ticaret Bakanlığı)</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     T.C. Ticaret Bakanlığı sektörlerine bağlı 184 resmi meslek grubu tanımı ve yönetimi.
                   </p>
                 </div>
@@ -5089,14 +5097,14 @@ export default function SuperAdminConsole({
               </div>
 
               {/* Sektöre Göre Filtreleme Barı */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginRight: 4 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: 'rgb(var(--rgb-ov) / 0.02)', padding: '10px 14px', borderRadius: 10, border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--nt-94a3b8)', textTransform: 'uppercase', marginRight: 4 }}>
                   Sektör Filtresi:
                 </span>
                 <button
                   onClick={() => setProfessionsFilterSector('')}
                   className="super-admin-btn-secondary"
-                  style={!professionsFilterSector ? { background: '#38bdf8', color: '#0f172a', borderColor: '#38bdf8', fontWeight: 800 } : { fontSize: '0.725rem' }}
+                  style={!professionsFilterSector ? { background: 'var(--ac-38bdf8)', color: '#0f172a', borderColor: 'var(--ac-38bdf8)', fontWeight: 800 } : { fontSize: '0.725rem' }}
                 >
                   TÜM SEKTÖRLER ({professions.length})
                 </button>
@@ -5124,17 +5132,17 @@ export default function SuperAdminConsole({
                       <div key={prof.code} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '2px 8px', borderRadius: 6, fontSize: '0.8rem' }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-38bdf8)', background: 'rgba(56,189,248,0.15)', padding: '2px 8px', borderRadius: 6, fontSize: '0.8rem' }}>
                               {prof.code}
                             </span>
-                            <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: '#34d399', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                            <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: 'var(--ac-34d399)', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
                               Sektör: {prof.sector_code} {parentSector ? `(${parentSector.name})` : ''}
                             </span>
                           </div>
-                          <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fff', margin: '6px 0 4px 0' }}>{prof.name}</h4>
-                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '4px 0 8px 0', lineHeight: 1.4 }}>{prof.description || '-'}</p>
+                          <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: '6px 0 4px 0' }}>{prof.name}</h4>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '4px 0 8px 0', lineHeight: 1.4 }}>{prof.description || '-'}</p>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                           <button
                             onClick={() => handleOpenProfessionModal(prof)}
                             className="super-admin-btn-secondary"
@@ -5147,7 +5155,7 @@ export default function SuperAdminConsole({
                           <button
                             onClick={() => handleDeleteProfession(prof)}
                             className="super-admin-btn-secondary"
-                            style={{ padding: '5px 8px', color: '#f87171' }}
+                            style={{ padding: '5px 8px', color: 'var(--ac-f87171)' }}
                             title="Sil"
                           >
                             <Trash2 style={{ width: 12, height: 12 }} />
@@ -5176,13 +5184,13 @@ export default function SuperAdminConsole({
                         const parentSector = sectors.find(s => s.code === prof.sector_code);
                         return (
                           <tr key={prof.code}>
-                            <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{prof.code}</td>
-                            <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#34d399' }}>{prof.sector_code}</td>
-                            <td style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.785rem' }}>{parentSector?.name || '-'}</td>
-                            <td style={{ fontWeight: 700, color: '#fff' }}>{prof.name}</td>
-                            <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{prof.description || '-'}</td>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-38bdf8)' }}>{prof.code}</td>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--ac-34d399)' }}>{prof.sector_code}</td>
+                            <td style={{ fontWeight: 600, color: 'var(--nt-cbd5e1)', fontSize: '0.785rem' }}>{parentSector?.name || '-'}</td>
+                            <td style={{ fontWeight: 700, color: 'var(--nt-ffffff)' }}>{prof.name}</td>
+                            <td style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>{prof.description || '-'}</td>
                             <td>
-                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: prof.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: prof.is_active ? '#4ade80' : '#f87171' }}>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: prof.is_active ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: prof.is_active ? 'var(--ac-4ade80)' : 'var(--ac-f87171)' }}>
                                 {prof.is_active ? 'Aktif' : 'Pasif'}
                               </span>
                             </td>
@@ -5198,7 +5206,7 @@ export default function SuperAdminConsole({
                               <button
                                 onClick={() => handleDeleteProfession(prof)}
                                 className="super-admin-btn-secondary"
-                                style={{ padding: '5px 7px', color: '#f87171' }}
+                                style={{ padding: '5px 7px', color: 'var(--ac-f87171)' }}
                                 title="Sil"
                               >
                                 <Trash2 style={{ width: 12, height: 12 }} />
@@ -5219,11 +5227,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Mail style={{ width: 20, height: 20, color: '#38bdf8' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Mail style={{ width: 20, height: 20, color: 'var(--ac-38bdf8)' }} />
                     <span>HTML E-Posta Şablonları & Canlı Editör</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     RECDx kurumsal logosunu içeren Hoş Geldiniz, 3 Ay Bitiş Hatırlatıcı ve özel e-posta şablonları.
                   </p>
                 </div>
@@ -5232,7 +5240,7 @@ export default function SuperAdminConsole({
                   <button
                     onClick={() => handleOpenTemplateModal(null)}
                     className="super-admin-btn-corporate"
-                    style={{ background: 'linear-gradient(135deg, #38bdf8 0%, #1d4ed8 100%)' }}
+                    style={{ background: 'linear-gradient(135deg, var(--ac-38bdf8) 0%, #1d4ed8 100%)' }}
                   >
                     <Plus style={{ width: 14, height: 14 }} />
                     <span>+ Yeni Şablon Oluştur</span>
@@ -5258,29 +5266,29 @@ export default function SuperAdminConsole({
                     <div key={tmpl.id} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: 'rgba(56,189,248,0.2)', color: '#38bdf8' }}>
+                          <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: 'rgba(56,189,248,0.2)', color: 'var(--ac-38bdf8)' }}>
                             {tmpl.code}
                           </span>
                           <span style={{
                             padding: '2px 7px', borderRadius: 999, fontSize: '0.65rem', fontWeight: 800,
                             background: tmpl.is_active ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                            color: tmpl.is_active ? '#6ee7b7' : '#fca5a5'
+                            color: tmpl.is_active ? 'var(--ac-6ee7b7)' : 'var(--ac-fca5a5)'
                           }}>
                             {tmpl.is_active ? 'AKTİF' : 'PASİF'}
                           </span>
                         </div>
 
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginTop: 10 }}>{tmpl.name}</h3>
-                        <div style={{ fontSize: '0.785rem', color: '#cbd5e1', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <strong style={{ color: '#94a3b8' }}>Konu:</strong> {tmpl.subject}
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginTop: 10 }}>{tmpl.name}</h3>
+                        <div style={{ fontSize: '0.785rem', color: 'var(--nt-cbd5e1)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <strong style={{ color: 'var(--nt-94a3b8)' }}>Konu:</strong> {tmpl.subject}
                         </div>
 
                         {/* Değişken Rozetleri */}
                         <div style={{ marginTop: 12 }}>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginBottom: 4, fontWeight: 700 }}>DİNAMİK DEĞİŞKENLER:</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', marginBottom: 4, fontWeight: 700 }}>DİNAMİK DEĞİŞKENLER:</div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {(tmpl.variables || []).map((v, i) => (
-                              <span key={i} style={{ fontSize: '0.65rem', fontFamily: 'monospace', padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: '#a78bfa' }}>
+                              <span key={i} style={{ fontSize: '0.65rem', fontFamily: 'monospace', padding: '2px 6px', borderRadius: 4, background: 'rgb(var(--rgb-ov) / 0.06)', color: 'var(--ac-a78bfa)' }}>
                                 {`{{${v}}}`}
                               </span>
                             ))}
@@ -5288,7 +5296,7 @@ export default function SuperAdminConsole({
                         </div>
 
                         {/* HTML Önizleme Kutusu */}
-                        <div style={{ marginTop: 14, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', height: 110, background: '#0b0f19', position: 'relative' }}>
+                        <div style={{ marginTop: 14, borderRadius: 8, overflow: 'hidden', border: '1px solid rgb(var(--rgb-ov) / 0.08)', height: 110, background: 'var(--sf-0b0f19)', position: 'relative' }}>
                           <iframe
                             title={tmpl.name}
                             srcDoc={tmpl.html_content}
@@ -5298,7 +5306,7 @@ export default function SuperAdminConsole({
                       </div>
 
                       {/* Aksiyon Butonları */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                         <button
                           onClick={() => handleOpenTemplateModal(tmpl)}
                           className="super-admin-btn-corporate"
@@ -5312,7 +5320,7 @@ export default function SuperAdminConsole({
                           onClick={() => handleTestSendTemplate(tmpl)}
                           disabled={processingId === 'test-mail-' + tmpl.id}
                           className="super-admin-btn-secondary"
-                          style={{ padding: '6px 10px', fontSize: '0.75rem', color: '#38bdf8' }}
+                          style={{ padding: '6px 10px', fontSize: '0.75rem', color: 'var(--ac-38bdf8)' }}
                           title="Test E-postası Gönder"
                         >
                           {processingId === 'test-mail-' + tmpl.id ? (
@@ -5326,7 +5334,7 @@ export default function SuperAdminConsole({
                         <button
                           onClick={() => handleDeleteTemplate(tmpl)}
                           className="super-admin-btn-secondary"
-                          style={{ color: '#f87171', padding: '6px 8px' }}
+                          style={{ color: 'var(--ac-f87171)', padding: '6px 8px' }}
                           title="Sil"
                         >
                           <Trash2 style={{ width: 13, height: 13 }} />
@@ -5352,18 +5360,18 @@ export default function SuperAdminConsole({
                     <tbody>
                       {filteredEmailTemplates.map((tmpl) => (
                         <tr key={tmpl.id}>
-                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8' }}>{tmpl.code}</td>
-                          <td style={{ fontWeight: 700, color: '#fff' }}>{tmpl.name}</td>
-                          <td style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{tmpl.subject}</td>
+                          <td style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-38bdf8)' }}>{tmpl.code}</td>
+                          <td style={{ fontWeight: 700, color: 'var(--nt-ffffff)' }}>{tmpl.name}</td>
+                          <td style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)' }}>{tmpl.subject}</td>
                           <td>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                               {(tmpl.variables || []).slice(0, 4).map((v, i) => (
-                                <span key={i} style={{ fontSize: '0.62rem', fontFamily: 'monospace', padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.06)', color: '#a78bfa' }}>
+                                <span key={i} style={{ fontSize: '0.62rem', fontFamily: 'monospace', padding: '1px 5px', borderRadius: 3, background: 'rgb(var(--rgb-ov) / 0.06)', color: 'var(--ac-a78bfa)' }}>
                                   {`{{${v}}}`}
                                 </span>
                               ))}
                               {(tmpl.variables || []).length > 4 && (
-                                <span style={{ fontSize: '0.62rem', color: '#64748b' }}>+{tmpl.variables.length - 4}</span>
+                                <span style={{ fontSize: '0.62rem', color: 'var(--nt-64748b)' }}>+{tmpl.variables.length - 4}</span>
                               )}
                             </div>
                           </td>
@@ -5371,7 +5379,7 @@ export default function SuperAdminConsole({
                             <span style={{
                               padding: '2px 7px', borderRadius: 999, fontSize: '0.65rem', fontWeight: 800,
                               background: tmpl.is_active ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                              color: tmpl.is_active ? '#6ee7b7' : '#fca5a5'
+                              color: tmpl.is_active ? 'var(--ac-6ee7b7)' : 'var(--ac-fca5a5)'
                             }}>
                               {tmpl.is_active ? 'AKTİF' : 'PASİF'}
                             </span>
@@ -5389,7 +5397,7 @@ export default function SuperAdminConsole({
                               onClick={() => handleTestSendTemplate(tmpl)}
                               disabled={processingId === 'test-mail-' + tmpl.id}
                               className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', marginRight: 4, color: '#38bdf8' }}
+                              style={{ padding: '5px 7px', marginRight: 4, color: 'var(--ac-38bdf8)' }}
                               title="Test E-postası Gönder"
                             >
                               {processingId === 'test-mail-' + tmpl.id ? <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" /> : <Send style={{ width: 12, height: 12 }} />}
@@ -5397,7 +5405,7 @@ export default function SuperAdminConsole({
                             <button
                               onClick={() => handleDeleteTemplate(tmpl)}
                               className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', color: '#f87171' }}
+                              style={{ padding: '5px 7px', color: 'var(--ac-f87171)' }}
                               title="Sil"
                             >
                               <Trash2 style={{ width: 12, height: 12 }} />
@@ -5417,11 +5425,11 @@ export default function SuperAdminConsole({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div className="super-admin-page-header">
                 <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Clock style={{ width: 20, height: 20, color: '#fbbf24' }} />
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Clock style={{ width: 20, height: 20, color: 'var(--ac-fbbf24)' }} />
                     <span>Otomatik Bildirim Zamanlayıcıları (Notification Schedules)</span>
                   </h2>
-                  <p style={{ fontSize: '0.785rem', color: '#94a3b8', marginTop: 2 }}>
+                  <p style={{ fontSize: '0.785rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                     Kayıt sonrası tek seferlik gönderim ve paket bitişine 3 ay kala 15 günde bir periyodik hatırlatma kuralları.
                   </p>
                 </div>
@@ -5430,7 +5438,7 @@ export default function SuperAdminConsole({
                   <button
                     onClick={() => handleOpenScheduleModal(null)}
                     className="super-admin-btn-corporate"
-                    style={{ background: 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)', color: '#000', fontWeight: 800 }}
+                    style={{ background: 'linear-gradient(135deg, var(--ac-fbbf24) 0%, #d97706 100%)', color: '#000', fontWeight: 800 }}
                   >
                     <Plus style={{ width: 14, height: 14 }} />
                     <span>+ Yeni Zamanlama Kuralı</span>
@@ -5447,38 +5455,38 @@ export default function SuperAdminConsole({
                     <div key={sch.id} className="super-admin-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}>
+                          <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: 'rgba(251,191,36,0.2)', color: 'var(--ac-fbbf24)' }}>
                             {sch.trigger_type}
                           </span>
                           <span style={{
                             padding: '2px 7px', borderRadius: 999, fontSize: '0.65rem', fontWeight: 800,
                             background: sch.is_active ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                            color: sch.is_active ? '#6ee7b7' : '#fca5a5'
+                            color: sch.is_active ? 'var(--ac-6ee7b7)' : 'var(--ac-fca5a5)'
                           }}>
                             {sch.is_active ? 'AKTİF' : 'PASİF'}
                           </span>
                         </div>
 
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginTop: 10 }}>{sch.name}</h3>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginTop: 10 }}>{sch.name}</h3>
 
-                        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.785rem', color: '#cbd5e1' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.03)' }}>
-                            <span style={{ color: '#94a3b8' }}>Bağlı Şablon:</span>
-                            <span style={{ fontFamily: 'monospace', color: '#38bdf8', fontWeight: 700 }}>{sch.template_code}</span>
+                        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.785rem', color: 'var(--nt-cbd5e1)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'rgb(var(--rgb-ov) / 0.03)' }}>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Bağlı Şablon:</span>
+                            <span style={{ fontFamily: 'monospace', color: 'var(--ac-38bdf8)', fontWeight: 700 }}>{sch.template_code}</span>
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.03)' }}>
-                            <span style={{ color: '#94a3b8' }}>Çalışma Mantığı:</span>
-                            <span style={{ color: '#fff', fontWeight: 700 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'rgb(var(--rgb-ov) / 0.03)' }}>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Çalışma Mantığı:</span>
+                            <span style={{ color: 'var(--nt-ffffff)', fontWeight: 700 }}>
                               {sch.trigger_type === 'ON_REGISTRATION'
                                 ? 'Kayıt anında tek sefer gönder'
                                 : `${sch.target_lead_days || 90} gün kala, her ${sch.frequency_days || 15} günde bir`}
                             </span>
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.03)' }}>
-                            <span style={{ color: '#94a3b8' }}>Son Gönderim:</span>
-                            <span style={{ color: '#a78bfa' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'rgb(var(--rgb-ov) / 0.03)' }}>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Son Gönderim:</span>
+                            <span style={{ color: 'var(--ac-a78bfa)' }}>
                               {sch.last_run_at ? new Date(sch.last_run_at).toLocaleString('tr-TR') : 'Henüz tetiklenmedi'}
                             </span>
                           </div>
@@ -5486,12 +5494,12 @@ export default function SuperAdminConsole({
                       </div>
 
                       {/* Aksiyon Butonları */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                         <button
                           onClick={() => handleTriggerSchedule(sch)}
                           disabled={processingId === 'sched-' + sch.id}
                           className="super-admin-btn-corporate"
-                          style={{ flex: 1, justifyContent: 'center', fontSize: '0.75rem', padding: '6px 10px', background: 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)', color: '#000', fontWeight: 800 }}
+                          style={{ flex: 1, justifyContent: 'center', fontSize: '0.75rem', padding: '6px 10px', background: 'linear-gradient(135deg, var(--ac-fbbf24) 0%, #d97706 100%)', color: '#000', fontWeight: 800 }}
                           title="Zamanlayıcıyı şimdi tara ve gönderilecek mailleri gönder"
                         >
                           {processingId === 'sched-' + sch.id ? (
@@ -5514,7 +5522,7 @@ export default function SuperAdminConsole({
                         <button
                           onClick={() => handleDeleteSchedule(sch)}
                           className="super-admin-btn-secondary"
-                          style={{ color: '#f87171', padding: '6px 8px' }}
+                          style={{ color: 'var(--ac-f87171)', padding: '6px 8px' }}
                           title="Sil"
                         >
                           <Trash2 style={{ width: 13, height: 13 }} />
@@ -5542,25 +5550,25 @@ export default function SuperAdminConsole({
                       {filteredSchedules.map((sch) => (
                         <tr key={sch.id}>
                           <td>
-                            <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}>
+                            <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: 'rgba(251,191,36,0.2)', color: 'var(--ac-fbbf24)' }}>
                               {sch.trigger_type}
                             </span>
                           </td>
-                          <td style={{ fontWeight: 700, color: '#fff' }}>{sch.name}</td>
-                          <td style={{ fontFamily: 'monospace', color: '#38bdf8', fontWeight: 700 }}>{sch.template_code}</td>
-                          <td style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                          <td style={{ fontWeight: 700, color: 'var(--nt-ffffff)' }}>{sch.name}</td>
+                          <td style={{ fontFamily: 'monospace', color: 'var(--ac-38bdf8)', fontWeight: 700 }}>{sch.template_code}</td>
+                          <td style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)' }}>
                             {sch.trigger_type === 'ON_REGISTRATION'
                               ? 'Kayıt anında tek sefer gönderim'
                               : `${sch.target_lead_days || 90} gün kala, her ${sch.frequency_days || 15} günde bir`}
                           </td>
-                          <td style={{ fontSize: '0.75rem', color: '#a78bfa' }}>
+                          <td style={{ fontSize: '0.75rem', color: 'var(--ac-a78bfa)' }}>
                             {sch.last_run_at ? new Date(sch.last_run_at).toLocaleString('tr-TR') : 'Henüz çalışmadı'}
                           </td>
                           <td>
                             <span style={{
                               padding: '2px 7px', borderRadius: 999, fontSize: '0.65rem', fontWeight: 800,
                               background: sch.is_active ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                              color: sch.is_active ? '#6ee7b7' : '#fca5a5'
+                              color: sch.is_active ? 'var(--ac-6ee7b7)' : 'var(--ac-fca5a5)'
                             }}>
                               {sch.is_active ? 'AKTİF' : 'PASİF'}
                             </span>
@@ -5570,7 +5578,7 @@ export default function SuperAdminConsole({
                               onClick={() => handleTriggerSchedule(sch)}
                               disabled={processingId === 'sched-' + sch.id}
                               className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', marginRight: 4, color: '#fbbf24' }}
+                              style={{ padding: '5px 7px', marginRight: 4, color: 'var(--ac-fbbf24)' }}
                               title="Şimdi Tetikle"
                             >
                               {processingId === 'sched-' + sch.id ? <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" /> : <Zap style={{ width: 12, height: 12 }} />}
@@ -5586,7 +5594,7 @@ export default function SuperAdminConsole({
                             <button
                               onClick={() => handleDeleteSchedule(sch)}
                               className="super-admin-btn-secondary"
-                              style={{ padding: '5px 7px', color: '#f87171' }}
+                              style={{ padding: '5px 7px', color: 'var(--ac-f87171)' }}
                               title="Sil"
                             >
                               <Trash2 style={{ width: 12, height: 12 }} />
@@ -5610,24 +5618,24 @@ export default function SuperAdminConsole({
       {profileModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #7134e2 0%, #146ceb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                   <User style={{ width: 18, height: 18 }} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>Süper Admin Profil Bilgileri</h3>
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Ad, telefon, e-posta, adres ve şifre güncelleyin.</p>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>Süper Admin Profil Bilgileri</h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>Ad, telefon, e-posta, adres ve şifre güncelleyin.</p>
                 </div>
               </div>
-              <button onClick={() => setProfileModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setProfileModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Ad Soyad</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Ad Soyad</label>
                 <input
                   type="text"
                   required
@@ -5637,9 +5645,9 @@ export default function SuperAdminConsole({
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Telefon</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Telefon</label>
                   <input
                     type="text"
                     value={profileForm.phone}
@@ -5649,7 +5657,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>E-posta</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>E-posta</label>
                   <input
                     type="email"
                     required
@@ -5661,7 +5669,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Adres</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Adres</label>
                 <textarea
                   rows="3"
                   value={profileForm.address}
@@ -5672,7 +5680,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Yeni Şifre (İsteğe Bağlı)</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Yeni Şifre (İsteğe Bağlı)</label>
                 <input
                   type="password"
                   value={profileForm.new_password}
@@ -5682,7 +5690,7 @@ export default function SuperAdminConsole({
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button type="button" onClick={() => setProfileModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>
@@ -5702,18 +5710,18 @@ export default function SuperAdminConsole({
       {tenantDetailModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box" style={{ maxWidth: 720 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>{tenantEditForm.name || 'Şirket Detayları'}</h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Şirket bilgileri, onaylama ve Şirket Admin kullanıcısı.</p>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>{tenantEditForm.name || 'Şirket Detayları'}</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>Şirket bilgileri, onaylama ve Şirket Admin kullanıcısı.</p>
               </div>
-              <button onClick={() => setTenantDetailModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setTenantDetailModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             {/* Sekme Butonları: 1. Kurumsal Bilgiler | 2. Yönetici Tanımlaması */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)', paddingBottom: 10, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => setTenantDetailActiveTab('COMPANY')}
@@ -5722,9 +5730,9 @@ export default function SuperAdminConsole({
                   padding: '7px 14px',
                   fontSize: '0.785rem',
                   fontWeight: 700,
-                  background: tenantDetailActiveTab === 'COMPANY' ? '#7134e2' : 'rgba(255,255,255,0.05)',
-                  color: tenantDetailActiveTab === 'COMPANY' ? '#fff' : '#94a3b8',
-                  borderColor: tenantDetailActiveTab === 'COMPANY' ? '#7134e2' : 'rgba(255,255,255,0.1)'
+                  background: tenantDetailActiveTab === 'COMPANY' ? '#7134e2' : 'rgb(var(--rgb-ov) / 0.05)',
+                  color: tenantDetailActiveTab === 'COMPANY' ? '#fff' : 'var(--nt-94a3b8)',
+                  borderColor: tenantDetailActiveTab === 'COMPANY' ? '#7134e2' : 'rgb(var(--rgb-ov) / 0.1)'
                 }}
               >
                 <Building2 style={{ width: 14, height: 14 }} />
@@ -5739,16 +5747,16 @@ export default function SuperAdminConsole({
                   padding: '7px 14px',
                   fontSize: '0.785rem',
                   fontWeight: 700,
-                  background: tenantDetailActiveTab === 'ADMIN' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(255,255,255,0.05)',
-                  color: tenantDetailActiveTab === 'ADMIN' ? '#fff' : '#94a3b8',
-                  borderColor: tenantDetailActiveTab === 'ADMIN' ? '#10b981' : 'rgba(255,255,255,0.1)',
+                  background: tenantDetailActiveTab === 'ADMIN' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgb(var(--rgb-ov) / 0.05)',
+                  color: tenantDetailActiveTab === 'ADMIN' ? '#fff' : 'var(--nt-94a3b8)',
+                  borderColor: tenantDetailActiveTab === 'ADMIN' ? '#10b981' : 'rgb(var(--rgb-ov) / 0.1)',
                   boxShadow: tenantDetailActiveTab === 'ADMIN' ? '0 0 12px rgba(16,185,129,0.3)' : 'none'
                 }}
               >
                 <User style={{ width: 14, height: 14 }} />
                 <span>2. Şirket Yöneticisi Tanımlaması</span>
                 {justCreatedTenantAlert && (
-                  <span style={{ width: 8, height: 8, borderRadius: 999, background: '#34d399', display: 'inline-block' }} />
+                  <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--ac-34d399)', display: 'inline-block' }} />
                 )}
               </button>
 
@@ -5760,8 +5768,8 @@ export default function SuperAdminConsole({
                   padding: '7px 12px',
                   fontSize: '0.725rem',
                   marginLeft: 'auto',
-                  background: tenantDetailActiveTab === 'ALL' ? 'rgba(255,255,255,0.15)' : 'transparent',
-                  color: tenantDetailActiveTab === 'ALL' ? '#fff' : '#64748b',
+                  background: tenantDetailActiveTab === 'ALL' ? 'rgb(var(--rgb-ov) / 0.15)' : 'transparent',
+                  color: tenantDetailActiveTab === 'ALL' ? 'var(--nt-ffffff)' : 'var(--nt-64748b)',
                   border: 'none'
                 }}
                 title="Tüm Bölümleri Alt Alta Göster"
@@ -5780,42 +5788,42 @@ export default function SuperAdminConsole({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                color: '#6ee7b7',
+                color: 'var(--ac-6ee7b7)',
                 fontSize: '0.785rem',
                 fontWeight: 700
               }}>
-                <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399', flexShrink: 0 }} />
+                <CheckCircle2 style={{ width: 16, height: 16, color: 'var(--ac-34d399)', flexShrink: 0 }} />
                 <span>{justCreatedTenantAlert}</span>
               </div>
             )}
 
             {tenantDetailLoading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Yükleniyor...</div>
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--nt-94a3b8)' }}>Yükleniyor...</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16 }}>
                 
                 {/* 1. Şirket Bilgileri */}
                 {(tenantDetailActiveTab === 'COMPANY' || tenantDetailActiveTab === 'ALL') && (
                 <form onSubmit={handleSaveTenantDetails} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-a78bfa)', textTransform: 'uppercase' }}>
                         1. Kurumsal Bilgiler & Durum:
                       </span>
                       {tenantEditForm.is_active ? (
-                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, background: 'rgba(16,185,129,0.2)', color: 'var(--ac-6ee7b7)', border: '1px solid rgba(16,185,129,0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <CheckCircle2 style={{ width: 11, height: 11 }} /> AKTİF
                         </span>
                       ) : (
-                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800, background: 'rgba(239,68,68,0.2)', color: 'var(--ac-fca5a5)', border: '1px solid rgba(239,68,68,0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <PauseCircle style={{ width: 11, height: 11 }} /> PASİF
                         </span>
                       )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                        Sistem Kimliği: <code style={{ color: '#38bdf8' }}>{selectedTenantDetails?.tenant?.slug}</code>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)' }}>
+                        Sistem Kimliği: <code style={{ color: 'var(--ac-38bdf8)' }}>{selectedTenantDetails?.tenant?.slug}</code>
                       </span>
                       {selectedTenantDetails?.tenant && !isMainCompany(selectedTenantDetails.tenant) && (
                         <button
@@ -5826,7 +5834,7 @@ export default function SuperAdminConsole({
                           style={{
                             padding: '4px 10px',
                             fontSize: '0.72rem',
-                            color: '#f87171',
+                            color: 'var(--ac-f87171)',
                             borderColor: 'rgba(239,68,68,0.35)',
                             background: 'rgba(239,68,68,0.08)'
                           }}
@@ -5846,7 +5854,7 @@ export default function SuperAdminConsole({
                             padding: '4px 10px',
                             fontSize: '0.72rem',
                             fontWeight: 600,
-                            color: '#38bdf8',
+                            color: 'var(--ac-38bdf8)',
                             background: 'rgba(56, 189, 248, 0.08)',
                             border: '1px solid rgba(56, 189, 248, 0.25)',
                             borderRadius: '6px',
@@ -5872,18 +5880,18 @@ export default function SuperAdminConsole({
                     alignItems: 'center',
                     justifyContent: 'space-between'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.74rem', fontWeight: 700, color: tenantEditForm.is_active ? '#6ee7b7' : '#fca5a5' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.74rem', fontWeight: 700, color: tenantEditForm.is_active ? 'var(--ac-6ee7b7)' : 'var(--ac-fca5a5)' }}>
                       {tenantEditForm.is_active ? <CheckCircle2 style={{ width: 14, height: 14 }} /> : <PauseCircle style={{ width: 14, height: 14 }} />}
                       <span>Şirket Kartı Durumu: <strong>{tenantEditForm.is_active ? 'AKTİF' : 'PASİF'}</strong> (Aktif / Pasif yapma işlemi yalnızca Kayıtlı Müşteri Listesinden yapılabilir)</span>
                     </div>
-                    <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>
                       {tenantEditForm.is_active ? '✓ Sistem Girişleri Açık' : '⏸️ Girişler Kapalı'}
                     </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10 }}>
+                  <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Şirket Ünvanı</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Şirket Ünvanı</label>
                       <input
                         type="text"
                         value={tenantEditForm.name}
@@ -5892,7 +5900,7 @@ export default function SuperAdminConsole({
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Vergi No (VKN)</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Vergi No (VKN)</label>
                       <input
                         type="text"
                         value={tenantEditForm.tax_id}
@@ -5901,7 +5909,7 @@ export default function SuperAdminConsole({
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#38bdf8', marginBottom: 3 }}>Vergi Dairesi (V.D.)</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--ac-38bdf8)', marginBottom: 3 }}>Vergi Dairesi (V.D.)</label>
                       <input
                         type="text"
                         value={tenantEditForm.tax_office || ''}
@@ -5912,9 +5920,9 @@ export default function SuperAdminConsole({
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                  <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Telefon</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Telefon</label>
                       <input
                         type="text"
                         value={tenantEditForm.phone}
@@ -5923,7 +5931,7 @@ export default function SuperAdminConsole({
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>İletişim E-posta</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>İletişim E-posta</label>
                       <input
                         type="email"
                         value={tenantEditForm.contact_email}
@@ -5932,7 +5940,7 @@ export default function SuperAdminConsole({
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Web Sitesi</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Web Sitesi</label>
                       <input
                         type="text"
                         value={tenantEditForm.website}
@@ -5943,9 +5951,9 @@ export default function SuperAdminConsole({
                   </div>
 
                   {/* Paket & Kira Bitiş Tarihi & Hatırlatıcı Mail (Maddeler 7, 10, 14) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10, padding: 10, borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10, padding: 10, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#a78bfa', marginBottom: 3 }}>Tanımlı Paket</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--ac-a78bfa)', marginBottom: 3 }}>Tanımlı Paket</label>
                       <select
                         value={tenantEditForm.plan_id || ''}
                         onChange={(e) => setTenantEditForm({ ...tenantEditForm, plan_id: e.target.value })}
@@ -5959,7 +5967,7 @@ export default function SuperAdminConsole({
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#60a5fa', marginBottom: 3 }}>Paket Kira Bitiş Tarihi</label>
+                      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--ac-60a5fa)', marginBottom: 3 }}>Paket Kira Bitiş Tarihi</label>
                       <input
                         type="date"
                         value={tenantEditForm.package_expiry_date ? tenantEditForm.package_expiry_date.split('T')[0] : ''}
@@ -5975,7 +5983,7 @@ export default function SuperAdminConsole({
                         onClick={() => handleSendManualWelcome(selectedTenantDetails.tenant)}
                         disabled={processingId === 'welcome-' + selectedTenantDetails.tenant.id}
                         className="super-admin-btn-secondary"
-                        style={{ height: 34, fontSize: '0.725rem', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)', width: '100%', justifyContent: 'center' }}
+                        style={{ height: 34, fontSize: '0.725rem', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)', width: '100%', justifyContent: 'center' }}
                         title="Müşteriye Hoş Geldiniz e-postası gönder"
                       >
                         {processingId === 'welcome-' + selectedTenantDetails.tenant.id ? (
@@ -6010,12 +6018,12 @@ export default function SuperAdminConsole({
                     {/* 1. SEKTÖR SEÇİMİ */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#818cf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-818cf8)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Briefcase style={{ width: 14, height: 14 }} />
                           <span>Faaliyet Sektörleri (T.C. Ticaret Bakanlığı)</span>
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}>
                             {tenantEditForm.sectors?.length || 0} sektör seçili
                           </span>
                           {tenantEditForm.sectors?.length > 0 && (
@@ -6025,7 +6033,7 @@ export default function SuperAdminConsole({
                               style={{
                                 background: 'rgba(239,68,68,0.15)',
                                 border: '1px solid rgba(239,68,68,0.3)',
-                                color: '#f87171',
+                                color: 'var(--ac-f87171)',
                                 padding: '2px 8px',
                                 borderRadius: 6,
                                 fontSize: '0.675rem',
@@ -6040,7 +6048,7 @@ export default function SuperAdminConsole({
                       </div>
 
                       {/* Seçili Sektör Rozetleri */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)', marginBottom: 8 }}>
                         {(tenantEditForm.sectors || []).map((secCode) => {
                           const secObj = sectors.find(s => s.code === secCode || s.name === secCode);
                           return (
@@ -6054,7 +6062,7 @@ export default function SuperAdminConsole({
                                 borderRadius: 999,
                                 background: 'linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(168,85,247,0.25) 100%)',
                                 border: '1px solid rgba(129,140,248,0.4)',
-                                color: '#c7d2fe',
+                                color: 'var(--ac-c7d2fe)',
                                 fontSize: '0.72rem',
                                 fontWeight: 700
                               }}
@@ -6065,7 +6073,7 @@ export default function SuperAdminConsole({
                               <button
                                 type="button"
                                 onClick={() => handleToggleSectorTenantEdit(secCode)}
-                                style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}
+                                style={{ background: 'none', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}
                                 title="Sektörü kaldır"
                               >
                                 ×
@@ -6074,7 +6082,7 @@ export default function SuperAdminConsole({
                           );
                         })}
                         {(!tenantEditForm.sectors || tenantEditForm.sectors.length === 0) && (
-                          <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center' }}>
                             Henüz sektör seçilmedi. Aşağıdaki butonlardan veya açılır kutudan sektör(ler) seçiniz.
                           </span>
                         )}
@@ -6120,9 +6128,9 @@ export default function SuperAdminConsole({
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 4,
-                                  background: isSelected ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.03)',
-                                  border: isSelected ? '1px solid rgba(129,140,248,0.6)' : '1px solid rgba(255,255,255,0.08)',
-                                  color: isSelected ? '#ffffff' : '#94a3b8',
+                                  background: isSelected ? 'rgba(99,102,241,0.3)' : 'rgb(var(--rgb-ov) / 0.03)',
+                                  border: isSelected ? '1px solid rgba(129,140,248,0.6)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
+                                  color: isSelected ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                                   transition: 'all 0.15s'
                                 }}
                               >
@@ -6137,14 +6145,14 @@ export default function SuperAdminConsole({
                     </div>
 
                     {/* 2. MESLEK GRUPLARI SEÇİMİ (Seçili sektörlere göre filtreli) */}
-                    <div style={{ paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-38bdf8)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <GraduationCap style={{ width: 14, height: 14 }} />
                           <span>Meslek Grupları (Seçili Sektörlere Göre Filtrelenir)</span>
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}>
                             {tenantEditForm.professions?.length || 0} meslek seçili
                           </span>
                           {tenantEditForm.professions?.length > 0 && (
@@ -6154,7 +6162,7 @@ export default function SuperAdminConsole({
                               style={{
                                 background: 'none',
                                 border: 'none',
-                                color: '#f87171',
+                                color: 'var(--ac-f87171)',
                                 fontSize: '0.675rem',
                                 cursor: 'pointer',
                                 fontWeight: 600
@@ -6174,21 +6182,21 @@ export default function SuperAdminConsole({
                       ) : (
                         <>
                           {/* Seçili Meslekler Etiketleri (Chips) */}
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)', marginBottom: 8 }}>
                             {(tenantEditForm.professions || []).map((pItem) => {
                               const pCode = typeof pItem === 'object' ? pItem.code : pItem;
                               const profObj = professions.find(pr => pr.code === pCode);
                               const pName = profObj ? profObj.name : (typeof pItem === 'object' ? pItem.name : pCode);
                               const pSector = profObj ? profObj.sector_code : '';
                               return (
-                                <span key={pCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', border: '1px solid rgba(56,189,248,0.4)', color: '#38bdf8', fontSize: '0.7rem' }}>
+                                <span key={pCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', border: '1px solid rgba(56,189,248,0.4)', color: 'var(--ac-38bdf8)', fontSize: '0.7rem' }}>
                                   <span style={{ fontFamily: 'monospace', fontWeight: 800 }}>[{pCode}]</span>
                                   <span>{pName}</span>
                                   {pSector && <span style={{ opacity: 0.6, fontSize: '0.65rem' }}>({pSector})</span>}
                                   <button
                                     type="button"
                                     onClick={() => handleToggleProfessionTenantEdit(pCode)}
-                                    style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0, fontWeight: 800 }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--ac-38bdf8)', cursor: 'pointer', padding: 0, fontWeight: 800 }}
                                   >
                                     ×
                                   </button>
@@ -6196,7 +6204,7 @@ export default function SuperAdminConsole({
                               );
                             })}
                             {(!tenantEditForm.professions || tenantEditForm.professions.length === 0) && (
-                              <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center' }}>
                                 Seçili sektör(ler)e ait meslek grubu seçilmedi. Aşağıdan seçebilirsiniz (opsiyonel).
                               </span>
                             )}
@@ -6232,7 +6240,7 @@ export default function SuperAdminConsole({
                   {/* AI İle Şirket Manifestosu Oluşturma (Madde 13) */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#c084fc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--ac-c084fc)', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Sparkles style={{ width: 13, height: 13 }} />
                         <span>RECOrion Ana LLM Tarafından Üretilen Kurumsal Manifesto</span>
                       </label>
@@ -6263,7 +6271,7 @@ export default function SuperAdminConsole({
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Adres</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Adres</label>
                     <textarea
                       rows="2"
                       value={tenantEditForm.address}
@@ -6327,7 +6335,7 @@ export default function SuperAdminConsole({
                 {/* 2. Şirket Admin Kullanıcısı & Güçlü Şifre */}
                 {(tenantDetailActiveTab === 'ADMIN' || tenantDetailActiveTab === 'ALL') && (
                 <div style={{
-                  borderTop: tenantDetailActiveTab === 'ALL' ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                  borderTop: tenantDetailActiveTab === 'ALL' ? '1px solid rgb(var(--rgb-ov) / 0.08)' : 'none',
                   paddingTop: tenantDetailActiveTab === 'ALL' ? 16 : 0,
                   display: 'flex',
                   flexDirection: 'column',
@@ -6335,11 +6343,11 @@ export default function SuperAdminConsole({
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: '0.825rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: '0.825rem', fontWeight: 800, color: 'var(--ac-38bdf8)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <User style={{ width: 15, height: 15 }} />
                         <span>2. Şirket Admin Kullanıcı Tanımlaması</span>
                       </div>
-                      <div style={{ fontSize: '0.725rem', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)' }}>
                         Şirketin sisteme ilk giriş yapacak yöneticisinin (Admin) kullanıcı bilgileri ve şifresi.
                       </div>
                     </div>
@@ -6371,8 +6379,8 @@ export default function SuperAdminConsole({
                   {generatedAdminPassword && (
                     <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div>
-                        <div style={{ fontSize: '0.68rem', color: '#6ee7b7', fontWeight: 800 }}>Yeni Oluşturulan Güçlü Şifre:</div>
-                        <div style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: '0.9rem', color: '#fff', marginTop: 2 }}>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--ac-6ee7b7)', fontWeight: 800 }}>Yeni Oluşturulan Güçlü Şifre:</div>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: '0.9rem', color: 'var(--nt-ffffff)', marginTop: 2 }}>
                           {generatedAdminPassword}
                         </div>
                       </div>
@@ -6389,9 +6397,9 @@ export default function SuperAdminConsole({
                   )}
 
                   <form onSubmit={handleSaveTenantAdmin} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Yönetici Adı Soyadı</label>
+                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Yönetici Adı Soyadı</label>
                         <input
                           type="text"
                           required
@@ -6401,7 +6409,7 @@ export default function SuperAdminConsole({
                         />
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Giriş E-postası</label>
+                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Giriş E-postası</label>
                         <input
                           type="email"
                           required
@@ -6412,9 +6420,9 @@ export default function SuperAdminConsole({
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Telefon</label>
+                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Telefon</label>
                         <input
                           type="text"
                           value={tenantAdminForm.phone}
@@ -6423,7 +6431,7 @@ export default function SuperAdminConsole({
                         />
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>Manuel Şifre Ata</label>
+                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 3 }}>Manuel Şifre Ata</label>
                         <input
                           type="text"
                           value={tenantAdminForm.new_password}
@@ -6480,19 +6488,19 @@ export default function SuperAdminConsole({
       {permissionModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                 {editingPermission ? 'İzin Tanımını Düzenle' : 'Yeni İzin Tanımla'}
               </h3>
-              <button onClick={() => setPermissionModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setPermissionModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleSavePermission} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Yetki Kodu</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Yetki Kodu</label>
                   <input
                     type="text"
                     required
@@ -6505,7 +6513,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Modül</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Modül</label>
                   <select
                     value={permissionForm.module}
                     onChange={(e) => setPermissionForm({ ...permissionForm, module: e.target.value })}
@@ -6519,7 +6527,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>İzin Adı</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>İzin Adı</label>
                 <input
                   type="text"
                   required
@@ -6531,7 +6539,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Açıklama</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Açıklama</label>
                 <textarea
                   rows="3"
                   value={permissionForm.description}
@@ -6541,7 +6549,7 @@ export default function SuperAdminConsole({
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button type="button" onClick={() => setPermissionModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>
@@ -6561,26 +6569,26 @@ export default function SuperAdminConsole({
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box" style={{ maxWidth: 880, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
             {/* Modal Başlığı */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ShieldCheck style={{ width: 20, height: 20, color: '#10b981' }} />
                   <span>{editingRole ? `Yetki Rolünü Düzenle: ${editingRole.name}` : 'Yeni Yetki Rolü Tanımla (RBAC)'}</span>
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', marginTop: 2 }}>
                   Kullanıcı ve aktör yetki sınırlarını belirleyin, İzin Kataloğundan çoklu yetkileri seçin.
                 </p>
               </div>
-              <button onClick={() => setRoleModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setRoleModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleSaveRole} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14, overflowY: 'auto', paddingRight: 4 }}>
               {/* 1. Rol Adı & Sistem Rolü Toggle */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: 12 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                     Rol Adı *
                   </label>
                   <input
@@ -6594,7 +6602,7 @@ export default function SuperAdminConsole({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                     Rol Türü / Kapsamı
                   </label>
                   <label
@@ -6604,12 +6612,12 @@ export default function SuperAdminConsole({
                       gap: 8,
                       height: 38,
                       padding: '0 12px',
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'rgb(var(--rgb-ov) / 0.03)',
+                      border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                       borderRadius: 6,
                       cursor: 'pointer',
                       fontSize: '0.75rem',
-                      color: roleForm.is_system ? '#34d399' : '#94a3b8',
+                      color: roleForm.is_system ? 'var(--ac-34d399)' : 'var(--nt-94a3b8)',
                       fontWeight: 700
                     }}
                   >
@@ -6625,7 +6633,7 @@ export default function SuperAdminConsole({
 
               {/* 2. Rol Açıklaması */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                   Rol Açıklaması
                 </label>
                 <textarea
@@ -6640,8 +6648,8 @@ export default function SuperAdminConsole({
               {/* 3. İZİN KATALOĞUNDAN ÇOKLU SEÇİM ALANI */}
               <div
                 style={{
-                  background: 'rgba(0,0,0,0.25)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))',
+                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                   borderRadius: 8,
                   padding: 12,
                   display: 'flex',
@@ -6652,8 +6660,8 @@ export default function SuperAdminConsole({
                 {/* İzin Başlığı, Sayaç ve Hızlı Eylemler */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <KeyRound style={{ width: 16, height: 16, color: '#fbbf24' }} />
-                    <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff' }}>
+                    <KeyRound style={{ width: 16, height: 16, color: 'var(--ac-fbbf24)' }} />
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                       İzin Kataloğu Yetkileri (Çoklu Seçim)
                     </span>
                     <span
@@ -6662,9 +6670,9 @@ export default function SuperAdminConsole({
                         fontWeight: 800,
                         padding: '2px 8px',
                         borderRadius: 999,
-                        background: roleForm.permissions.length > 0 ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)',
-                        color: roleForm.permissions.length > 0 ? '#34d399' : '#94a3b8',
-                        border: roleForm.permissions.length > 0 ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(255,255,255,0.08)'
+                        background: roleForm.permissions.length > 0 ? 'rgba(16,185,129,0.2)' : 'rgb(var(--rgb-ov) / 0.06)',
+                        color: roleForm.permissions.length > 0 ? 'var(--ac-34d399)' : 'var(--nt-94a3b8)',
+                        border: roleForm.permissions.length > 0 ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgb(var(--rgb-ov) / 0.08)'
                       }}
                     >
                       {roleForm.permissions.length} / {permissions.length} İzin Seçildi
@@ -6703,7 +6711,7 @@ export default function SuperAdminConsole({
                         type="button"
                         onClick={() => setRoleForm({ ...roleForm, permissions: [] })}
                         className="super-admin-btn-secondary"
-                        style={{ fontSize: '0.68rem', padding: '3px 8px', color: '#f87171' }}
+                        style={{ fontSize: '0.68rem', padding: '3px 8px', color: 'var(--ac-f87171)' }}
                       >
                         Temizle
                       </button>
@@ -6734,9 +6742,9 @@ export default function SuperAdminConsole({
                           fontWeight: 700,
                           padding: '3px 7px',
                           borderRadius: 4,
-                          border: rolePermissionModuleFilter === mod ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.08)',
-                          background: rolePermissionModuleFilter === mod ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.03)',
-                          color: rolePermissionModuleFilter === mod ? '#34d399' : '#94a3b8',
+                          border: rolePermissionModuleFilter === mod ? '1px solid #10b981' : '1px solid rgb(var(--rgb-ov) / 0.08)',
+                          background: rolePermissionModuleFilter === mod ? 'rgba(16,185,129,0.2)' : 'rgb(var(--rgb-ov) / 0.03)',
+                          color: rolePermissionModuleFilter === mod ? 'var(--ac-34d399)' : 'var(--nt-94a3b8)',
                           cursor: 'pointer'
                         }}
                       >
@@ -6773,7 +6781,7 @@ export default function SuperAdminConsole({
                             padding: '2px 6px',
                             borderRadius: 4,
                             background: 'rgba(16,185,129,0.18)',
-                            color: '#34d399',
+                            color: 'var(--ac-34d399)',
                             fontSize: '0.68rem',
                             fontFamily: 'monospace'
                           }}
@@ -6786,7 +6794,7 @@ export default function SuperAdminConsole({
                             style={{
                               background: 'transparent',
                               border: 'none',
-                              color: '#34d399',
+                              color: 'var(--ac-34d399)',
                               cursor: 'pointer',
                               padding: 0,
                               fontWeight: 900,
@@ -6805,14 +6813,14 @@ export default function SuperAdminConsole({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
                     gap: 6,
                     maxHeight: 280,
                     overflowY: 'auto',
                     padding: 4,
-                    background: 'rgba(0,0,0,0.2)',
+                    background: 'rgb(var(--rgb-shade) / calc(0.2 * var(--shade-k)))',
                     borderRadius: 6,
-                    border: '1px solid rgba(255,255,255,0.04)'
+                    border: '1px solid rgb(var(--rgb-ov) / 0.04)'
                   }}
                 >
                   {permissions
@@ -6837,8 +6845,8 @@ export default function SuperAdminConsole({
                             padding: '8px 10px',
                             borderRadius: 6,
                             cursor: 'pointer',
-                            background: isSelected ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.02)',
-                            border: isSelected ? '1px solid rgba(16,185,129,0.45)' : '1px solid rgba(255,255,255,0.05)',
+                            background: isSelected ? 'rgba(16,185,129,0.12)' : 'rgb(var(--rgb-ov) / 0.02)',
+                            border: isSelected ? '1px solid rgba(16,185,129,0.45)' : '1px solid rgb(var(--rgb-ov) / 0.05)',
                             transition: 'all 0.15s ease'
                           }}
                         >
@@ -6850,18 +6858,18 @@ export default function SuperAdminConsole({
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginBottom: 2 }}>
-                              <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.08)', color: '#a78bfa' }}>
+                              <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '1px 5px', borderRadius: 3, background: 'rgb(var(--rgb-ov) / 0.08)', color: 'var(--ac-a78bfa)' }}>
                                 {p.module}
                               </span>
-                              <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 700, color: isSelected ? '#34d399' : '#cbd5e1' }}>
+                              <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 700, color: isSelected ? 'var(--ac-34d399)' : 'var(--nt-cbd5e1)' }}>
                                 {p.code}
                               </span>
                             </div>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-ffffff)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {p.name}
                             </div>
                             {p.description && (
-                              <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: 2, lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--nt-94a3b8)', marginTop: 2, lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                                 {p.description}
                               </div>
                             )}
@@ -6873,7 +6881,7 @@ export default function SuperAdminConsole({
               </div>
 
               {/* Modal Butonları */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button
                   type="button"
                   onClick={() => setRoleModalOpen(false)}
@@ -6916,19 +6924,19 @@ export default function SuperAdminConsole({
       {planModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                 {editingPlan ? 'Paketi Düzenle' : 'Yeni Kiralama Paketi Tanımla'}
               </h3>
-              <button onClick={() => setPlanModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setPlanModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleSavePlan} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Paket Kodu</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Paket Kodu</label>
                   <input
                     type="text"
                     required
@@ -6941,7 +6949,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Paket Adı</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Paket Adı</label>
                   <input
                     type="text"
                     required
@@ -6953,9 +6961,9 @@ export default function SuperAdminConsole({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Aylık Fiyat (TRY)</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Aylık Fiyat (TRY)</label>
                   <input
                     type="number"
                     value={planForm.monthly_price}
@@ -6964,7 +6972,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Aylık Kredi</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Aylık Kredi</label>
                   <input
                     type="number"
                     value={planForm.monthly_credits}
@@ -6975,13 +6983,13 @@ export default function SuperAdminConsole({
               </div>
 
               {/* Dinamik Limitler (Madde 15) */}
-              <div style={{ padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a78bfa', marginBottom: 8, textTransform: 'uppercase' }}>
+              <div style={{ padding: 12, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-a78bfa)', marginBottom: 8, textTransform: 'uppercase' }}>
                   Paket Kaynak ve Adetsel Limitleri (Madde 15)
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+                <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>AI Ajan Personel</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>AI Ajan Personel</label>
                     <input
                       type="number"
                       value={planForm.max_agents}
@@ -6990,7 +6998,7 @@ export default function SuperAdminConsole({
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>İnsan Kullanıcı</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>İnsan Kullanıcı</label>
                     <input
                       type="number"
                       value={planForm.max_humans}
@@ -6999,7 +7007,7 @@ export default function SuperAdminConsole({
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Eşzamanlı Proje</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Eşzamanlı Proje</label>
                     <input
                       type="number"
                       value={planForm.max_projects || 3}
@@ -7008,7 +7016,7 @@ export default function SuperAdminConsole({
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>İşlem Kredisi</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>İşlem Kredisi</label>
                     <input
                       type="number"
                       value={planForm.monthly_credits}
@@ -7017,7 +7025,7 @@ export default function SuperAdminConsole({
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>MinIO Depolama (GB)</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>MinIO Depolama (GB)</label>
                     <input
                       type="number"
                       value={planForm.storage_gb}
@@ -7029,15 +7037,15 @@ export default function SuperAdminConsole({
               </div>
 
               {/* Paket İçerisindeki EVREN LLM Modelleri Seçimi (Madde 15) */}
-              <div style={{ padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: 12, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-38bdf8)', textTransform: 'uppercase' }}>
                     Pakete Dahil Edilen EVREN LLM Modelleri ({planForm.allowed_models?.length || 0} Model Seçili)
                   </div>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Müşterinin kullanabileceği modeller</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}>Müşterinin kullanabileceği modeller</span>
                 </div>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxHeight: 150, overflowY: 'auto' }}>
+                <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxHeight: 150, overflowY: 'auto' }}>
                   {models.map((m) => {
                     const isChecked = (planForm.allowed_models || []).includes(m.model_code);
                     return (
@@ -7045,8 +7053,8 @@ export default function SuperAdminConsole({
                         key={m.id}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6,
-                          background: isChecked ? 'rgba(56,189,248,0.15)' : 'rgba(0,0,0,0.3)',
-                          border: isChecked ? '1px solid rgba(56,189,248,0.4)' : '1px solid rgba(255,255,255,0.04)',
+                          background: isChecked ? 'rgba(56,189,248,0.15)' : 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))',
+                          border: isChecked ? '1px solid rgba(56,189,248,0.4)' : '1px solid rgb(var(--rgb-ov) / 0.04)',
                           cursor: 'pointer'
                         }}
                       >
@@ -7063,8 +7071,8 @@ export default function SuperAdminConsole({
                           }}
                         />
                         <div style={{ overflow: 'hidden' }}>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.display_name}</div>
-                          <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#94a3b8' }}>{m.model_code}</div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-ffffff)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.display_name}</div>
+                          <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: 'var(--nt-94a3b8)' }}>{m.model_code}</div>
                         </div>
                       </label>
                     );
@@ -7073,7 +7081,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Açıklama</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Açıklama</label>
                 <textarea
                   rows="2"
                   value={planForm.description}
@@ -7083,7 +7091,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div style={{ display: 'flex', gap: 20, padding: '4px 0' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={planForm.can_create_custom_titles}
@@ -7092,7 +7100,7 @@ export default function SuperAdminConsole({
                   <span>Özel AI Ünvan Tanımlama İzni Ver</span>
                 </label>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={planForm.is_active}
@@ -7102,7 +7110,7 @@ export default function SuperAdminConsole({
                 </label>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button type="button" onClick={() => setPlanModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>
@@ -7121,19 +7129,19 @@ export default function SuperAdminConsole({
       {modelModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                 {editingModel ? 'EVREN Modelini Düzenle' : 'Yeni EVREN Modeli Ekle'}
               </h3>
-              <button onClick={() => setModelModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setModelModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleSaveModel} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Model Kodu</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Model Kodu</label>
                   <input
                     type="text"
                     required
@@ -7146,7 +7154,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Görünen İsim</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Görünen İsim</label>
                   <input
                     type="text"
                     required
@@ -7158,9 +7166,9 @@ export default function SuperAdminConsole({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Tür</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Tür</label>
                   <select
                     value={modelForm.model_type}
                     onChange={(e) => setModelForm({ ...modelForm, model_type: e.target.value })}
@@ -7172,7 +7180,7 @@ export default function SuperAdminConsole({
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Bağlam (Token)</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Bağlam (Token)</label>
                   <input
                     type="number"
                     value={modelForm.context_window}
@@ -7181,7 +7189,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Efor Katsayısı</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Efor Katsayısı</label>
                   <input
                     type="number"
                     step="0.1"
@@ -7193,7 +7201,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Durum</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Durum</label>
                 <select
                   value={modelForm.status}
                   onChange={(e) => setModelForm({ ...modelForm, status: e.target.value })}
@@ -7204,7 +7212,7 @@ export default function SuperAdminConsole({
                 </select>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button type="button" onClick={() => setModelModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>
@@ -7223,22 +7231,22 @@ export default function SuperAdminConsole({
       {professionModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
                   {editingProfession ? `'${professionForm.code}' Meslek Tanımını Düzenle` : 'Yeni Meslek Grubu Tanımla'}
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>T.C. Ticaret Bakanlığı resmi meslek grubu tanımı.</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>T.C. Ticaret Bakanlığı resmi meslek grubu tanımı.</p>
               </div>
-              <button onClick={() => setProfessionModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setProfessionModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleSaveProfession} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                     Meslek Kodu *
                   </label>
                   <input
@@ -7253,7 +7261,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                     Bağlı Olduğu Sektör *
                   </label>
                   <select
@@ -7261,7 +7269,7 @@ export default function SuperAdminConsole({
                     value={professionForm.sector_code}
                     onChange={(e) => setProfessionForm({ ...professionForm, sector_code: e.target.value })}
                     className="super-admin-input"
-                    style={{ background: '#1e293b', color: '#fff', cursor: 'pointer' }}
+                    style={{ background: 'var(--sf-1e293b)', color: 'var(--nt-ffffff)', cursor: 'pointer' }}
                   >
                     <option value="">-- Sektör Seçiniz --</option>
                     {sectors.map((sec) => (
@@ -7274,7 +7282,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                   Meslek Tanım Adı *
                 </label>
                 <input
@@ -7288,7 +7296,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                   Açıklama (Opsiyonel)
                 </label>
                 <textarea
@@ -7301,7 +7309,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={professionForm.is_active}
@@ -7311,7 +7319,7 @@ export default function SuperAdminConsole({
                 </label>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 14, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button type="button" onClick={() => setProfessionModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>
@@ -7331,26 +7339,26 @@ export default function SuperAdminConsole({
       {newTenantModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box" style={{ maxWidth: 780 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Building2 style={{ width: 20, height: 20, color: '#10b981' }} />
                   <span>Yeni Müşteri & Şirket Ekle (Süper Admin Kaydı)</span>
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                   Şirket kartı oluşturulur, 1 yıllık kira paketi tanımlanır ve Hoş Geldiniz e-postası otomatik iletilir.
                 </p>
               </div>
-              <button onClick={() => setNewTenantModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setNewTenantModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleSaveNewTenant} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
               {/* Kurumsal Bilgiler */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Şirket Ünvanı *</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Şirket Ünvanı *</label>
                   <input
                     type="text"
                     required
@@ -7361,7 +7369,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Vergi No (VKN) *</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Vergi No (VKN) *</label>
                   <input
                     type="text"
                     required
@@ -7372,7 +7380,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#38bdf8', marginBottom: 3 }}>Vergi Dairesi (Madde 12)</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--ac-38bdf8)', marginBottom: 3 }}>Vergi Dairesi (Madde 12)</label>
                   <input
                     type="text"
                     value={newTenantForm.tax_office}
@@ -7384,9 +7392,9 @@ export default function SuperAdminConsole({
               </div>
 
               {/* İletişim Bilgileri */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Kurumsal / Official E-posta *</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Kurumsal / Official E-posta *</label>
                   <input
                     type="email"
                     required
@@ -7395,12 +7403,12 @@ export default function SuperAdminConsole({
                     placeholder="yetkili@sirketiniz.com"
                     className="super-admin-input"
                   />
-                  <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: 3 }}>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--nt-94a3b8)', marginTop: 3 }}>
                     * Resmi şirket e-posta adresi zorunludur (Gmail, Hotmail vb. kabul edilmez).
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Telefon</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Telefon</label>
                   <input
                     type="text"
                     value={newTenantForm.phone}
@@ -7410,7 +7418,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Web Sitesi</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Web Sitesi</label>
                   <input
                     type="text"
                     value={newTenantForm.website}
@@ -7422,9 +7430,9 @@ export default function SuperAdminConsole({
               </div>
 
               {/* Paket & Yönetici Bilgileri */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10, padding: 10, borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10, padding: 10, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#a78bfa', marginBottom: 3 }}>Kiralama Paketi (1 Yıl Başlatılır)</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--ac-a78bfa)', marginBottom: 3 }}>Kiralama Paketi (1 Yıl Başlatılır)</label>
                   <select
                     value={newTenantForm.plan_id}
                     onChange={(e) => setNewTenantForm({ ...newTenantForm, plan_id: e.target.value })}
@@ -7436,7 +7444,7 @@ export default function SuperAdminConsole({
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Yönetici Adı Soyadı</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Yönetici Adı Soyadı</label>
                   <input
                     type="text"
                     value={newTenantForm.admin_name}
@@ -7446,7 +7454,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Yönetici Şifresi (Opsiyonel)</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Yönetici Şifresi (Opsiyonel)</label>
                   <input
                     type="text"
                     value={newTenantForm.admin_password}
@@ -7462,12 +7470,12 @@ export default function SuperAdminConsole({
                 {/* 1. SEKTÖR SEÇİMİ */}
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#818cf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-818cf8)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Briefcase style={{ width: 14, height: 14 }} />
                       <span>Faaliyet Sektörleri (T.C. Ticaret Bakanlığı) *</span>
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}>
                         {newTenantForm.sectors?.length || 0} sektör seçili
                       </span>
                       {newTenantForm.sectors?.length > 0 && (
@@ -7477,7 +7485,7 @@ export default function SuperAdminConsole({
                           style={{
                             background: 'rgba(239,68,68,0.15)',
                             border: '1px solid rgba(239,68,68,0.3)',
-                            color: '#f87171',
+                            color: 'var(--ac-f87171)',
                             padding: '2px 8px',
                             borderRadius: 6,
                             fontSize: '0.675rem',
@@ -7492,7 +7500,7 @@ export default function SuperAdminConsole({
                   </div>
 
                   {/* Seçili Sektörler Etiketleri (Chips) */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)', marginBottom: 8 }}>
                     {(newTenantForm.sectors || []).map((secCode) => {
                       const secObj = sectors.find(s => s.code === secCode || s.name === secCode);
                       return (
@@ -7506,7 +7514,7 @@ export default function SuperAdminConsole({
                             borderRadius: 999,
                             background: 'linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(168,85,247,0.25) 100%)',
                             border: '1px solid rgba(129,140,248,0.4)',
-                            color: '#c7d2fe',
+                            color: 'var(--ac-c7d2fe)',
                             fontSize: '0.72rem',
                             fontWeight: 700
                           }}
@@ -7517,7 +7525,7 @@ export default function SuperAdminConsole({
                           <button
                             type="button"
                             onClick={() => handleToggleSectorNewTenant(secCode)}
-                            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}
+                            style={{ background: 'none', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}
                             title="Sektörü kaldır"
                           >
                             ×
@@ -7526,7 +7534,7 @@ export default function SuperAdminConsole({
                       );
                     })}
                     {(!newTenantForm.sectors || newTenantForm.sectors.length === 0) && (
-                      <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center' }}>
                         Henüz sektör seçilmedi. Aşağıdaki butonlardan veya açılır kutudan sektör(ler) seçiniz.
                       </span>
                     )}
@@ -7572,9 +7580,9 @@ export default function SuperAdminConsole({
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 4,
-                              background: isSelected ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.03)',
-                              border: isSelected ? '1px solid rgba(129,140,248,0.6)' : '1px solid rgba(255,255,255,0.08)',
-                              color: isSelected ? '#ffffff' : '#94a3b8',
+                              background: isSelected ? 'rgba(99,102,241,0.3)' : 'rgb(var(--rgb-ov) / 0.03)',
+                              border: isSelected ? '1px solid rgba(129,140,248,0.6)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
+                              color: isSelected ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
                               transition: 'all 0.15s'
                             }}
                           >
@@ -7589,14 +7597,14 @@ export default function SuperAdminConsole({
                 </div>
 
                 {/* 2. MESLEK GRUPLARI SEÇİMİ (Seçili sektörlere göre filtreli) */}
-                <div style={{ paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-38bdf8)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <GraduationCap style={{ width: 14, height: 14 }} />
                       <span>Meslek Grupları (Seçili Sektörlere Göre Filtrelenir)</span>
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}>
                         {newTenantForm.professions?.length || 0} meslek seçili
                       </span>
                       {newTenantForm.professions?.length > 0 && (
@@ -7606,7 +7614,7 @@ export default function SuperAdminConsole({
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#f87171',
+                            color: 'var(--ac-f87171)',
                             fontSize: '0.675rem',
                             cursor: 'pointer',
                             fontWeight: 600
@@ -7626,21 +7634,21 @@ export default function SuperAdminConsole({
                   ) : (
                     <>
                       {/* Seçili Meslekler Etiketleri (Chips) */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34, padding: 6, borderRadius: 6, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)', marginBottom: 8 }}>
                         {(newTenantForm.professions || []).map((pItem) => {
                           const pCode = typeof pItem === 'object' ? pItem.code : pItem;
                           const profObj = professions.find(pr => pr.code === pCode);
                           const pName = profObj ? profObj.name : (typeof pItem === 'object' ? pItem.name : pCode);
                           const pSector = profObj ? profObj.sector_code : '';
                           return (
-                            <span key={pCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', border: '1px solid rgba(56,189,248,0.4)', color: '#38bdf8', fontSize: '0.7rem' }}>
+                            <span key={pCode} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', border: '1px solid rgba(56,189,248,0.4)', color: 'var(--ac-38bdf8)', fontSize: '0.7rem' }}>
                               <span style={{ fontFamily: 'monospace', fontWeight: 800 }}>[{pCode}]</span>
                               <span>{pName}</span>
                               {pSector && <span style={{ opacity: 0.6, fontSize: '0.65rem' }}>({pSector})</span>}
                               <button
                                 type="button"
                                 onClick={() => handleToggleProfessionNewTenant(pCode)}
-                                style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0, fontWeight: 800 }}
+                                style={{ background: 'none', border: 'none', color: 'var(--ac-38bdf8)', cursor: 'pointer', padding: 0, fontWeight: 800 }}
                               >
                                 ×
                               </button>
@@ -7648,7 +7656,7 @@ export default function SuperAdminConsole({
                           );
                         })}
                         {(!newTenantForm.professions || newTenantForm.professions.length === 0) && (
-                          <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--nt-64748b)', display: 'flex', alignItems: 'center' }}>
                             Seçili sektör(ler)e ait meslek grubu seçilmedi. Aşağıdan seçebilirsiniz (opsiyonel).
                           </span>
                         )}
@@ -7684,7 +7692,7 @@ export default function SuperAdminConsole({
               {/* AI İle Kurumsal Manifesto Üretimi (Madde 13) */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#c084fc', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--ac-c084fc)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Sparkles style={{ width: 13, height: 13 }} />
                     <span>RECOrion Ana LLM Tarafından Otomatik Yazılan Şirket Manifestosu</span>
                   </label>
@@ -7715,7 +7723,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Adres</label>
+                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Adres</label>
                 <textarea
                   rows="2"
                   value={newTenantForm.address}
@@ -7725,7 +7733,7 @@ export default function SuperAdminConsole({
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, paddingTop: 14, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)', flexWrap: 'wrap' }}>
                 <button type="button" onClick={() => setNewTenantModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>
@@ -7754,20 +7762,20 @@ export default function SuperAdminConsole({
       {templateModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box" style={{ maxWidth: 1360, width: '96%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Mail style={{ width: 22, height: 22, color: '#38bdf8' }} />
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Mail style={{ width: 22, height: 22, color: 'var(--ac-38bdf8)' }} />
                   <span>{editingTemplate ? `'${templateForm.name}' Şablonunu Düzenle` : 'Yeni E-Posta Şablonu Tasarla'}</span>
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                   Sürükle-bırak görsel blok editörü, canlı e-posta önizlemesi ve modal içi test gönderim altyapısı.
                 </p>
               </div>
 
               {/* Mod Seçici (Görsel Builder vs HTML Kod) */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', padding: 3, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', background: 'rgb(var(--rgb-ov) / 0.06)', padding: 3, borderRadius: 8, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                   <button
                     type="button"
                     onClick={() => setTemplateEditorTab('BUILDER')}
@@ -7775,7 +7783,7 @@ export default function SuperAdminConsole({
                       display: 'flex', alignItems: 'center', gap: 6,
                       padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
                       background: templateEditorTab === 'BUILDER' ? '#7134e2' : 'transparent',
-                      color: templateEditorTab === 'BUILDER' ? '#fff' : '#94a3b8'
+                      color: templateEditorTab === 'BUILDER' ? '#fff' : 'var(--nt-94a3b8)'
                     }}
                   >
                     <Layers style={{ width: 14, height: 14 }} />
@@ -7788,7 +7796,7 @@ export default function SuperAdminConsole({
                       display: 'flex', alignItems: 'center', gap: 6,
                       padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
                       background: templateEditorTab === 'CODE' ? '#7134e2' : 'transparent',
-                      color: templateEditorTab === 'CODE' ? '#fff' : '#94a3b8'
+                      color: templateEditorTab === 'CODE' ? '#fff' : 'var(--nt-94a3b8)'
                     }}
                   >
                     <Code style={{ width: 14, height: 14 }} />
@@ -7796,16 +7804,16 @@ export default function SuperAdminConsole({
                   </button>
                 </div>
 
-                <button onClick={() => setTemplateModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <button onClick={() => setTemplateModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                   <X style={{ width: 20, height: 20 }} />
                 </button>
               </div>
             </div>
 
             <form onSubmit={handleSaveTemplate} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12, flex: 1, minHeight: 0 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.6fr 2.2fr', gap: 10 }}>
+              <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.6fr 2.2fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Şablon Kodu *</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Şablon Kodu *</label>
                   <input
                     type="text"
                     required
@@ -7818,7 +7826,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>Şablon Adı *</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>Şablon Adı *</label>
                   <input
                     type="text"
                     required
@@ -7829,7 +7837,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 3 }}>E-Posta Konusu (Subject) *</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 3 }}>E-Posta Konusu (Subject) *</label>
                   <input
                     type="text"
                     required
@@ -7843,7 +7851,7 @@ export default function SuperAdminConsole({
 
               {/* Dinamik Değişken İpuçları */}
               <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.18)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#38bdf8' }}>Dinamik Değişkenler:</span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-38bdf8)' }}>Dinamik Değişkenler:</span>
                 {['company_name', 'contact_name', 'login_email', 'password', 'plan_name', 'package_expiry_date', 'days_remaining', 'login_url'].map((v) => (
                   <button
                     type="button"
@@ -7853,10 +7861,10 @@ export default function SuperAdminConsole({
                         setTemplateForm({ ...templateForm, html_content: templateForm.html_content + ` {{${v}}}` });
                       } else {
                         navigator.clipboard?.writeText(`{{${v}}}`);
-                        alert(`'{{${v}}}' panoya kopyalandı! İstediğiniz blok alanına yapıştırabilirsiniz.`);
+                        notify(`'{{${v}}}' panoya kopyalandı! İstediğiniz blok alanına yapıştırabilirsiniz.`);
                       }
                     }}
-                    style={{ fontSize: '0.62rem', fontFamily: 'monospace', padding: '2px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.08)', color: '#a78bfa', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+                    style={{ fontSize: '0.62rem', fontFamily: 'monospace', padding: '2px 5px', borderRadius: 4, background: 'rgb(var(--rgb-ov) / 0.08)', color: 'var(--ac-a78bfa)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', cursor: 'pointer' }}
                     title="Panoya kopyalamak veya içeriğe eklemek için tıklayın"
                   >
                     {`{{${v}}}`}
@@ -7866,12 +7874,12 @@ export default function SuperAdminConsole({
 
               {/* GÖRSEL BUILDER MODU (Madde 5) */}
               {templateEditorTab === 'BUILDER' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '270px 1.4fr 1.1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>
+                <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '270px 1.4fr 1.1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>
                   {/* Kolon 1: Bileşen Blokları Paleti */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.5, marginBottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', border: '1px solid rgb(var(--rgb-ov) / 0.08)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--nt-94a3b8)', letterSpacing: 0.5, marginBottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span>Bileşen Blokları</span>
-                      <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Sürükle / Tıkla</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--nt-64748b)' }}>Sürükle / Tıkla</span>
                     </div>
 
                     {EMAIL_PRESET_BLOCKS.map((preset) => (
@@ -7885,8 +7893,8 @@ export default function SuperAdminConsole({
                         onDragEnd={() => setDraggedPresetType(null)}
                         onClick={() => handleAddBlockToCanvas(preset.type)}
                         style={{
-                          background: 'rgba(255,255,255,0.04)',
-                          border: '1px solid rgba(255,255,255,0.08)',
+                          background: 'rgb(var(--rgb-ov) / 0.04)',
+                          border: '1px solid rgb(var(--rgb-ov) / 0.08)',
                           borderRadius: 8,
                           padding: '8px 10px',
                           cursor: 'grab',
@@ -7899,15 +7907,15 @@ export default function SuperAdminConsole({
                         title="Tuvale eklemek için tıklayın veya sürükleyin"
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <GripVertical style={{ width: 14, height: 14, color: '#64748b' }} />
+                          <GripVertical style={{ width: 14, height: 14, color: 'var(--nt-64748b)' }} />
                           <div>
-                            <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#f1f5f9' }}>{preset.label}</div>
-                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace' }}>{preset.type}</div>
+                            <div style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--nt-f1f5f9)' }}>{preset.label}</div>
+                            <div style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontFamily: 'monospace' }}>{preset.type}</div>
                           </div>
                         </div>
                         <button
                           type="button"
-                          style={{ width: 22, height: 22, borderRadius: 6, background: 'rgba(255,255,255,0.08)', border: 'none', color: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                          style={{ width: 22, height: 22, borderRadius: 6, background: 'rgb(var(--rgb-ov) / 0.08)', border: 'none', color: 'var(--nt-cbd5e1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                         >
                           <Plus style={{ width: 12, height: 12 }} />
                         </button>
@@ -7919,22 +7927,22 @@ export default function SuperAdminConsole({
                   <div
                     onDragOver={(e) => {
                       e.preventDefault();
-                      e.currentTarget.style.borderColor = '#38bdf8';
+                      e.currentTarget.style.borderColor = 'var(--ac-38bdf8)';
                     }}
                     onDragLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+                      e.currentTarget.style.borderColor = 'rgb(var(--rgb-ov) / 0.12)';
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+                      e.currentTarget.style.borderColor = 'rgb(var(--rgb-ov) / 0.12)';
                       const type = e.dataTransfer.getData('text/plain') || draggedPresetType;
                       if (type) {
                         handleAddBlockToCanvas(type);
                       }
                     }}
                     style={{
-                      background: 'rgba(15,23,42,0.4)',
-                      border: '2px dashed rgba(255,255,255,0.12)',
+                      background: 'rgb(var(--rgb-sf-0f172a) / 0.4)',
+                      border: '2px dashed rgb(var(--rgb-ov) / 0.12)',
                       borderRadius: 10,
                       padding: 12,
                       display: 'flex',
@@ -7943,17 +7951,17 @@ export default function SuperAdminConsole({
                       overflowY: 'auto'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a78bfa' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-a78bfa)' }}>
                         📋 Tuval Düzeni ({templateCanvasBlocks.length} Blok)
                       </span>
-                      <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--nt-64748b)' }}>
                         Oklarla veya sürükleyerek sıralayın
                       </span>
                     </div>
 
                     {templateCanvasBlocks.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b', fontSize: '0.8rem' }}>
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>
                         Soldaki blokları buraya sürükleyin veya tıklayarak ekleyin.
                       </div>
                     ) : (
@@ -7974,8 +7982,8 @@ export default function SuperAdminConsole({
                             }
                           }}
                           style={{
-                            background: 'rgba(30,41,59,0.85)',
-                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: 'rgb(var(--rgb-sf-1e293b) / 0.85)',
+                            border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                             borderRadius: 8,
                             padding: 10,
                             display: 'flex',
@@ -7987,11 +7995,11 @@ export default function SuperAdminConsole({
                           {/* Blok Başlık Barı */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <GripVertical style={{ width: 14, height: 14, color: '#94a3b8' }} />
+                              <GripVertical style={{ width: 14, height: 14, color: 'var(--nt-94a3b8)' }} />
                               <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'rgba(113,52,226,0.25)', color: '#c4b5fd' }}>
                                 {block.type}
                               </span>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0' }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-e2e8f0)' }}>
                                 {EMAIL_PRESET_BLOCKS.find(p => p.type === block.type)?.label || block.type}
                               </span>
                             </div>
@@ -8001,7 +8009,7 @@ export default function SuperAdminConsole({
                                 type="button"
                                 disabled={idx === 0}
                                 onClick={() => handleMoveBlock(idx, -1)}
-                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgba(255,255,255,0.06)', border: 'none', color: idx === 0 ? '#475569' : '#cbd5e1', cursor: idx === 0 ? 'default' : 'pointer' }}
+                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgb(var(--rgb-ov) / 0.06)', border: 'none', color: idx === 0 ? 'var(--nt-475569)' : 'var(--nt-cbd5e1)', cursor: idx === 0 ? 'default' : 'pointer' }}
                                 title="Yukarı Taşı"
                               >
                                 <ArrowUp style={{ width: 12, height: 12 }} />
@@ -8010,7 +8018,7 @@ export default function SuperAdminConsole({
                                 type="button"
                                 disabled={idx === templateCanvasBlocks.length - 1}
                                 onClick={() => handleMoveBlock(idx, 1)}
-                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgba(255,255,255,0.06)', border: 'none', color: idx === templateCanvasBlocks.length - 1 ? '#475569' : '#cbd5e1', cursor: idx === templateCanvasBlocks.length - 1 ? 'default' : 'pointer' }}
+                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgb(var(--rgb-ov) / 0.06)', border: 'none', color: idx === templateCanvasBlocks.length - 1 ? 'var(--nt-475569)' : 'var(--nt-cbd5e1)', cursor: idx === templateCanvasBlocks.length - 1 ? 'default' : 'pointer' }}
                                 title="Aşağı Taşı"
                               >
                                 <ArrowDown style={{ width: 12, height: 12 }} />
@@ -8018,7 +8026,7 @@ export default function SuperAdminConsole({
                               <button
                                 type="button"
                                 onClick={() => handleRemoveBlockFromCanvas(block.id)}
-                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgba(239,68,68,0.15)', border: 'none', color: '#f87171', cursor: 'pointer' }}
+                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgba(239,68,68,0.15)', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer' }}
                                 title="Bloğu Kaldır"
                               >
                                 <Trash2 style={{ width: 12, height: 12 }} />
@@ -8039,7 +8047,7 @@ export default function SuperAdminConsole({
                               />
 
                               {/* Logo Seçim Dialogu (Madde 1) */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '6px 10px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                                 <input
                                   type="file"
                                   id={`logo-upload-${block.id}`}
@@ -8049,7 +8057,7 @@ export default function SuperAdminConsole({
                                     const file = e.target.files?.[0];
                                     if (file) {
                                       if (file.size > 3 * 1024 * 1024) {
-                                        alert("Logo dosya boyutu 3MB'tan küçük olmalıdır.");
+                                        notify("Logo dosya boyutu 3MB'tan küçük olmalıdır.");
                                         return;
                                       }
                                       const reader = new FileReader();
@@ -8063,7 +8071,7 @@ export default function SuperAdminConsole({
                                 <label
                                   htmlFor={`logo-upload-${block.id}`}
                                   className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
                                   title="Dosya Seçici Penceresi: PNG, JPG, SVG logo dosyası yükleyin"
                                 >
                                   <ImageIcon style={{ width: 13, height: 13 }} />
@@ -8079,18 +8087,18 @@ export default function SuperAdminConsole({
                                         style={{ maxHeight: 22, maxWidth: 80, objectFit: 'contain' }}
                                       />
                                     </div>
-                                    <span style={{ fontSize: '0.68rem', color: '#34d399', fontWeight: 700 }}>✓ Logo Yüklendi</span>
+                                    <span style={{ fontSize: '0.68rem', color: 'var(--ac-34d399)', fontWeight: 700 }}>✓ Logo Yüklendi</span>
                                     <button
                                       type="button"
                                       onClick={() => handleUpdateBlockField(block.id, 'logoUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
                                       title="Logoyu kaldırıp varsayılan RECOrion başlığına dön"
                                     >
                                       Kaldır ✕
                                     </button>
                                   </div>
                                 ) : (
-                                  <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Varsayılan RECOrion logosu devrede</span>
+                                  <span style={{ fontSize: '0.65rem', color: 'var(--nt-64748b)' }}>Varsayılan RECOrion logosu devrede</span>
                                 )}
                               </div>
                               {renderBlockStyleControls(block)}
@@ -8098,7 +8106,7 @@ export default function SuperAdminConsole({
                           )}
                           {block.type === 'IMAGE' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '6px 10px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                                 <input
                                   type="file"
                                   id={`img-upload-${block.id}`}
@@ -8108,7 +8116,7 @@ export default function SuperAdminConsole({
                                     const file = e.target.files?.[0];
                                     if (file) {
                                       if (file.size > 4 * 1024 * 1024) {
-                                        alert("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
+                                        notify("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
                                         return;
                                       }
                                       const reader = new FileReader();
@@ -8122,7 +8130,7 @@ export default function SuperAdminConsole({
                                 <label
                                   htmlFor={`img-upload-${block.id}`}
                                   className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
                                   title="PNG, JPG görsel seçin"
                                 >
                                   <ImageIcon style={{ width: 13, height: 13 }} />
@@ -8139,7 +8147,7 @@ export default function SuperAdminConsole({
                                     <button
                                       type="button"
                                       onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
                                     >
                                       Kaldır ✕
                                     </button>
@@ -8180,7 +8188,7 @@ export default function SuperAdminConsole({
                                 style={{ fontSize: '0.75rem', padding: '5px 8px' }}
                               />
                               {/* Body Görsel Seçici (Madde 3) */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '5px 8px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                                 <input
                                   type="file"
                                   id={`body-img-upload-${block.id}`}
@@ -8190,7 +8198,7 @@ export default function SuperAdminConsole({
                                     const file = e.target.files?.[0];
                                     if (file) {
                                       if (file.size > 4 * 1024 * 1024) {
-                                        alert("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
+                                        notify("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
                                         return;
                                       }
                                       const reader = new FileReader();
@@ -8204,7 +8212,7 @@ export default function SuperAdminConsole({
                                 <label
                                   htmlFor={`body-img-upload-${block.id}`}
                                   className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
                                   title="Body paragrafına PNG, JPG görsel ekleyin"
                                 >
                                   <ImageIcon style={{ width: 12, height: 12 }} />
@@ -8213,11 +8221,11 @@ export default function SuperAdminConsole({
                                 {block.imageUrl && (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                                     <img src={block.imageUrl} alt="Önizleme" style={{ height: 22, maxWidth: 50, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }} />
-                                    <span style={{ fontSize: '0.65rem', color: '#34d399', fontWeight: 700 }}>✓ Görsel Eklendi</span>
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--ac-34d399)', fontWeight: 700 }}>✓ Görsel Eklendi</span>
                                     <button
                                       type="button"
                                       onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
                                       title="Görseli Kaldır"
                                     >
                                       Kaldır ✕
@@ -8229,7 +8237,7 @@ export default function SuperAdminConsole({
                             </div>
                           )}
                           {block.type === 'PACKAGE_INFO' && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                            <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                               <input
                                 type="text"
                                 value={block.planName || ''}
@@ -8257,7 +8265,7 @@ export default function SuperAdminConsole({
                             </div>
                           )}
                           {block.type === 'CREDENTIALS' && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                            <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                               <input
                                 type="text"
                                 value={block.loginEmail || ''}
@@ -8277,7 +8285,7 @@ export default function SuperAdminConsole({
                             </div>
                           )}
                           {block.type === 'BUTTON' && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                            <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                               <input
                                 type="text"
                                 value={block.buttonText || ''}
@@ -8307,7 +8315,7 @@ export default function SuperAdminConsole({
                                 style={{ fontSize: '0.72rem', padding: '4px 6px' }}
                               />
                               {/* Footer Görsel / İmza Seçici (Madde 3) */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '5px 8px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                                 <input
                                   type="file"
                                   id={`footer-img-upload-${block.id}`}
@@ -8317,7 +8325,7 @@ export default function SuperAdminConsole({
                                     const file = e.target.files?.[0];
                                     if (file) {
                                       if (file.size > 3 * 1024 * 1024) {
-                                        alert("Görsel dosya boyutu 3MB'tan küçük olmalıdır.");
+                                        notify("Görsel dosya boyutu 3MB'tan küçük olmalıdır.");
                                         return;
                                       }
                                       const reader = new FileReader();
@@ -8331,7 +8339,7 @@ export default function SuperAdminConsole({
                                 <label
                                   htmlFor={`footer-img-upload-${block.id}`}
                                   className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}
+                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
                                   title="Footer alanına PNG, JPG imza veya logo ekleyin"
                                 >
                                   <ImageIcon style={{ width: 12, height: 12 }} />
@@ -8340,11 +8348,11 @@ export default function SuperAdminConsole({
                                 {block.imageUrl && (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                                     <img src={block.imageUrl} alt="Footer Görseli" style={{ height: 22, maxWidth: 50, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }} />
-                                    <span style={{ fontSize: '0.65rem', color: '#34d399', fontWeight: 700 }}>✓ Görsel Eklendi</span>
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--ac-34d399)', fontWeight: 700 }}>✓ Görsel Eklendi</span>
                                     <button
                                       type="button"
                                       onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
                                       title="Görseli Kaldır"
                                     >
                                       Kaldır ✕
@@ -8361,15 +8369,15 @@ export default function SuperAdminConsole({
                   </div>
 
                   {/* Kolon 3: Canlı Önizleme */}
-                  <div style={{ background: '#0b0f19', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+                  <div style={{ background: 'var(--sf-0b0f19)', border: '1px solid rgb(var(--rgb-ov) / 0.08)', borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4 }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--ac-38bdf8)', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Eye style={{ width: 13, height: 13 }} />
                         <span>Canlı Görsel Önizleme</span>
                       </span>
-                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>620px Responsive</span>
+                      <span style={{ fontSize: '0.62rem', color: 'var(--nt-64748b)' }}>620px Responsive</span>
                     </div>
-                    <div style={{ flex: 1, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#ffffff', minHeight: 0 }}>
+                    <div style={{ flex: 1, borderRadius: 8, overflow: 'hidden', border: '1px solid rgb(var(--rgb-ov) / 0.1)', background: '#ffffff', minHeight: 0 }}>
                       <iframe
                         title="HTML Preview"
                         srcDoc={templateForm.html_content}
@@ -8380,10 +8388,10 @@ export default function SuperAdminConsole({
                 </div>
               ) : (
                 /* HTML KOD EDİTÖRÜ MODU */
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>
+                <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Code style={{ width: 13, height: 13, color: '#a78bfa' }} />
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Code style={{ width: 13, height: 13, color: 'var(--ac-a78bfa)' }} />
                       <span>HTML Kod Editörü</span>
                     </label>
                     <textarea
@@ -8393,16 +8401,16 @@ export default function SuperAdminConsole({
                       onChange={(e) => setTemplateForm({ ...templateForm, html_content: e.target.value })}
                       placeholder="<html><body>...</body></html>"
                       className="super-admin-input"
-                      style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.725rem', lineHeight: 1.4, whiteSpace: 'pre', background: '#0b0f19' }}
+                      style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.725rem', lineHeight: 1.4, whiteSpace: 'pre', background: 'var(--sf-0b0f19)' }}
                     />
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Eye style={{ width: 13, height: 13, color: '#38bdf8' }} />
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Eye style={{ width: 13, height: 13, color: 'var(--ac-38bdf8)' }} />
                       <span>Canlı E-Posta Önizlemesi (True Render)</span>
                     </label>
-                    <div style={{ flex: 1, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#ffffff' }}>
+                    <div style={{ flex: 1, borderRadius: 8, overflow: 'hidden', border: '1px solid rgb(var(--rgb-ov) / 0.1)', background: '#ffffff' }}>
                       <iframe
                         title="HTML Preview"
                         srcDoc={templateForm.html_content}
@@ -8420,14 +8428,14 @@ export default function SuperAdminConsole({
                 justifyContent: 'space-between',
                 paddingTop: 14,
                 paddingBottom: 4,
-                borderTop: '1px solid rgba(255,255,255,0.08)',
+                borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)',
                 position: 'sticky',
                 bottom: 0,
-                background: '#0d1222',
+                background: 'var(--sf-0d1222)',
                 zIndex: 20,
                 marginTop: 'auto'
               }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={templateForm.is_active}
@@ -8442,7 +8450,7 @@ export default function SuperAdminConsole({
                     onClick={handleTestSendFromModal}
                     disabled={processingId === 'test-mail-modal'}
                     className="super-admin-btn-secondary"
-                    style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)', fontWeight: 700, padding: '7px 14px' }}
+                    style={{ background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)', fontWeight: 700, padding: '7px 14px' }}
                     title="Şablonu kayıtlı bir adrese canlı test e-postası olarak gönderir"
                   >
                     {processingId === 'test-mail-modal' ? (
@@ -8474,24 +8482,24 @@ export default function SuperAdminConsole({
       {scheduleModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box" style={{ maxWidth: 640 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Clock style={{ width: 20, height: 20, color: '#fbbf24' }} />
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Clock style={{ width: 20, height: 20, color: 'var(--ac-fbbf24)' }} />
                   <span>{editingSchedule ? `'${scheduleForm.name}' Zamanlama Kuralını Düzenle` : 'Yeni Bildirim Zamanlayıcısı Tanımla'}</span>
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                   Kayıt anında veya paket bitimine 3 ay kala periyodik e-posta gönderim kuralı.
                 </p>
               </div>
-              <button onClick={() => setScheduleModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setScheduleModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             <form onSubmit={handleSaveSchedule} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Kural Adı *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Kural Adı *</label>
                 <input
                   type="text"
                   required
@@ -8502,9 +8510,9 @@ export default function SuperAdminConsole({
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Tetikleme Senaryosu *</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Tetikleme Senaryosu *</label>
                   <select
                     value={scheduleForm.trigger_type}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, trigger_type: e.target.value })}
@@ -8517,7 +8525,7 @@ export default function SuperAdminConsole({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>İletilecek Şablon *</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>İletilecek Şablon *</label>
                   <select
                     value={scheduleForm.template_code}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, template_code: e.target.value })}
@@ -8533,9 +8541,9 @@ export default function SuperAdminConsole({
               </div>
 
               {scheduleForm.trigger_type !== 'ON_REGISTRATION' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 10, borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 10, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Kaç Gün Kala Başlasın?</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Kaç Gün Kala Başlasın?</label>
                     <input
                       type="number"
                       value={scheduleForm.target_lead_days}
@@ -8543,11 +8551,11 @@ export default function SuperAdminConsole({
                       placeholder="90 (3 Ay)"
                       className="super-admin-input"
                     />
-                    <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Varsayılan: 90 gün (3 ay)</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--nt-94a3b8)' }}>Varsayılan: 90 gün (3 ay)</span>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>Gönderim Sıklığı (Gün)?</label>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Gönderim Sıklığı (Gün)?</label>
                     <input
                       type="number"
                       value={scheduleForm.frequency_days}
@@ -8555,13 +8563,13 @@ export default function SuperAdminConsole({
                       placeholder="15 (15 Günde Bir)"
                       className="super-admin-input"
                     />
-                    <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Varsayılan: 15 günde bir</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--nt-94a3b8)' }}>Varsayılan: 15 günde bir</span>
                   </div>
                 </div>
               )}
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={scheduleForm.is_active}
@@ -8591,17 +8599,17 @@ export default function SuperAdminConsole({
       {sectorModalOpen && (
         <div className="super-admin-modal-overlay">
           <div className="super-admin-modal-box">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Layers style={{ width: 18, height: 18, color: '#10b981' }} />
                   <span>{editingSector ? `'${sectorForm.code} - ${sectorForm.name}' Sektörünü Düzenle` : 'Yeni Sektör Tanımla'}</span>
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
                   T.C. Ticaret Bakanlığı resmi sektör kataloğu ana sektör tanımı.
                 </p>
               </div>
-              <button onClick={() => setSectorModalOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button onClick={() => setSectorModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
@@ -8609,7 +8617,7 @@ export default function SuperAdminConsole({
             <form onSubmit={handleSaveSector} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                     Sektör Kodu *
                   </label>
                   <input
@@ -8624,7 +8632,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                     Sektör Adı *
                   </label>
                   <input
@@ -8639,7 +8647,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', marginBottom: 4 }}>
+                <label style={{ display: 'block', fontSize: '0.725rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
                   Sektör Açıklaması (Opsiyonel)
                 </label>
                 <textarea
@@ -8652,17 +8660,17 @@ export default function SuperAdminConsole({
               </div>
 
               {/* Sektör İkonu & Resmi Seçimi (Madde 1) */}
-              <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.08)', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <label style={{ fontSize: '0.725rem', fontWeight: 700, color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <ImageIcon style={{ width: 14, height: 14, color: '#38bdf8' }} />
+                  <label style={{ fontSize: '0.725rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ImageIcon style={{ width: 14, height: 14, color: 'var(--ac-38bdf8)' }} />
                     <span>Sektör İkonu / Görseli (Eski Usül İkon / Resim)</span>
                   </label>
                   {(sectorForm.icon || sectorForm.image_url) && (
                     <button
                       type="button"
                       onClick={() => setSectorForm({ ...sectorForm, icon: '', image_url: '' })}
-                      style={{ background: 'transparent', border: 'none', color: '#f87171', fontSize: '0.68rem', cursor: 'pointer', fontWeight: 700 }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', fontSize: '0.68rem', cursor: 'pointer', fontWeight: 700 }}
                     >
                       İkon ve Görseli Temizle ✕
                     </button>
@@ -8671,7 +8679,7 @@ export default function SuperAdminConsole({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {/* Canlı Önizleme */}
-                  <div style={{ width: 50, height: 50, borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '2px solid rgba(16, 185, 129, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                  <div style={{ width: 50, height: 50, borderRadius: 10, background: 'rgb(var(--rgb-ov) / 0.06)', border: '2px solid rgba(16, 185, 129, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
                     {sectorForm.image_url ? (
                       <img src={sectorForm.image_url} alt="Sektör Görseli" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -8699,7 +8707,7 @@ export default function SuperAdminConsole({
                           const file = e.target.files?.[0];
                           if (file) {
                             if (file.size > 2 * 1024 * 1024) {
-                              alert("Resim dosyası 2MB'den küçük olmalıdır.");
+                              notify("Resim dosyası 2MB'den küçük olmalıdır.");
                               return;
                             }
                             const reader = new FileReader();
@@ -8713,7 +8721,7 @@ export default function SuperAdminConsole({
                       <label
                         htmlFor="sector-image-file"
                         className="super-admin-btn-secondary"
-                        style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.12)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)', whiteSpace: 'nowrap' }}
+                        style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.12)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)', whiteSpace: 'nowrap' }}
                         title="PNG, JPG veya SVG resim dosyası seçin"
                       >
                         <ImageIcon style={{ width: 13, height: 13 }} />
@@ -8722,15 +8730,15 @@ export default function SuperAdminConsole({
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginRight: 4 }}>Hızlı Seçim:</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--nt-94a3b8)', marginRight: 4 }}>Hızlı Seçim:</span>
                       {['🌲', '🎭', '💻', '🌾', '👗', '🎁', '✂️', '🚗', '🛒', '🚚', '🏗️', '🏦', '🏥', '⚖️', '🎓', '⚡', '🏢', '🛡️', '⚙️', '🚀', '💎', '📈', '🌐', '📦'].map((emoji) => (
                         <button
                           key={emoji}
                           type="button"
                           onClick={() => setSectorForm({ ...sectorForm, icon: emoji })}
                           style={{
-                            background: sectorForm.icon === emoji ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.05)',
-                            border: sectorForm.icon === emoji ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.08)',
+                            background: sectorForm.icon === emoji ? 'rgba(16, 185, 129, 0.3)' : 'rgb(var(--rgb-ov) / 0.05)',
+                            border: sectorForm.icon === emoji ? '1px solid #10b981' : '1px solid rgb(var(--rgb-ov) / 0.08)',
                             borderRadius: 4,
                             padding: '2px 4px',
                             fontSize: '0.9rem',
@@ -8759,7 +8767,7 @@ export default function SuperAdminConsole({
                       type="button"
                       onClick={() => setSectorForm({ ...sectorForm, image_url: '' })}
                       className="super-admin-btn-secondary"
-                      style={{ fontSize: '0.68rem', padding: '4px 8px', color: '#f87171', whiteSpace: 'nowrap' }}
+                      style={{ fontSize: '0.68rem', padding: '4px 8px', color: 'var(--ac-f87171)', whiteSpace: 'nowrap' }}
                     >
                       Resmi Kaldır
                     </button>
@@ -8768,7 +8776,7 @@ export default function SuperAdminConsole({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--nt-cbd5e1)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={sectorForm.is_active}
@@ -8779,7 +8787,7 @@ export default function SuperAdminConsole({
               </div>
 
               {/* FOOTER BUTONLARI */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 14, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button type="button" onClick={() => setSectorModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
                 </button>

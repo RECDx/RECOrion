@@ -45,7 +45,7 @@ export default function LeftPane({
             <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'flex', gap: '6px' }}>
               <span>Kod: {project?.slug || 'REC-001'}</span>
               <span>•</span>
-              <span style={{ color: '#22d3ee' }}>{project?.field_package || 'YAZILIM'}</span>
+              <span style={{ color: 'var(--ac-22d3ee)' }}>{project?.field_package || 'YAZILIM'}</span>
             </div>
           </div>
         </div>
@@ -60,18 +60,18 @@ export default function LeftPane({
           border: '1px solid rgba(99, 102, 241, 0.2)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--ac-818cf8)', display: 'flex', alignItems: 'center', gap: '5px' }}>
               <GitBranch size={13} />
               OTONOM İŞ AKIŞI ZİNCİRİ
             </span>
             <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>Temporal Engine</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-            <span style={{ color: '#38bdf8', fontWeight: '600' }}>Analist</span>
+            <span style={{ color: 'var(--ac-38bdf8)', fontWeight: '600' }}>Analist</span>
             <span>➔</span>
-            <span style={{ color: '#c084fc', fontWeight: '600' }}>Mimar</span>
+            <span style={{ color: 'var(--ac-c084fc)', fontWeight: '600' }}>Mimar</span>
             <span>➔</span>
-            <span style={{ color: '#34d399', fontWeight: '600' }}>Coder</span>
+            <span style={{ color: 'var(--ac-34d399)', fontWeight: '600' }}>Coder</span>
             <span>➔</span>
             <span style={{ color: '#f59e0b', fontWeight: '600' }}>QA</span>
           </div>
@@ -83,16 +83,16 @@ export default function LeftPane({
             <Filter size={12} />
             SOHBET VE GÖRÜNÜM FİLTRESİ
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
+          <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
             <button 
               onClick={() => handleFilterChange('ALL')}
               className="btn btn-secondary"
               style={{
                 fontSize: '0.68rem',
                 padding: '6px 4px',
-                background: filterType === 'ALL' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                background: filterType === 'ALL' ? 'rgba(99, 102, 241, 0.25)' : 'rgb(var(--rgb-ov) / 0.03)',
                 borderColor: filterType === 'ALL' ? '#6366f1' : 'var(--border-subtle)',
-                color: filterType === 'ALL' ? '#818cf8' : 'var(--text-muted)'
+                color: filterType === 'ALL' ? 'var(--ac-818cf8)' : 'var(--text-muted)'
               }}
             >
               Tüm Ekip
@@ -103,9 +103,9 @@ export default function LeftPane({
               style={{
                 fontSize: '0.68rem',
                 padding: '6px 4px',
-                background: filterType === 'MY' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                background: filterType === 'MY' ? 'rgba(16, 185, 129, 0.25)' : 'rgb(var(--rgb-ov) / 0.03)',
                 borderColor: filterType === 'MY' ? '#10b981' : 'var(--border-subtle)',
-                color: filterType === 'MY' ? '#34d399' : 'var(--text-muted)'
+                color: filterType === 'MY' ? 'var(--ac-34d399)' : 'var(--text-muted)'
               }}
             >
               Benim
@@ -116,9 +116,9 @@ export default function LeftPane({
               style={{
                 fontSize: '0.68rem',
                 padding: '6px 4px',
-                background: filterType === 'A2A' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                background: filterType === 'A2A' ? 'rgba(168, 85, 247, 0.25)' : 'rgb(var(--rgb-ov) / 0.03)',
                 borderColor: filterType === 'A2A' ? '#a855f7' : 'var(--border-subtle)',
-                color: filterType === 'A2A' ? '#c084fc' : 'var(--text-muted)'
+                color: filterType === 'A2A' ? 'var(--ac-c084fc)' : 'var(--text-muted)'
               }}
             >
               Ajanlar Arası
@@ -152,26 +152,26 @@ export default function LeftPane({
                   style={{
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    background: isSelected ? 'rgba(99, 102, 241, 0.16)' : 'rgba(255, 255, 255, 0.02)',
+                    background: isSelected ? 'rgba(99, 102, 241, 0.16)' : 'rgb(var(--rgb-ov) / 0.02)',
                     border: `1px solid ${isSelected ? '#6366f1' : 'var(--border-subtle)'}`,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: '600', color: isSelected ? '#ffffff' : 'var(--text-main)' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: '600', color: isSelected ? 'var(--nt-ffffff)' : 'var(--text-main)' }}>
                       {t.title}
                     </span>
                     <span className="badge" style={{
                       fontSize: '0.6rem',
                       background: t.priority === 'HIGH' ? 'rgba(244, 63, 94, 0.18)' : 'rgba(148, 163, 184, 0.12)',
-                      color: t.priority === 'HIGH' ? '#f43f5e' : '#cbd5e1'
+                      color: t.priority === 'HIGH' ? '#f43f5e' : 'var(--nt-cbd5e1)'
                     }}>
                       {t.priority}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--text-dim)' }}>
-                    <span>Durum: <b style={{ color: '#38bdf8' }}>{t.status}</b></span>
+                    <span>Durum: <b style={{ color: 'var(--ac-38bdf8)' }}>{t.status}</b></span>
                     <span>Efor: {t.estimated_effort} sp</span>
                   </div>
                 </div>
@@ -197,7 +197,7 @@ export default function LeftPane({
                   justifyContent: 'space-between',
                   padding: '7px 10px',
                   borderRadius: '8px',
-                  background: 'rgba(255, 255, 255, 0.02)',
+                  background: 'rgb(var(--rgb-ov) / 0.02)',
                   border: '1px solid var(--border-subtle)'
                 }}
               >
@@ -212,9 +212,9 @@ export default function LeftPane({
                     justifyContent: 'center'
                   }}>
                     {a.actor_type === 'AI_AGENT' ? (
-                      <Bot size={14} color="#818cf8" />
+                      <Bot size={14} color="var(--ac-818cf8)" />
                     ) : (
-                      <User size={14} color="#34d399" />
+                      <User size={14} color="var(--ac-34d399)" />
                     )}
                   </div>
                   <div>

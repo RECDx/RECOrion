@@ -8,6 +8,7 @@ import OfficialLanding from './components/OfficialLanding';
 import SuperAdminConsole from './components/SuperAdminConsole';
 import CompanyAdminConsole from './components/CompanyAdminConsole';
 import { api, session } from './api';
+import { notify } from './ui/feedback';
 
 // Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
 function loadSavedUser() {
@@ -74,6 +75,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   // KVKK modu: RECDx yöneticisi başka bir şirketin Work Space'ini içerik olmadan görüntüler
   const [kvkkRestricted, setKvkkRestricted] = useState(false);
+  // Tablet/telefonda aynı anda tek bölme gösterilir
+  const [activePane, setActivePane] = useState('middle');
 
   // URL Hash ve Görünüm Eşitlemesi
   useEffect(() => {
@@ -174,7 +177,7 @@ export default function App() {
   useEffect(() => {
     const onUnauthorized = () => {
       handleLogout();
-      alert('Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.');
+      notify('Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.');
     };
     window.addEventListener('recorion:unauthorized', onUnauthorized);
     return () => window.removeEventListener('recorion:unauthorized', onUnauthorized);
@@ -252,7 +255,7 @@ export default function App() {
         setMemoryItems(updatedMem);
       }
     } catch (err) {
-      alert(`Mesaj gönderilemedi: ${err.message}`);
+      notify(`Mesaj gönderilemedi: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -266,7 +269,7 @@ export default function App() {
       setTasks((prev) => [newTask, ...prev]);
       setSelectedTask(newTask);
     } catch (err) {
-      alert(`Görev oluşturulamadı: ${err.message}`);
+      notify(`Görev oluşturulamadı: ${err.message}`);
     }
   };
 
@@ -278,9 +281,9 @@ export default function App() {
         const updatedMem = await api.getMemoryItems(tenant.id);
         setMemoryItems(updatedMem);
       }
-      alert("Bilgi başarıyla Şirket Kurum Hafızasına (NS_GLOBAL) terfi ettirildi!");
+      notify("Bilgi başarıyla Şirket Kurum Hafızasına (NS_GLOBAL) terfi ettirildi!");
     } catch (err) {
-      alert(`Hafıza terfi hatası: ${err.message}`);
+      notify(`Hafıza terfi hatası: ${err.message}`);
     }
   };
 
@@ -428,7 +431,7 @@ export default function App() {
           style={{
             background: 'linear-gradient(90deg, rgba(234, 179, 8, 0.18), rgba(234, 179, 8, 0.08))',
             borderBottom: '1px solid rgba(234, 179, 8, 0.45)',
-            color: '#fde68a',
+            color: 'var(--ac-fde68a)',
             padding: '10px 20px',
             fontSize: '0.85rem',
             display: 'flex',
@@ -465,7 +468,14 @@ export default function App() {
       />
 
       {/* Tri-Pane Work Area */}
-      <div className="tri-pane-container">
+      <nav className="pane-switcher" aria-label="Çalışma alanı bölmeleri">
+        {[['left', 'Proje & Görevler'], ['middle', 'Sohbet'], ['right', 'Çıktı & Hafıza']].map(([key, label]) => (
+          <button key={key} type="button" className={activePane === key ? 'active' : ''} onClick={() => setActivePane(key)}>
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div className="tri-pane-container" data-active-pane={activePane}>
         {/* Left Pane: Project, Workflow & Team */}
         <LeftPane 
           project={activeProject}
@@ -495,8 +505,8 @@ export default function App() {
           selectedTask={selectedTask}
           memoryItems={memoryItems}
           onPromoteMemory={handlePromoteMemory}
-          onApproveQualityGate={() => alert("Kalite Kapısı onaylandı. Görev sonraki AI personeline devredildi.")}
-          onRejectQualityGate={() => alert("Revizyon talep edildi. Ajan geribildirime göre çıktıyı güncelleyecek.")}
+          onApproveQualityGate={() => notify("Kalite Kapısı onaylandı. Görev sonraki AI personeline devredildi.")}
+          onRejectQualityGate={() => notify("Revizyon talep edildi. Ajan geribildirime göre çıktıyı güncelleyecek.")}
         />
       </div>
 
