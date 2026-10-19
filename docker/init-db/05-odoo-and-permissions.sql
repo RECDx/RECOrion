@@ -80,9 +80,6 @@ ON CONFLICT (code) DO UPDATE SET
     default_for_roles = EXCLUDED.default_for_roles;
 
 -- 5. RECDx Süper Admin Kullanıcısını Ekleme (E maddesi)
--- Şifre: RECDx_SuperAdmin_2026! (SHA-256 + tuz: recorion_tenant_salt_2026)
--- Hash: hashlib.sha256(b"recorion_tenant_salt_2026_RECDx_SuperAdmin_2026!").hexdigest()
--- f284ec6efdf4079836371cbef878693eb120fcbca2c6ee4b1ea9bebc7ec86e11
 
 -- Önce RECDx Ana Şirketi var mı bakalım
 INSERT INTO tenants (slug, name, phone, contact_email, website, address, sector_manifesto)

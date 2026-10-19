@@ -1,10 +1,11 @@
+import os
 import asyncio
 import asyncpg
 import openpyxl
 
 async def inspect():
     print("--- 1. DATABASE CHECK ---")
-    conn = await asyncpg.connect('postgresql://recorion_admin:recorion_secret_pass_2026@localhost:5432/recorion_db')
+    conn = await asyncpg.connect(f"postgresql://recorion_admin:{os.getenv('POSTGRES_PASSWORD', '')}@localhost:5432/recorion_db")
     sectors = await conn.fetch('SELECT code, name FROM sectors ORDER BY code')
     print(f"Total sectors in DB: {len(sectors)}")
     for s in sectors:

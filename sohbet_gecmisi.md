@@ -11,8 +11,8 @@ Oturum süresince üç temel aşama halinde geliştirme ve revizyon talepleri al
 ### 1. Aşama: Şirket Yapılandırması, Süper Admin Hesapları ve Kurumsal E-posta Zorunluluğu
 1. **Tek Ana Şirket Kuralı:** Sistemde yalnızca **"RECDx Teknoloji & Dijital Dönüşüm Danışmanlığı LTD. Şirketi"** tanımlı kalacak. Bu şirket ana şirket (Master Tenant) olup sistemden silinemez.
 2. **Süper Admin Kullanıcıları:**
-   - `cuneyterdil@recx.com` (Şifre: `mce*1501`)
-   - `rehaerdag@recdx.com` (Şifre: `samil+2011`)
+   - `cuneyterdil@recx.com` (Şifre: güvenli şifre yöneticisinde saklanır)
+   - `rehaerdag@recdx.com` (Şifre: güvenli şifre yöneticisinde saklanır)
 3. **Eski/Gereksiz Şirketlerin Silinmesi:**
    - `RECDx Bilişim Teknolojileri ve Yapay Zeka A.Ş.`
    - `RECOrion Teknoloji A.Ş.`

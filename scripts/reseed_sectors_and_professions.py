@@ -16,7 +16,7 @@ import asyncpg
 EXCEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "documents", "Sektör Meslek Nace Kodları_2026.03.xlsx")
 
 DB_USER = os.getenv("POSTGRES_USER", "recorion_admin")
-DB_PASS = os.getenv("POSTGRES_PASSWORD", "recorion_secret_pass_2026")
+DB_PASS = os.getenv("POSTGRES_PASSWORD", "")
 DB_NAME = os.getenv("POSTGRES_DB", "recorion_db")
 DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = int(os.getenv("POSTGRES_PORT", "5432"))

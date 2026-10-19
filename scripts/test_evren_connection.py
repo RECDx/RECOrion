@@ -1,8 +1,9 @@
+import os
 import requests
 import json
 
 headers = {
-    "Authorization": "Bearer evren_llm_YFiyd7zrA1Bs0r5egqud8HMhCwMaqbRQnV47UCeZ4jg",
+    "Authorization": f"Bearer {os.getenv('EVREN_API_KEY', '')}",
     "Content-Type": "application/json"
 }
 base_url = "https://evren-llmapi.ssyz.org.tr/v1"

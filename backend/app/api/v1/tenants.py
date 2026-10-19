@@ -1021,7 +1021,7 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
         odoo_order_id=odoo_order_id,
         odoo_order_name=odoo_order_name,
         status="PENDING",
-        notes=f"Yetkili: {payload.contact_name} | PasswordHash: {pw_hash} | InitialPassword: {payload.password} | Sektör: {manifesto_data['sector_focus']} | OdooRef: {odoo_order_name or 'N/A'}"
+        notes=f"Yetkili: {payload.contact_name} | PasswordHash: {pw_hash} | Sektör: {manifesto_data['sector_focus']} | OdooRef: {odoo_order_name or 'N/A'}"
     )
     db.add(lead)
     await db.commit()
@@ -1216,8 +1216,6 @@ async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
                 contact_name = part.replace("Yetkili:", "").strip()
             if "PasswordHash:" in part:
                 pw_hash = part.replace("PasswordHash:", "").strip()
-            if "InitialPassword:" in part:
-                initial_pw = part.replace("InitialPassword:", "").strip()
 
     admin_actor_res = await db.execute(
         select(Actor).where(Actor.tenant_id == tenant.id, Actor.role == "COMPANY_ADMIN").order_by(Actor.created_at.desc())
@@ -1546,7 +1544,7 @@ async def admin_create_tenant(payload: AdminTenantCreate, db: AsyncSession = Dep
             lead.odoo_order_id = odoo_order_id
         if odoo_order_name:
             lead.odoo_order_name = odoo_order_name
-        lead.notes = f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | InitialPassword: {plain_password} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
+        lead.notes = f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
     else:
         lead = TenantLead(
             company_name=tenant.name,
@@ -1564,7 +1562,7 @@ async def admin_create_tenant(payload: AdminTenantCreate, db: AsyncSession = Dep
             odoo_order_id=odoo_order_id,
             odoo_order_name=odoo_order_name,
             status="APPROVED",
-            notes=f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | InitialPassword: {plain_password} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
+            notes=f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
         )
         db.add(lead)
 

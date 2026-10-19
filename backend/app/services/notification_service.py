@@ -23,7 +23,7 @@ class NotificationService:
             "host": os.getenv("SMTP_HOST") or "mail.recdx.com",
             "port": int(os.getenv("SMTP_PORT") or "587"),
             "user": os.getenv("SMTP_USER") or "info@recdx.com",
-            "password": os.getenv("SMTP_PASSWORD") or "J18BG&d@",
+            "password": os.getenv("SMTP_PASSWORD") or "",
             "from_email": os.getenv("FROM_EMAIL") or "info@recdx.com",
         }
 

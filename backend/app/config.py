@@ -7,11 +7,11 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "RECOrion"
     ENVIRONMENT: str = "local_dev"
     DEBUG: bool = True
-    SECRET_KEY: str = "recorion_super_secret_jwt_key_change_in_production_2026"
+    SECRET_KEY: str = ""  # .env üzerinden verilir
 
     # PostgreSQL
     POSTGRES_USER: str = "recorion_admin"
-    POSTGRES_PASSWORD: str = "recorion_secret_pass_2026"
+    POSTGRES_PASSWORD: str = ""  # .env üzerinden verilir
     POSTGRES_DB: str = "recorion_db"
     POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
@@ -29,14 +29,14 @@ class Settings(BaseSettings):
 
     # MinIO
     MINIO_ROOT_USER: str = "minio_admin"
-    MINIO_ROOT_PASSWORD: str = "recorion_secret_pass_2026"
+    MINIO_ROOT_PASSWORD: str = ""  # .env üzerinden verilir
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_BUCKET_NAME: str = "recorion-artifacts"
     MINIO_USE_SSL: bool = False
 
     # EVREN LLM Gateway (TÜBİTAK BİLGEM & SSB SAYZEK EVREN)
     EVREN_API_BASE_URL: str = "https://evren-llmapi.ssyz.org.tr/v1"
-    EVREN_API_KEY: str = "evren_llm_YFiyd7zrA1Bs0r5egqud8HMhCwMaqbRQnV47UCeZ4jg"
+    EVREN_API_KEY: str = ""  # .env üzerinden verilir
     LLM_TIMEOUT_SECONDS: int = 120
 
     class Config:

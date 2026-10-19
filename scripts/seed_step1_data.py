@@ -19,7 +19,7 @@ DB_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 DB_PORT = os.environ.get("POSTGRES_PORT", "5432")
 DB_NAME = os.environ.get("POSTGRES_DB", "recorion_db")
 DB_USER = os.environ.get("POSTGRES_USER", "recorion_admin")
-DB_PASS = os.environ.get("POSTGRES_PASSWORD", "recorion_secret_pass_2026")
+DB_PASS = os.environ.get("POSTGRES_PASSWORD", "")
 
 def get_sector_group(code: str) -> str:
     """NACE kodunun ilk 2 hanesine göre makro sektör grubunu belirler."""

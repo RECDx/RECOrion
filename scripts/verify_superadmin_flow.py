@@ -80,9 +80,9 @@ def run_verification():
         driver.save_screenshot(os.path.join(SCREENSHOT_DIR, "1_wrong_password_blocked.png"))
         print("✓ Ekran goruntusu kaydedildi: 1_wrong_password_blocked.png")
 
-        # 4. DOGRU SUPER ADMIN GIRISI TESTI (cuneyterdil@recdx. ve RECDx_SuperAdmin_2026!)
+        # 4. DOGRU SUPER ADMIN GIRISI TESTI (cuneyterdil@recdx. ve <RECORION_TEST_SUPERADMIN_PASSWORD>)
         print("\n>>> 3. Dogru Super Admin Bilgileri ile Giris Yapiliyor...")
-        set_react_input(driver, password_input, "RECDx_SuperAdmin_2026!")
+        set_react_input(driver, password_input, os.getenv("RECORION_TEST_SUPERADMIN_PASSWORD", ""))
         time.sleep(0.5)
 
         submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")

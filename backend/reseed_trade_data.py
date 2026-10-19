@@ -13,7 +13,7 @@ import asyncpg
 CATALOG_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trade_ministry_catalog.json")
 
 DB_USER = os.getenv("POSTGRES_USER", "recorion_admin")
-DB_PASS = os.getenv("POSTGRES_PASSWORD", "recorion_secret_pass_2026")
+DB_PASS = os.getenv("POSTGRES_PASSWORD", "")
 DB_NAME = os.getenv("POSTGRES_DB", "recorion_db")
 DB_HOST = os.getenv("POSTGRES_HOST", "recorion_postgres")
 DB_PORT = int(os.getenv("POSTGRES_PORT", "5432"))

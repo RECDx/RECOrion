@@ -34,3 +34,6 @@ docker/volumes/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Kullanıcıların yüklediği dosyalar (KVKK) - git dışı
+backend/storage/

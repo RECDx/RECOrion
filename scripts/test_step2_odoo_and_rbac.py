@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 import uuid
@@ -20,7 +21,7 @@ def test_all():
     print_section("E. RECDx Süper Admin Giriş Testi (auth/login)")
     login_resp = requests.post(f"{BASE_URL}/auth/login", json={
         "email": "cuneyterdil@recdx.com",
-        "password": "RECDx_SuperAdmin_2026!"
+        "password": os.getenv("RECORION_TEST_SUPERADMIN_PASSWORD", "")
     })
     print(f"Login Status: {login_resp.status_code}")
     assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
