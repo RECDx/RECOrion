@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.api.v1.health import router as health_router
 from app.api.v1.models import router as models_router
 from app.api.v1.tenants import router as tenants_router
@@ -11,8 +11,10 @@ from app.api.v1.system import router as system_router
 from app.api.v1.company import router as company_router
 from app.api.v1.sectors import router as sectors_router
 from app.api.v1.professions import router as professions_router
+from app.core.access_policy import enforce_access_policy
 
-api_router = APIRouter(prefix="/api/v1")
+# Tüm uçlar merkezi erişim politikasından geçer (app/core/access_policy.py)
+api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(enforce_access_policy)])
 
 api_router.include_router(health_router)
 api_router.include_router(models_router)

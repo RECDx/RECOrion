@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import logging
 from app.config import settings
 from app.api.router import api_router
+from app.core.audit import AuditMiddleware
 
 logging.basicConfig(
     level=logging.INFO if not settings.DEBUG else logging.DEBUG,
@@ -32,13 +33,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Middleware (Frontend Work Area Bağlantısı)
+# Denetim kaydı: tüm değişiklik istekleri ve giriş denemeleri
+app.add_middleware(AuditMiddleware)
+
+# CORS Middleware (yalnızca izinli frontend adresleri, .env: CORS_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # API Rotaları

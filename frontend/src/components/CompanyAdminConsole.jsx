@@ -9634,6 +9634,11 @@ export default function CompanyAdminConsole({
                               ) : isDeepSearch ? (
                                 <a
                                   href={api.getAgentDocumentDownloadUrl(getActiveTenantId(), selectedAgentForDocs.id, doc.id)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    api.downloadAgentDocument(getActiveTenantId(), selectedAgentForDocs.id, doc.id, doc.original_name)
+                                      .catch((err) => alert(`Doküman indirilemedi: ${err.message}`));
+                                  }}
                                   target="_blank"
                                   rel="noreferrer"
                                   download
@@ -9659,6 +9664,11 @@ export default function CompanyAdminConsole({
                               ) : (
                                 <a
                                   href={api.getAgentDocumentDownloadUrl(getActiveTenantId(), selectedAgentForDocs.id, doc.id)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    api.downloadAgentDocument(getActiveTenantId(), selectedAgentForDocs.id, doc.id, doc.original_name)
+                                      .catch((err) => alert(`Doküman indirilemedi: ${err.message}`));
+                                  }}
                                   target="_blank"
                                   rel="noreferrer"
                                   download

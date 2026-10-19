@@ -148,25 +148,25 @@ DEFAULT_SYSTEM_ROLES = [
     {
         "name": "Kurumsal Operasyon & Müşteri Yöneticisi",
         "description": "Müşteri ve kiralama paketlerini, onay süreçlerini ve bildirim zamanlayıcılarını yönetir.",
-        "permissions": ["tenant:view", "tenant:create", "tenant:edit", "lead:approve", "plan:view", "schedule:view", "schedule:trigger", "template:edit", "audit:read"],
+        "permissions": ["tenant:view", "tenant:manage", "billing:view"],
         "is_system": True
     },
     {
         "name": "Güvenlik & Uyum Denetçisi (SecOps & Compliance)",
         "description": "Erişim loglarını, rol tanımlarını ve RBAC izin hiyerarşisini denetler.",
-        "permissions": ["rbac:audit", "audit:read", "role:view", "security:manage"],
+        "permissions": ["tenant:view", "role:edit", "chat:export"],
         "is_system": True
     },
     {
         "name": "Yapay Zeka Mimarisi & Ajan Lideri",
         "description": "EVREN modellerini yapılandırır, otonom ajanları ve görev dağılımlarını orkestre eder.",
-        "permissions": ["agent:create", "agent:edit", "agent:hire", "agent:dismiss", "model:config", "project:manage", "chat:access"],
+        "permissions": ["agent:hire", "agent:configure", "agent:custom_title", "agent:quarantine", "project:manage", "chat:participate", "chat:view_a2a"],
         "is_system": True
     },
     {
         "name": "Standart Kurumsal Kullanıcı",
         "description": "Temel sohbet, proje takibi ve hafıza arama yetkilerine sahip standart kullanıcı.",
-        "permissions": ["chat:access", "project:view", "memory:read"],
+        "permissions": ["tenant:view", "task:create", "chat:participate", "memory:search"],
         "is_system": True
     }
 ]

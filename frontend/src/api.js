@@ -4,10 +4,59 @@
  */
 
 const BASE_URL = '/api/v1';
+const TOKEN_KEY = 'recorion_token';
+
+/**
+ * Oturum token'ı. "Beni Hatırla" seçiliyse localStorage, değilse sessionStorage
+ * (tarayıcı kapanınca silinir) kullanılır.
+ */
+export const session = {
+  getToken: () => {
+    try {
+      return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+  setToken: (token, rememberMe) => {
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      (rememberMe ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+    } catch (e) {
+      console.warn('Oturum bilgisi kaydedilemedi:', e);
+    }
+  },
+  clear: () => {
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem('recorion_user');
+      localStorage.removeItem('recorion_current_view');
+    } catch {
+      /* depolama erişilemiyor */
+    }
+  },
+};
+
+function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  const token = session.getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
+// Oturum süresi dolduğunda veya token geçersiz olduğunda uygulama bu olayı dinleyip çıkış yapar
+function handleUnauthorized() {
+  if (session.getToken()) {
+    session.clear();
+    window.dispatchEvent(new Event('recorion:unauthorized'));
+  }
+}
 
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
-  const headers = { ...options.headers };
+  const headers = authHeaders(options.headers);
   if (!(options.body instanceof FormData)) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
@@ -15,6 +64,7 @@ async function request(endpoint, options = {}) {
   try {
     const res = await fetch(url, { ...options, headers });
     if (!res.ok) {
+      if (res.status === 401 && endpoint !== '/auth/login') handleUnauthorized();
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.detail || `HTTP Error ${res.status}`);
     }
@@ -23,6 +73,27 @@ async function request(endpoint, options = {}) {
     console.error(`API Hatası [${endpoint}]:`, err);
     throw err;
   }
+}
+
+/** Yetkili dosya indirme: token'lı istekle indirip tarayıcıya kaydettirir. */
+async function downloadFile(endpoint, fallbackName) {
+  const res = await fetch(`${BASE_URL}${endpoint}`, { headers: authHeaders() });
+  if (!res.ok) {
+    if (res.status === 401) handleUnauthorized();
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || `HTTP Error ${res.status}`);
+  }
+  const disposition = res.headers.get('content-disposition') || '';
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+  const fileName = match ? decodeURIComponent(match[1]) : (fallbackName || 'dokuman');
+  const blobUrl = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 export const api = {
@@ -83,6 +154,7 @@ export const api = {
   // Kimlik Doğrulama & Profil (Auth & RBAC)
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   getProfile: (actorId) => request(`/auth/profile/${actorId}`),
+  getMe: () => request('/auth/me'),
   updateProfile: (actorId, data) => request(`/auth/profile/${actorId}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Sistem İzinleri & Ayarları (Süper Admin)
@@ -227,6 +299,8 @@ export const api = {
   deepSearchExistingAgentSectorTitle: (tenantId, agentId, modelCode = 'glm-5.3') => request(`/company/${tenantId}/ai-agents/${agentId}/deep-search-sector-title?model_code=${encodeURIComponent(modelCode)}`, { method: 'POST' }),
   deleteAgentDocument: (tenantId, agentId, documentId) => request(`/company/${tenantId}/ai-agents/${agentId}/documents/${documentId}`, { method: 'DELETE' }),
   getAgentDocumentDownloadUrl: (tenantId, agentId, documentId) => `${BASE_URL}/company/${tenantId}/ai-agents/${agentId}/documents/${documentId}/download`,
+  downloadAgentDocument: (tenantId, agentId, documentId, fallbackName) =>
+    downloadFile(`/company/${tenantId}/ai-agents/${agentId}/documents/${documentId}/download`, fallbackName),
 
   // Müşteri Şirket Yönetimi - Kurumsal Manifesto (Madde 6)
   updateCompanyManifesto: (tenantId, data) => request(`/company/${tenantId}/manifesto`, { method: 'PUT', body: JSON.stringify(data) }),

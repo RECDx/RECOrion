@@ -31,6 +31,8 @@ from app.db.models import (
     Plan, TenantRole, SystemPermission, AgentDocument, MemoryItem
 )
 from app.api.v1.auth import hash_password
+from app.core.net import UnsafeURLError, safe_request
+from app.core.security import CurrentUser, forbidden, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -1259,10 +1261,12 @@ async def fetch_web_page_content(url: str) -> Dict[str, Any]:
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 RECOrionBot/1.0"
     }
-    async with httpx.AsyncClient(timeout=25.0, follow_redirects=True, headers=headers) as client:
-        resp = await client.get(clean_url)
-        resp.raise_for_status()
-        html = resp.text
+    try:
+        resp = await safe_request("GET", clean_url, timeout=25.0, headers=headers)
+    except UnsafeURLError as exc:
+        raise HTTPException(status_code=400, detail=f"Bu adres öğrenme kaynağı olarak kullanılamaz: {exc}")
+    resp.raise_for_status()
+    html = resp.text
 
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript", "svg", "iframe", "header", "footer", "nav"]):
@@ -2276,10 +2280,20 @@ async def list_company_users(
     return result
 
 
+def _ensure_can_grant(current: CurrentUser, permissions: List[str]) -> None:
+    """Kullanıcı, kendisinde olmayan bir izni başkasına veremez (süper admin hariç)."""
+    if current.is_super_admin:
+        return
+    missing = [p for p in permissions if not current.has(p)]
+    if missing:
+        raise forbidden(f"Sahip olmadığınız izinleri atayamazsınız: {', '.join(sorted(set(missing)))}")
+
+
 @router.post("/{tenant_id}/users", response_model=CompanyUserOut)
 async def create_company_user(
     tenant_id: uuid.UUID,
     payload: CompanyUserIn,
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -2360,6 +2374,7 @@ async def create_company_user(
 
     # 8. Ek İzinler
     extra_p = payload.extra_permissions or []
+    _ensure_can_grant(current, list(role_perms) + list(extra_p))
 
     user = Actor(
         tenant_id=tenant_id,
@@ -2408,6 +2423,7 @@ async def update_company_user(
     tenant_id: uuid.UUID,
     user_id: uuid.UUID,
     payload: CompanyUserUpdateIn,
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -2488,12 +2504,14 @@ async def update_company_user(
             r = await db.get(TenantRole, payload.role_id)
             if not r or (r.tenant_id is not None and r.tenant_id != tenant_id):
                 raise HTTPException(status_code=404, detail="Seçilen yetki rolü bulunamadı.")
+            _ensure_can_grant(current, r.permissions or [])
             user.role_id = payload.role_id
             user.role = r.name
         else:
             user.role_id = None
 
     if payload.extra_permissions is not None:
+        _ensure_can_grant(current, payload.extra_permissions)
         user.extra_permissions = payload.extra_permissions
 
     await db.commit()

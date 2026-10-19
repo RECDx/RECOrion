@@ -940,7 +940,6 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
     - info@recdx.com adresine bildirim gönderir
     - Müşteri e-postasına profesyonel onay e-postası gönderir
     """
-    import hashlib
     from app.db.models import TenantLead
     from app.services.manifesto_service import ManifestoService
     from app.services.notification_service import NotificationService
@@ -969,9 +968,9 @@ async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = D
         website=payload.website
     )
 
-    # 3. Güvenli Şifre Hashleme (SHA-256 + Salt)
-    salt = "recorion_tenant_salt_2026"
-    pw_hash = hashlib.sha256(f"{salt}_{payload.password}".encode("utf-8")).hexdigest()
+    # 3. Güvenli Şifre Hashleme (Argon2id)
+    from app.api.v1.auth import hash_password
+    pw_hash = hash_password(payload.password)
 
     # 4. Odoo 19 res.partner & sale.order Entegrasyonu (A maddesi)
     odoo_partner_id = None

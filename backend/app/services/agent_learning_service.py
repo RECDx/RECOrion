@@ -18,6 +18,7 @@ from typing import List, Dict, Any, Optional
 import uuid
 
 import httpx
+from app.core.net import safe_request
 from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -87,15 +88,14 @@ class AgentLearningService:
     async def fetch_page_content(self, url: str) -> str:
         """Belirtilen URL'den sayfayı çeker ve temiz metin çıkarır."""
         try:
-            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers=self.headers) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    for tag in soup(["script", "style", "noscript", "svg", "header", "footer", "nav", "iframe"]):
-                        tag.decompose()
-                    text = soup.get_text(separator="\n", strip=True)
-                    lines = [line.strip() for line in text.splitlines() if len(line.strip()) > 30]
-                    return "\n".join(lines[:40])  # İlk 40 paragraf
+            resp = await safe_request("GET", url, timeout=15.0, headers=self.headers)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for tag in soup(["script", "style", "noscript", "svg", "header", "footer", "nav", "iframe"]):
+                    tag.decompose()
+                text = soup.get_text(separator="\n", strip=True)
+                lines = [line.strip() for line in text.splitlines() if len(line.strip()) > 30]
+                return "\n".join(lines[:40])  # İlk 40 paragraf
         except Exception as e:
             logger.info(f"Sayfa metni çekilemedi ({url}): {e}")
         return ""

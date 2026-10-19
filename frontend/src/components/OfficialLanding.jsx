@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api';
+import { api, session } from '../api';
 import AdminLeadsModal from './AdminLeadsModal';
 import { 
   Building2, 
@@ -28,7 +28,9 @@ import {
   Eye, 
   EyeOff,
   Search,
-  KeyRound
+  KeyRound,
+  Briefcase,
+  GraduationCap
 } from 'lucide-react';
 
 export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogout }) {
@@ -226,10 +228,12 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setIsLoggingIn(true);
     try {
       let email = loginEmail.trim();
-      const user = await api.login({
+      const { access_token: accessToken, token_type: _tokenType, expires_at: _expiresAt, ...user } = await api.login({
         email: email,
         password: loginPassword,
+        remember_me: rememberMe,
       });
+      session.setToken(accessToken, rememberMe);
 
       if (rememberMe) {
         localStorage.setItem('recorion_remember_me', 'true');

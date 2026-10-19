@@ -24,10 +24,8 @@ def test_plans_listed(client):
     assert {p["code"] for p in r.json()} == {"STARTER", "PRO", "ENTERPRISE"}
 
 
-def test_models_listed(client):
-    r = client.get("/api/v1/models/")
-    assert r.status_code == 200
-    assert len(r.json()) == 15
+def test_models_require_login(client):
+    assert client.get("/api/v1/models/").status_code == 401
 
 
 def test_login_rejects_wrong_password(client):

@@ -9,6 +9,18 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     SECRET_KEY: str = ""  # .env üzerinden verilir
 
+    # Kimlik doğrulama (JWT)
+    ACCESS_TOKEN_HOURS: int = 12
+    REMEMBER_ME_DAYS: int = 30
+    LOGIN_MAX_FAILED_ATTEMPTS: int = 5
+    LOGIN_LOCK_MINUTES: int = 15
+
+    # Virgülle ayrılmış izinli frontend adresleri
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    # SQL sorgularını loglar (parametreler dahil); yalnızca yerel hata ayıklamada açın
+    DB_ECHO: bool = False
+
     # PostgreSQL
     POSTGRES_USER: str = "recorion_admin"
     POSTGRES_PASSWORD: str = ""  # .env üzerinden verilir

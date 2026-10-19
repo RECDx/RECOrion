@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 from app.db.session import get_db
+from app.core.security import CurrentUser, ensure_tenant_management, get_current_user
 from app.db.models import Actor, LLMModel, JobTitle
 from pydantic import BaseModel
 import uuid
@@ -261,14 +262,15 @@ Otonomi Seviyen: {job_title.autonomy_level}. Temel yetenek havuzun: {skills_str}
 async def list_actors(
     tenant_id: Optional[uuid.UUID] = Query(None),
     actor_type: Optional[str] = Query(None),
+    user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Şirket personellerini (İnsan ve AI Ajanlar) listeler.
     """
-    stmt = select(Actor)
-    if tenant_id:
-        stmt = stmt.where(Actor.tenant_id == tenant_id)
+    tenant_id = tenant_id or user.tenant_id
+    ensure_tenant_management(user, tenant_id)
+    stmt = select(Actor).where(Actor.tenant_id == tenant_id)
     if actor_type:
         stmt = stmt.where(Actor.actor_type == actor_type.upper())
     stmt = stmt.order_by(Actor.actor_type, Actor.display_name)

@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 
 engine = create_async_engine(
     settings.get_database_url(),
-    echo=settings.DEBUG,
+    echo=settings.DB_ECHO,
     future=True,
     pool_pre_ping=True
 )

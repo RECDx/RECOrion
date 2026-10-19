@@ -7,28 +7,25 @@ import CreateTaskModal from './components/CreateTaskModal';
 import OfficialLanding from './components/OfficialLanding';
 import SuperAdminConsole from './components/SuperAdminConsole';
 import CompanyAdminConsole from './components/CompanyAdminConsole';
-import { api } from './api';
+import { api, session } from './api';
+
+// Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
+function loadSavedUser() {
+  try {
+    if (!session.getToken()) return null;
+    const u = localStorage.getItem('recorion_user');
+    return u ? JSON.parse(u) : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const u = localStorage.getItem('recorion_user');
-      return u ? JSON.parse(u) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState(loadSavedUser);
 
   const [currentView, setCurrentView] = useState(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
-    const savedUser = (() => {
-      try {
-        const u = localStorage.getItem('recorion_user');
-        return u ? JSON.parse(u) : null;
-      } catch {
-        return null;
-      }
-    })();
+    const savedUser = loadSavedUser();
     const savedView = typeof window !== 'undefined' ? localStorage.getItem('recorion_current_view') : null;
 
     if (hash.startsWith('#/super-admin') && savedUser?.role === 'SUPER_ADMIN') {
@@ -106,12 +103,7 @@ export default function App() {
   useEffect(() => {
     const handleLocationChange = () => {
       const hash = window.location.hash;
-      const u = currentUser || (() => {
-        try {
-          const raw = localStorage.getItem('recorion_user');
-          return raw ? JSON.parse(raw) : null;
-        } catch { return null; }
-      })();
+      const u = currentUser || loadSavedUser();
 
       if (hash.startsWith('#/super-admin')) {
         if (u?.role === 'SUPER_ADMIN') {
@@ -153,64 +145,37 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // 1. Initial Load: Cluster Health, Models, Tenant, Actors
+  // 1. Initial Load: sağlık durumu; oturum varsa kullanıcının kendi şirketi
   useEffect(() => {
     async function initPlatform() {
       try {
-        const hData = await api.getHealth();
-        setHealth(hData);
+        setHealth(await api.getHealth());
+      } catch (err) {
+        console.error("Sağlık kontrolü hatası:", err);
+      }
 
+      const savedUser = loadSavedUser();
+      if (!savedUser?.tenant_id) return;
+      try {
         const mData = await api.getModels();
         setModels(mData);
         if (mData.length > 0) setSelectedModel(mData[0].model_code);
-
-        const tData = await api.getTenants();
-        if (tData.length > 0) {
-          // Kullanıcının şirket eşleştirmesi (currentUser.tenant_id mutlak önceliklidir)
-          let activeTenant = null;
-          const savedUser = currentUser || (() => {
-            try {
-              const u = localStorage.getItem('recorion_user');
-              return u ? JSON.parse(u) : null;
-            } catch { return null; }
-          })();
-
-          if (savedUser?.tenant_id) {
-            activeTenant = tData.find(t => t.id === savedUser.tenant_id);
-            if (!activeTenant) {
-              try {
-                const details = await api.getTenantDetails(savedUser.tenant_id);
-                activeTenant = details?.tenant || details;
-              } catch (e) {
-                console.warn("Kullanıcı şirketi detayları çekilemedi:", e);
-              }
-            }
-          }
-
-          // Fallback: Eğer kullanıcı yoksa veya genel yönetici ise listenin ilk şirketi
-          if (!activeTenant) {
-            activeTenant = tData[0];
-          }
-
-          setTenant(activeTenant);
-
-          const actData = await api.getActors(activeTenant.id);
-          setActors(actData);
-
-          const prjData = await api.getProjects(activeTenant.id);
-          setProjects(prjData);
-          if (prjData.length > 0) {
-            setActiveProject(prjData[0]);
-          }
-
-          const memData = await api.getMemoryItems(activeTenant.id);
-          setMemoryItems(memData);
-        }
+        await loadTenantWorkspace(savedUser.tenant_id);
       } catch (err) {
         console.error("Platform başlatma hatası:", err);
       }
     }
     initPlatform();
+  }, []);
+
+  // Oturum süresi dolarsa veya token geçersizse otomatik çıkış
+  useEffect(() => {
+    const onUnauthorized = () => {
+      handleLogout();
+      alert('Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.');
+    };
+    window.addEventListener('recorion:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('recorion:unauthorized', onUnauthorized);
   }, []);
 
   // 2. Load Tasks when Active Project Changes
@@ -240,9 +205,8 @@ export default function App() {
           // Task-specific history
           msgList = await api.getChatHistory(selectedTask.id, null, true);
         } else if (chatFilter === 'MY') {
-          // Filter to user messages
-          const humanAdmin = actors.find(a => a.actor_type === 'HUMAN');
-          msgList = await api.getChatHistory(selectedTask.id, humanAdmin?.id || null, true);
+          // Yalnızca giriş yapmış kullanıcının mesajları
+          msgList = await api.getChatHistory(selectedTask.id, currentUser?.actor_id || null, true);
         } else if (chatFilter === 'A2A') {
           // Project-wide Agent-to-Agent negotiations
           msgList = await api.getProjectChatHistory(selectedTask.project_id, null, 'AGENT_TO_AGENT');
@@ -260,13 +224,11 @@ export default function App() {
     if (!selectedTask || !content.trim()) return;
 
     setIsLoading(true);
-    const humanAdmin = actors.find(a => a.actor_type === 'HUMAN');
 
     try {
       const response = await api.sendMessage({
         task_id: selectedTask.id,
         content: content,
-        sender_actor_id: humanAdmin?.id || null,
         override_model_code: overrideModel || selectedModel,
         is_private: isPrivate,
         message_type: 'CHAT'
@@ -320,9 +282,27 @@ export default function App() {
     }
   };
 
+  // Şirketin Work Space verilerini (personel, proje, hafıza) yükler
+  async function loadTenantWorkspace(tenantId) {
+    const details = await api.getTenantDetails(tenantId);
+    const userTenant = details?.tenant || details;
+    if (!userTenant) return;
+    setTenant(userTenant);
+    setActors(await api.getActors(userTenant.id));
+    const prjData = await api.getProjects(userTenant.id);
+    setProjects(prjData);
+    if (prjData.length > 0) {
+      setActiveProject(prjData[0]);
+    } else {
+      setActiveProject(null);
+      setTasks([]);
+      setSelectedTask(null);
+    }
+    setMemoryItems(await api.getMemoryItems(userTenant.id));
+  }
+
   const handleLogout = () => {
-    localStorage.removeItem('recorion_user');
-    localStorage.removeItem('recorion_current_view');
+    session.clear();
     setCurrentUser(null);
     setTenant(null);
     setActors([]);
@@ -343,24 +323,10 @@ export default function App() {
     // Giriş yapan kullanıcının şirketini derhal yükle ve senkronize et
     if (user.tenant_id) {
       try {
-        const details = await api.getTenantDetails(user.tenant_id);
-        const userTenant = details?.tenant || details;
-        if (userTenant) {
-          setTenant(userTenant);
-          const actData = await api.getActors(userTenant.id);
-          setActors(actData);
-          const prjData = await api.getProjects(userTenant.id);
-          setProjects(prjData);
-          if (prjData.length > 0) {
-            setActiveProject(prjData[0]);
-          } else {
-            setActiveProject(null);
-            setTasks([]);
-            setSelectedTask(null);
-          }
-          const memData = await api.getMemoryItems(userTenant.id);
-          setMemoryItems(memData);
-        }
+        const mData = await api.getModels();
+        setModels(mData);
+        if (mData.length > 0) setSelectedModel(mData[0].model_code);
+        await loadTenantWorkspace(user.tenant_id);
       } catch (e) {
         console.warn("Giriş yapan kullanıcının şirketi senkronize edilemedi:", e);
       }
@@ -380,21 +346,14 @@ export default function App() {
 
   const handleSwitchTenant = async (selectedTenant) => {
     if (!selectedTenant) return;
-    setTenant(selectedTenant);
+    // KVKK: RECDx yöneticileri müşteri şirketlerin Work Space içeriğini (proje, sohbet, hafıza) göremez
+    if (currentUser?.tenant_id && selectedTenant.id !== currentUser.tenant_id) {
+      alert("KVKK gereği müşteri şirketlerin Work Space içeriğine (proje, sohbet, hafıza) erişilemez. "
+        + "Şirketin Yönetim Merkezi'ne geçerek yönetim ayarlarını düzenleyebilirsiniz.");
+      return;
+    }
     try {
-      const actData = await api.getActors(selectedTenant.id);
-      setActors(actData);
-      const prjData = await api.getProjects(selectedTenant.id);
-      setProjects(prjData);
-      if (prjData.length > 0) {
-        setActiveProject(prjData[0]);
-      } else {
-        setActiveProject(null);
-        setTasks([]);
-        setSelectedTask(null);
-      }
-      const memData = await api.getMemoryItems(selectedTenant.id);
-      setMemoryItems(memData);
+      await loadTenantWorkspace(selectedTenant.id);
     } catch (err) {
       console.error("Şirket verileri yüklenirken hata:", err);
     }

@@ -444,3 +444,19 @@ class NotificationSchedule(Base):
     next_run_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
+
+class AuditEvent(Base):
+    """
+    Değiştirilemez denetim kaydı. Yalnızca ekleme yapılır; UPDATE/DELETE
+    veritabanı tetikleyicisiyle engellenir. Şirket/kullanıcı silinse de kayıt kalır.
+    """
+    __tablename__ = "audit_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    actor_id = Column(UUID(as_uuid=True), nullable=True)
+    action = Column(String(128), nullable=False)
+    target_type = Column(String(64))
+    target_id = Column(String(64))
+    payload = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional, Dict, Any
 from app.db.session import get_db
-from app.db.models import ChatMessage, Task, Actor, LLMModel
+from app.core.security import CurrentUser, ensure_tenant_content, get_current_user
+from app.db.models import ChatMessage, Task, Actor, LLMModel, Project
 from app.services.evren_gateway import evren_gateway
 from app.services.collective_memory import collective_memory
 from app.services.redis_stream import redis_stream
@@ -19,6 +20,16 @@ from app.services.agent_learning_service import agent_learning_service
 logger = logging.getLogger("chat_api")
 
 router = APIRouter(prefix="/chat", tags=["Work Area Chat (Kalıcı Sohbet & Düşünce Akışı)"])
+
+
+async def _ensure_task_access(db: AsyncSession, user: CurrentUser, task_id: uuid.UUID) -> Task:
+    task = (await db.execute(
+        select(Task).options(selectinload(Task.project)).where(Task.id == task_id)
+    )).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Görev bulunamadı.")
+    ensure_tenant_content(user, task.project.tenant_id)
+    return task
 
 
 class SendMessageRequest(BaseModel):
@@ -58,6 +69,7 @@ async def get_chat_history(
     task_id: uuid.UUID,
     actor_id: Optional[uuid.UUID] = None,
     include_private: bool = False,
+    user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -66,11 +78,15 @@ async def get_chat_history(
     - Proje üyeleri birbirinin sohbetlerini şeffafça görebilir.
     - Sadece kendi sohbetini filtrelemek için actor_id kullanılabilir.
     """
+    await _ensure_task_access(db, user, task_id)
     stmt = (
         select(ChatMessage)
         .where(ChatMessage.task_id == task_id)
     )
-    if not include_private:
+    if include_private:
+        # Özel mesajları yalnızca gönderen kişi görür
+        stmt = stmt.where((ChatMessage.is_private == False) | (ChatMessage.sender_actor_id == user.actor_id))
+    else:
         stmt = stmt.where(ChatMessage.is_private == False)
     if actor_id:
         stmt = stmt.where(ChatMessage.sender_actor_id == actor_id)
@@ -85,12 +101,17 @@ async def get_project_chat_history(
     project_id: uuid.UUID,
     actor_id: Optional[uuid.UUID] = None,
     message_type: Optional[str] = None,
+    user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Tüm Proje Seviyesinde Şeffaf Sohbet ve Ajanlar Arası Müzakere Akışı:
     Projedeki tüm insan-AI ve AI-AI diyaloglarını kronolojik olarak listeler.
     """
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proje bulunamadı.")
+    ensure_tenant_content(user, project.tenant_id)
     stmt = select(ChatMessage).where(ChatMessage.project_id == project_id, ChatMessage.is_private == False)
     if actor_id:
         stmt = stmt.where(ChatMessage.sender_actor_id == actor_id)
@@ -103,7 +124,11 @@ async def get_project_chat_history(
 
 
 @router.post("/send", response_model=ChatCompletionResponse)
-async def send_chat_message(payload: SendMessageRequest, db: AsyncSession = Depends(get_db)):
+async def send_chat_message(
+    payload: SendMessageRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
     Work Area üzerinden bir AI personeline mesaj gönderir:
     1. Mesajı kalıcı olarak chat_messages tablosuna kaydeder.
@@ -127,6 +152,7 @@ async def send_chat_message(payload: SendMessageRequest, db: AsyncSession = Depe
 
     project = task.project
     tenant_id = project.tenant_id
+    ensure_tenant_content(user, tenant_id, "chat:participate")
     project_id = project.id
     task_id = task.id
 
@@ -147,7 +173,7 @@ async def send_chat_message(payload: SendMessageRequest, db: AsyncSession = Depe
         tenant_id=tenant_id,
         project_id=project_id,
         task_id=task_id,
-        sender_actor_id=payload.sender_actor_id,
+        sender_actor_id=user.actor_id,
         role="user",
         content=payload.content,
         is_private=payload.is_private,
@@ -202,6 +228,7 @@ async def send_chat_message(payload: SendMessageRequest, db: AsyncSession = Depe
         tenant_id=tenant_id,
         project_id=project_id,
         task_id=task_id,
+        sender_actor_id=task.assignee.id if task.assignee else None,
         role="assistant",
         content=assistant_content,
         thought_process=thought_process,
@@ -242,6 +269,7 @@ async def send_chat_message(payload: SendMessageRequest, db: AsyncSession = Depe
 @router.post("/learn/{task_id}")
 async def learn_from_task_chat_history(
     task_id: uuid.UUID,
+    user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -257,6 +285,7 @@ async def learn_from_task_chat_history(
     task = task_res.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Görev bulunamadı.")
+    ensure_tenant_content(user, task.project.tenant_id, "chat:participate")
 
     msgs_stmt = (
         select(ChatMessage)

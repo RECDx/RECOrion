@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional, Dict, Any
 from app.db.session import get_db
+from app.core.security import CurrentUser, ensure_tenant_content, get_current_user
 from app.db.models import MemoryItem
 from app.services.collective_memory import collective_memory
 from pydantic import BaseModel
@@ -46,8 +47,10 @@ class MemoryItemResponse(BaseModel):
 async def list_memory_items(
     tenant_id: uuid.UUID = Query(...),
     scope: Optional[str] = Query(None),
+    user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    ensure_tenant_content(user, tenant_id)
     stmt = select(MemoryItem).where(MemoryItem.tenant_id == tenant_id)
     if scope:
         stmt = stmt.where(MemoryItem.scope == scope.upper())
@@ -57,7 +60,8 @@ async def list_memory_items(
 
 
 @router.post("/add")
-async def add_memory_item(payload: AddMemoryRequest, db: AsyncSession = Depends(get_db)):
+async def add_memory_item(payload: AddMemoryRequest, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    ensure_tenant_content(user, payload.tenant_id, "memory:promote")
     if payload.scope not in ["GLOBAL", "AGENT"]:
         raise HTTPException(status_code=400, detail="Scope yalnızca 'GLOBAL' veya 'AGENT' olabilir.")
 
@@ -89,10 +93,11 @@ async def add_memory_item(payload: AddMemoryRequest, db: AsyncSession = Depends(
 
 
 @router.post("/search")
-async def search_memory(payload: SearchMemoryRequest):
+async def search_memory(payload: SearchMemoryRequest, user: CurrentUser = Depends(get_current_user)):
     """
     2 Kademeli RAG Hibrit Arama (Şirket Kurum Hafızası + AI Personel Hafızası).
     """
+    ensure_tenant_content(user, payload.tenant_id, "memory:search")
     results = await collective_memory.search_memory(
         tenant_id=str(payload.tenant_id),
         query=payload.query,
@@ -103,7 +108,7 @@ async def search_memory(payload: SearchMemoryRequest):
 
 
 @router.post("/promote/{memory_id}")
-async def promote_to_corporate_memory(memory_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def promote_to_corporate_memory(memory_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     İnsan İnceleme Kuyruğu Onayı:
     Bir ajanın projedeki tecrübesini Şirket Kurum Hafızasına (NS_GLOBAL) terfi ettirir;
@@ -114,6 +119,7 @@ async def promote_to_corporate_memory(memory_id: uuid.UUID, db: AsyncSession = D
     item = res.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Hafıza kaydı bulunamadı.")
+    ensure_tenant_content(user, item.tenant_id, "memory:promote")
 
     item.scope = "GLOBAL"
     item.agent_id = None
