@@ -72,6 +72,8 @@ export default function App() {
   const [chatFilter, setChatFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // KVKK modu: RECDx yöneticisi başka bir şirketin Work Space'ini içerik olmadan görüntüler
+  const [kvkkRestricted, setKvkkRestricted] = useState(false);
 
   // URL Hash ve Görünüm Eşitlemesi
   useEffect(() => {
@@ -284,6 +286,7 @@ export default function App() {
 
   // Şirketin Work Space verilerini (personel, proje, hafıza) yükler
   async function loadTenantWorkspace(tenantId) {
+    setKvkkRestricted(false);
     const details = await api.getTenantDetails(tenantId);
     const userTenant = details?.tenant || details;
     if (!userTenant) return;
@@ -346,10 +349,18 @@ export default function App() {
 
   const handleSwitchTenant = async (selectedTenant) => {
     if (!selectedTenant) return;
-    // KVKK: RECDx yöneticileri müşteri şirketlerin Work Space içeriğini (proje, sohbet, hafıza) göremez
+    // KVKK: RECDx yöneticileri başka şirketin Work Space'ine geçebilir ama içeriğini (proje, sohbet, hafıza) göremez
     if (currentUser?.tenant_id && selectedTenant.id !== currentUser.tenant_id) {
-      alert("KVKK gereği müşteri şirketlerin Work Space içeriğine (proje, sohbet, hafıza) erişilemez. "
-        + "Şirketin Yönetim Merkezi'ne geçerek yönetim ayarlarını düzenleyebilirsiniz.");
+      setTenant(selectedTenant);
+      setActors([]);
+      setProjects([]);
+      setActiveProject(null);
+      setTasks([]);
+      setSelectedTask(null);
+      setMessages([]);
+      setMemoryItems([]);
+      setKvkkRestricted(true);
+      setCurrentView('WORKSPACE');
       return;
     }
     try {
@@ -411,6 +422,28 @@ export default function App() {
 
   return (
     <div className="work-area-layout">
+      {kvkkRestricted && (
+        <div
+          role="status"
+          style={{
+            background: 'linear-gradient(90deg, rgba(234, 179, 8, 0.18), rgba(234, 179, 8, 0.08))',
+            borderBottom: '1px solid rgba(234, 179, 8, 0.45)',
+            color: '#fde68a',
+            padding: '10px 20px',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }}>🔒</span>
+          <span>
+            <strong>KVKK Koruma Modu:</strong> {tenant?.name} şirketinin Work Space alanını görüntülüyorsunuz.
+            Kişisel verilerin korunması gereği bu şirketin projeleri, görevleri, sohbetleri ve kurum hafızası
+            RECDx yöneticilerine gösterilmez.
+          </span>
+        </div>
+      )}
       {/* Top Navigation */}
       <Navbar 
         health={health}

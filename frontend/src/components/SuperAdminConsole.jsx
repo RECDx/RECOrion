@@ -2152,7 +2152,7 @@ export default function SuperAdminConsole({
                     <span className="super-admin-brand-tag">SÜPER</span>
                   </div>
                   <div className="super-admin-brand-sub">
-                    Operitional Reasoning Intelligence Orchestration Network
+                    Operational Reasoning Intelligence Orchestration Network
                   </div>
                 </div>
               </div>

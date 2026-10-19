@@ -267,17 +267,16 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         <div className="landing-nav-actions">
           {currentUser ? (
             <>
-              <button 
-                className="btn-primary" 
+              <button
+                className="btn-login-header-3d"
                 onClick={() => onEnterWorkspace(currentUser)}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 {currentUser.role === 'SUPER_ADMIN' ? '👑 Süper Admin Konsolu →' : (currentUser.role === 'COMPANY_ADMIN' ? '🏢 Şirket Yönetim Paneli →' : '💻 Çalışma Alanına Git →')}
               </button>
-              <button 
-                className="btn-secondary" 
+              <button
+                className="btn btn-secondary"
                 onClick={onLogout}
-                style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171' }}
+                style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', borderRadius: '12px', padding: '10px 18px' }}
               >
                 Çıkış Yap
               </button>
@@ -301,8 +300,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
           <span className="gradient-text">Şirketinizi Otonom Yönetin</span>
         </h2>
         <p className="hero-desc">
-          RECOrion, 13 uzman EVREN modeli ve 40 kurumsal iş ünvanı ile donatılmış,
-          sıfır veri sızıntılı Dark DB altyapısında çalışan deterministik yapay zeka işletim sistemidir.
+          RECOrion, yerli EVREN yapay zeka modelleriyle çalışan, T.C. Ticaret Bakanlığı'nın resmi sektör ve
+          meslek grubu yapısıyla şirketinizi tanıyan, sıfır veri sızıntılı Dark DB altyapısında çalışan
+          deterministik yapay zeka işletim sistemidir.
         </p>
 
         <div className="hero-stats-row">
@@ -311,12 +311,12 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
             <span className="stat-label">EVREN LLM Modeli</span>
           </div>
           <div className="stat-card">
-            <span className="stat-value">40</span>
-            <span className="stat-label">Kurumsal AI Ünvanı</span>
+            <span className="stat-value">{sectors.length || '…'}</span>
+            <span className="stat-label">Resmi Faaliyet Sektörü</span>
           </div>
           <div className="stat-card">
-            <span className="stat-value">2.164</span>
-            <span className="stat-label">Sektör & Meslek Grubu</span>
+            <span className="stat-value">{professions.length || '…'}</span>
+            <span className="stat-label">Meslek Grubu (T.C. Ticaret Bakanlığı)</span>
           </div>
           <div className="stat-card">
             <span className="stat-value">%100</span>
