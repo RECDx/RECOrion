@@ -1,6 +1,6 @@
 """
 RECOrion Step 1 Data Generator
-Generates: docker/init-db/04-seed-nace-and-titles.sql
+Generates: docker/legacy-init-sql/04-seed-nace-and-titles.sql
 Pure standard Python - zero external dependencies.
 """
 import xml.etree.ElementTree as ET
@@ -46,7 +46,7 @@ def get_sector_group(code: str) -> str:
 def generate_sql():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     xml_path = os.path.join(base_dir, "static_data", "recorion_sirket_faaliyet_alan_data.xml")
-    out_sql_path = os.path.join(base_dir, "docker", "init-db", "04-seed-nace-and-titles.sql")
+    out_sql_path = os.path.join(base_dir, "docker", "legacy-init-sql", "04-seed-nace-and-titles.sql")
 
     print(f"XML Okunuyor: {xml_path}")
     tree = ET.parse(xml_path)

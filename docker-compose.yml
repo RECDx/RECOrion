@@ -222,6 +222,8 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD:?SMTP_PASSWORD .env dosyasinda tanimli olmali}
       - FROM_EMAIL=${FROM_EMAIL:-info@recdx.com}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY .env dosyasinda tanimli olmali}
+      - RECORION_SUPERADMIN_EMAILS=${RECORION_SUPERADMIN_EMAILS:-}
+      - RECORION_SUPERADMIN_INITIAL_PASSWORD=${RECORION_SUPERADMIN_INITIAL_PASSWORD:-}
     volumes:
       - ./backend:/app
     networks:
