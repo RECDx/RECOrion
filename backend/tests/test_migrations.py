@@ -94,3 +94,34 @@ def test_existing_database_is_adopted_without_changes():
         conn.close()
     finally:
         drop_database(name)
+
+
+def test_legacy_nace_tables_removed(db):
+    with db.cursor() as cur:
+        cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('nace_catalog', 'sector_definitions')")
+        assert cur.fetchall() == []
+
+
+def test_bootstrap_guarantees_super_admins(db, monkeypatch, test_db_url):
+    """RECDx ana şirketi ve süper adminler açılışta garanti edilir; tekrar çalışınca çoğalmaz."""
+    import asyncio
+    from app import bootstrap
+
+    monkeypatch.setenv("RECORION_SUPERADMIN_EMAILS", "cuneyterdil@recdx.com,rehaerdag@recdx.com")
+    monkeypatch.setenv("RECORION_SUPERADMIN_INITIAL_PASSWORD", "Test-Ilk-Sifre-2026")
+    from app.db.session import engine
+
+    async def scenario():
+        await engine.dispose(close=False)  # başka event loop'tan kalan bağlantıları bırak
+        await bootstrap.ensure_super_admins()
+        await bootstrap.ensure_super_admins()
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+    with db.cursor() as cur:
+        cur.execute(
+            "SELECT a.email FROM actors a JOIN tenants t ON t.id = a.tenant_id "
+            "WHERE t.slug = 'recdx_hq' AND a.role = 'SUPER_ADMIN' ORDER BY a.email"
+        )
+        assert [r[0] for r in cur.fetchall()] == ["cuneyterdil@recdx.com", "rehaerdag@recdx.com"]
