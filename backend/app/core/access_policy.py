@@ -134,6 +134,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
 
     # --- Süper Admin: müşteriler, paketler, başvurular ---
     ("POST", f"{P}/tenants/plans"): SUPER_ADMIN,
+    ("GET", f"{P}/tenants/odoo/products"): SUPER_ADMIN,
     ("PUT", f"{P}/tenants/plans/{{plan_id}}"): SUPER_ADMIN,
     ("DELETE", f"{P}/tenants/plans/{{plan_id}}"): SUPER_ADMIN,
     ("GET", f"{P}/tenants"): SUPER_ADMIN,

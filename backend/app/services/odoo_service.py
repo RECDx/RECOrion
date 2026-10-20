@@ -7,6 +7,11 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger("recorion_odoo")
 
+
+class OdooUnavailable(Exception):
+    pass
+
+
 class OdooService:
     """
     RECOrion - Odoo 19 Entegrasyon Servisi.
@@ -103,6 +108,34 @@ class OdooService:
     def _found(p: Dict[str, Any], how: str, wanted: str) -> Dict[str, Any]:
         logger.info(f"Odoo'da mevcut müşteri kullanıldı ({how}): ID={p['id']} '{p['name']}' (aranan: {wanted})")
         return {"id": p["id"], "name": p["name"], "matched_by": how}
+
+    @classmethod
+    def list_products(cls, search: Optional[str] = None, product_ids: Optional[list] = None, limit: int = 200) -> list:
+        """
+        Odoo'da satılabilir (sale_ok) ürün varyantları (product.product). Satış siparişi satırı bu
+        ID ile açıldığı için paketlerin odoo_product_id alanı bu listeden seçilir.
+        Bağlantı kurulamazsa OdooUnavailable fırlatır.
+        """
+        uid, models, cfg = cls._get_connection()
+        if not uid or not models:
+            raise OdooUnavailable("Odoo bağlantısı kurulamadı.")
+        domain: list = [("sale_ok", "=", True)]
+        if product_ids:
+            domain.append(("id", "in", [int(i) for i in product_ids]))
+        if search:
+            domain += ["|", ("name", "ilike", search), ("default_code", "ilike", search)]
+        try:
+            rows = models.execute_kw(cfg["db"], uid, cfg["password"], "product.product", "search_read", [domain], {
+                "fields": ["id", "display_name", "default_code", "list_price", "currency_id", "type"],
+                "limit": limit, "order": "name",
+            })
+        except Exception as e:
+            logger.error(f"Odoo ürün listesi alınamadı: {e}")
+            raise OdooUnavailable("Odoo ürün listesi alınamadı.") from e
+        return [{
+            "id": r["id"], "name": r["display_name"], "code": r.get("default_code") or None,
+            "list_price": r.get("list_price") or 0, "currency": (r.get("currency_id") or [None, None])[1], "type": r.get("type"),
+        } for r in rows]
 
     @classmethod
     def create_sale_order(cls, partner_id: int, product_id: int, price: float, description: str) -> Dict[str, Any]:

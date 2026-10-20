@@ -105,6 +105,7 @@ export const api = {
 
   // Şirketler, Paketler & NACE
   getTenants: () => request('/tenants/'),
+  getOdooProducts: (search = '') => request(`/tenants/odoo/products${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   getPlans: (activeOnly = false) => request(`/tenants/plans${activeOnly ? '?active_only=true' : ''}`),
   getJobTitles: (category = null) => request(`/actors/job-titles${category ? `?category=${category}` : ''}`),
   getNaceCatalog: () => request('/tenants/nace-catalog'),

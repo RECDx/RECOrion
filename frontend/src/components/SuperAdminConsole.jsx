@@ -61,6 +61,7 @@ import {
 import { api } from '../api';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
+import OdooProductPicker from './OdooProductPicker';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
 
 const TAB_SLUG_MAP = {
@@ -7232,18 +7233,11 @@ export default function SuperAdminConsole({
                       style={{ marginTop: 4 }}
                     />
                   </label>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                    Odoo ürün ID (satış siparişi)
-                    <input
-                      type="number"
-                      min="1"
-                      value={planForm.odoo_product_id}
-                      onChange={(e) => setPlanForm({ ...planForm, odoo_product_id: e.target.value })}
-                      placeholder="Örn: 31"
-                      className="super-admin-input"
-                      style={{ marginTop: 4 }}
-                    />
-                  </label>
+                  <OdooProductPicker
+                    value={planForm.odoo_product_id}
+                    planPrice={planForm.monthly_price}
+                    onChange={(id) => setPlanForm({ ...planForm, odoo_product_id: id })}
+                  />
                 </div>
               </div>
 

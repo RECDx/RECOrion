@@ -185,6 +185,7 @@ async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail=f"'{code_safe}' kodlu paket zaten mevcut.")
 
+    await _validate_odoo_product(payload.odoo_product_id)
     plan = Plan(
         code=code_safe,
         name=payload.name.strip(),
@@ -206,6 +207,31 @@ async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(plan)
     return plan
+
+@router.get("/odoo/products")
+async def list_odoo_products(search: Optional[str] = Query(None, max_length=100)):
+    """Süper Admin: paket tanımında seçilecek Odoo satış ürünleri."""
+    import asyncio
+    from app.services.odoo_service import OdooService, OdooUnavailable
+    try:
+        return await asyncio.to_thread(OdooService.list_products, (search or "").strip() or None)
+    except OdooUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"{exc} Lütfen daha sonra tekrar deneyin.")
+
+
+async def _validate_odoo_product(product_id: Optional[int]) -> None:
+    """Pakete bağlanan Odoo ürününün gerçekten var ve satılabilir olduğunu doğrular."""
+    import asyncio
+    from app.services.odoo_service import OdooService, OdooUnavailable
+    if not product_id:
+        return
+    try:
+        found = await asyncio.to_thread(OdooService.list_products, None, [product_id], 1)
+    except OdooUnavailable:
+        raise HTTPException(status_code=503, detail="Odoo'ya ulaşılamadığı için ürün doğrulanamadı. Lütfen daha sonra tekrar deneyin.")
+    if not found:
+        raise HTTPException(status_code=400, detail=f"Odoo'da {product_id} ID'li satılabilir bir ürün bulunamadı.")
+
 
 @router.get("/plans/{plan_id}", response_model=PlanResponse)
 async def get_plan(plan_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
@@ -236,6 +262,8 @@ async def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: AsyncSession 
     # Formda gönderilmeyen paket izinleri silinmesin diye birleştir
     plan.features = {**(plan.features or {}), **(payload.features or {})}
     plan.can_create_custom_titles = payload.can_create_custom_titles
+    if payload.odoo_product_id != plan.odoo_product_id:
+        await _validate_odoo_product(payload.odoo_product_id)
     plan.odoo_product_id = payload.odoo_product_id
     plan.is_active = payload.is_active
 
