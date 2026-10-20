@@ -23,9 +23,9 @@ branch_labels = None
 depends_on = None
 
 MODEL_SETTINGS = {
-    "model.default.chat": ("glm-5.3", "AI personel sohbetlerinde model belirtilmemişse kullanılan model"),
-    "model.default.brain": ("glm-5.3", "Şirketler Beyin AI modeli seçmemişse kullanılan organizatör model"),
-    "model.platform_assistant": ("glm-5.3", "Süper Yönetici asistanının (Ana AI) modeli"),
+    "model.default.chat": ("mimo-v2.6-pro", "AI personel sohbetlerinde model belirtilmemişse kullanılan model"),
+    "model.default.brain": ("mimo-v2.6-pro", "Şirketler Beyin AI modeli seçmemişse kullanılan organizatör model"),
+    "model.platform_assistant": ("mimo-v2.6-pro", "Süper Yönetici asistanının (Ana AI) modeli"),
     "model.default.embedding": ("qwen3-embedding-8b", "Hafıza vektörleme modeli"),
     "model.default.rerank": ("qwen3-reranker-8b", "Hafıza arama sonuçlarını yeniden sıralama modeli"),
 }
