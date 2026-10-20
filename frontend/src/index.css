@@ -1347,7 +1347,7 @@ body {
 
 .super-admin-table {
   width: 100%;
-  min-width: 1450px;
+  min-width: 760px; /* geniş tablolar (ör. şirket listesi) kendi min-width değerini verir */
   border-collapse: collapse;
   text-align: left;
   font-size: 0.785rem;

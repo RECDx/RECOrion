@@ -22,7 +22,14 @@ async def lifespan(app: FastAPI):
     logger.info(f"   Qdrant Vektör: {settings.QDRANT_HOST}:{settings.QDRANT_PORT}")
     logger.info(f"   Redis Stream: {settings.REDIS_HOST}:{settings.REDIS_PORT}")
     logger.info("=" * 60)
+    scheduler_task = None
+    if settings.SCHEDULER_ENABLED:
+        import asyncio
+        from app.services.scheduler_service import scheduler_loop
+        scheduler_task = asyncio.create_task(scheduler_loop())
     yield
+    if scheduler_task:
+        scheduler_task.cancel()
     logger.info("🛑 RECOrion Backend Durduruluyor...")
 
 

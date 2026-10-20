@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api, session } from '../api';
 import AdminLeadsModal from './AdminLeadsModal';
 import ThemeToggle from '../ui/ThemeToggle';
+import { notify, promptDialog, toast } from '../ui/feedback';
 import { 
   Building2, 
   Hash, 
@@ -33,7 +34,6 @@ import {
   Briefcase,
   GraduationCap
 } from 'lucide-react';
-import { notify } from '../ui/feedback';
 
 export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogout }) {
   const [plans, setPlans] = useState([]);
@@ -56,11 +56,18 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   const [contactEmail, setContactEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  // E-posta doğrulama kodu (başvuru göndermeden önce zorunlu)
+  const [emailCode, setEmailCode] = useState('');
+  const [codeSentTo, setCodeSentTo] = useState('');
+  const [codeCooldown, setCodeCooldown] = useState(0);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [companyFax, setCompanyFax] = useState(''); // bot tuzağı (görünmez alan)
   const [copiedKey, setCopiedKey] = useState(null);
   
   // Sektör ve Meslek Grubu Seçim State'leri (Madde 2 - T.C. Ticaret Bakanlığı)
   const [sectors, setSectors] = useState([]);
   const [professions, setProfessions] = useState([]);
+  const [llmModelCount, setLlmModelCount] = useState(null);
   const [selectedSectors, setSelectedSectors] = useState([]);
   const [selectedProfessions, setSelectedProfessions] = useState([]);
 
@@ -104,6 +111,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setContactEmail('');
     setPassword('');
     setShowPassword(false);
+    setEmailCode('');
+    setCodeSentTo('');
+    setCompanyFax('');
     setCopiedKey(null);
     setSelectedSectors([]);
     setSelectedProfessions([]);
@@ -143,6 +153,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         setPlans(activePlans);
         setSectors(sectorsData || []);
         setProfessions(professionsData || []);
+        api.getPublicStats().then((st) => setLlmModelCount(st.llm_models)).catch(() => {});
       } catch (err) {
         console.error("Paketleri, sektörleri ve meslekleri yükleme hatası:", err);
       } finally {
@@ -178,6 +189,32 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setIsPurchaseModalOpen(true);
   };
 
+  useEffect(() => {
+    if (codeCooldown <= 0) return undefined;
+    const t = setTimeout(() => setCodeCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [codeCooldown]);
+
+  const handleSendEmailCode = async () => {
+    setErrorMessage('');
+    const email = contactEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setErrorMessage('Lütfen önce kurumsal e-posta adresinizi yazın.');
+      return;
+    }
+    setSendingCode(true);
+    try {
+      const res = await api.sendPurchaseEmailCode(email);
+      setCodeSentTo(email);
+      setCodeCooldown(60);
+      toast.success(res.message || 'Doğrulama kodu gönderildi.');
+    } catch (err) {
+      setErrorMessage(err.message || 'Doğrulama kodu gönderilemedi.');
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
   const handleSubmitPurchase = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -196,6 +233,15 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
       return;
     }
 
+    if (password.trim().length < 8) {
+      setErrorMessage('Giriş şifresi en az 8 karakter olmalıdır.');
+      return;
+    }
+    if (codeSentTo !== contactEmail.trim().toLowerCase() || emailCode.trim().length !== 6) {
+      setErrorMessage('Lütfen e-posta adresinize gönderilen 6 haneli doğrulama kodunu girin.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -209,6 +255,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         address: address || null,
         contact_name: contactName,
         contact_email: contactEmail,
+        password: password,
+        email_code: emailCode.trim(),
+        company_fax: companyFax || null,
         sectors: selectedSectors,
         professions: selectedProfessions,
         nace_codes: []
@@ -221,6 +270,22 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
       setErrorMessage(err.message || 'Satın alma talebi iletilirken bir hata oluştu.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const email = await promptDialog({
+      title: 'Şifremi Unuttum',
+      message: 'Hesabınıza kayıtlı e-posta adresini yazın. Şifre belirleme bağlantısı gönderilecektir.',
+      defaultValue: loginEmail,
+      confirmText: 'Bağlantı Gönder',
+    });
+    if (!email || !email.trim()) return;
+    try {
+      const res = await api.requestPasswordReset(email.trim());
+      toast.success(res.message);
+    } catch (err) {
+      toast.error(err.message || 'Talep iletilemedi.');
     }
   };
 
@@ -310,8 +375,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
         <div className="hero-stats-row">
           <div className="stat-card">
-            <span className="stat-value">13</span>
-            <span className="stat-label">EVREN LLM Modeli</span>
+            <span className="stat-value">{llmModelCount ?? '…'}</span>
+            <span className="stat-label">Yerli EVREN LLM Modeli</span>
           </div>
           <div className="stat-card">
             <span className="stat-value">{sectors.length || '…'}</span>
@@ -900,6 +965,54 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                         </div>
                       </div>
 
+                      {/* E-posta doğrulama kodu */}
+                      <div>
+                        <label className="purchase-label-3d" htmlFor="input-email-code">
+                          <ShieldCheck style={{ width: 13, height: 13, color: 'var(--nt-cbd5e1)' }} />
+                          <span>E-Posta Doğrulama Kodu *</span>
+                        </label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            id="input-email-code"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            required
+                            placeholder="6 haneli kod"
+                            value={emailCode}
+                            onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                            className="purchase-input-field-3d"
+                            style={{ letterSpacing: '0.3em', fontFamily: 'var(--font-mono)', flex: 1, minWidth: 0 }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSendEmailCode}
+                            disabled={sendingCode || codeCooldown > 0}
+                            className="ui-btn ui-btn-secondary"
+                            style={{ flexShrink: 0 }}
+                          >
+                            {sendingCode ? 'Gönderiliyor…' : codeCooldown > 0 ? `Tekrar (${codeCooldown} sn)` : (codeSentTo ? 'Kodu Tekrar Gönder' : 'Kod Gönder')}
+                          </button>
+                        </div>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>
+                          {codeSentTo === contactEmail.trim().toLowerCase() && codeSentTo
+                            ? `Kod ${codeSentTo} adresine gönderildi; 10 dakika geçerlidir.`
+                            : 'Başvurunuzu tamamlamak için e-posta adresinizi doğrulayın.'}
+                        </div>
+                        {/* Bot tuzağı: ekranda görünmez, gerçek kullanıcılar doldurmaz */}
+                        <input
+                          type="text"
+                          name="company_fax"
+                          tabIndex={-1}
+                          autoComplete="off"
+                          aria-hidden="true"
+                          value={companyFax}
+                          onChange={(e) => setCompanyFax(e.target.value)}
+                          style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, opacity: 0 }}
+                        />
+                      </div>
+
                       {/* Şifre ve Güçlü Şifre Oluşturucu */}
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -929,7 +1042,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                             id="input-password"
                             type={showPassword ? 'text' : 'password'} 
                             required 
-                            placeholder="Güçlü bir şifre belirleyin..." 
+                            placeholder="En az 8 karakter..." 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             className="purchase-input-field-3d"
@@ -1039,7 +1152,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       </div>
 
                       <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(2,132,199,0.1)', border: '1px solid rgba(2,132,199,0.25)', fontSize: '0.72rem', color: 'var(--ac-7dd3fc)', lineHeight: 1.4, marginTop: 10 }}>
-                        📌 Başvuru tamamlandığında kurumsal hesabınız oluşturulacak ve <b>{contactEmail || 'kurumsal adresinize'}</b> aktivasyon mektubu iletilecektir.
+                        📌 Başvurunuz RECDx ekibi tarafından incelendikten sonra hesabınız aktifleştirilecek ve <b>{contactEmail || 'kurumsal adresinize'}</b> aktivasyon e-postası gönderilecektir.
                       </div>
                     </div>
                   </div>
@@ -1237,6 +1350,13 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   />
                   <span>Beni Hatırla</span>
                 </label>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  style={{ background: 'none', border: 'none', color: 'var(--ac-818cf8)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                >
+                  Şifremi unuttum
+                </button>
               </div>
 
               {/* Giriş Butonu */}

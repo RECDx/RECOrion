@@ -404,6 +404,7 @@ class EmailTemplateCreate(BaseModel):
     html_content: str
     text_content: Optional[str] = None
     variables: List[str] = []
+    builder_blocks: Optional[list] = None  # sürükle-bırak editör blokları
     is_active: bool = True
 
 class EmailTemplateUpdate(BaseModel):
@@ -412,6 +413,7 @@ class EmailTemplateUpdate(BaseModel):
     html_content: str
     text_content: Optional[str] = None
     variables: List[str] = []
+    builder_blocks: Optional[list] = None  # sürükle-bırak editör blokları
     is_active: bool = True
 
 class TestEmailPayload(BaseModel):
@@ -460,6 +462,7 @@ async def create_email_template(payload: EmailTemplateCreate, db: AsyncSession =
         html_content=payload.html_content,
         text_content=payload.text_content,
         variables=payload.variables,
+        builder_blocks=payload.builder_blocks,
         is_active=payload.is_active
     )
     db.add(tmpl)
@@ -491,6 +494,7 @@ async def update_email_template(tmpl_id: uuid.UUID, payload: EmailTemplateUpdate
     tmpl.html_content = payload.html_content
     tmpl.text_content = payload.text_content
     tmpl.variables = payload.variables
+    tmpl.builder_blocks = payload.builder_blocks
     tmpl.is_active = payload.is_active
 
     await db.commit()
@@ -508,7 +512,8 @@ async def delete_email_template(tmpl_id: uuid.UUID, db: AsyncSession = Depends(g
         raise HTTPException(status_code=404, detail="E-posta şablonu bulunamadı.")
 
     # 1. Temel sistem şablonları silinemez
-    system_critical_codes = ["WELCOME_CUSTOMER", "PACKAGE_EXPIRATION_REMINDER"]
+    system_critical_codes = ["WELCOME_CUSTOMER", "PACKAGE_EXPIRATION_REMINDER", "ACCOUNT_ACTIVATED",
+                             "EMAIL_VERIFICATION_CODE", "LEAD_RECEIVED", "LEAD_REJECTED", "PASSWORD_RESET", "ADMIN_NEW_LEAD"]
     if tmpl.code in system_critical_codes:
         raise HTTPException(
             status_code=400,
@@ -542,14 +547,27 @@ async def send_test_email_template(tmpl_id: uuid.UUID, payload: TestEmailPayload
         "expiry_date": "10.10.2027",
         "days_remaining": 45,
         "admin_email": payload.to_email,
-        "admin_password": "GucluSifre2026!",
         "portal_url": "http://localhost:5173",
         "renewal_url": "http://localhost:5173/#/pricing"
     }
     if payload.context:
         sample_ctx.update(payload.context)
 
-    sent = NotificationService.render_and_send_template(payload.to_email, tmpl, sample_ctx)
+    sample_ctx.setdefault("code", "123456")
+    sample_ctx.setdefault("valid_minutes", 10)
+    sample_ctx.setdefault("contact_name", "Ayşe Yılmaz")
+    sample_ctx.setdefault("login_email", payload.to_email)
+    sample_ctx.setdefault("password_instruction", "Kayıt sırasında belirlediğiniz şifre ile giriş yapabilirsiniz.")
+    sample_ctx.setdefault("action_label", "Şifremi Belirle / Giriş Yap")
+    sample_ctx.setdefault("action_url", "http://localhost:5173")
+    sample_ctx.setdefault("reset_url", "http://localhost:5173")
+    sample_ctx.setdefault("valid_hours", 72)
+    sample_ctx.setdefault("reason", "Örnek ret gerekçesi")
+    sample_ctx.setdefault("order_ref", "S00042")
+    sample_ctx.setdefault("package_expiry_date", "10.10.2027")
+    import asyncio
+    snapshot = {"subject": tmpl.subject, "html_content": tmpl.html_content, "text_content": tmpl.text_content}
+    sent = await asyncio.to_thread(NotificationService.render_and_send_template, payload.to_email, snapshot, sample_ctx)
     if not sent:
         raise HTTPException(
             status_code=500,
@@ -614,67 +632,21 @@ async def delete_notification_schedule(sched_id: uuid.UUID, db: AsyncSession = D
 @router.post("/schedules/{sched_id}/trigger")
 async def trigger_schedule_manually(sched_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     """
-    Zamanlanmış görevi hemen çalıştırır (Madde 2 & 14):
-    Paket bitimine 3 ay (90 gün) kala olan şirketleri tarar,
-    15 gündür bildirim gitmemişse şablonu render edip gönderir.
+    Zamanlamayı hemen çalıştırır (otomatik zamanlayıcıyla aynı kurallar):
+    paket bitimine target_lead_days gün kalan ve son frequency_days günde hatırlatma
+    almamış şirketlere şablonlu e-posta gönderir.
     """
-    from datetime import datetime, timedelta
+    from app.services.scheduler_service import run_schedule
+
     sched = await db.get(NotificationSchedule, sched_id)
     if not sched:
         raise HTTPException(status_code=404, detail="Zamanlama görevi bulunamadı.")
-
-    t_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == sched.template_code))
-    tmpl = t_res.scalar_one_or_none()
-
-    processed_count = 0
-    now = datetime.utcnow()
-
-    if sched.trigger_type == 'BEFORE_EXPIRATION_INTERVAL':
-        tenants_res = await db.execute(select(Tenant).where(Tenant.is_active == True))
-        active_tenants = tenants_res.scalars().all()
-        
-        for t in active_tenants:
-            if not t.package_expiry_date or not t.contact_email:
-                continue
-            
-            exp_date = t.package_expiry_date.replace(tzinfo=None) if t.package_expiry_date.tzinfo else t.package_expiry_date
-            days_remaining = (exp_date - now).days
-            
-            # 3 ay (<= 90 gün) ve henüz süresi bitmemiş
-            if 0 <= days_remaining <= sched.target_lead_days:
-                should_send = True
-                if t.last_reminder_sent_at:
-                    last_sent = t.last_reminder_sent_at.replace(tzinfo=None) if t.last_reminder_sent_at.tzinfo else t.last_reminder_sent_at
-                    since_last = (now - last_sent).days
-                    if since_last < sched.frequency_days:
-                        should_send = False
-                
-                if should_send:
-                    plan_obj = await db.get(Plan, t.plan_id) if t.plan_id else None
-                    p_name = plan_obj.name if plan_obj else "Kurumsal Paket"
-                    
-                    ctx = {
-                        "company_name": t.name,
-                        "plan_name": p_name,
-                        "expiry_date": t.package_expiry_date.strftime("%d.%m.%Y"),
-                        "days_remaining": days_remaining,
-                        "renewal_url": "http://localhost:5173/#/pricing"
-                    }
-                    if tmpl:
-                        NotificationService.render_and_send_template(t.contact_email, tmpl, ctx)
-                    else:
-                        NotificationService.send_customer_account_activated_notification(ctx)
-                    
-                    t.last_reminder_sent_at = now
-                    processed_count += 1
-        
-        sched.last_run_at = now
-        sched.next_run_at = now + timedelta(days=sched.frequency_days)
-        await db.commit()
-
+    if sched.trigger_type != "BEFORE_EXPIRATION_INTERVAL":
+        raise HTTPException(status_code=400, detail="Bu zamanlama türü elle çalıştırılamaz; şirket aktivasyonunda otomatik kullanılır.")
+    processed_count = await run_schedule(db, sched)
     return {
         "success": True,
-        "message": f"'{sched.name}' başarıyla çalıştırıldı. {processed_count} adet kuruma hatırlatıcı iletildi.",
+        "message": f"'{sched.name}' çalıştırıldı. {processed_count} kuruma hatırlatıcı iletildi.",
         "processed_count": processed_count
     }
 

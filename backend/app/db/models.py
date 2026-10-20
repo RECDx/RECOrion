@@ -97,6 +97,8 @@ class Plan(Base):
     allowed_models = Column(JSONB, default=list)
     features = Column(JSONB, default=dict)
     can_create_custom_titles = Column(Boolean, default=False)
+    # Odoo ürün eşleşmesi (product.product id); satış siparişi bu ürün ve monthly_price ile açılır
+    odoo_product_id = Column(Integer, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -188,6 +190,18 @@ class TenantLead(Base):
     status = Column(String(32), default="PENDING")  # PENDING, CONTACTED, APPROVED, REJECTED
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Başvurunun bağlı olduğu şirket (onay bekleyen veya aktif)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True, index=True)
+    contact_name = Column(String(255))
+    password_hash = Column(String(255))  # Web kaydında belirlenen şifre (Argon2)
+    rejection_reason = Column(Text)
+    reviewed_by_actor_id = Column(UUID(as_uuid=True), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True))
+    odoo_sync_status = Column(String(32), default="PENDING")  # PENDING, SYNCED, FAILED, SKIPPED
+    odoo_sync_error = Column(Text)
+    email_verified_at = Column(DateTime(timezone=True))
+    source = Column(String(16), default="WEB")  # WEB, ADMIN
 
     plan = relationship("Plan")
 
@@ -422,6 +436,7 @@ class EmailTemplate(Base):
     html_content = Column(Text, nullable=False)
     text_content = Column(Text)
     variables = Column(JSONB, default=list)
+    builder_blocks = Column(JSONB, nullable=True)  # sürükle-bırak editör blokları
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

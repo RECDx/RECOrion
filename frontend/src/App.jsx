@@ -7,6 +7,7 @@ import CreateTaskModal from './components/CreateTaskModal';
 import OfficialLanding from './components/OfficialLanding';
 import SuperAdminConsole from './components/SuperAdminConsole';
 import CompanyAdminConsole from './components/CompanyAdminConsole';
+import ResetPassword from './components/ResetPassword';
 import { api, session } from './api';
 import { notify } from './ui/feedback';
 
@@ -81,6 +82,7 @@ export default function App() {
   // URL Hash ve Görünüm Eşitlemesi
   useEffect(() => {
     try {
+      if (window.location.hash.startsWith('#/reset-password')) return; // şifre belirleme sayfası adresini koru
       localStorage.setItem('recorion_current_view', currentView);
       if (currentView === 'SUPER_ADMIN_CONSOLE') {
         if (!window.location.hash.startsWith('#/super-admin')) {
@@ -108,6 +110,7 @@ export default function App() {
   useEffect(() => {
     const handleLocationChange = () => {
       const hash = window.location.hash;
+      if (hash.startsWith('#/reset-password')) return;
       const u = currentUser || loadSavedUser();
 
       if (hash.startsWith('#/super-admin')) {
@@ -373,6 +376,18 @@ export default function App() {
     }
     setCurrentView('WORKSPACE');
   };
+
+  // E-postadaki şifre belirleme bağlantısı (#/reset-password?token=...) oturumdan bağımsız açılır
+  if (typeof window !== 'undefined' && window.location.hash.startsWith('#/reset-password')) {
+    return (
+      <ResetPassword
+        onDone={() => {
+          window.location.hash = '#/landing';
+          setCurrentView('LANDING');
+        }}
+      />
+    );
+  }
 
   if (currentView === 'LANDING') {
     return (

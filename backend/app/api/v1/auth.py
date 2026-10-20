@@ -68,11 +68,8 @@ def _lock_key(email: str) -> str:
 
 
 async def _redis() -> aioredis.Redis:
-    return aioredis.from_url(
-        f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
-        password=settings.REDIS_PASSWORD or None,
-        decode_responses=True,
-    )
+    from app.core.tokens import redis_client
+    return redis_client()
 
 
 async def _is_locked(email: str) -> bool:
@@ -250,3 +247,62 @@ async def update_profile(
     await db.commit()
     await db.refresh(actor)
     return UserProfileResponse(**await _profile(db, actor))
+
+
+# ---------------------------------------------------------------------------
+# Şifre belirleme / sıfırlama (tek kullanımlık e-posta bağlantısı)
+# ---------------------------------------------------------------------------
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/password-reset/request")
+async def request_password_reset(payload: PasswordResetRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Şifre sıfırlama bağlantısı gönderir. Hesabın var olup olmadığı yanıttan anlaşılmaz.
+    Sınır: aynı e-postaya saatte 3, aynı IP'den saatte 10 talep.
+    """
+    from app.core.tokens import hit_rate_limit
+    from app.services.customer_lifecycle import RESET_LINK_HOURS, set_password_link
+    from app.services.notification_service import NotificationService
+
+    email = payload.email.strip().lower()
+    generic = {"success": True, "message": "Bu e-posta adresiyle kayıtlı bir hesap varsa şifre belirleme bağlantısı gönderildi."}
+    ip = request.client.host if request.client else "unknown"
+    if await hit_rate_limit(f"pwreset:email:{email}", 3, 3600) or await hit_rate_limit(f"pwreset:ip:{ip}", 10, 3600):
+        return generic
+
+    actor = (await db.execute(
+        select(Actor).where(func.lower(Actor.email) == email, Actor.actor_type == "HUMAN", Actor.status != "DISABLED")
+        .order_by(Actor.created_at.desc())
+    )).scalars().first()
+    if actor:
+        link = await set_password_link(actor, hours=RESET_LINK_HOURS)
+        await NotificationService.send_by_code(db, "PASSWORD_RESET", actor.email, {
+            "contact_name": actor.display_name, "reset_url": link, "valid_hours": RESET_LINK_HOURS,
+        })
+    return generic
+
+
+@router.post("/password-reset/confirm")
+async def confirm_password_reset(payload: PasswordResetConfirm, db: AsyncSession = Depends(get_db)):
+    """Bağlantıdaki token ile yeni şifreyi belirler. Token tek kullanımlıktır."""
+    from app.core.tokens import consume_link_token
+    from app.services.customer_lifecycle import SET_PASSWORD_PURPOSE
+
+    new_password = (payload.new_password or "").strip()
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Yeni şifre en az 8 karakter olmalıdır.")
+    actor_id = await consume_link_token(SET_PASSWORD_PURPOSE, payload.token)
+    actor = await db.get(Actor, uuid.UUID(actor_id)) if actor_id else None
+    if not actor or actor.status == "DISABLED":
+        raise HTTPException(status_code=400, detail="Bağlantı geçersiz veya süresi dolmuş. Lütfen yeni bağlantı isteyin.")
+    actor.password_hash = hash_password(new_password)
+    await db.commit()
+    await _clear_failures((actor.email or "").lower())
+    return {"success": True, "message": "Şifreniz belirlendi. Yeni şifrenizle giriş yapabilirsiniz.", "email": actor.email}

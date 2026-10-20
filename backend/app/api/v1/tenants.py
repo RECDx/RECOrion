@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func, delete
 from typing import List, Optional, Dict, Any
@@ -8,6 +8,11 @@ import re
 from app.db.session import get_db
 from app.db.models import Tenant, Plan, Actor, TenantLead, EmailTemplate, Sector, Profession
 from pydantic import BaseModel
+from app.config import settings
+from app.core.security import CurrentUser, get_current_user
+from app.core.tokens import hit_rate_limit, issue_email_code, verify_email_code, EMAIL_CODE_TTL_MINUTES
+from app.services import customer_lifecycle as lifecycle
+from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/tenants", tags=["Tenants (Şirketler)"])
 
@@ -26,6 +31,7 @@ class PlanResponse(BaseModel):
     storage_gb: int
     allowed_models: List[str]
     features: Dict[str, Any]
+    odoo_product_id: Optional[int] = None
     is_active: bool
 
     class Config:
@@ -46,6 +52,7 @@ class PlanCreate(BaseModel):
     allowed_models: List[str] = ["deepseek-v3"]
     features: Dict[str, Any] = {}
     can_create_custom_titles: bool = False
+    odoo_product_id: Optional[int] = None
     is_active: bool = True
 
 class PlanUpdate(BaseModel):
@@ -61,6 +68,7 @@ class PlanUpdate(BaseModel):
     allowed_models: List[str] = []
     features: Dict[str, Any] = {}
     can_create_custom_titles: bool = False
+    odoo_product_id: Optional[int] = None
     is_active: bool = True
 
 
@@ -191,6 +199,7 @@ async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
         allowed_models=payload.allowed_models,
         features=payload.features,
         can_create_custom_titles=payload.can_create_custom_titles,
+        odoo_product_id=payload.odoo_product_id,
         is_active=payload.is_active
     )
     db.add(plan)
@@ -224,8 +233,10 @@ async def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: AsyncSession 
     plan.monthly_credits = payload.monthly_credits
     plan.storage_gb = payload.storage_gb
     plan.allowed_models = payload.allowed_models
-    plan.features = payload.features
+    # Formda gönderilmeyen paket izinleri silinmesin diye birleştir
+    plan.features = {**(plan.features or {}), **(payload.features or {})}
     plan.can_create_custom_titles = payload.can_create_custom_titles
+    plan.odoo_product_id = payload.odoo_product_id
     plan.is_active = payload.is_active
 
     await db.commit()
@@ -824,59 +835,26 @@ async def generate_tenant_admin_password(tenant_id: uuid.UUID, db: AsyncSession 
     }
 
 @router.post("/{tenant_id}/approve")
-async def approve_registered_tenant(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def approve_registered_tenant(
+    tenant_id: uuid.UUID,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Şirket detay ekranı üzerinden şirketi onaylama ve aktifleştirme (Madde 5 & 7).
-    Satın almayı onaylayıp 1 yıllık paket kullanım süresi atar.
+    Şirket detay ekranından şirketi onaylama ve aktifleştirme: 1 yıllık paket süresi,
+    bağlı başvurunun onayı, Odoo siparişinin onayı ve aktivasyon e-postası.
     """
     tenant = await db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
-
-    now = datetime.utcnow()
-    tenant.is_active = True
-    if not tenant.package_start_date:
-        tenant.package_start_date = now
-    tenant.package_expiry_date = now + timedelta(days=365)
-
-    # Varsa ilgili lead kaydını da APPROVED yap
-    lead_stmt = select(TenantLead).where(TenantLead.company_name == tenant.name).order_by(TenantLead.created_at.desc()).limit(1)
-    lead_res = await db.execute(lead_stmt)
-    lead_obj = lead_res.scalar_one_or_none()
-    if lead_obj:
-        lead_obj.status = "APPROVED"
-
-    await db.commit()
-    await db.refresh(tenant)
-
-    # Hoş geldiniz şablonu ile e-posta gönder
-    from app.services.notification_service import NotificationService
-    plan_obj = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
-    plan_title = plan_obj.name if plan_obj else "Kurumsal Paket"
-
-    welcome_ctx = {
-        "company_name": tenant.name,
-        "contact_name": tenant.name + " Yetkilisi",
-        "email": tenant.contact_email,
-        "login_email": tenant.contact_email,
-        "password": "Mevcut şifreniz geçerlidir",
-        "plan_name": plan_title,
-        "package_expiry_date": tenant.package_expiry_date.strftime("%d.%m.%Y"),
-        "odoo_order_name": "Süper Admin Onay",
-        "login_url": "http://localhost:5173/"
-    }
-
-    tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER"))
-    welcome_tmpl = tmpl_res.scalar_one_or_none()
-    if welcome_tmpl and tenant.contact_email:
-        NotificationService.render_and_send_template(tenant.contact_email, welcome_tmpl, welcome_ctx)
-
+    result = await lifecycle.activate_tenant(db, tenant, user.actor_id)
+    expiry = result["package_expiry_date"]
     return {
         "success": True,
-        "message": f"'{tenant.name}' şirketi başarıyla onaylandı ve 1 yıllık paket süresi ({tenant.package_expiry_date.strftime('%d.%m.%Y')}) tanımlandı.",
-        "package_expiry_date": tenant.package_expiry_date.isoformat()
+        "message": f"'{tenant.name}' şirketi onaylandı ve paket süresi {expiry.strftime('%d.%m.%Y')} tarihine kadar tanımlandı.",
+        "package_expiry_date": expiry.isoformat(),
+        "activation_email_sent": result["email_sent"],
     }
-
 
 
 class PurchaseRequest(BaseModel):
@@ -890,9 +868,60 @@ class PurchaseRequest(BaseModel):
     contact_name: str
     contact_email: str
     password: str
+    email_code: str  # e-posta doğrulama kodu (/purchase-request/send-code)
+    company_fax: Optional[str] = None  # bot tuzağı: gerçek kullanıcılar bu alanı görmez, boş gönderir
     sectors: List[str] = []
     professions: List[str] = []
     nace_codes: List[str] = []
+
+
+class SendCodeRequest(BaseModel):
+    email: str
+
+
+class LeadRejectRequest(BaseModel):
+    reason: str
+
+
+class LeadOut(BaseModel):
+    id: uuid.UUID
+    tenant_id: Optional[uuid.UUID] = None
+    plan_id: Optional[uuid.UUID] = None
+    plan_name: Optional[str] = None
+    company_name: str
+    contact_name: Optional[str] = None
+    contact_email: str
+    phone: Optional[str] = None
+    tax_id: Optional[str] = None
+    tax_office: Optional[str] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
+    sectors: list = []
+    professions: list = []
+    nace_codes: list = []
+    generated_manifesto: Optional[str] = None
+    status: str
+    source: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    email_verified_at: Optional[datetime] = None
+    odoo_partner_id: Optional[int] = None
+    odoo_order_id: Optional[int] = None
+    odoo_order_name: Optional[str] = None
+    odoo_sync_status: Optional[str] = None
+    odoo_sync_error: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+
+
+MIN_PASSWORD_LENGTH = 8
 
 
 class PurchaseResponse(BaseModel):
@@ -930,364 +959,174 @@ class RoleResponse(BaseModel):
         from_attributes = True
 
 
+@router.post("/purchase-request/send-code")
+async def send_purchase_email_code(payload: SendCodeRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Web sitesi başvurusu için kurumsal e-postaya 6 haneli doğrulama kodu gönderir.
+    Sınırlar: aynı e-postaya dakikada 1 / saatte 5, aynı IP'den saatte 20 istek.
+    """
+    email = validate_corporate_email(payload.email, "İletişim e-posta")
+    await validate_unique_admin_email(db, email)
+    ip = _client_ip(request)
+    if await hit_rate_limit(f"code:min:{email}", 1, 60):
+        raise HTTPException(status_code=429, detail="Yeni kod istemeden önce lütfen 1 dakika bekleyin.")
+    if await hit_rate_limit(f"code:hour:{email}", 5, 3600) or await hit_rate_limit(f"code:ip:{ip}", settings.EMAIL_CODE_IP_LIMIT_PER_HOUR, 3600):
+        raise HTTPException(status_code=429, detail="Çok fazla doğrulama kodu istendi. Lütfen daha sonra tekrar deneyin.")
+
+    code = await issue_email_code(email)
+    sent = await NotificationService.send_by_code(db, "EMAIL_VERIFICATION_CODE", email,
+                                                  {"code": code, "valid_minutes": EMAIL_CODE_TTL_MINUTES})
+    if not sent:
+        raise HTTPException(status_code=503, detail="Doğrulama kodu e-postası gönderilemedi. Lütfen daha sonra tekrar deneyin.")
+    return {"success": True, "message": f"Doğrulama kodu {email} adresine gönderildi.", "valid_minutes": EMAIL_CODE_TTL_MINUTES}
+
+
 @router.post("/purchase-request", response_model=PurchaseResponse)
-async def submit_purchase_request(payload: PurchaseRequest, db: AsyncSession = Depends(get_db)):
+async def submit_purchase_request(
+    payload: PurchaseRequest, request: Request, background: BackgroundTasks, db: AsyncSession = Depends(get_db)
+):
     """
-    Resmi RECOrion Web Sitesinden Paket Satın Alma / Kiralama Başvurusu.
-    - Plan kontrolü yapar
-    - Sektör ve Meslek tanımları ile Kurumsal Manifesto üretir (Madde 1)
-    - Odoo 19 üzerinde res.partner ve sale.order (teklif) oluşturur
-    - info@recdx.com adresine bildirim gönderir
-    - Müşteri e-postasına profesyonel onay e-postası gönderir
+    Resmi web sitesinden paket satın alma / kiralama başvurusu.
+    1. E-posta doğrulama kodu, bot tuzağı ve IP sınırı kontrol edilir.
+    2. Onay bekleyen şirket kartı, şirket yöneticisi ve başvuru kaydı oluşturulur (birbirine bağlı).
+    3. Arka planda: Odoo müşteri + satış teklifi, ardından müşteriye ve RECDx'e bildirim.
     """
-    from app.db.models import TenantLead
     from app.services.manifesto_service import ManifestoService
-    from app.services.notification_service import NotificationService
-    from app.services.odoo_service import OdooService
-
-    # Official / Kurumsal e-posta zorunluluğu (Madde 3)
-    validate_corporate_email(payload.contact_email, "İletişim e-posta")
-
-    # Vergi No ve Vergi Dairesi mükerrerlik kontrolü (Madde 2)
-    await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
-
-    # Yönetici E-Posta tekillik kontrolü (Madde 3)
-    await validate_unique_admin_email(db, payload.contact_email)
-
-    # 1. Planı bul
-    p_res = await db.execute(select(Plan).where(Plan.code == payload.plan_code.upper()))
-    plan = p_res.scalar_one_or_none()
-    if not plan:
-        raise HTTPException(status_code=404, detail=f"'{payload.plan_code}' kodlu kiralama paketi bulunamadı.")
-
-    # 2. AI ile Kurumsal Manifesto Üret (Sektör ve Meslek Tanımları ile)
-    manifesto_data = ManifestoService.generate_manifesto(
-        company_name=payload.company_name,
-        sectors=payload.sectors,
-        professions=payload.professions,
-        website=payload.website
-    )
-
-    # 3. Güvenli Şifre Hashleme (Argon2id)
     from app.api.v1.auth import hash_password
-    pw_hash = hash_password(payload.password)
 
-    # 4. Odoo 19 res.partner & sale.order Entegrasyonu (A maddesi)
-    odoo_partner_id = None
-    odoo_order_id = None
-    odoo_order_name = None
+    if payload.company_fax:
+        raise HTTPException(status_code=400, detail="Başvuru alınamadı.")
+    if await hit_rate_limit(f"purchase:ip:{_client_ip(request)}", settings.PURCHASE_IP_LIMIT_PER_HOUR, 3600):
+        raise HTTPException(status_code=429, detail="Çok fazla başvuru denemesi. Lütfen daha sonra tekrar deneyin.")
 
-    try:
-        odoo_partner_id = OdooService.get_or_create_partner(
-            company_name=payload.company_name,
-            contact_email=payload.contact_email,
-            phone=payload.phone,
-            address=payload.address,
-            website=payload.website,
-            tax_id=payload.tax_id
-        )
+    email = validate_corporate_email(payload.contact_email, "İletişim e-posta")
+    if len((payload.password or "").strip()) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Şifre en az {MIN_PASSWORD_LENGTH} karakter olmalıdır.")
+    if not await verify_email_code(email, payload.email_code):
+        raise HTTPException(status_code=400, detail="E-posta doğrulama kodu hatalı veya süresi dolmuş. Lütfen yeni kod isteyin.")
 
-        if odoo_partner_id:
-            so_res = OdooService.create_sale_order(
-                partner_id=odoo_partner_id,
-                plan_code=plan.code,
-                address=payload.address
-            )
-            if so_res.get("success"):
-                odoo_order_id = so_res.get("order_id")
-                odoo_order_name = so_res.get("order_name")
-    except Exception as e:
-        # Odoo bağlantı hatası genel akışı durdurmasın ama loglansın
-        import logging
-        logging.getLogger("recorion_odoo").error(f"Odoo işlemi sırasında istisna: {e}")
+    await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
+    await validate_unique_admin_email(db, email)
 
-    # 5. Lead Kaydını Oluştur
+    plan = (await db.execute(select(Plan).where(Plan.code == payload.plan_code.upper(), Plan.is_active == True))).scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail=f"'{payload.plan_code}' kodlu aktif kiralama paketi bulunamadı.")
+
+    manifesto_data = ManifestoService.generate_manifesto(
+        company_name=payload.company_name, sectors=payload.sectors,
+        professions=payload.professions, website=payload.website,
+    )
+    pw_hash = hash_password(payload.password.strip())
+
+    tenant = Tenant(
+        slug=await lifecycle.unique_slug(db, payload.company_name),
+        name=payload.company_name.strip(),
+        tax_id=payload.tax_id, tax_office=payload.tax_office, phone=payload.phone,
+        address=payload.address, website=payload.website, contact_email=email,
+        plan_id=plan.id, sectors=payload.sectors or [], professions=payload.professions or [],
+        sector_manifesto=manifesto_data["manifesto"],
+        package_start_date=None, package_expiry_date=None, is_active=False,
+    )
+    db.add(tenant)
+    await db.flush()
+    db.add(Actor(
+        tenant_id=tenant.id, actor_type="HUMAN", display_name=payload.contact_name.strip(),
+        email=email, phone=payload.phone, address=payload.address, role="COMPANY_ADMIN",
+        password_hash=pw_hash, autonomy_level="L3", status="IDLE",
+    ))
     lead = TenantLead(
-        plan_id=plan.id,
-        company_name=payload.company_name,
-        tax_id=payload.tax_id,
-        tax_office=payload.tax_office,
-        address=payload.address,
-        phone=payload.phone,
-        website=payload.website,
-        contact_email=payload.contact_email,
-        sectors=payload.sectors or [],
-        professions=payload.professions or [],
-        nace_codes=[],
-        generated_manifesto=manifesto_data["manifesto"],
-        assigned_skills=manifesto_data["assigned_skills"],
-        odoo_partner_id=odoo_partner_id,
-        odoo_order_id=odoo_order_id,
-        odoo_order_name=odoo_order_name,
-        status="PENDING",
-        notes=f"Yetkili: {payload.contact_name} | PasswordHash: {pw_hash} | Sektör: {manifesto_data['sector_focus']} | OdooRef: {odoo_order_name or 'N/A'}"
+        tenant_id=tenant.id, plan_id=plan.id, company_name=tenant.name, contact_name=payload.contact_name.strip(),
+        contact_email=email, password_hash=pw_hash, tax_id=payload.tax_id, tax_office=payload.tax_office,
+        address=payload.address, phone=payload.phone, website=payload.website,
+        sectors=payload.sectors or [], professions=payload.professions or [], nace_codes=[],
+        generated_manifesto=manifesto_data["manifesto"], assigned_skills=manifesto_data["assigned_skills"],
+        status="PENDING", source="WEB", email_verified_at=datetime.utcnow(), odoo_sync_status="PENDING",
     )
     db.add(lead)
     await db.commit()
     await db.refresh(lead)
 
-    # 6.1. Kayıtlı Şirketler (Tenants) Listesi için Onay Bekleyen Tenant Kaydı Oluştur
-    import re
-    clean_slug = re.sub(r'[^a-zA-Z0-9]', '', payload.company_name.lower())[:16] or "tenant"
-    slug_cand = f"{clean_slug}_{str(lead.id)[:6]}"
-
-    pending_tenant = Tenant(
-        slug=slug_cand,
-        name=payload.company_name,
-        tax_id=payload.tax_id,
-        tax_office=payload.tax_office,
-        phone=payload.phone,
-        address=payload.address,
-        website=payload.website,
-        contact_email=payload.contact_email,
-        plan_id=plan.id,
-        sectors=payload.sectors or [],
-        professions=payload.professions or [],
-        sector_manifesto=manifesto_data["manifesto"],
-        package_start_date=None,
-        package_expiry_date=None,
-        is_active=False
-    )
-    db.add(pending_tenant)
-    await db.flush()
-
-    # 6.2. Şirket Yöneticisi Aktörü Oluştur (IDLE)
-    pending_admin_actor = Actor(
-        tenant_id=pending_tenant.id,
-        actor_type="HUMAN",
-        display_name=f"{payload.contact_name} (Yönetici)",
-        email=payload.contact_email,
-        phone=payload.phone,
-        address=payload.address,
-        role="COMPANY_ADMIN",
-        password_hash=pw_hash,
-        autonomy_level="L3",
-        status="IDLE"
-    )
-    db.add(pending_admin_actor)
-    await db.commit()
-
-    # 7. E-posta Bildirimlerini Gönder
-    email_payload = {
-        "company_name": payload.company_name,
-        "contact_name": payload.contact_name,
-        "contact_email": payload.contact_email,
-        "phone": payload.phone,
-        "website": payload.website,
-        "address": payload.address,
-        "tax_id": payload.tax_id,
-        "tax_office": payload.tax_office,
-        "plan_code": plan.code,
-        "plan_name": plan.name,
-        "monthly_price": float(plan.monthly_price),
-        "currency": plan.currency,
-        "sectors": payload.sectors,
-        "professions": payload.professions,
-        "generated_manifesto": manifesto_data["manifesto"],
-        "odoo_order_name": odoo_order_name
-    }
-
-    admin_ok = NotificationService.send_admin_new_customer_notification(email_payload)
-    cust_ok = NotificationService.send_customer_welcome_notification(email_payload)
+    background.add_task(lifecycle.process_new_lead, lead.id)
 
     return PurchaseResponse(
-        lead_id=lead.id,
-        company_name=lead.company_name,
-        plan_code=plan.code,
-        plan_name=plan.name,
-        monthly_price=float(plan.monthly_price),
-        currency=plan.currency,
-        contact_email=lead.contact_email,
-        generated_manifesto=lead.generated_manifesto,
-        assigned_skills=lead.assigned_skills,
-        odoo_order_name=odoo_order_name,
-        status=lead.status,
-        admin_notified=admin_ok,
-        customer_notified=cust_ok,
-        message=f"Kiralama talebiniz başarıyla alınmıştır. Odoo Sipariş Referansı: {odoo_order_name or 'İşleniyor'}. İlgili müşteri temsilcisi en kısa sürede sizinle iletişime geçecektir."
+        lead_id=lead.id, company_name=lead.company_name, plan_code=plan.code, plan_name=plan.name,
+        monthly_price=float(plan.monthly_price), currency=plan.currency, contact_email=lead.contact_email,
+        generated_manifesto=lead.generated_manifesto, assigned_skills=lead.assigned_skills or [],
+        odoo_order_name=None, status=lead.status, admin_notified=True, customer_notified=True,
+        message="Başvurunuz alındı. RECDx ekibi inceledikten sonra hesabınız aktifleştirilecek ve size e-posta ile bilgi verilecektir.",
     )
 
 
-@router.get("/leads")
+@router.get("/leads", response_model=List[LeadOut])
 async def list_tenant_leads(db: AsyncSession = Depends(get_db)):
-    """
-    Süper Admin için gelen satın alma ve kiralama taleplerini listeler.
-    """
-    from app.db.models import TenantLead
-    res = await db.execute(select(TenantLead).order_by(TenantLead.created_at.desc()))
-    return res.scalars().all()
+    """Süper Admin için satın alma ve kiralama başvuruları (şifre bilgisi dönmez)."""
+    rows = (await db.execute(
+        select(TenantLead, Plan.name).outerjoin(Plan, Plan.id == TenantLead.plan_id).order_by(TenantLead.created_at.desc())
+    )).all()
+    return [LeadOut.model_validate(lead).model_copy(update={"plan_name": plan_name}) for lead, plan_name in rows]
+
+
+async def _get_lead(db: AsyncSession, lead_id: uuid.UUID) -> TenantLead:
+    lead = await db.get(TenantLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Başvuru bulunamadı.")
+    return lead
 
 
 @router.post("/leads/{lead_id}/approve")
-async def approve_tenant_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def approve_tenant_lead(lead_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
-    RECDx Yetkilisi (A.9 Maddesi & Madde 7):
-    Müşterinin ödemesi geldikten sonra siparişi ve üyeliği onaylar.
-    - Satın almayı onaylayıp 1 yıllık paket kullanım süresi hesaplar (Madde 7).
-    - Tenant ortamı aktive edilir
-    - Şirket Yöneticisi (COMPANY_ADMIN) oluşturulur
-    - Odoo siparişi onaylanır (action_confirm)
-    - Müşteriye Kurumsal Hoş Geldiniz e-postası (şifre, bitiş tarihi, paket) gönderilir (Madde 1).
+    RECDx yetkilisi ödemeyi/başvuruyu onaylar: şirket ve 1 yıllık paket aktifleşir,
+    Odoo siparişi onaylanır, müşteriye aktivasyon e-postası (şifre içermez) gönderilir.
     """
-    from app.db.models import TenantLead, Actor
-    from app.services.odoo_service import OdooService
-
-    lead = await db.get(TenantLead, lead_id)
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead başvurusu bulunamadı.")
-
-    # 1. Şirket slug üret
-    import re
-    clean_slug = re.sub(r'[^a-zA-Z0-9]', '', lead.company_name.lower())[:16] or "tenant"
-    slug_candidate = f"{clean_slug}_{str(lead.id)[:6]}"
-
-    # 2. 1 yıllık paket kullanım süresi hesapla (Madde 7)
-    start_date = datetime.utcnow()
-    expiry_date = start_date + timedelta(days=365)
-
-    # 3. Mevcut Tenant var mı kontrol et, varsa aktif et, yoksa oluştur
-    lead_slug_part = str(lead.id)[:6]
-    tenant = None
-
-    # Öncelikle lead id ile üretilmiş slug eşleşmesine bak
-    if lead_slug_part:
-        existing_by_slug = await db.execute(
-            select(Tenant).where(Tenant.slug.contains(lead_slug_part)).order_by(Tenant.created_at.desc())
-        )
-        tenant = existing_by_slug.scalars().first()
-
-    # Bulunamazsa şirket adı ve e-posta eşleşmesine bak
+    lead = await _get_lead(db, lead_id)
+    if lead.status == "APPROVED":
+        raise HTTPException(status_code=400, detail="Bu başvuru zaten onaylanmış.")
+    if not lead.tenant_id:
+        raise HTTPException(status_code=409, detail="Başvuruya bağlı şirket kaydı bulunamadı; şirketi 'Yeni Müşteri Ekle' ile oluşturun.")
+    tenant = await db.get(Tenant, lead.tenant_id)
     if not tenant:
-        existing_by_info = await db.execute(
-            select(Tenant).where(
-                (Tenant.name == lead.company_name) & (Tenant.contact_email == lead.contact_email)
-            ).order_by(Tenant.created_at.desc())
-        )
-        tenant = existing_by_info.scalars().first()
+        raise HTTPException(status_code=409, detail="Başvuruya bağlı şirket kaydı silinmiş.")
 
-    # Hala bulunamazsa sadece ada göre en son oluşturulanı ara
-    if not tenant:
-        existing_by_name = await db.execute(
-            select(Tenant).where(Tenant.name == lead.company_name).order_by(Tenant.created_at.desc())
-        )
-        tenant = existing_by_name.scalars().first()
-
-    if tenant:
-        tenant.is_active = True
-        tenant.package_start_date = start_date
-        tenant.package_expiry_date = expiry_date
-        if not tenant.plan_id:
-            tenant.plan_id = lead.plan_id
-        if not tenant.sectors:
-            tenant.sectors = lead.sectors
-        if not tenant.professions:
-            tenant.professions = lead.professions
-        if not tenant.sector_manifesto:
-            tenant.sector_manifesto = lead.generated_manifesto
-    else:
-        tenant = Tenant(
-            slug=slug_candidate,
-            name=lead.company_name,
-            tax_id=lead.tax_id,
-            tax_office=lead.tax_office,
-            phone=lead.phone,
-            address=lead.address,
-            website=lead.website,
-            contact_email=lead.contact_email,
-            plan_id=lead.plan_id,
-            sectors=lead.sectors or [],
-            professions=lead.professions or [],
-            sector_manifesto=lead.generated_manifesto,
-            package_start_date=start_date,
-            package_expiry_date=expiry_date,
-            is_active=True
-        )
-        db.add(tenant)
-        await db.flush()
-
-    # 4. Şirket Yöneticisi Kullanıcısını Güncelle veya Oluştur
-    contact_name = "Şirket Yöneticisi"
-    pw_hash = None
-    initial_pw = None
-    if lead.notes:
-        for part in lead.notes.split("|"):
-            if "Yetkili:" in part:
-                contact_name = part.replace("Yetkili:", "").strip()
-            if "PasswordHash:" in part:
-                pw_hash = part.replace("PasswordHash:", "").strip()
-
-    admin_actor_res = await db.execute(
-        select(Actor).where(Actor.tenant_id == tenant.id, Actor.role == "COMPANY_ADMIN").order_by(Actor.created_at.desc())
-    )
-    admin_actor = admin_actor_res.scalars().first()
-    if admin_actor:
-        admin_actor.status = "IDLE"
-        if pw_hash and not admin_actor.password_hash:
-            admin_actor.password_hash = pw_hash
-    else:
-        admin_actor = Actor(
-            tenant_id=tenant.id,
-            actor_type="HUMAN",
-            display_name=f"{contact_name} (Yönetici)",
-            email=lead.contact_email,
-            role="COMPANY_ADMIN",
-            password_hash=pw_hash,
-            autonomy_level="L3",
-            status="IDLE"
-        )
-        db.add(admin_actor)
-
-    # 5. Odoo Siparişini Onayla (Varsa)
-    if lead.odoo_order_id:
-        try:
-            OdooService.confirm_sale_order(lead.odoo_order_id)
-        except Exception as odoo_err:
-            import logging
-            logging.getLogger(__name__).warning(f"Odoo sipariş onaylama atlandı / hata: {odoo_err}")
-
-    # 6. Lead durumunu güncelle
-    lead.status = "APPROVED"
-    await db.commit()
-
-    # 7. Müşteriye "Hoş Geldiniz - Hesap Bilgileri ve Paket Süresi" E-postası Gönder (Madde 1)
-    from app.services.notification_service import NotificationService
-    plan_obj = await db.get(Plan, lead.plan_id) if lead.plan_id else None
-    plan_title = plan_obj.name if plan_obj else "RECOrion Paketi"
-
-    welcome_ctx = {
-        "company_name": lead.company_name,
-        "contact_name": contact_name,
-        "email": lead.contact_email,
-        "login_email": lead.contact_email,
-        "password": initial_pw or "Kayıt sırasında belirlediğiniz şifreniz",
-        "plan_name": plan_title,
-        "package_expiry_date": expiry_date.strftime("%d.%m.%Y"),
-        "odoo_order_name": lead.odoo_order_name or "Belirtilmedi",
-        "login_url": "http://localhost:5173/"
-    }
-
-    tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER").order_by(EmailTemplate.created_at.desc()))
-    welcome_tmpl = tmpl_res.scalars().first()
-    email_sent = False
-    try:
-        if welcome_tmpl:
-            email_sent = NotificationService.render_and_send_template(lead.contact_email, welcome_tmpl, welcome_ctx)
-        else:
-            email_sent = NotificationService.send_customer_account_activated_notification(welcome_ctx)
-    except Exception as email_err:
-        import logging
-        logging.getLogger(__name__).warning(f"Aktivasyon e-postası gönderilemedi: {email_err}")
-
+    result = await lifecycle.activate_tenant(db, tenant, user.actor_id, lead)
     return {
         "success": True,
-        "message": f"'{lead.company_name}' şirketi ve yöneticisi ({lead.contact_email}) başarıyla aktive edildi. Kullanıcı adı ve şifresini içeren aktivasyon e-postası müşteriye iletildi.",
+        "message": f"'{tenant.name}' şirketi aktifleştirildi." + (
+            " Aktivasyon e-postası gönderildi." if result["email_sent"] else " Aktivasyon e-postası gönderilemedi; şirket kartından tekrar gönderebilirsiniz."),
         "tenant_id": tenant.id,
         "tenant_slug": tenant.slug,
         "admin_email": lead.contact_email,
         "odoo_order_name": lead.odoo_order_name,
-        "activation_email_sent": email_sent,
-        "status": "APPROVED"
+        "activation_email_sent": result["email_sent"],
+        "status": "APPROVED",
     }
+
+
+@router.post("/leads/{lead_id}/reject")
+async def reject_tenant_lead(
+    lead_id: uuid.UUID, payload: LeadRejectRequest,
+    user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    """Başvuruyu reddeder: şirket pasif kalır, Odoo teklifi iptal edilir, müşteriye gerekçeli e-posta gider."""
+    reason = (payload.reason or "").strip()
+    if len(reason) < 5:
+        raise HTTPException(status_code=400, detail="Lütfen müşteriye iletilecek bir ret gerekçesi yazın.")
+    lead = await _get_lead(db, lead_id)
+    if lead.status == "APPROVED":
+        raise HTTPException(status_code=400, detail="Onaylanmış bir başvuru reddedilemez; şirketi pasife alabilirsiniz.")
+    sent = await lifecycle.reject_lead(db, lead, user.actor_id, reason)
+    return {"success": True, "message": f"'{lead.company_name}' başvurusu reddedildi.", "email_sent": sent, "status": "REJECTED"}
+
+
+@router.post("/leads/{lead_id}/odoo-sync")
+async def retry_lead_odoo_sync(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Başarısız Odoo senkronizasyonunu yeniden dener."""
+    await _get_lead(db, lead_id)
+    await lifecycle.sync_lead_to_odoo(lead_id)
+    lead = await _get_lead(db, lead_id)
+    await db.refresh(lead)
+    return {"success": lead.odoo_sync_status in ("SYNCED", "SKIPPED"), "odoo_sync_status": lead.odoo_sync_status,
+            "odoo_order_name": lead.odoo_order_name, "odoo_sync_error": lead.odoo_sync_error}
 
 
 @router.post("/{tenant_id}/roles", response_model=RoleResponse)
@@ -1333,401 +1172,124 @@ async def list_tenant_roles(tenant_id: uuid.UUID, db: AsyncSession = Depends(get
 
 
 @router.post("/admin-create")
-async def admin_create_tenant(payload: AdminTenantCreate, db: AsyncSession = Depends(get_db)):
+async def admin_create_tenant(
+    payload: AdminTenantCreate, background: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
     """
-    Süper Admin tarafından doğrudan yeni müşteri kurumu ve yöneticisi ekleme (Madde 9 & 7).
-    - 1 yıllık paket kullanım süresi hesaplar
-    - Otomatik şirket slug'ı üretir
-    - Kurumsal AI manifestosu hazırlar
-    - Yönetici kullanıcısını oluşturur
-    - Müşteriye Hoş Geldiniz şablonu ile e-posta gönderir
+    Süper Admin tarafından doğrudan müşteri kurumu ve yöneticisi ekleme.
+    - Şirket, yönetici ve başvuru kaydı (kaynak: ADMIN) birbirine bağlı oluşturulur.
+    - Yönetici şifresi verilmezse hesap şifresiz açılır; aktivasyon e-postasındaki
+      bağlantıyla kullanıcı şifresini kendisi belirler (şifre e-postayla gönderilmez).
+    - activate_package=True ise şirket hemen 1 yıllık paketle aktifleşir; değilse
+      onay bekleyen olarak kalır ve şirket kartından/başvurulardan onaylanır.
+    - Odoo müşteri ve satış teklifi arka planda açılır.
     """
     from app.api.v1.auth import hash_password
     from app.services.manifesto_service import ManifestoService
-    from app.services.notification_service import NotificationService
-    import secrets
-    import string
 
-    clean_tax_id = payload.tax_id.strip() if payload.tax_id else ""
-    # Official / Kurumsal e-posta zorunluluğu (Madde 2)
-    clean_email = validate_corporate_email(payload.contact_email, "İletişim e-posta")
-    clean_name = payload.name.strip() if payload.name else ""
+    email = validate_corporate_email(payload.contact_email, "İletişim e-posta")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Şirket ünvanı zorunludur.")
+    password = (payload.admin_password or "").strip()
+    if password and len(password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Yönetici şifresi en az {MIN_PASSWORD_LENGTH} karakter olmalıdır.")
 
-    # Mevcut bir şirket var mı kontrol et (aynı vergi no, aynı email veya aynı ünvan ile)
-    existing_tenant = None
-    if clean_tax_id:
-        t_res = await db.execute(select(Tenant).where(Tenant.tax_id == clean_tax_id))
-        existing_tenant = t_res.scalars().first()
-    if not existing_tenant and clean_email:
-        t_res = await db.execute(select(Tenant).where(func.lower(Tenant.contact_email) == clean_email))
-        existing_tenant = t_res.scalars().first()
-    if not existing_tenant and clean_name:
-        t_res = await db.execute(select(Tenant).where(func.lower(Tenant.name) == clean_name.lower()))
-        existing_tenant = t_res.scalars().first()
+    await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
+    await validate_unique_admin_email(db, email)
 
-    # 1. Slug üret
-    clean_slug = re.sub(r'[^a-zA-Z0-9]', '', payload.name.lower())[:16] or "tenant"
-    rnd_suffix = str(uuid.uuid4())[:6]
-    slug_candidate = f"{clean_slug}_{rnd_suffix}"
-
-    # 2. Şifre belirle
-    plain_password = payload.admin_password
-    if not plain_password:
-        symbols = "!@#$%&*+?"
-        chars = string.ascii_letters + string.digits + symbols
-        plain_password = ''.join(secrets.choice(chars) for _ in range(12))
-
-    # 3. NACE kodlarını alıp Manifesto oluştur
-    nace_items = []
+    plan = await db.get(Plan, payload.plan_id) if payload.plan_id else None
     manifesto_data = ManifestoService.generate_manifesto(
-        company_name=payload.name,
-        sectors=payload.sectors,
-        professions=payload.professions,
-        website=payload.website
+        company_name=name, sectors=payload.sectors, professions=payload.professions, website=payload.website,
     )
-
-    start_date = None
-    expiry_date = None
-
-    if existing_tenant:
-        # Şirket zaten sistemde mevcut; mükerrer insert YAPMA, kartı UPDATE et! (Madde 3 Hatası Çözümü)
-        await validate_unique_tax_info(db, payload.tax_id, payload.tax_office, exclude_tenant_id=existing_tenant.id)
-        await validate_unique_admin_email(db, clean_email, exclude_tenant_id=existing_tenant.id)
-
-        existing_tenant.name = payload.name.strip()
-        existing_tenant.tax_id = payload.tax_id
-        existing_tenant.tax_office = payload.tax_office
-        existing_tenant.phone = payload.phone
-        existing_tenant.address = payload.address
-        existing_tenant.website = payload.website
-        existing_tenant.contact_email = clean_email
-        if payload.plan_id:
-            existing_tenant.plan_id = payload.plan_id
-        if payload.sectors:
-            existing_tenant.sectors = payload.sectors
-        if payload.professions:
-            existing_tenant.professions = payload.professions
-        existing_tenant.sector_manifesto = manifesto_data["manifesto"]
-
-        tenant = existing_tenant
-
-        # Admin Actor'ü bul veya oluştur (Yetkili kullanıcı)
-        act_res = await db.execute(select(Actor).where(Actor.tenant_id == tenant.id, Actor.role == "COMPANY_ADMIN").limit(1))
-        admin_actor = act_res.scalar_one_or_none()
-        if not admin_actor:
-            admin_actor = Actor(
-                tenant_id=tenant.id,
-                actor_type="HUMAN",
-                display_name=payload.admin_name.strip() if payload.admin_name and payload.admin_name.strip() else f"{payload.name} Yöneticisi",
-                email=clean_email,
-                phone=payload.phone,
-                role="COMPANY_ADMIN",
-                password_hash=hash_password(plain_password),
-                autonomy_level="L3",
-                status="IDLE"
-            )
-            db.add(admin_actor)
-        else:
-            if payload.admin_name and payload.admin_name.strip():
-                admin_actor.display_name = payload.admin_name.strip()
-            admin_actor.email = clean_email
-            admin_actor.phone = payload.phone
-            admin_actor.status = "IDLE"
-            if payload.admin_password and payload.admin_password.strip():
-                admin_actor.password_hash = hash_password(payload.admin_password.strip())
-            elif plain_password:
-                admin_actor.password_hash = hash_password(plain_password)
-    else:
-        # Yeni Şirket Ekle
-        await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
-        await validate_unique_admin_email(db, clean_email)
-
-        tenant = Tenant(
-            slug=slug_candidate,
-            name=payload.name.strip(),
-            tax_id=payload.tax_id,
-            tax_office=payload.tax_office,
-            phone=payload.phone,
-            address=payload.address,
-            website=payload.website,
-            contact_email=clean_email,
-            plan_id=payload.plan_id,
-            sectors=payload.sectors or [],
-            professions=payload.professions or [],
-            sector_manifesto=manifesto_data["manifesto"],
-            package_start_date=start_date,
-            package_expiry_date=expiry_date,
-            is_active=True
-        )
-        db.add(tenant)
-        await db.flush()
-
-        admin_actor = Actor(
-            tenant_id=tenant.id,
-            actor_type="HUMAN",
-            display_name=payload.admin_name.strip() if payload.admin_name and payload.admin_name.strip() else f"{payload.name} Yöneticisi",
-            email=clean_email,
-            phone=payload.phone,
-            role="COMPANY_ADMIN",
-            password_hash=hash_password(plain_password),
-            autonomy_level="L3",
-            status="IDLE"
-        )
-        db.add(admin_actor)
-
-    # 5.1 Odoo 19 Entegrasyonu: Müşteri Partneri ve Satış Siparişi Aç (Madde 2)
-    from app.services.odoo_service import OdooService
-    odoo_partner_id = None
-    odoo_order_id = None
-    odoo_order_name = None
-
-    try:
-        plan_obj = await db.get(Plan, payload.plan_id) if payload.plan_id else None
-        plan_code = plan_obj.code if plan_obj else "STARTER"
-
-        odoo_partner_id = OdooService.get_or_create_partner(
-            company_name=payload.name.strip(),
-            contact_email=payload.contact_email.strip().lower(),
-            phone=payload.phone or "",
-            address=payload.address or "",
-            website=payload.website or "",
-            tax_id=payload.tax_id or ""
-        )
-
-        if odoo_partner_id:
-            so_res = OdooService.create_sale_order(
-                partner_id=odoo_partner_id,
-                plan_code=plan_code,
-                address=payload.address
-            )
-            if so_res.get("success"):
-                odoo_order_id = so_res.get("order_id")
-                odoo_order_name = so_res.get("order_name")
-                import logging
-                logging.getLogger("recorion_odoo").info(
-                    f"✓ Süper Admin müşteri kaydı: Odoo Siparişi başarıyla oluşturuldu -> Ref: {odoo_order_name} (ID: {odoo_order_id})"
-                )
-    except Exception as odoo_err:
-        import logging
-        logging.getLogger("recorion_odoo").error(f"Süper Admin müşteri eklerken Odoo entegrasyon hatası: {odoo_err}")
-
-    # 6. TenantLead ile senkronize et
-    lead = None
-    l_res = await db.execute(
-        select(TenantLead).where(
-            or_(
-                TenantLead.tax_id == tenant.tax_id,
-                func.lower(TenantLead.contact_email) == clean_email,
-                func.lower(TenantLead.company_name) == tenant.name.lower()
-            )
-        ).order_by(TenantLead.created_at.desc()).limit(1)
+    tenant = Tenant(
+        slug=await lifecycle.unique_slug(db, name), name=name, tax_id=payload.tax_id, tax_office=payload.tax_office,
+        phone=payload.phone, address=payload.address, website=payload.website, contact_email=email,
+        plan_id=plan.id if plan else None, sectors=payload.sectors or [], professions=payload.professions or [],
+        sector_manifesto=manifesto_data["manifesto"], package_start_date=None, package_expiry_date=None, is_active=False,
     )
-    lead = l_res.scalars().first()
-
-    if lead:
-        lead.company_name = tenant.name
-        lead.contact_email = tenant.contact_email
-        lead.phone = tenant.phone
-        lead.tax_id = tenant.tax_id
-        lead.tax_office = tenant.tax_office
-        lead.website = tenant.website
-        lead.address = tenant.address
-        lead.plan_id = tenant.plan_id
-        lead.sectors = payload.sectors or []
-        lead.professions = tenant.professions or []
-        lead.generated_manifesto = tenant.sector_manifesto
-        lead.status = "APPROVED"
-        if odoo_partner_id:
-            lead.odoo_partner_id = odoo_partner_id
-        if odoo_order_id:
-            lead.odoo_order_id = odoo_order_id
-        if odoo_order_name:
-            lead.odoo_order_name = odoo_order_name
-        lead.notes = f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
-    else:
-        lead = TenantLead(
-            company_name=tenant.name,
-            contact_email=tenant.contact_email,
-            phone=tenant.phone,
-            tax_id=tenant.tax_id,
-            tax_office=tenant.tax_office,
-            website=tenant.website,
-            address=tenant.address,
-            plan_id=tenant.plan_id,
-            sectors=payload.sectors or [],
-            professions=payload.professions or [],
-            generated_manifesto=tenant.sector_manifesto,
-            odoo_partner_id=odoo_partner_id,
-            odoo_order_id=odoo_order_id,
-            odoo_order_name=odoo_order_name,
-            status="APPROVED",
-            notes=f"Yetkili: {admin_actor.display_name} | PasswordHash: {hash_password(plain_password)} | Sektör: {manifesto_data.get('sector_focus', 'Genel')} | OdooRef: {odoo_order_name or 'N/A'}"
-        )
-        db.add(lead)
-
+    db.add(tenant)
+    await db.flush()
+    admin_name = (payload.admin_name or "").strip() or f"{name} Yöneticisi"
+    admin_actor = Actor(
+        tenant_id=tenant.id, actor_type="HUMAN", display_name=admin_name, email=email, phone=payload.phone,
+        role="COMPANY_ADMIN", password_hash=hash_password(password) if password else None,
+        autonomy_level="L3", status="IDLE",
+    )
+    db.add(admin_actor)
+    lead = TenantLead(
+        tenant_id=tenant.id, plan_id=tenant.plan_id, company_name=name, contact_name=admin_name, contact_email=email,
+        phone=payload.phone, tax_id=payload.tax_id, tax_office=payload.tax_office, website=payload.website,
+        address=payload.address, sectors=payload.sectors or [], professions=payload.professions or [], nace_codes=[],
+        generated_manifesto=tenant.sector_manifesto, status="PENDING", source="ADMIN",
+        odoo_sync_status="PENDING" if plan else "SKIPPED",
+    )
+    db.add(lead)
     await db.commit()
     await db.refresh(tenant)
 
-    # 7. E-posta Gönder (İstenmişse)
+    if plan:
+        background.add_task(lifecycle.sync_lead_to_odoo, lead.id)
+
     email_sent = False
-    if payload.send_welcome_email and tenant.contact_email:
-        plan_obj = await db.get(Plan, payload.plan_id) if payload.plan_id else None
-        plan_title = plan_obj.name if plan_obj else "Kurumsal Paket"
+    expiry = None
+    if payload.activate_package:
+        result = await lifecycle.activate_tenant(db, tenant, user.actor_id, lead)
+        email_sent = result["email_sent"] and payload.send_welcome_email
+        expiry = result["package_expiry_date"]
 
-        welcome_ctx = {
-            "company_name": tenant.name,
-            "contact_name": admin_actor.display_name,
-            "email": tenant.contact_email,
-            "login_email": admin_actor.email,
-            "password": plain_password,
-            "plan_name": plan_title,
-            "package_expiry_date": expiry_date.strftime("%d.%m.%Y") if expiry_date else "Onay Bekliyor",
-            "odoo_order_name": odoo_order_name or "Süper Admin Doğrudan Kayıt",
-            "login_url": "http://localhost:5173/"
-        }
-
-        tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER").order_by(EmailTemplate.created_at.desc()))
-        welcome_tmpl = tmpl_res.scalars().first()
-        if welcome_tmpl:
-            email_sent = NotificationService.render_and_send_template(tenant.contact_email, welcome_tmpl, welcome_ctx)
-        else:
-            email_sent = NotificationService.send_customer_account_activated_notification(welcome_ctx)
-
-    msg = f"'{tenant.name}' kurumu ve yetkili kullanıcısı ({admin_actor.display_name}) başarıyla kaydedildi."
-    if odoo_order_name:
-        msg += f" Odoo 19 Satış Siparişi oluşturuldu: {odoo_order_name}."
-
+    msg = f"'{tenant.name}' kurumu ve yöneticisi ({admin_name}) kaydedildi."
+    msg += " Paket aktifleştirildi." if payload.activate_package else " Şirket kartındaki 'Onayla' ile aktifleştirebilirsiniz."
+    if not password:
+        msg += " Yönetici şifresini aktivasyon e-postasındaki bağlantıdan kendisi belirleyecek."
     return {
         "success": True,
         "message": msg,
         "tenant_id": str(tenant.id),
         "slug": tenant.slug,
-        "admin_name": admin_actor.display_name,
-        "admin_email": admin_actor.email,
-        "admin_password": plain_password,
+        "admin_name": admin_name,
+        "admin_email": email,
         "is_active": tenant.is_active,
-        "package_expiry_date": expiry_date.isoformat() if expiry_date else None,
+        "package_expiry_date": expiry.isoformat() if expiry else None,
         "welcome_email_sent": email_sent,
-        "odoo_order_id": odoo_order_id,
-        "odoo_order_name": odoo_order_name
+        "lead_id": str(lead.id),
     }
 
 
 @router.post("/{tenant_id}/send-welcome")
 async def send_manual_welcome_email(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     """
-    Müşteriye manuel olarak Hoş Geldiniz E-Postası Gönderir.
+    Müşteriye aktivasyon e-postasını yeniden gönderir. E-posta şifre içermez; yeni bir
+    şifre belirleme bağlantısı (72 saat geçerli) içerir.
     """
-    from app.services.notification_service import NotificationService
     tenant = await db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
-
-    act_res = await db.execute(select(Actor).where(Actor.tenant_id == tenant.id, Actor.role.in_(["COMPANY_ADMIN", "SUPER_ADMIN"])).limit(1))
-    admin_actor = act_res.scalar_one_or_none()
-
-    target_email = tenant.contact_email or (admin_actor.email if admin_actor and admin_actor.email else None)
-    if not target_email:
-        raise HTTPException(status_code=400, detail="Şirketin veya yönetici kullanıcısının geçerli bir e-posta adresi bulunamadı.")
-
-    if not tenant.contact_email and target_email:
-        tenant.contact_email = target_email
-        await db.commit()
-
-    plan_obj = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
-    plan_title = plan_obj.name if plan_obj else "Kurumsal Paket"
-
-    welcome_ctx = {
-        "company_name": tenant.name,
-        "contact_name": admin_actor.display_name if admin_actor else f"{tenant.name} Yetkilisi",
-        "email": target_email,
-        "login_email": admin_actor.email if admin_actor and admin_actor.email else target_email,
-        "password": "Mevcut şifreniz geçerlidir",
-        "plan_name": plan_title,
-        "package_expiry_date": tenant.package_expiry_date.strftime("%d.%m.%Y") if tenant.package_expiry_date else "Onay Bekliyor",
-        "odoo_order_name": "Süper Admin İletimi",
-        "login_url": "http://localhost:5173/"
-    }
-
-    tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "WELCOME_CUSTOMER"))
-    welcome_tmpl = tmpl_res.scalar_one_or_none()
-    sent = False
-    if welcome_tmpl:
-        sent = NotificationService.render_and_send_template(target_email, welcome_tmpl, welcome_ctx)
-    else:
-        sent = NotificationService.send_customer_account_activated_notification(welcome_ctx)
-
+    admin = await lifecycle.company_admin(db, tenant.id)
+    if not admin or not (admin.email or tenant.contact_email):
+        raise HTTPException(status_code=400, detail="Şirket yöneticisinin geçerli bir e-posta adresi bulunamadı.")
+    sent = await lifecycle.send_activation_email(db, tenant, admin, has_known_password=bool(admin.password_hash))
     if not sent:
-        raise HTTPException(
-            status_code=500,
-            detail=f"'{tenant.name}' şirketine ({target_email}) Hoş Geldiniz e-postası iletilemedi. Lütfen sunucu e-posta ayarlarını kontrol ediniz."
-        )
-
-    return {
-        "success": True,
-        "message": f"'{tenant.name}' şirketine ({target_email}) Hoş Geldiniz e-postası başarıyla iletildi."
-    }
+        raise HTTPException(status_code=502, detail="Aktivasyon e-postası gönderilemedi. E-posta ayarlarını ve ACCOUNT_ACTIVATED şablonunu kontrol ediniz.")
+    return {"success": True, "message": f"'{tenant.name}' şirketine ({admin.email or tenant.contact_email}) aktivasyon e-postası gönderildi."}
 
 
 @router.post("/{tenant_id}/send-reminder")
 async def send_manual_expiration_reminder(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    """
-    Müşteriye manuel olarak Paket Süre Sonu Hatırlatıcı E-Postası Gönderir (Madde 14).
-    """
-    from app.services.notification_service import NotificationService
+    """Müşteriye paket süre sonu hatırlatıcı e-postasını hemen gönderir."""
+    from app.services.scheduler_service import send_expiration_reminder
+
     tenant = await db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
-
-    act_res = await db.execute(select(Actor).where(Actor.tenant_id == tenant.id, Actor.role.in_(["COMPANY_ADMIN", "SUPER_ADMIN"])).limit(1))
-    admin_actor = act_res.scalar_one_or_none()
-
-    target_email = tenant.contact_email or (admin_actor.email if admin_actor and admin_actor.email else None)
-    if not target_email:
-        raise HTTPException(status_code=400, detail="Şirketin veya yönetici kullanıcısının geçerli bir e-posta adresi bulunamadı.")
-
-    now = datetime.utcnow()
-    days_rem = 0
-    if tenant.package_expiry_date:
-        exp_date = tenant.package_expiry_date.replace(tzinfo=None) if tenant.package_expiry_date.tzinfo else tenant.package_expiry_date
-        days_rem = (exp_date - now).days
-
-    plan_obj = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
-    plan_title = plan_obj.name if plan_obj else "Kurumsal Paket"
-
-    # Hatırlatıcı şablonu getir
-    tmpl_res = await db.execute(select(EmailTemplate).where(EmailTemplate.code == "PACKAGE_EXPIRATION_REMINDER"))
-    tmpl = tmpl_res.scalar_one_or_none()
-
-    ctx = {
-        "company_name": tenant.name,
-        "plan_name": plan_title,
-        "expiry_date": tenant.package_expiry_date.strftime("%d.%m.%Y") if tenant.package_expiry_date else "Belirtilmedi",
-        "days_remaining": max(0, days_rem),
-        "renewal_url": "http://localhost:5173/#/pricing"
-    }
-
-    sent = False
-    if tmpl:
-        sent = NotificationService.render_and_send_template(target_email, tmpl, ctx)
-    else:
-        sent = NotificationService.send_customer_account_activated_notification(ctx)
-
+    if not tenant.contact_email:
+        raise HTTPException(status_code=400, detail="Şirketin geçerli bir e-posta adresi bulunamadı.")
+    sent, days_rem = await send_expiration_reminder(db, tenant)
     if not sent:
-        raise HTTPException(
-            status_code=500,
-            detail=f"'{tenant.name}' şirketine ({target_email}) hatırlatıcı e-postası iletilemedi. Lütfen sunucu e-posta ayarlarını kontrol ediniz."
-        )
-
-    tenant.last_reminder_sent_at = now
+        raise HTTPException(status_code=502, detail="Hatırlatıcı e-postası gönderilemedi. E-posta ayarlarını ve PACKAGE_EXPIRATION_REMINDER şablonunu kontrol ediniz.")
     await db.commit()
-
-    return {
-        "success": True,
-        "message": f"'{tenant.name}' şirketine ({target_email}) hatırlatıcı e-postası başarıyla iletildi.",
-        "days_remaining": days_rem,
-        "sent_at": now.isoformat()
-    }
+    return {"success": True, "message": f"'{tenant.name}' şirketine hatırlatıcı e-postası gönderildi.", "days_remaining": days_rem}
 
 
 @router.post("/generate-manifesto")

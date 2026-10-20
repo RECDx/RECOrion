@@ -220,6 +220,15 @@
 .ui-table-empty { text-align: center; color: var(--text-muted); padding: 36px 14px !important; }
 .ui-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-size: 0.8rem; color: var(--text-muted); }
 
+/* Geniş tablolarda işlem sütunu kaydırılsa da görünür kalır */
+.ui-sticky-right {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--bg-surface);
+  box-shadow: -8px 0 12px -10px rgb(var(--rgb-shade) / calc(0.5 * var(--shade-k)));
+}
+
 /* Görünürlük yardımcıları */
 .ui-show-tablet { display: none !important; }
 .ui-show-mobile-only { display: none !important; }

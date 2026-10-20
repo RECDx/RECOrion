@@ -33,6 +33,7 @@ from app.db.models import (
 from app.api.v1.auth import hash_password
 from app.core.net import UnsafeURLError, safe_request
 from app.core.security import CurrentUser, forbidden, get_current_user
+from app.services.plan_features import deny, ensure_document_quota, entitlements
 
 logger = logging.getLogger(__name__)
 
@@ -407,7 +408,8 @@ async def list_company_job_titles(tenant_id: uuid.UUID, db: AsyncSession = Depen
 
 @router.post("/{tenant_id}/job-titles", response_model=CompanyJobTitleOut, status_code=201)
 async def create_company_job_title(
-    tenant_id: uuid.UUID, payload: CompanyJobTitleIn, db: AsyncSession = Depends(get_db)
+    tenant_id: uuid.UUID, payload: CompanyJobTitleIn,
+    current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """
     Şirket için yeni ünvan tanımlar.
@@ -416,6 +418,9 @@ async def create_company_job_title(
     - RECOrion kendi AI Modeli yeni ünvanı inceler; sistem geneli için faydalı bulursa Ana Şablona ekler.
     """
     tenant = await _get_tenant_or_404(db, tenant_id)
+    ent = await entitlements(db, tenant, current)
+    if not ent.can_create_custom_titles:
+        deny(f"'{ent.plan_name or 'Mevcut'}' paketiniz şirkete özel ünvan tanımlamaya izin vermiyor. Sistem ünvanlarından seçebilir veya paketinizi yükseltebilirsiniz.")
 
     # Departman doğrulaması (eğer seçildiyse)
     dept_name = None
@@ -640,6 +645,23 @@ class LLMModelOptionOut(BaseModel):
         from_attributes = True
 
 
+@router.get("/{tenant_id}/entitlements")
+async def get_company_entitlements(
+    tenant_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    """Şirketin paketine göre kullanabileceği özellikler (arayüz düğmeleri buna göre açılır/kapanır)."""
+    tenant = await _get_tenant_or_404(db, tenant_id)
+    return (await entitlements(db, tenant, current)).as_dict()
+
+
+def _forced_model_code(ent, job_title) -> Optional[str]:
+    """LLM değiştirme izni yoksa kullanılacak model: ünvanın önerdiği (pakette varsa) ya da paketin ilk modeli."""
+    rec = (job_title.recommended_model_code or "").lower() if job_title else ""
+    if rec and ent.model_allowed(rec):
+        return rec
+    return ent.allowed_models[0] if ent.allowed_models else (rec or None)
+
+
 @router.get("/{tenant_id}/llm-models", response_model=List[LLMModelOptionOut])
 async def list_available_llm_models(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     """Müşteri paketinde izin verilen ve sistemde aktif olan LLM modellerini listeler."""
@@ -855,7 +877,10 @@ async def list_company_ai_agents(
 
 
 @router.post("/{tenant_id}/ai-agents", response_model=AIAgentOut, status_code=201)
-async def hire_ai_agent(tenant_id: uuid.UUID, payload: AIAgentIn, db: AsyncSession = Depends(get_db)):
+async def hire_ai_agent(
+    tenant_id: uuid.UUID, payload: AIAgentIn,
+    current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
     """
     Şirket bünyesinde yeni bir AI Ajanı işe alır / tanımlar (Madde 3).
     - AI Ajan Adı
@@ -901,18 +926,27 @@ async def hire_ai_agent(tenant_id: uuid.UUID, payload: AIAgentIn, db: AsyncSessi
             raise HTTPException(status_code=404, detail="Seçilen departman bulunamadı.")
         dept_name = dept.name
 
-    # 3. LLM Modeli Eşleştirme
-    model_stmt = select(LLMModel).where(func.lower(LLMModel.model_code) == payload.model_code.lower())
-    model = (await db.execute(model_stmt)).scalars().first()
+    # 3. LLM Modeli: paket izinleri (#241)
+    ent = await entitlements(db, tenant, current)
+    requested_code = (payload.model_code or "").strip().lower()
+    if not ent.can_change_llm:
+        forced = _forced_model_code(ent, job_title)
+        if requested_code and forced and requested_code != forced:
+            deny(f"'{ent.plan_name}' paketiniz LLM modelini değiştirmeye izin vermiyor; bu ünvan için '{forced}' modeli kullanılır.")
+        requested_code = forced or requested_code
+    if requested_code and not ent.model_allowed(requested_code):
+        deny(f"'{requested_code}' modeli '{ent.plan_name}' paketinizde yer almıyor.")
+    model = (await db.execute(select(LLMModel).where(func.lower(LLMModel.model_code) == requested_code))).scalars().first() if requested_code else None
     if not model:
-        # Fallback to glm-5.3 or first active
-        fallback_stmt = select(LLMModel).where(LLMModel.status == "ACTIVE").limit(1)
-        model = (await db.execute(fallback_stmt)).scalars().first()
+        raise HTTPException(status_code=400, detail="Geçerli bir LLM modeli seçiniz.")
+    preferred_model_id = model.id
 
-    preferred_model_id = model.id if model else None
-
-    # 4. Sistem Rol Promptu (Özel verilmemişse ünvandan devralınır)
-    role_prompt = payload.system_prompt or job_title.base_role_prompt or f"Sen bir {job_title.title} AI personelsin."
+    # 4. Sistem Rol Promptu (Özel verilmemişse ünvandan devralınır; paket izin vermiyorsa değiştirilemez)
+    base_prompt = (job_title.base_role_prompt or "").strip()
+    custom_prompt = (payload.system_prompt or "").strip()
+    if custom_prompt and custom_prompt != base_prompt and not ent.can_edit_role_prompt:
+        deny(f"'{ent.plan_name}' paketiniz ünvan rol promptunu değiştirmeye izin vermiyor; ünvanın hazır rol promptu kullanılır.")
+    role_prompt = custom_prompt or base_prompt or f"Sen bir {job_title.title} AI personelsin."
 
     # 5. İşe Alım Tarihi (Payload'da varsa o, yoksa şu an)
     hire_date = payload.hired_at or datetime.utcnow()
@@ -988,12 +1022,14 @@ async def update_ai_agent(
     tenant_id: uuid.UUID,
     agent_id: uuid.UUID,
     payload: AIAgentUpdateIn,
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """AI Ajan bilgilerini (Adı, Modeli, Ünvanı, Departmanı, Açıklaması) günceller."""
     agent = await db.get(Actor, agent_id)
     if not agent or agent.tenant_id != tenant_id or agent.actor_type != "AI_AGENT":
         raise HTTPException(status_code=404, detail="AI Ajan bulunamadı.")
+    ent = await entitlements(db, await _get_tenant_or_404(db, tenant_id), current)
 
     if payload.display_name is not None:
         clean_name = payload.display_name.strip()
@@ -1011,7 +1047,10 @@ async def update_ai_agent(
         agent.autonomy_level = payload.autonomy_level
 
     if payload.system_prompt is not None:
-        agent.system_prompt = payload.system_prompt.strip()
+        new_prompt = payload.system_prompt.strip()
+        if new_prompt != (agent.system_prompt or "").strip() and not ent.can_edit_role_prompt:
+            deny(f"'{ent.plan_name}' paketiniz rol promptunu değiştirmeye izin vermiyor.")
+        agent.system_prompt = new_prompt
 
     if payload.job_title_id is not None:
         title = await db.get(JobTitle, payload.job_title_id)
@@ -1029,7 +1068,11 @@ async def update_ai_agent(
     if payload.model_code is not None:
         model_stmt = select(LLMModel).where(func.lower(LLMModel.model_code) == payload.model_code.lower())
         model = (await db.execute(model_stmt)).scalars().first()
-        if model:
+        if model and model.id != agent.preferred_model_id:
+            if not ent.can_change_llm:
+                deny(f"'{ent.plan_name}' paketiniz LLM modelini değiştirmeye izin vermiyor.")
+            if not ent.model_allowed(model.model_code):
+                deny(f"'{model.model_code}' modeli '{ent.plan_name}' paketinizde yer almıyor.")
             agent.preferred_model_id = model.id
 
     await db.commit()
@@ -1473,6 +1516,7 @@ async def upload_agent_document(
     tenant_id: uuid.UUID,
     agent_id: uuid.UUID,
     file: UploadFile = File(...),
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1499,6 +1543,8 @@ async def upload_agent_document(
         raise HTTPException(status_code=400, detail="Yüklenen dosya boş olamaz.")
     if file_size > 50 * 1024 * 1024:  # 50MB
         raise HTTPException(status_code=400, detail="Dosya boyutu 50MB sınırını aşamaz.")
+    tenant_obj = await _get_tenant_or_404(db, tenant_id)
+    await ensure_document_quota(db, await entitlements(db, tenant_obj, current), tenant_id, agent_id, file_size)
 
     # 1. Metni Ayrıştır
     extracted_text = extract_text_from_file(file_bytes, ext)
@@ -1598,6 +1644,7 @@ async def add_agent_web_link(
     tenant_id: uuid.UUID,
     agent_id: uuid.UUID,
     data: AddWebLinkIn,
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1608,6 +1655,7 @@ async def add_agent_web_link(
     agent = await db.get(Actor, agent_id)
     if not agent or agent.tenant_id != tenant_id or agent.actor_type != "AI_AGENT":
         raise HTTPException(status_code=404, detail="AI Ajan bulunamadı.")
+    await ensure_document_quota(db, await entitlements(db, await _get_tenant_or_404(db, tenant_id), current), tenant_id, agent_id, 0)
 
     if not data.url or not data.url.strip():
         raise HTTPException(status_code=400, detail="Web sayfası URL'si boş olamaz.")
@@ -1708,6 +1756,7 @@ async def add_agent_video_link(
     tenant_id: uuid.UUID,
     agent_id: uuid.UUID,
     data: AddVideoLinkIn,
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1718,6 +1767,7 @@ async def add_agent_video_link(
     agent = await db.get(Actor, agent_id)
     if not agent or agent.tenant_id != tenant_id or agent.actor_type != "AI_AGENT":
         raise HTTPException(status_code=404, detail="AI Ajan bulunamadı.")
+    await ensure_document_quota(db, await entitlements(db, await _get_tenant_or_404(db, tenant_id), current), tenant_id, agent_id, 0)
 
     if not data.url or not data.url.strip():
         raise HTTPException(status_code=400, detail="Video URL'si boş olamaz.")
@@ -1826,6 +1876,7 @@ async def trigger_agent_deep_search(
     tenant_id: uuid.UUID,
     agent_id: uuid.UUID,
     data: DeepSearchIn,
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1837,6 +1888,7 @@ async def trigger_agent_deep_search(
     agent = await db.get(Actor, agent_id)
     if not agent or agent.tenant_id != tenant_id or agent.actor_type != "AI_AGENT":
         raise HTTPException(status_code=404, detail="AI Ajan bulunamadı.")
+    await ensure_document_quota(db, await entitlements(db, await _get_tenant_or_404(db, tenant_id), current), tenant_id, agent_id, 0)
 
     if not data.query or not data.query.strip():
         raise HTTPException(status_code=400, detail="Araştırma konusu boş olamaz.")
@@ -1897,6 +1949,7 @@ async def deep_search_sector_title_existing_agent(
     tenant_id: uuid.UUID,
     agent_id: uuid.UUID,
     model_code: Optional[str] = Query("glm-5.3"),
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Mevcut bir AI Ajanı için şirket sektörü ve ajanın ünvanı üzerine Deep Search yapar ve hafızasına kaydeder."""
@@ -1904,6 +1957,7 @@ async def deep_search_sector_title_existing_agent(
     agent = await db.get(Actor, agent_id)
     if not agent or agent.tenant_id != tenant_id or agent.actor_type != "AI_AGENT":
         raise HTTPException(status_code=404, detail="AI Ajan bulunamadı.")
+    await ensure_document_quota(db, await entitlements(db, await _get_tenant_or_404(db, tenant_id), current), tenant_id, agent_id, 0)
     if not agent.job_title_id:
         raise HTTPException(status_code=400, detail="Ajanın atanmış bir ünvanı bulunmuyor.")
 

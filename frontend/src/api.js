@@ -110,6 +110,8 @@ export const api = {
   getNaceCatalog: () => request('/tenants/nace-catalog'),
   searchNace: (query = '', limit = 30) => request(`/tenants/nace-catalog?query=${encodeURIComponent(query)}&limit=${limit}`),
   submitPurchaseRequest: (data) => request('/tenants/purchase-request', { method: 'POST', body: JSON.stringify(data) }),
+  sendPurchaseEmailCode: (email) => request('/tenants/purchase-request/send-code', { method: 'POST', body: JSON.stringify({ email }) }),
+  getPublicStats: () => request('/public/stats'),
   getLeads: () => request('/tenants/leads'),
 
   // Personeller (İnsan & AI Aktörler)
@@ -155,6 +157,9 @@ export const api = {
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   getProfile: (actorId) => request(`/auth/profile/${actorId}`),
   getMe: () => request('/auth/me'),
+  requestPasswordReset: (email) => request('/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }) }),
+  confirmPasswordReset: (token, newPassword) => request('/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify({ token, new_password: newPassword }) }),
+  getCompanyEntitlements: (tenantId) => request(`/company/${tenantId}/entitlements`),
   updateProfile: (actorId, data) => request(`/auth/profile/${actorId}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Sistem İzinleri & Ayarları (Süper Admin)
@@ -229,6 +234,8 @@ export const api = {
 
   // Leads & Roller
   approveLead: (leadId) => request(`/tenants/leads/${leadId}/approve`, { method: 'POST' }),
+  rejectLead: (leadId, reason) => request(`/tenants/leads/${leadId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  retryLeadOdooSync: (leadId) => request(`/tenants/leads/${leadId}/odoo-sync`, { method: 'POST' }),
   getRoles: (tenantId) => request(`/tenants/${tenantId}/roles`),
   createRole: (tenantId, data) => request(`/tenants/${tenantId}/roles`, { method: 'POST', body: JSON.stringify(data) }),
   createCustomJobTitle: (data) => request('/actors/job-titles', { method: 'POST', body: JSON.stringify(data) }),

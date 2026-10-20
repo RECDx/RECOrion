@@ -21,6 +21,22 @@ class Settings(BaseSettings):
     # SQL sorgularını loglar (parametreler dahil); yalnızca yerel hata ayıklamada açın
     DB_ECHO: bool = False
 
+    # Müşterilere giden e-postalardaki bağlantıların kök adresi
+    PUBLIC_APP_URL: str = "http://localhost:5173"
+    # RECDx'e yeni başvuru bildirimlerinin gideceği adres
+    ADMIN_NOTIFICATION_EMAIL: str = "info@recdx.com"
+    # smtp: gerçek gönderim · log: göndermeden bellekte tut (test/geliştirme)
+    EMAIL_DELIVERY: str = "smtp"
+    # Odoo satış siparişi senkronizasyonu (testlerde kapalı)
+    ODOO_SYNC_ENABLED: bool = True
+    ODOO_PRICELIST_ID: int = 1
+    # Otomatik zamanlayıcı (mail hatırlatmaları)
+    SCHEDULER_ENABLED: bool = True
+    SCHEDULER_INTERVAL_MINUTES: int = 60
+    # Web başvurusu kötüye kullanım sınırları (IP başına, saatlik)
+    PURCHASE_IP_LIMIT_PER_HOUR: int = 5
+    EMAIL_CODE_IP_LIMIT_PER_HOUR: int = 20
+
     # PostgreSQL
     POSTGRES_USER: str = "recorion_admin"
     POSTGRES_PASSWORD: str = ""  # .env üzerinden verilir
@@ -38,6 +54,7 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: Optional[str] = None
+    REDIS_DB: int = 0  # testler ayrı veritabanı kullanır
 
     # MinIO
     MINIO_ROOT_USER: str = "minio_admin"

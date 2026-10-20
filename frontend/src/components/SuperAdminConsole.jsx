@@ -200,7 +200,7 @@ const EMAIL_PRESET_BLOCKS = [
     type: 'CREDENTIALS',
     label: 'Yönetici Giriş Bilgileri Kartı',
     loginEmail: '{{login_email}}',
-    passwordText: '{{password}}',
+    passwordText: '{{password_instruction}}',
     renderHtml: (b) => `<div style="padding: 15px 25px; background: #0b0f19;">
   <div style="background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: 10px; padding: 18px 20px;">
     <div style="font-size: 12px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">🔐 Yönetici Giriş Bilgileri</div>
@@ -210,8 +210,8 @@ const EMAIL_PRESET_BLOCKS = [
         <td style="padding: 5px 0; text-align: right; font-family: monospace; font-weight: 700; color: #ffffff;">${b.loginEmail || '{{login_email}}'}</td>
       </tr>
       <tr>
-        <td style="padding: 5px 0; color: #94a3b8;">Geçici Şifre:</td>
-        <td style="padding: 5px 0; text-align: right; font-family: monospace; font-weight: 700; color: #fbbf24;">${b.passwordText || '{{password}}'}</td>
+        <td style="padding: 5px 0; color: #94a3b8;">Şifre:</td>
+        <td style="padding: 5px 0; text-align: right; font-family: monospace; font-weight: 700; color: #fbbf24;">${b.passwordText || '{{password_instruction}}'}</td>
       </tr>
     </table>
   </div>
@@ -534,13 +534,17 @@ export default function SuperAdminConsole({
     max_projects: 3,
     monthly_credits: 1000,
     storage_gb: 10,
-    allowed_models: ['deepseek-v3'],
+    allowed_models: [],
     can_create_custom_titles: false,
+    features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 },
+    odoo_product_id: '',
     is_active: true
   });
 
   // 4.1 E-Posta Şablonu Modal (Madde 1)
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  // Görsel editör blokları HTML ile eşleşiyor mu (HTML elle düzenlenince false olur)
+  const [templateBlocksInSync, setTemplateBlocksInSync] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [templateForm, setTemplateForm] = useState({
     code: '',
@@ -743,20 +747,79 @@ export default function SuperAdminConsole({
 
   // ================= 2. LEAD ONAYLAMA =================
   const handleApproveLead = async (lead) => {
+    if (!(await confirmDialog({
+      title: 'Başvuruyu Onayla',
+      message: `'${lead.company_name}' şirketi 1 yıllık paketle aktifleştirilecek, Odoo siparişi onaylanacak ve ${lead.contact_email} adresine aktivasyon e-postası gönderilecek. Devam edilsin mi?`,
+      confirmText: 'Onayla ve Aktif Et',
+    }))) return;
     try {
       setProcessingId(lead.id);
-      setActionFeedback(null);
-      await api.approveLead(lead.id);
-      setActionFeedback({
-        type: 'success',
-        text: `✓ '${lead.company_name}' onaylandı! Odoo 19 siparişi resmileştirildi, şirket ortamı aktive edildi ve aktivasyon e-postası iletildi.`
-      });
+      const res = await api.approveLead(lead.id);
+      setActionFeedback({ type: res.activation_email_sent ? 'success' : 'warning', text: res.message });
       await loadAllData();
     } catch (err) {
       setActionFeedback({ type: 'error', text: 'Onay işlemi başarısız: ' + (err.message || '') });
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const handleRejectLead = async (lead) => {
+    const reason = await promptDialog({
+      title: 'Başvuruyu Reddet',
+      message: `'${lead.company_name}' başvurusu reddedilecek ve müşteriye aşağıdaki gerekçeyle e-posta gönderilecek. Odoo teklifi iptal edilir.`,
+      defaultValue: '',
+      confirmText: 'Reddet',
+    });
+    if (reason === null) return;
+    if (reason.trim().length < 5) {
+      toast.warning('Lütfen müşteriye iletilecek en az 5 karakterlik bir gerekçe yazın.');
+      return;
+    }
+    try {
+      setProcessingId(lead.id);
+      const res = await api.rejectLead(lead.id, reason.trim());
+      setActionFeedback({ type: 'success', text: res.message + (res.email_sent ? ' Müşteriye e-posta gönderildi.' : ' E-posta gönderilemedi.') });
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Ret işlemi başarısız: ' + (err.message || '') });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRetryLeadOdoo = async (lead) => {
+    try {
+      setProcessingId(lead.id);
+      const res = await api.retryLeadOdooSync(lead.id);
+      setActionFeedback(res.success
+        ? { type: 'success', text: `Odoo senkronizasyonu tamamlandı${res.odoo_order_name ? `: ${res.odoo_order_name}` : ''}.` }
+        : { type: 'error', text: `Odoo senkronizasyonu başarısız: ${res.odoo_sync_error || ''}` });
+      await loadAllData();
+    } catch (err) {
+      setActionFeedback({ type: 'error', text: 'Odoo senkronizasyonu başarısız: ' + (err.message || '') });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // Başvurunun Odoo durumu: senkron, işleniyor, hata (yeniden dene) veya kapalı
+  const renderLeadOdoo = (lead) => {
+    const status = lead.odoo_sync_status;
+    if (lead.odoo_order_name) {
+      return <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--ac-34d399)', fontWeight: 800 }}>{lead.odoo_order_name}</span>;
+    }
+    if (status === 'FAILED') {
+      return (
+        <button type="button" className="ui-btn ui-btn-ghost ui-btn-sm" onClick={() => handleRetryLeadOdoo(lead)}
+                disabled={processingId === lead.id} title={lead.odoo_sync_error || 'Odoo hatası'}
+                style={{ color: 'var(--ac-f87171)', padding: '2px 6px', minHeight: 0 }}>
+          ⚠ Yeniden dene
+        </button>
+      );
+    }
+    if (status === 'SKIPPED') return <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Odoo: kapalı</span>;
+    return <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Odoo: işleniyor…</span>;
   };
 
   // ================= 3. ŞİRKET DETAY & ADMIN KULLANICI (Madde 5 & 12) =================
@@ -1199,7 +1262,7 @@ export default function SuperAdminConsole({
       { id: 'b_2', type: 'GREETING', text: 'Sayın <b>{{company_name}}</b> Yetkilisi, Sayın <b>{{contact_name}}</b>,' },
       { id: 'b_3', type: 'CONTENT', text: 'RECOrion kurumsal aboneliğiniz başarıyla aktif edilmiştir. Kurumunuza özel olarak hazırlanan yapay zeka ajanları ve şirket çalışma ortamınız hazır durumdadır.' },
       { id: 'b_4', type: 'PACKAGE_INFO', planName: '{{plan_name}}', expiryDate: '{{package_expiry_date}}', daysRemaining: '{{days_remaining}}' },
-      { id: 'b_5', type: 'CREDENTIALS', loginEmail: '{{login_email}}', passwordText: '{{password}}' },
+      { id: 'b_5', type: 'CREDENTIALS', loginEmail: '{{login_email}}', passwordText: '{{password_instruction}}' },
       { id: 'b_6', type: 'BUTTON', buttonText: 'Yönetim Paneline Giriş Yap →', buttonUrl: '{{login_url}}' },
       { id: 'b_7', type: 'DIVIDER' },
       { id: 'b_8', type: 'FOOTER', footerText: 'Bu e-posta RECDx Bilişim Teknolojileri ve Yapay Zeka A.Ş. tarafından otomatik olarak iletilmiştir.' }
@@ -1216,8 +1279,12 @@ export default function SuperAdminConsole({
         variables: tmpl.variables || [],
         is_active: tmpl.is_active
       });
-      setTemplateCanvasBlocks(defaultBlocks);
-      setTemplateEditorTab('BUILDER');
+      // Kayıtlı şablon: blok yapısı saklanmışsa görsel editörde, yoksa HTML olarak açılır.
+      // (Önceden varsayılan bloklar yükleniyor ve ilk düzenlemede kayıtlı HTML'in üzerine yazılıyordu.)
+      const savedBlocks = Array.isArray(tmpl.builder_blocks) && tmpl.builder_blocks.length ? tmpl.builder_blocks : null;
+      setTemplateCanvasBlocks(savedBlocks || []);
+      setTemplateBlocksInSync(!!savedBlocks);
+      setTemplateEditorTab(savedBlocks ? 'BUILDER' : 'CODE');
     } else {
       setEditingTemplate(null);
       const generatedHtml = compileBlocksToHtml(defaultBlocks);
@@ -1227,10 +1294,11 @@ export default function SuperAdminConsole({
         subject: 'RECDx | RECOrion Kurumsal Bildirim',
         html_content: generatedHtml,
         text_content: '',
-        variables: ['company_name', 'contact_name', 'plan_name', 'package_expiry_date', 'days_remaining', 'login_email', 'password', 'login_url'],
+        variables: ['company_name', 'contact_name', 'plan_name', 'package_expiry_date', 'days_remaining', 'login_email', 'password_instruction', 'action_url', 'login_url'],
         is_active: true
       });
       setTemplateCanvasBlocks(defaultBlocks);
+      setTemplateBlocksInSync(true);
       setTemplateEditorTab('BUILDER');
     }
     setTemplateModalOpen(true);
@@ -1419,10 +1487,10 @@ export default function SuperAdminConsole({
     try {
       setProcessingId('save-template');
       if (editingTemplate) {
-        await api.updateEmailTemplate(editingTemplate.id, templateForm);
+        await api.updateEmailTemplate(editingTemplate.id, { ...templateForm, builder_blocks: templateBlocksInSync && templateCanvasBlocks.length ? templateCanvasBlocks : null });
         setActionFeedback({ type: 'success', text: `✓ '${templateForm.name}' e-posta şablonu güncellendi.` });
       } else {
-        await api.createEmailTemplate(templateForm);
+        await api.createEmailTemplate({ ...templateForm, builder_blocks: templateBlocksInSync && templateCanvasBlocks.length ? templateCanvasBlocks : null });
         setActionFeedback({ type: 'success', text: `✓ '${templateForm.name}' e-posta şablonu oluşturuldu.` });
       }
       setTemplateModalOpen(false);
@@ -1757,8 +1825,10 @@ export default function SuperAdminConsole({
         max_projects: plan.max_projects,
         monthly_credits: plan.monthly_credits,
         storage_gb: plan.storage_gb,
-        allowed_models: plan.allowed_models || ['deepseek-v3'],
+        allowed_models: plan.allowed_models || [],
         can_create_custom_titles: !!plan.can_create_custom_titles,
+        features: { ...{ can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 }, ...(plan.features || {}) },
+        odoo_product_id: plan.odoo_product_id ?? '',
         is_active: plan.is_active
       });
     } else {
@@ -1774,8 +1844,10 @@ export default function SuperAdminConsole({
         max_projects: 5,
         monthly_credits: 3000,
         storage_gb: 25,
-        allowed_models: ['deepseek-v3', 'glm-5.3'],
-        can_create_custom_titles: true,
+        allowed_models: [],
+        can_create_custom_titles: false,
+        features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 },
+        odoo_product_id: '',
         is_active: true
       });
     }
@@ -1788,10 +1860,10 @@ export default function SuperAdminConsole({
     try {
       setProcessingId('save-plan');
       if (editingPlan) {
-        await api.updatePlan(editingPlan.id, planForm);
+        await api.updatePlan(editingPlan.id, { ...planForm, odoo_product_id: planForm.odoo_product_id === '' ? null : Number(planForm.odoo_product_id) });
         setActionFeedback({ type: 'success', text: `✓ '${planForm.name}' paketi güncellendi.` });
       } else {
-        await api.createPlan(planForm);
+        await api.createPlan({ ...planForm, odoo_product_id: planForm.odoo_product_id === '' ? null : Number(planForm.odoo_product_id) });
         setActionFeedback({ type: 'success', text: `✓ '${planForm.name}' paketi oluşturuldu.` });
       }
       setPlanModalOpen(false);
@@ -2067,6 +2139,7 @@ export default function SuperAdminConsole({
     .filter(l => {
       if (leadApprovalFilter === 'PENDING') return l.status === 'PENDING';
       if (leadApprovalFilter === 'APPROVED') return l.status === 'APPROVED';
+      if (leadApprovalFilter === 'REJECTED') return l.status === 'REJECTED';
       return true;
     })
     .filter(l => 
@@ -2846,7 +2919,7 @@ export default function SuperAdminConsole({
                                 {ld.contact_email}
                               </span>
                               <span style={{ color: 'var(--ac-38bdf8)', fontWeight: 600 }}>
-                                {ld.plan?.name || 'Paket Bilgisi'}
+                                {ld.plan_name || 'Paket Bilgisi'}
                               </span>
                             </div>
                           </div>
@@ -3016,6 +3089,15 @@ export default function SuperAdminConsole({
                       <CheckCircle2 style={{ width: 15, height: 15 }} />
                       <span>Başvurusu Onaylanmışlar ({leads.filter(l => l.status === 'APPROVED').length})</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => { setLeadApprovalFilter('REJECTED'); setLeadViewMode('LIST'); }}
+                      className={`super-admin-toggle-3d-btn ${leadApprovalFilter === 'REJECTED' ? 'active' : ''}`}
+                      title="Reddedilen Başvuruları Listele"
+                    >
+                      <X style={{ width: 15, height: 15 }} />
+                      <span>Reddedilenler ({leads.filter(l => l.status === 'REJECTED').length})</span>
+                    </button>
                   </div>
 
                   {renderViewModeToggle(leadViewMode, setLeadViewMode)}
@@ -3056,9 +3138,7 @@ export default function SuperAdminConsole({
                         leads.filter(l => l.status === 'PENDING').filter(l => !searchQuery || l.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) || l.contact_email?.toLowerCase().includes(searchQuery.toLowerCase())).map(lead => (
                           <div key={lead.id} className="super-admin-card" style={{ padding: 14, border: '1px solid rgba(245,158,11,0.25)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--ac-34d399)', fontWeight: 800 }}>
-                                {lead.odoo_order_name || 'Odoo: Otomatik'}
-                              </span>
+                              {renderLeadOdoo(lead)}
                               <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-fbbf24)', background: 'rgba(245,158,11,0.2)', padding: '2px 6px', borderRadius: 4 }}>
                                 ⏳ Onay Bekliyor
                               </span>
@@ -3076,8 +3156,18 @@ export default function SuperAdminConsole({
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                               <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--ac-a78bfa)' }}>
-                                {lead.plan?.name || 'Standart Paket'}
+                                {lead.plan_name || 'Paket seçilmemiş'}
                               </span>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectLead(lead)}
+                                disabled={processingId === lead.id}
+                                className="ui-btn ui-btn-ghost ui-btn-sm"
+                                style={{ color: 'var(--ac-f87171)' }}
+                              >
+                                Reddet
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleApproveLead(lead)}
@@ -3088,6 +3178,7 @@ export default function SuperAdminConsole({
                                 {processingId === lead.id ? <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" /> : <CheckCircle2 style={{ width: 12, height: 12 }} />}
                                 <span>Onayla & Aktif Et</span>
                               </button>
+                              </div>
                             </div>
                           </div>
                         ))
@@ -3135,7 +3226,7 @@ export default function SuperAdminConsole({
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                               <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--ac-a78bfa)' }}>
-                                {lead.plan?.name || 'Paket'}
+                                {lead.plan_name || 'Paket'}
                               </span>
                               <span style={{ fontSize: '0.72rem', color: 'var(--ac-6ee7b7)', fontWeight: 700 }}>
                                 Aktivasyon Tamamlandı
@@ -3153,11 +3244,11 @@ export default function SuperAdminConsole({
                     <thead>
                       <tr>
                         <th>Şirket Ünvanı & Yetkili</th>
-                        <th>İletişim & NACE</th>
+                        <th>İletişim</th>
                         <th>Seçilen Paket</th>
                         <th>Odoo Sipariş No</th>
                         <th>Durum</th>
-                        <th style={{ textAlign: 'right' }}>Aksiyon</th>
+                        <th className="ui-sticky-right" style={{ textAlign: 'right' }}>Aksiyon</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3184,20 +3275,21 @@ export default function SuperAdminConsole({
                                 <Phone style={{ width: 12, height: 12 }} />
                                 <span>{lead.phone || '-'}</span>
                               </div>
-                              <div style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', marginTop: 3 }}>
-                                {lead.nace_codes && lead.nace_codes.length > 0 ? lead.nace_codes.slice(0, 2).join(', ') : 'NACE yok'}
-                              </div>
                             </td>
                             <td>
                               <span style={{ fontWeight: 700, color: 'var(--nt-ffffff)' }}>
-                                {lead.plan ? lead.plan.name : 'Standart Paket'}
+                                {lead.plan_name || 'Paket seçilmemiş'}
                               </span>
                             </td>
-                            <td style={{ fontFamily: 'monospace', color: 'var(--ac-34d399)', fontWeight: 700 }}>
-                              {lead.odoo_order_name || 'Otomatik'}
+                            <td>
+                              {renderLeadOdoo(lead)}
                             </td>
                             <td>
-                              {lead.status === 'APPROVED' ? (
+                              {lead.status === 'REJECTED' ? (
+                                <span title={lead.rejection_reason || ''} style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--ac-f87171)', border: '1px solid rgba(239,68,68,0.3)', padding: '3px 8px', borderRadius: 999, fontSize: '0.7rem', fontWeight: 800 }}>
+                                  ✕ Reddedildi
+                                </span>
+                              ) : lead.status === 'APPROVED' ? (
                                 <span style={{ background: 'rgba(16,185,129,0.2)', color: 'var(--ac-6ee7b7)', border: '1px solid rgba(16,185,129,0.3)', padding: '3px 8px', borderRadius: 999, fontSize: '0.68rem', fontWeight: 800 }}>
                                   ✓ Onaylandı & Aktif
                                 </span>
@@ -3207,8 +3299,20 @@ export default function SuperAdminConsole({
                                 </span>
                               )}
                             </td>
-                            <td style={{ textAlign: 'right' }}>
-                              {lead.status !== 'APPROVED' ? (
+                            <td className="ui-sticky-right" style={{ textAlign: 'right' }}>
+                              {lead.status === 'REJECTED' ? (
+                                <span style={{ fontSize: '0.725rem', color: 'var(--nt-64748b)' }}>{lead.rejection_reason || 'Reddedildi'}</span>
+                              ) : lead.status !== 'APPROVED' ? (
+                                <div style={{ display: 'inline-flex', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectLead(lead)}
+                                  disabled={processingId === lead.id}
+                                  className="ui-btn ui-btn-ghost ui-btn-sm"
+                                  style={{ color: 'var(--ac-f87171)' }}
+                                >
+                                  Reddet
+                                </button>
                                 <button
                                   onClick={() => handleApproveLead(lead)}
                                   disabled={processingId === lead.id}
@@ -3218,6 +3322,7 @@ export default function SuperAdminConsole({
                                   {processingId === lead.id ? <RefreshCw style={{ width: 12, height: 12 }} className="animate-spin" /> : <CheckCircle2 style={{ width: 12, height: 12 }} />}
                                   <span>Onayla & Aktif Et</span>
                                 </button>
+                                </div>
                               ) : (
                                 <span style={{ fontSize: '0.725rem', color: 'var(--nt-64748b)' }}>Aktivasyon Tamamlandı</span>
                               )}
@@ -5300,6 +5405,7 @@ export default function SuperAdminConsole({
                           <iframe
                             title={tmpl.name}
                             srcDoc={tmpl.html_content}
+                            sandbox=""
                             style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none', transform: 'scale(0.7)', transformOrigin: 'top left', width: '142%', height: '142%' }}
                           />
                         </div>
@@ -7110,6 +7216,53 @@ export default function SuperAdminConsole({
                 </label>
               </div>
 
+              {/* Paket izinleri (#241) ve Odoo ürün eşleşmesi */}
+              <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-main)' }}>Paket İzinleri</div>
+                <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {[
+                    ['can_change_llm', 'AI personelin LLM modelini değiştirebilir'],
+                    ['can_edit_role_prompt', 'Ünvan rol promptunu değiştirebilir'],
+                    ['can_upload_title_documents', 'Ünvanlara bilgi dokümanı yükleyebilir'],
+                    ['ocr_enabled', 'Taranmış belgelerde OCR kullanabilir'],
+                  ].map(([key, label]) => (
+                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!planForm.features?.[key]}
+                        onChange={(e) => setPlanForm({ ...planForm, features: { ...planForm.features, [key]: e.target.checked } })}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                    AI personel başına en fazla öğrenme kaynağı
+                    <input
+                      type="number"
+                      min="0"
+                      value={planForm.features?.max_documents_per_agent ?? 20}
+                      onChange={(e) => setPlanForm({ ...planForm, features: { ...planForm.features, max_documents_per_agent: Number(e.target.value) } })}
+                      className="super-admin-input"
+                      style={{ marginTop: 4 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                    Odoo ürün ID (satış siparişi)
+                    <input
+                      type="number"
+                      min="1"
+                      value={planForm.odoo_product_id}
+                      onChange={(e) => setPlanForm({ ...planForm, odoo_product_id: e.target.value })}
+                      placeholder="Örn: 31"
+                      className="super-admin-input"
+                      style={{ marginTop: 4 }}
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                 <button type="button" onClick={() => setPlanModalOpen(false)} className="super-admin-btn-secondary">
                   Vazgeç
@@ -7459,7 +7612,7 @@ export default function SuperAdminConsole({
                     type="text"
                     value={newTenantForm.admin_password}
                     onChange={(e) => setNewTenantForm({ ...newTenantForm, admin_password: e.target.value })}
-                    placeholder="Boş bırakılırsa güçlü şifre atanır"
+                    placeholder="Boş bırakılırsa yönetici şifresini e-postadaki bağlantıdan kendisi belirler"
                     className="super-admin-input"
                   />
                 </div>
@@ -7778,7 +7931,19 @@ export default function SuperAdminConsole({
                 <div style={{ display: 'flex', background: 'rgb(var(--rgb-ov) / 0.06)', padding: 3, borderRadius: 8, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                   <button
                     type="button"
-                    onClick={() => setTemplateEditorTab('BUILDER')}
+                    onClick={async () => {
+                      if (!templateBlocksInSync && templateForm.html_content?.trim()) {
+                        const ok = await confirmDialog({
+                          title: 'Görsel editöre geç',
+                          message: 'Bu şablonun HTML içeriği görsel editör bloklarıyla eşleşmiyor. Görsel editörde yapacağınız ilk değişiklik mevcut HTML içeriğinin yerine geçer. Devam edilsin mi?',
+                          danger: true,
+                          confirmText: 'Evet, görsel editöre geç',
+                        });
+                        if (!ok) return;
+                        setTemplateBlocksInSync(true);
+                      }
+                      setTemplateEditorTab('BUILDER');
+                    }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
                       padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -7852,7 +8017,7 @@ export default function SuperAdminConsole({
               {/* Dinamik Değişken İpuçları */}
               <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.18)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-38bdf8)' }}>Dinamik Değişkenler:</span>
-                {['company_name', 'contact_name', 'login_email', 'password', 'plan_name', 'package_expiry_date', 'days_remaining', 'login_url'].map((v) => (
+                {['company_name', 'contact_name', 'login_email', 'password_instruction', 'action_url', 'plan_name', 'package_expiry_date', 'days_remaining', 'login_url'].map((v) => (
                   <button
                     type="button"
                     key={v}
@@ -8381,6 +8546,7 @@ export default function SuperAdminConsole({
                       <iframe
                         title="HTML Preview"
                         srcDoc={templateForm.html_content}
+                        sandbox=""
                         style={{ width: '100%', height: '100%', border: 'none' }}
                       />
                     </div>
@@ -8398,7 +8564,7 @@ export default function SuperAdminConsole({
                       rows="18"
                       required
                       value={templateForm.html_content}
-                      onChange={(e) => setTemplateForm({ ...templateForm, html_content: e.target.value })}
+                      onChange={(e) => { setTemplateForm({ ...templateForm, html_content: e.target.value }); setTemplateBlocksInSync(false); }}
                       placeholder="<html><body>...</body></html>"
                       className="super-admin-input"
                       style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.725rem', lineHeight: 1.4, whiteSpace: 'pre', background: 'var(--sf-0b0f19)' }}
@@ -8414,6 +8580,7 @@ export default function SuperAdminConsole({
                       <iframe
                         title="HTML Preview"
                         srcDoc={templateForm.html_content}
+                        sandbox=""
                         style={{ width: '100%', height: '100%', border: 'none' }}
                       />
                     </div>

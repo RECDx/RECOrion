@@ -124,4 +124,6 @@ def test_bootstrap_guarantees_super_admins(db, monkeypatch, test_db_url):
             "SELECT a.email FROM actors a JOIN tenants t ON t.id = a.tenant_id "
             "WHERE t.slug = 'recdx_hq' AND a.role = 'SUPER_ADMIN' ORDER BY a.email"
         )
-        assert [r[0] for r in cur.fetchall()] == ["cuneyterdil@recdx.com", "rehaerdag@recdx.com"]
+        emails = [r[0] for r in cur.fetchall()]
+    # Diğer testler de süper admin ekleyebilir; burada iki zorunlu hesabın birer kez bulunması aranır
+    assert emails.count("cuneyterdil@recdx.com") == 1 and emails.count("rehaerdag@recdx.com") == 1

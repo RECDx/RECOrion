@@ -317,6 +317,26 @@ export default function CompanyAdminConsole({
     return tenantId || currentTenant?.id || tenant?.id || currentUser?.tenant_id;
   };
 
+  // Paket hakları (#241): LLM değiştirme, rol promptu düzenleme, özel ünvan
+  const [entitlements, setEntitlements] = useState(null);
+  const entitlementTenantId = getActiveTenantId();
+  useEffect(() => {
+    if (!entitlementTenantId) return;
+    api.getCompanyEntitlements(entitlementTenantId).then(setEntitlements).catch(() => setEntitlements(null));
+  }, [entitlementTenantId]);
+  const canChangeLlm = !entitlements || entitlements.can_change_llm;
+  const canEditRolePrompt = !entitlements || entitlements.can_edit_role_prompt;
+  const canCreateCustomTitles = !entitlements || entitlements.can_create_custom_titles;
+  const planLabel = entitlements?.plan_name || 'Mevcut';
+  // LLM değiştirme izni yoksa kullanılacak model (backend ile aynı kural)
+  const forcedModelForTitle = (titleId) => {
+    const t = jobTitles.find((x) => x.id === titleId);
+    const rec = (t?.recommended_model_code || '').toLowerCase();
+    const allowed = entitlements?.allowed_models || [];
+    if (rec && (!allowed.length || allowed.includes(rec))) return rec;
+    return allowed[0] || rec || '';
+  };
+
   // currentUser veya currentTenant değiştiğinde tenantId senkronizasyonu
   useEffect(() => {
     const expectedId = (currentUser?.role === 'COMPANY_ADMIN' && currentUser?.tenant_id)
@@ -1288,7 +1308,7 @@ export default function CompanyAdminConsole({
       setAgentFormError("Lütfen AI Ajan için bir şirket ünvanı seçiniz.");
       return;
     }
-    if (!agentForm.model_code) {
+    if (!agentForm.model_code && canChangeLlm) {
       setAgentFormError("Lütfen AI Ajan için bir LLM modeli seçiniz.");
       return;
     }
@@ -1310,13 +1330,14 @@ export default function CompanyAdminConsole({
     try {
       const payload = {
         display_name: name,
-        model_code: agentForm.model_code,
+        model_code: canChangeLlm ? agentForm.model_code : (editingAgent ? undefined : forcedModelForTitle(agentForm.job_title_id)),
         job_title_id: agentForm.job_title_id,
         department_id: agentForm.department_id || null,
         description: agentForm.description?.trim() || null,
         hired_at: agentForm.hired_at ? new Date(agentForm.hired_at).toISOString() : new Date().toISOString(),
         autonomy_level: agentForm.autonomy_level || 'L1',
-        system_prompt: agentForm.system_prompt?.trim() || null,
+        // Paket rol promptu düzenlemeye izin vermiyorsa ünvanın hazır promptu kullanılır
+        system_prompt: canEditRolePrompt ? (agentForm.system_prompt?.trim() || null) : undefined,
         pending_learnings: agentForm.pending_learnings || null,
         deep_search_metadata: agentForm.deep_search_metadata || null
       };
@@ -2165,7 +2186,7 @@ export default function CompanyAdminConsole({
                   padding: '2px 6px',
                   borderRadius: '4px'
                 }}>
-                  13 Model
+                  {entitlements?.allowed_models?.length ? `${entitlements.allowed_models.length} Model` : 'Modeller'}
                 </span>
               </button>
 
@@ -2205,9 +2226,9 @@ export default function CompanyAdminConsole({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: 'var(--nt-f8fafc)', marginBottom: '4px' }}>
               <Shield size={14} color="#7134e2" />
-              <span>RLS İzolasyonu Aktif</span>
+              <span>Şirket Veri İzolasyonu Aktif</span>
             </div>
-            <span>Şirketinizin departman, ünvan ve AI ajan verileri PostgreSQL Row-Level Security ile tamamen izoledir.</span>
+            <span>Şirketinizin verileri her istekte şirket bazında yetki kontrolünden geçer; başka şirketler ve RECDx yöneticileri proje, sohbet ve hafıza içeriğinize erişemez (KVKK).</span>
           </div>
         </aside>
 
@@ -3556,8 +3577,10 @@ export default function CompanyAdminConsole({
                   </button>
 
                   <button
-                    onClick={handleOpenCreateTitle}
+                    onClick={canCreateCustomTitles ? handleOpenCreateTitle : () => toast.warning(`'${planLabel}' paketiniz şirkete özel ünvan tanımlamaya izin vermiyor. Sistem ünvanlarından seçebilir veya paketinizi yükseltebilirsiniz.`)}
+                    title={canCreateCustomTitles ? 'Yeni ünvan tanımla' : 'Paketiniz özel ünvan tanımlamaya izin vermiyor'}
                     style={{
+                      opacity: canCreateCustomTitles ? 1 : 0.55,
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
@@ -8032,12 +8055,14 @@ export default function CompanyAdminConsole({
                     <label style={{ fontSize: '0.825rem', fontWeight: '600', color: 'var(--ac-c084fc)' }}>
                       AI Ajan LLM Modeli <span style={{ color: '#f43f5e' }}>*</span>
                     </label>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--ac-38bdf8)', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                      Değiştirilebilir
+                    <span style={{ fontSize: '0.7rem', color: canChangeLlm ? 'var(--ac-38bdf8)' : 'var(--ac-fbbf24)', background: canChangeLlm ? 'rgba(56, 189, 248, 0.1)' : 'rgba(245, 158, 11, 0.12)', padding: '2px 6px', borderRadius: '4px' }}
+                          title={canChangeLlm ? '' : `'${planLabel}' paketinde model ünvana göre otomatik belirlenir`}>
+                      {canChangeLlm ? 'Değiştirilebilir' : 'Paketinizde sabit'}
                     </span>
                   </div>
                   <select
-                    value={agentForm.model_code}
+                    value={canChangeLlm ? agentForm.model_code : (editingAgent ? agentForm.model_code : forcedModelForTitle(agentForm.job_title_id))}
+                    disabled={!canChangeLlm}
                     onChange={(e) => setAgentForm({ ...agentForm, model_code: e.target.value })}
                     style={{
                       width: '100%',
@@ -8349,9 +8374,15 @@ export default function CompanyAdminConsole({
                   </div>
                 )}
 
+                {!canEditRolePrompt && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--ac-fbbf24)', marginBottom: 6 }}>
+                    '{planLabel}' paketinizde ünvanın hazır rol promptu kullanılır ve değiştirilemez. Deep Search bulguları yine personelin hafızasına kaydedilir.
+                  </div>
+                )}
                 <textarea
                   placeholder="Ajanın sistem talimatı... Seçilen ünvandan otomatik devralınır veya yukarıdaki 'Sektör & Ünvan Deep Search' butonu ile internette araştırılarak zenginleştirilebilir."
                   value={agentForm.system_prompt}
+                  readOnly={!canEditRolePrompt}
                   onChange={(e) => setAgentForm({ ...agentForm, system_prompt: e.target.value })}
                   rows={6}
                   style={{

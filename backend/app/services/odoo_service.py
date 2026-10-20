@@ -25,25 +25,6 @@ class OdooService:
             "password": os.getenv("ODOO_PASSWORD") or ""
         }
 
-    # Odoo 19 Ürün Eşleştirmeleri (product.product / product.template ID'leri)
-    PRODUCT_MAPPING = {
-        "STARTER": {
-            "id": 30,
-            "name": "RECOrion - Başlangıç Paketi",
-            "price": 14900.0
-        },
-        "PRO": {
-            "id": 31,
-            "name": "RECOrion - Profesyonel Paketi",
-            "price": 39900.0
-        },
-        "ENTERPRISE": {
-            "id": 32,
-            "name": "RECOrion - Başlangıç Kurumsal",
-            "price": 99000.0
-        }
-    }
-
     @classmethod
     def _get_connection(cls):
         cfg = cls.get_config()
@@ -124,72 +105,57 @@ class OdooService:
             return None
 
     @classmethod
-    def create_sale_order(
-        cls,
-        partner_id: int,
-        plan_code: str,
-        address: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def create_sale_order(cls, partner_id: int, product_id: int, price: float, description: str) -> Dict[str, Any]:
         """
-        Odoo 19 sale.order modülünde kiralama siparişi (teklif) oluşturur.
+        Odoo sale.order (teklif) oluşturur. Ürün ve fiyat RECOrion paket tanımından gelir
+        (plans.odoo_product_id, plans.monthly_price).
         """
+        from app.config import settings
+
         uid, models, cfg = cls._get_connection()
         if not uid or not models:
             return {"success": False, "error": "Odoo bağlantısı kurulamadı"}
 
         try:
-            code = plan_code.upper()
-            prod_info = cls.PRODUCT_MAPPING.get(code, cls.PRODUCT_MAPPING["PRO"])
-
-            today_date = date.today().isoformat()
-            now_datetime = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-
             order_data = {
                 'partner_id': partner_id,
                 'partner_invoice_id': partner_id,
                 'partner_shipping_id': partner_id,
-                'validity_date': today_date,
-                'date_order': now_datetime,
-                'pricelist_id': 1, # Default TRY
+                'validity_date': date.today().isoformat(),
+                'date_order': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                'pricelist_id': settings.ODOO_PRICELIST_ID,
                 'order_line': [
                     (0, 0, {
-                        'product_id': prod_info["id"],
+                        'product_id': product_id,
                         'product_uom_qty': 1.0,
-                        'price_unit': prod_info["price"],
-                        'name': f"{prod_info['name']} (RECOrion Otonom AI Kiralama)"
+                        'price_unit': float(price),
+                        'name': description,
                     })
                 ]
             }
-
-            order_id = models.execute_kw(
-                cfg['db'], uid, cfg['password'],
-                'sale.order', 'create',
-                [order_data]
-            )
-
-            # Sipariş numarasını oku (örn: S00035)
-            orders = models.execute_kw(
-                cfg['db'], uid, cfg['password'],
-                'sale.order', 'read',
-                [[order_id]],
-                {'fields': ['name', 'state', 'amount_total']}
-            )
+            order_id = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'create', [order_data])
+            orders = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'read', [[order_id]],
+                                       {'fields': ['name', 'state', 'amount_total']})
             order_name = orders[0].get('name', f"SO-{order_id}") if orders else f"SO-{order_id}"
-            amount_total = orders[0].get('amount_total', prod_info['price']) if orders else prod_info['price']
-
-            logger.info(f"Odoo sale.order başarıyla oluşturuldu: ID={order_id}, Ref={order_name}, Toplam={amount_total} TL")
-
-            return {
-                "success": True,
-                "order_id": order_id,
-                "order_name": order_name,
-                "partner_id": partner_id,
-                "amount_total": amount_total
-            }
-
+            logger.info(f"Odoo sale.order oluşturuldu: ID={order_id}, Ref={order_name}")
+            return {"success": True, "order_id": order_id, "order_name": order_name, "partner_id": partner_id}
         except Exception as e:
             logger.error(f"Odoo sale.order oluşturulurken hata: {e}")
             return {"success": False, "error": str(e)}
+
+    @classmethod
+    def cancel_sale_order(cls, order_id: int) -> bool:
+        """Reddedilen başvurunun Odoo siparişini iptal eder (action_cancel)."""
+        uid, models, cfg = cls._get_connection()
+        if not uid or not models:
+            return False
+        try:
+            models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'action_cancel', [[order_id]])
+            logger.info(f"Odoo siparişi iptal edildi: Order ID={order_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"Odoo sipariş iptali (action_cancel) uyarısı: {e}")
+            return False
 
     @classmethod
     def confirm_sale_order(cls, order_id: int) -> bool:
