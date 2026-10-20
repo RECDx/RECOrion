@@ -55,6 +55,7 @@ import ThemeToggle from '../ui/ThemeToggle';
 import { notify, toast } from '../ui/feedback';
 import CreditsPanel from './ai/CreditsPanel';
 import BrainPanel from './ai/BrainPanel';
+import CatalogImportModal from './catalog/CatalogImportModal';
 import { Coins, Brain } from 'lucide-react';
 
 export default function CompanyAdminConsole({
@@ -74,6 +75,7 @@ export default function CompanyAdminConsole({
   };
 
   const [activeTab, setActiveTab] = useState('DEPARTMENTS');
+  const [catalogImportOpen, setCatalogImportOpen] = useState(false);
   const [tenantId, setTenantId] = useState(resolveInitialTenantId);
   const [tenant, setTenant] = useState(() => {
     const initId = resolveInitialTenantId();
@@ -3055,6 +3057,20 @@ export default function CompanyAdminConsole({
                   </button>
 
                   <button
+                    onClick={() => setCatalogImportOpen(true)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      background: 'rgb(var(--rgb-ov) / 0.05)', border: '1px solid var(--border-highlight)',
+                      color: 'var(--text-main)', padding: '8px 14px', borderRadius: '8px',
+                      fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer'
+                    }}
+                    title="Sektörünüze uygun RECOrion departmanlarını ekleyin"
+                  >
+                    <Building2 size={14} />
+                    <span>Katalogdan Ekle</span>
+                  </button>
+
+                  <button
                     onClick={handleOpenCreateDept}
                     style={{
                       display: 'flex',
@@ -5267,6 +5283,8 @@ export default function CompanyAdminConsole({
           )}
 
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
+
+          <CatalogImportModal tenantId={tenantId} open={catalogImportOpen} onClose={() => setCatalogImportOpen(false)} onImported={loadDepartments} />
 
           {activeTab === 'MANIFESTO' && (
             <div style={{ padding: '4px 0 30px 0', maxWidth: '1100px', margin: '0 auto' }}>

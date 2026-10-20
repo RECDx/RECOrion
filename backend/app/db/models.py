@@ -112,7 +112,28 @@ class Plan(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class CatalogDepartment(Base):
+    """Platform departman kataloğu: genel (GENERAL) veya sektöre özel (SECTOR). Tüm müşterilere açık genel bilgi."""
+    __tablename__ = "catalog_departments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(64), unique=True, nullable=False)
+    name = Column(String(128), nullable=False)
+    description = Column(Text)
+    scope = Column(String(16), nullable=False, default="GENERAL")
+    sector_code = Column(String(32), ForeignKey("sectors.code", ondelete="CASCADE"), nullable=True)
+    profession_codes = Column(JSONB, nullable=False, default=list)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class JobTitle(Base):
+    """
+    Unvan. tenant_id boşsa platform kataloğu (Platform Unvan Bilgisi, tüm müşterilere açık);
+    doluysa şirket unvanı (katalogdan alındıysa source_title_id).
+    """
     __tablename__ = "job_titles"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -124,15 +145,26 @@ class JobTitle(Base):
     description = Column(Text)
     base_role_prompt = Column(Text, nullable=False)
     required_skills = Column(JSONB, default=list)
-    recommended_model_code = Column(String(128), default="glm-5.3")
+    recommended_model_code = Column(String(128))
     autonomy_level = Column(String(8), default="L1")
     ai_review_status = Column(String(32), default="COMPANY_LOCAL")
     ai_review_feedback = Column(Text)
     is_active = Column(Boolean, default=True)
+    catalog_department_id = Column(UUID(as_uuid=True), ForeignKey("catalog_departments.id", ondelete="SET NULL"))
+    scope = Column(String(16))  # GENERAL, SECTOR (platform) veya COMPANY
+    sector_code = Column(String(32))
+    profession_codes = Column(JSONB, default=list)
+    seniority = Column(String(16))  # JUNIOR, MID, SENIOR, LEAD, MANAGER
+    responsibilities = Column(JSONB, default=list)
+    kpis = Column(JSONB, default=list)
+    source = Column(String(16))  # CATALOG, ADMIN, COMPANY
+    source_title_id = Column(UUID(as_uuid=True), ForeignKey("job_titles.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tenant = relationship("Tenant", foreign_keys=[tenant_id])
     department = relationship("Department", foreign_keys=[department_id])
+    catalog_department = relationship("CatalogDepartment", foreign_keys=[catalog_department_id])
 
 
 class SystemPermission(Base):
@@ -170,6 +202,7 @@ class Department(Base):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(128), nullable=False)
     description = Column(Text)
+    catalog_department_id = Column(UUID(as_uuid=True), ForeignKey("catalog_departments.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

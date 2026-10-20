@@ -327,6 +327,20 @@ export const api = {
   updateCompanyUser: (tenantId, userId, data) => request(`/company/${tenantId}/users/${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCompanyUser: (tenantId, userId) => request(`/company/${tenantId}/users/${userId}`, { method: 'DELETE' }),
 
+  // Platform departman ve unvan kataloğu (Adım 5)
+  getCatalogSummary: () => request('/catalog/summary'),
+  getCatalogDepartments: (params = {}) => request(`/catalog/departments?${new URLSearchParams(params).toString()}`),
+  getCatalogTitles: (params = {}) => request(`/catalog/titles?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null)).toString()}`),
+  getCatalogTitle: (id) => request(`/catalog/titles/${id}`),
+  createCatalogDepartment: (data) => request('/catalog/departments', { method: 'POST', body: JSON.stringify(data) }),
+  updateCatalogDepartment: (id, data) => request(`/catalog/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCatalogDepartment: (id) => request(`/catalog/departments/${id}`, { method: 'DELETE' }),
+  createCatalogTitle: (data) => request('/catalog/titles', { method: 'POST', body: JSON.stringify(data) }),
+  updateCatalogTitle: (id, data) => request(`/catalog/titles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCatalogTitle: (id) => request(`/catalog/titles/${id}`, { method: 'DELETE' }),
+  getCompanyCatalogRecommended: (tenantId) => request(`/company/${tenantId}/catalog/recommended`),
+  importCatalogDepartments: (tenantId, ids) => request(`/company/${tenantId}/departments/from-catalog`, { method: 'POST', body: JSON.stringify({ catalog_department_ids: ids }) }),
+
   // Kredi ve yapay zeka kullanımı (Adım 4)
   getCompanyCredits: (tenantId) => request(`/company/${tenantId}/credits`),
   topupCredits: (tenantId, data) => request(`/tenants/${tenantId}/credits/topup`, { method: 'POST', body: JSON.stringify(data) }),

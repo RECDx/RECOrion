@@ -122,6 +122,18 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("DELETE", f"{P}/system/schedules/{{sched_id}}"): SUPER_ADMIN,
     ("POST", f"{P}/system/schedules/{{sched_id}}/trigger"): SUPER_ADMIN,
 
+    # Platform departman ve unvan kataloğu (Platform Unvan Bilgisi: herkese açık genel bilgi)
+    ("GET", f"{P}/catalog/summary"): AUTH,
+    ("GET", f"{P}/catalog/departments"): AUTH,
+    ("GET", f"{P}/catalog/titles"): AUTH,
+    ("GET", f"{P}/catalog/titles/{{title_id}}"): AUTH,
+    ("POST", f"{P}/catalog/departments"): SUPER_ADMIN,
+    ("PUT", f"{P}/catalog/departments/{{department_id}}"): SUPER_ADMIN,
+    ("DELETE", f"{P}/catalog/departments/{{department_id}}"): SUPER_ADMIN,
+    ("POST", f"{P}/catalog/titles"): SUPER_ADMIN,
+    ("PUT", f"{P}/catalog/titles/{{title_id}}"): SUPER_ADMIN,
+    ("DELETE", f"{P}/catalog/titles/{{title_id}}"): SUPER_ADMIN,
+
     ("GET", f"{P}/actors/job-titles"): AUTH,
     ("GET", f"{P}/actors/job-titles/{{title_id}}"): AUTH,
     ("POST", f"{P}/actors/job-titles/admin"): SUPER_ADMIN,
@@ -161,6 +173,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
 
     # --- Müşteri Yönetim Merkezi (yönetim verisi: süper admin de erişebilir) ---
     ("GET", f"{C}/departments"): TENANT("tenant:view"),
+    ("GET", f"{C}/catalog/recommended"): TENANT("tenant:view"),
+    ("POST", f"{C}/departments/from-catalog"): TENANT("tenant:manage"),
     ("POST", f"{C}/departments"): TENANT("tenant:manage"),
     ("PUT", f"{C}/departments/{{department_id}}"): TENANT("tenant:manage"),
     ("DELETE", f"{C}/departments/{{department_id}}"): TENANT("tenant:manage"),

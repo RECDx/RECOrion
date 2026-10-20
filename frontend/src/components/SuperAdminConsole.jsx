@@ -62,6 +62,7 @@ import { api } from '../api';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
 import OdooProductPicker from './OdooProductPicker';
+import CatalogAdmin from './catalog/CatalogAdmin';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
 
 const TAB_SLUG_MAP = {
@@ -70,6 +71,7 @@ const TAB_SLUG_MAP = {
   TENANTS: 'tenants',
   SECTORS: 'sectors',
   PROFESSIONS: 'professions',
+  CATALOG: 'catalog',
   PERMISSIONS: 'permissions',
   ROLES: 'roles',
   PLANS: 'plans',
@@ -86,6 +88,7 @@ const SLUG_TAB_MAP = {
   'tenants': 'TENANTS',
   'sectors': 'SECTORS',
   'professions': 'PROFESSIONS',
+  'catalog': 'CATALOG',
   'permissions': 'PERMISSIONS',
   'roles': 'ROLES',
   'plans': 'PLANS',
@@ -2379,6 +2382,18 @@ export default function SuperAdminConsole({
             )}
           </button>
 
+          {/* DEPARTMAN & UNVAN KATALOĞU */}
+          <button
+            onClick={() => { switchTab('CATALOG'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'CATALOG' ? 'active' : ''}`}
+            title="Departman & Unvan Kataloğu"
+          >
+            <div className="super-admin-nav-item-left">
+              <Building2 style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+              {!sidebarCollapsed && <span>Departman & Unvan</span>}
+            </div>
+          </button>
+
           <div className="super-admin-nav-section-title">Ticari & Yetki</div>
 
           {/* KİRALAMA PAKETLERİ */}
@@ -2594,6 +2609,7 @@ export default function SuperAdminConsole({
               {activeTab === 'MODELS' && 'EVREN Model Kataloğu'}
               {activeTab === 'AI_MODEL_SETTINGS' && 'Genel AI Modelleri & Yapay Zeka Kullanımı'}
               {activeTab === 'AI_ASSISTANT' && 'Süper Yönetici Asistanı'}
+              {activeTab === 'CATALOG' && 'Departman & Unvan Kataloğu'}
               {activeTab === 'SECTORS' && 'Sektör Tanımları (Ticaret Bakanlığı)'}
               {activeTab === 'PROFESSIONS' && 'Meslek Grubu Tanımları (Ticaret Bakanlığı)'}
             </span>
@@ -4813,6 +4829,8 @@ export default function SuperAdminConsole({
           )}
 
           {activeTab === 'AI_ASSISTANT' && <PlatformAssistantPanel />}
+
+          {activeTab === 'CATALOG' && <CatalogAdmin />}
 
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
           {activeTab === 'MODELS' && (

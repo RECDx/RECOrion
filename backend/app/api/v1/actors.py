@@ -20,7 +20,7 @@ class JobTitleResponse(BaseModel):
     description: Optional[str] = None
     base_role_prompt: str
     required_skills: List[str]
-    recommended_model_code: str
+    recommended_model_code: Optional[str] = None
     autonomy_level: str
     is_active: bool
 
@@ -63,7 +63,7 @@ class CustomJobTitleCreate(BaseModel):
     description: Optional[str] = None
     base_role_prompt: str
     required_skills: List[str] = []
-    recommended_model_code: str = "glm-5.3"
+    recommended_model_code: Optional[str] = None
     autonomy_level: str = "L1"
 
 
@@ -99,7 +99,7 @@ class JobTitleCreateAdmin(BaseModel):
     description: Optional[str] = None
     base_role_prompt: Optional[str] = None
     required_skills: List[str] = []
-    recommended_model_code: str = "glm-5.3"
+    recommended_model_code: Optional[str] = None
     autonomy_level: str = "L1"
 
 class JobTitleUpdate(BaseModel):
@@ -108,7 +108,7 @@ class JobTitleUpdate(BaseModel):
     description: Optional[str] = None
     base_role_prompt: str
     required_skills: List[str] = []
-    recommended_model_code: str = "glm-5.3"
+    recommended_model_code: Optional[str] = None
     autonomy_level: str = "L1"
 
 @router.post("/job-titles/admin", response_model=JobTitleResponse)

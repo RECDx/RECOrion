@@ -6,6 +6,7 @@ RECOrion ilk açılış hazırlığı (her başlangıçta çalışır, idempoten
 2. RECORION_SUPERADMIN_EMAILS içindeki süper adminler yoksa RECDx ana şirketine
    eklenir. İlk şifre RECORION_SUPERADMIN_INITIAL_PASSWORD'dan okunur; şifre
    repoda tutulmaz. Mevcut kullanıcılara dokunulmaz.
+3. Platform departman/unvan kataloğundaki eksik kayıtlar app/seed/catalog/*.json'dan eklenir.
 
 Kullanım: python -m app.bootstrap
 """
@@ -80,12 +81,25 @@ async def ensure_super_admins() -> None:
         logger.info("Süper admin oluşturuldu: %s (ilk girişte şifreyi değiştirin)", ", ".join(missing))
 
 
+async def ensure_catalog() -> None:
+    from app.services.catalog_seed import load_catalog
+
+    async with AsyncSessionLocal() as db:
+        added = await load_catalog(db)
+    if added["departments"] or added["titles"]:
+        logger.info("Platform kataloğu yüklendi: %s departman, %s unvan", added["departments"], added["titles"])
+
+
 async def main() -> None:
     try:
         await ensure_qdrant_collection()
     except Exception as exc:  # Qdrant geçici olarak erişilemezse API yine de açılsın
         logger.warning("Qdrant koleksiyonu kontrol edilemedi: %s", exc)
     await ensure_super_admins()
+    try:
+        await ensure_catalog()
+    except Exception as exc:  # katalog yüklenemese de API açılsın; hata loglanır
+        logger.error("Platform kataloğu yüklenemedi: %s", exc)
 
 
 if __name__ == "__main__":

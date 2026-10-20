@@ -179,7 +179,7 @@ class CompanyJobTitleIn(BaseModel):
     description: Optional[str] = Field(None, description="Ünvan Açıklaması")
     base_role_prompt: str = Field(..., description="Sistem Rol Promptu")
     required_skills: List[str] = Field(default_factory=list, description="Gerekli Yetenekler")
-    recommended_model_code: str = Field("glm-5.3", description="Önerilen LLM Modeli")
+    recommended_model_code: Optional[str] = Field(None, description="Önerilen LLM Modeli")
     autonomy_level: str = Field("L1", description="Otonomi Seviyesi (L1, L2, L3)")
     source_template_id: Optional[uuid.UUID] = Field(None, description="Seçilen Sistem Şablonu ID'si")
 
@@ -195,7 +195,7 @@ class CompanyJobTitleOut(BaseModel):
     description: Optional[str] = None
     base_role_prompt: str
     required_skills: List[str] = []
-    recommended_model_code: str = "glm-5.3"
+    recommended_model_code: Optional[str] = None
     autonomy_level: str = "L1"
     ai_review_status: Optional[str] = "COMPANY_LOCAL"
     ai_review_feedback: Optional[str] = None
@@ -215,7 +215,7 @@ class SystemJobTitleTemplateOut(BaseModel):
     description: Optional[str] = None
     base_role_prompt: str
     required_skills: List[str] = []
-    recommended_model_code: str = "glm-5.3"
+    recommended_model_code: Optional[str] = None
     autonomy_level: str = "L1"
     is_nace_recommended: bool = False
     is_sector_recommended: bool = False
