@@ -16,6 +16,7 @@ import {
   Phone, 
   CreditCard,
   ChevronRight,
+  ChevronDown,
   ChevronLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -47,9 +48,6 @@ import {
   HelpCircle,
   Bell,
   Save,
-  GripVertical,
-  ArrowUp,
-  ArrowDown,
   Image as ImageIcon,
   PauseCircle,
   PlayCircle,
@@ -63,6 +61,8 @@ import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
 import OdooProductPicker from './OdooProductPicker';
 import CatalogAdmin from './catalog/CatalogAdmin';
+import EmailTemplateBuilder from './email/EmailTemplateBuilder';
+import { compileBlocksToHtml, htmlToBlocks } from './email/emailBlocks';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
 
 const TAB_SLUG_MAP = {
@@ -109,187 +109,6 @@ function getTabFromHash() {
   return 'DASHBOARD';
 }
 
-const EMAIL_PRESET_BLOCKS = [
-  {
-    type: 'HEADER',
-    label: 'Kurumsal Başlık & Logo',
-    subtitle: 'Yapay Zeka Destekli Yeni Nesil ERP Platformu',
-    logoUrl: '',
-    bgColor: '#1e1b4b',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    fontSize: '26px',
-    textColor: '#ffffff',
-    renderHtml: (b) => {
-      const bg = b.bgColor ? b.bgColor : 'linear-gradient(135deg, #1e1b4b 0%, #31104b 50%, #0f172a 100%)';
-      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
-      const fSize = b.fontSize || '26px';
-      const color = b.textColor || '#ffffff';
-      return `<div style="background: ${bg}; padding: 32px 25px; border-radius: 12px 12px 0 0; text-align: center; border-bottom: 2px solid #7134e2; font-family: ${font};">
-  ${b.logoUrl ? `<div style="margin-bottom: 12px;"><img src="${b.logoUrl}" alt="Kurumsal Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" /></div>` : `<div style="font-size: ${fSize}; font-weight: 900; color: ${color}; letter-spacing: 0.5px;">🪐 RECOrion</div>`}
-  <div style="font-size: 13px; color: #a78bfa; margin-top: 5px; font-weight: 600;">${b.subtitle || 'Yapay Zeka Destekli Kurumsal İşletim Sistemi'}</div>
-</div>`;
-    }
-  },
-  {
-    type: 'IMAGE',
-    label: 'Özel Görsel / Logo / Banner',
-    imageUrl: '',
-    caption: '',
-    renderHtml: (b) => b.imageUrl ? `<div style="padding: 15px 25px; background: #0b0f19; text-align: center;">
-  <img src="${b.imageUrl}" alt="${b.caption || 'Görsel'}" style="max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); object-fit: contain;" />
-  ${b.caption ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${b.caption}</div>` : ''}
-</div>` : ''
-  },
-  {
-    type: 'GREETING',
-    label: 'Karşılama Metni',
-    text: 'Sayın <b>{{company_name}}</b> Yetkilisi, Sayın <b>{{contact_name}}</b>,',
-    bgColor: '#0b0f19',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    fontSize: '15px',
-    textColor: '#f1f5f9',
-    renderHtml: (b) => {
-      const bg = b.bgColor || '#0b0f19';
-      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
-      const fSize = b.fontSize || '15px';
-      const color = b.textColor || '#f1f5f9';
-      return `<div style="padding: 22px 25px 12px 25px; background: ${bg}; color: ${color}; font-size: ${fSize}; font-family: ${font}; line-height: 1.6;">
-  <p style="margin: 0;">${b.text || 'Sayın <b>{{company_name}}</b> Yetkilisi,'}</p>
-</div>`;
-    }
-  },
-  {
-    type: 'CONTENT',
-    label: 'Açıklama / Duyuru Paragrafı (Body)',
-    text: 'RECOrion kurumsal aboneliğiniz başarıyla aktif edilmiştir. Kurumunuza özel olarak hazırlanan yapay zeka ajanları ve şirket çalışma ortamınız hazır durumdadır.',
-    bgColor: '#0b0f19',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    fontSize: '14px',
-    textColor: '#cbd5e1',
-    imageUrl: '',
-    renderHtml: (b) => {
-      const bg = b.bgColor || '#0b0f19';
-      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
-      const fSize = b.fontSize || '14px';
-      const color = b.textColor || '#cbd5e1';
-      const imgHtml = b.imageUrl ? `<div style="text-align: center; margin-top: 12px;"><img src="${b.imageUrl}" alt="Body Görseli" style="max-width: 100%; max-height: 220px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); object-fit: contain;" /></div>` : '';
-      return `<div style="padding: 10px 25px 15px 25px; background: ${bg}; color: ${color}; font-size: ${fSize}; font-family: ${font}; line-height: 1.7;">
-  <p style="margin: 0;">${b.text || ''}</p>
-  ${imgHtml}
-</div>`;
-    }
-  },
-  {
-    type: 'PACKAGE_INFO',
-    label: 'Paket & Süre Özeti',
-    planName: '{{plan_name}}',
-    expiryDate: '{{package_expiry_date}}',
-    daysRemaining: '{{days_remaining}}',
-    renderHtml: (b) => `<div style="padding: 15px 25px; background: #0b0f19;">
-  <div style="background: rgba(113, 52, 226, 0.12); border: 1px solid rgba(113, 52, 226, 0.35); border-radius: 10px; padding: 18px 20px;">
-    <div style="font-size: 12px; font-weight: 800; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">📦 Kurumsal Abonelik Özeti</div>
-    <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #e2e8f0;">
-      <tr>
-        <td style="padding: 5px 0; color: #94a3b8;">Tanımlanan Paket:</td>
-        <td style="padding: 5px 0; text-align: right; font-weight: 800; color: #38bdf8;">${b.planName || '{{plan_name}}'}</td>
-      </tr>
-      <tr>
-        <td style="padding: 5px 0; color: #94a3b8;">Paket Bitiş Tarihi:</td>
-        <td style="padding: 5px 0; text-align: right; font-weight: 700; color: #34d399;">${b.expiryDate || '{{package_expiry_date}}'}</td>
-      </tr>
-      <tr>
-        <td style="padding: 5px 0; color: #94a3b8;">Kalan Kullanım Süresi:</td>
-        <td style="padding: 5px 0; text-align: right; font-weight: 700; color: #fbbf24;">${b.daysRemaining || '{{days_remaining}}'} Gün</td>
-      </tr>
-    </table>
-  </div>
-</div>`
-  },
-  {
-    type: 'CREDENTIALS',
-    label: 'Yönetici Giriş Bilgileri Kartı',
-    loginEmail: '{{login_email}}',
-    passwordText: '{{password_instruction}}',
-    renderHtml: (b) => `<div style="padding: 15px 25px; background: #0b0f19;">
-  <div style="background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: 10px; padding: 18px 20px;">
-    <div style="font-size: 12px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">🔐 Yönetici Giriş Bilgileri</div>
-    <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #e2e8f0;">
-      <tr>
-        <td style="padding: 5px 0; color: #94a3b8;">Kullanıcı E-Posta:</td>
-        <td style="padding: 5px 0; text-align: right; font-family: monospace; font-weight: 700; color: #ffffff;">${b.loginEmail || '{{login_email}}'}</td>
-      </tr>
-      <tr>
-        <td style="padding: 5px 0; color: #94a3b8;">Şifre:</td>
-        <td style="padding: 5px 0; text-align: right; font-family: monospace; font-weight: 700; color: #fbbf24;">${b.passwordText || '{{password_instruction}}'}</td>
-      </tr>
-    </table>
-  </div>
-</div>`
-  },
-  {
-    type: 'BUTTON',
-    label: 'Aksiyon Butonu (CTA)',
-    buttonText: 'Yönetim Paneline Giriş Yap →',
-    buttonUrl: '{{login_url}}',
-    renderHtml: (b) => `<div style="padding: 20px 25px; background: #0b0f19; text-align: center;">
-  <a href="${b.buttonUrl || '{{login_url}}'}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #7134e2 0%, #146ceb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 13px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(113, 52, 226, 0.4);">
-    ${b.buttonText || 'Panele Giriş Yap →'}
-  </a>
-</div>`
-  },
-  {
-    type: 'DIVIDER',
-    label: 'Ayırıcı Çizgi',
-    renderHtml: () => `<div style="padding: 10px 25px; background: #0b0f19;">
-  <hr style="border: none; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); margin: 0;" />
-</div>`
-  },
-  {
-    type: 'FOOTER',
-    label: 'Kurumsal Alt Bilgi & İmza',
-    footerText: 'Bu e-posta RECDx Bilişim Teknolojileri ve Yapay Zeka A.Ş. tarafından otomatik olarak iletilmiştir. Destek için info@recdx.com adresiyle iletişime geçebilirsiniz.',
-    bgColor: '#060911',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    fontSize: '11px',
-    textColor: '#64748b',
-    imageUrl: '',
-    renderHtml: (b) => {
-      const bg = b.bgColor || '#060911';
-      const font = b.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
-      const fSize = b.fontSize || '11px';
-      const color = b.textColor || '#64748b';
-      const imgHtml = b.imageUrl ? `<div style="text-align: center; margin-bottom: 12px;"><img src="${b.imageUrl}" alt="Footer Görseli" style="max-height: 48px; max-width: 200px; object-fit: contain;" /></div>` : '';
-      return `<div style="padding: 25px; background: ${bg}; border-radius: 0 0 12px 12px; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; color: ${color}; font-size: ${fSize}; font-family: ${font}; line-height: 1.6;">
-  ${imgHtml}
-  <div style="font-weight: 700; color: #94a3b8; margin-bottom: 4px;">RECDx Bilişim Teknolojileri ve Yapay Zeka A.Ş.</div>
-  <div>${b.footerText}</div>
-  <div style="margin-top: 8px; color: #475569;">© 2026 RECOrion. Tüm Hakları Saklıdır.</div>
-</div>`;
-    }
-  }
-];
-
-function compileBlocksToHtml(blocks) {
-  const inner = blocks.map(b => {
-    const preset = EMAIL_PRESET_BLOCKS.find(p => p.type === b.type);
-    return preset ? preset.renderHtml(b) : '';
-  }).filter(Boolean).join('\n');
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RECOrion Kurumsal Bildirim</title>
-</head>
-<body style="margin: 0; padding: 30px 15px; background-color: #030712; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-  <div style="max-width: 620px; margin: 0 auto; background: #0b0f19; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.6);">
-${inner}
-  </div>
-</body>
-</html>`;
-}
-
 export default function SuperAdminConsole({ 
   currentUser, 
   onLogout, 
@@ -300,6 +119,15 @@ export default function SuperAdminConsole({
 }) {
   // Sol Menü Daraltma / Genişletme State'i (Madde 4)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Sol menü grupları açılıp kapanabilir; tercih bu tarayıcıda hatırlanır
+  const [closedNavGroups, setClosedNavGroups] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('recorion_sa_nav_groups') || '{}'); } catch { return {}; }
+  });
+  const toggleNavGroup = (key) => setClosedNavGroups((prev) => {
+    const next = { ...prev, [key]: !prev[key] };
+    try { localStorage.setItem('recorion_sa_nav_groups', JSON.stringify(next)); } catch { /* depolama kapalı */ }
+    return next;
+  });
   // Tablet/telefonda sol menü açılır çekmece olarak çalışır
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isSavingTenantRef = useRef(false);
@@ -358,8 +186,6 @@ export default function SuperAdminConsole({
   // E-Posta Şablonu Drag & Drop Builder State'leri (Madde 5)
   const [templateEditorTab, setTemplateEditorTab] = useState('BUILDER'); // 'BUILDER' | 'CODE'
   const [templateCanvasBlocks, setTemplateCanvasBlocks] = useState([]);
-  const [draggedPresetType, setDraggedPresetType] = useState(null);
-  const [draggedBlockIdx, setDraggedBlockIdx] = useState(null);
 
   // Ortak Segmentli Kanban / Liste Seçici Bileşeni (Madde 2)
   const renderViewModeToggle = (mode, setMode) => (
@@ -1317,10 +1143,12 @@ export default function SuperAdminConsole({
       });
       // Kayıtlı şablon: blok yapısı saklanmışsa görsel editörde, yoksa HTML olarak açılır.
       // (Önceden varsayılan bloklar yükleniyor ve ilk düzenlemede kayıtlı HTML'in üzerine yazılıyordu.)
+      // Blok yapısı yoksa (HTML olarak kayıtlı şablon) HTML bloklara çevrilir; HTML, ilk görsel
+      // düzenlemeye kadar değişmez. Kaydedilmeden hiçbir şey değişmez.
       const savedBlocks = Array.isArray(tmpl.builder_blocks) && tmpl.builder_blocks.length ? tmpl.builder_blocks : null;
-      setTemplateCanvasBlocks(savedBlocks || []);
+      setTemplateCanvasBlocks(savedBlocks || htmlToBlocks(tmpl.html_content || ''));
       setTemplateBlocksInSync(!!savedBlocks);
-      setTemplateEditorTab(savedBlocks ? 'BUILDER' : 'CODE');
+      setTemplateEditorTab('BUILDER');
     } else {
       setEditingTemplate(null);
       const generatedHtml = compileBlocksToHtml(defaultBlocks);
@@ -1339,148 +1167,6 @@ export default function SuperAdminConsole({
     }
     setTemplateModalOpen(true);
   };
-
-  const handleAddBlockToCanvas = (type) => {
-    const preset = EMAIL_PRESET_BLOCKS.find(p => p.type === type);
-    if (!preset) return;
-    const newBlock = {
-      id: 'b_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      type: preset.type,
-      ...preset
-    };
-    const updated = [...templateCanvasBlocks, newBlock];
-    setTemplateCanvasBlocks(updated);
-    setTemplateForm(prev => ({
-      ...prev,
-      html_content: compileBlocksToHtml(updated)
-    }));
-  };
-
-  const handleRemoveBlockFromCanvas = (id) => {
-    const updated = templateCanvasBlocks.filter(b => b.id !== id);
-    setTemplateCanvasBlocks(updated);
-    setTemplateForm(prev => ({
-      ...prev,
-      html_content: compileBlocksToHtml(updated)
-    }));
-  };
-
-  const handleMoveBlock = (index, direction) => {
-    const targetIdx = index + direction;
-    if (targetIdx < 0 || targetIdx >= templateCanvasBlocks.length) return;
-    const updated = [...templateCanvasBlocks];
-    const temp = updated[index];
-    updated[index] = updated[targetIdx];
-    updated[targetIdx] = temp;
-    setTemplateCanvasBlocks(updated);
-    setTemplateForm(prev => ({
-      ...prev,
-      html_content: compileBlocksToHtml(updated)
-    }));
-  };
-
-  const handleUpdateBlockField = (id, field, value) => {
-    const updated = templateCanvasBlocks.map(b => b.id === id ? { ...b, [field]: value } : b);
-    setTemplateCanvasBlocks(updated);
-    setTemplateForm(prev => ({
-      ...prev,
-      html_content: compileBlocksToHtml(updated)
-    }));
-  };
-
-  const renderBlockStyleControls = (block) => (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 125px), 1fr))',
-      gap: 6,
-      background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))',
-      padding: '8px 10px',
-      borderRadius: 6,
-      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
-      marginTop: 6
-    }}>
-      {/* Arka Plan Rengi */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>🎨 Arka Plan Rengi</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <input
-            type="color"
-            value={block.bgColor || (block.type === 'HEADER' ? '#1e1b4b' : block.type === 'FOOTER' ? '#060911' : '#0b0f19')}
-            onChange={(e) => handleUpdateBlockField(block.id, 'bgColor', e.target.value)}
-            style={{ width: 22, height: 22, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}
-            title="Arka Plan Rengi Seç"
-          />
-          <input
-            type="text"
-            value={block.bgColor || ''}
-            onChange={(e) => handleUpdateBlockField(block.id, 'bgColor', e.target.value)}
-            placeholder={block.type === 'HEADER' ? '#1e1b4b' : block.type === 'FOOTER' ? '#060911' : '#0b0f19'}
-            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgb(var(--rgb-ov) / 0.05)', color: 'var(--nt-cbd5e1)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
-          />
-        </div>
-      </div>
-
-      {/* Yazı Rengi */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>✏️ Yazı Rengi</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <input
-            type="color"
-            value={block.textColor || (block.type === 'HEADER' ? '#ffffff' : block.type === 'FOOTER' ? '#64748b' : '#cbd5e1')}
-            onChange={(e) => handleUpdateBlockField(block.id, 'textColor', e.target.value)}
-            style={{ width: 22, height: 22, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}
-            title="Yazı Rengi Seç"
-          />
-          <input
-            type="text"
-            value={block.textColor || ''}
-            onChange={(e) => handleUpdateBlockField(block.id, 'textColor', e.target.value)}
-            placeholder={block.type === 'HEADER' ? '#ffffff' : block.type === 'FOOTER' ? '#64748b' : '#cbd5e1'}
-            style={{ fontSize: '0.65rem', padding: '2px 4px', width: '100%', fontFamily: 'monospace', background: 'rgb(var(--rgb-ov) / 0.05)', color: 'var(--nt-cbd5e1)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
-          />
-        </div>
-      </div>
-
-      {/* Yazı Fontu */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>🔤 Yazı Fontu</span>
-        <select
-          value={block.fontFamily || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"}
-          onChange={(e) => handleUpdateBlockField(block.id, 'fontFamily', e.target.value)}
-          style={{ fontSize: '0.65rem', padding: '3px 4px', background: 'var(--sf-0b0f19)', color: 'var(--nt-e2e8f0)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
-        >
-          <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI / Standart</option>
-          <option value="'Outfit', sans-serif">Outfit (Modern)</option>
-          <option value="'Inter', sans-serif">Inter (Minimal)</option>
-          <option value="Arial, Helvetica, sans-serif">Arial / Sans</option>
-          <option value="Georgia, serif">Georgia (Kurumsal Serif)</option>
-          <option value="'Courier New', monospace">Courier (Kod/Mono)</option>
-        </select>
-      </div>
-
-      {/* Font Büyüklüğü */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontWeight: 700 }}>📏 Font Büyüklüğü</span>
-        <select
-          value={block.fontSize || (block.type === 'HEADER' ? '26px' : block.type === 'FOOTER' ? '11px' : '14px')}
-          onChange={(e) => handleUpdateBlockField(block.id, 'fontSize', e.target.value)}
-          style={{ fontSize: '0.65rem', padding: '3px 4px', background: 'var(--sf-0b0f19)', color: 'var(--nt-e2e8f0)', border: '1px solid rgb(var(--rgb-ov) / 0.1)', borderRadius: 4 }}
-        >
-          <option value="11px">11px (Çok Küçük)</option>
-          <option value="12px">12px (Küçük)</option>
-          <option value="13px">13px (Kompakt)</option>
-          <option value="14px">14px (Standart)</option>
-          <option value="15px">15px (Orta)</option>
-          <option value="16px">16px (Büyük)</option>
-          <option value="18px">18px (Vurgulu)</option>
-          <option value="20px">20px (Alt Başlık)</option>
-          <option value="24px">24px (Başlık)</option>
-          <option value="26px">26px (Büyük Başlık)</option>
-          <option value="28px">28px (Manşet)</option>
-        </select>
-      </div>
-    </div>
-  );
 
   const handleTestSendFromModal = async () => {
     const toEmail = (await promptDialog({ message: `'${templateForm.name || "E-Posta"}' şablonunu test etmek için alıcı e-posta adresi giriniz:`, defaultValue: currentUser?.email || 'cuneyterdil@recdx.com' }));
@@ -2294,230 +1980,272 @@ export default function SuperAdminConsole({
 
         {/* MENÜ LİSTESİ */}
         <nav className="super-admin-nav">
-          <div className="super-admin-nav-section-title">Genel</div>
-
-          {/* DASHBOARD (Madde 7) */}
-          <button
-            onClick={() => { switchTab('DASHBOARD'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'DASHBOARD' ? 'active' : ''}`}
-            title="Dashboard (Genel Bakış)"
-          >
-            <div className="super-admin-nav-item-left">
-              <LayoutDashboard style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
-              {!sidebarCollapsed && <span>Dashboard (Genel Bakış)</span>}
-            </div>
+          <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup('GENEL')} aria-expanded={!closedNavGroups.GENEL}>
+            <span>Genel</span>
+            <ChevronDown className={`super-admin-nav-group-chevron ${closedNavGroups.GENEL ? 'closed' : ''}`} />
           </button>
+          {(sidebarCollapsed || !closedNavGroups.GENEL) && (
+            <>
 
-          <div className="super-admin-nav-section-title">Müşteriler</div>
+            {/* DASHBOARD (Madde 7) */}
+            <button
+              onClick={() => { switchTab('DASHBOARD'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'DASHBOARD' ? 'active' : ''}`}
+              title="Dashboard (Genel Bakış)"
+            >
+              <div className="super-admin-nav-item-left">
+                <LayoutDashboard style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+                {!sidebarCollapsed && <span>Dashboard (Genel Bakış)</span>}
+              </div>
+            </button>
+            </>
+          )}
 
-          {/* BAŞVURU ONAY DURUM (Madde 8) */}
-          <button
-            onClick={() => { switchTab('LEADS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'LEADS' ? 'active' : ''}`}
-            title="Başvuru Onay Durum"
-          >
-            <div className="super-admin-nav-item-left">
-              <Clock style={{ width: 17, height: 17, color: 'var(--ac-38bdf8)' }} />
-              {!sidebarCollapsed && <span>Başvuru Onay Durum</span>}
-            </div>
-            {leads.filter(l => l.status === 'PENDING').length > 0 && (
-              <span style={{ 
-                background: '#f59e0b', 
-                color: '#000', 
-                fontSize: '0.65rem', 
-                fontWeight: 800, 
-                padding: '2px 6px', 
-                borderRadius: 999,
-                boxShadow: '0 0 8px rgba(245, 158, 11, 0.5)'
-              }}>
-                {leads.filter(l => l.status === 'PENDING').length}
-              </span>
-            )}
+          <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup('MUSTERILER')} aria-expanded={!closedNavGroups.MUSTERILER}>
+            <span>Müşteriler</span>
+            <ChevronDown className={`super-admin-nav-group-chevron ${closedNavGroups.MUSTERILER ? 'closed' : ''}`} />
           </button>
+          {(sidebarCollapsed || !closedNavGroups.MUSTERILER) && (
+            <>
 
-          {/* KAYITLI ŞİRKETLER */}
-          <button
-            onClick={() => { switchTab('TENANTS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'TENANTS' ? 'active' : ''}`}
-            title="Kayıtlı Şirketler"
-          >
-            <div className="super-admin-nav-item-left">
-              <Building2 style={{ width: 17, height: 17, color: 'var(--ac-818cf8)' }} />
-              {!sidebarCollapsed && <span>Kayıtlı Şirketler</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{tenants.length}</span>
-            )}
+            {/* BAŞVURU ONAY DURUM (Madde 8) */}
+            <button
+              onClick={() => { switchTab('LEADS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'LEADS' ? 'active' : ''}`}
+              title="Başvuru Onay Durum"
+            >
+              <div className="super-admin-nav-item-left">
+                <Clock style={{ width: 17, height: 17, color: 'var(--ac-38bdf8)' }} />
+                {!sidebarCollapsed && <span>Başvuru Onay Durum</span>}
+              </div>
+              {leads.filter(l => l.status === 'PENDING').length > 0 && (
+                <span style={{ 
+                  background: '#f59e0b', 
+                  color: '#000', 
+                  fontSize: '0.65rem', 
+                  fontWeight: 800, 
+                  padding: '2px 6px', 
+                  borderRadius: 999,
+                  boxShadow: '0 0 8px rgba(245, 158, 11, 0.5)'
+                }}>
+                  {leads.filter(l => l.status === 'PENDING').length}
+                </span>
+              )}
+            </button>
+
+            {/* KAYITLI ŞİRKETLER */}
+            <button
+              onClick={() => { switchTab('TENANTS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'TENANTS' ? 'active' : ''}`}
+              title="Kayıtlı Şirketler"
+            >
+              <div className="super-admin-nav-item-left">
+                <Building2 style={{ width: 17, height: 17, color: 'var(--ac-818cf8)' }} />
+                {!sidebarCollapsed && <span>Kayıtlı Şirketler</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{tenants.length}</span>
+              )}
+            </button>
+            </>
+          )}
+
+          <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup('KATALOG')} aria-expanded={!closedNavGroups.KATALOG}>
+            <span>Katalog</span>
+            <ChevronDown className={`super-admin-nav-group-chevron ${closedNavGroups.KATALOG ? 'closed' : ''}`} />
           </button>
+          {(sidebarCollapsed || !closedNavGroups.KATALOG) && (
+            <>
 
-          <div className="super-admin-nav-section-title">Katalog</div>
+            {/* SEKTÖR TANIMLARI (TİCARET BAKANLIĞI) */}
+            <button
+              onClick={() => { switchTab('SECTORS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'SECTORS' ? 'active' : ''}`}
+              title="Sektör Tanımları (Ticaret Bakanlığı)"
+            >
+              <div className="super-admin-nav-item-left">
+                <Layers style={{ width: 17, height: 17, color: '#10b981' }} />
+                {!sidebarCollapsed && <span>Sektör Tanımları</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{sectors.length}</span>
+              )}
+            </button>
 
-          {/* SEKTÖR TANIMLARI (TİCARET BAKANLIĞI) */}
-          <button
-            onClick={() => { switchTab('SECTORS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'SECTORS' ? 'active' : ''}`}
-            title="Sektör Tanımları (Ticaret Bakanlığı)"
-          >
-            <div className="super-admin-nav-item-left">
-              <Layers style={{ width: 17, height: 17, color: '#10b981' }} />
-              {!sidebarCollapsed && <span>Sektör Tanımları</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{sectors.length}</span>
-            )}
+            {/* MESLEK TANIMLARI (TİCARET BAKANLIĞI) */}
+            <button
+              onClick={() => { switchTab('PROFESSIONS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'PROFESSIONS' ? 'active' : ''}`}
+              title="Meslek Grubu Tanımları (Ticaret Bakanlığı)"
+            >
+              <div className="super-admin-nav-item-left">
+                <Briefcase style={{ width: 17, height: 17, color: 'var(--ac-38bdf8)' }} />
+                {!sidebarCollapsed && <span>Meslek Tanımları</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{professions.length}</span>
+              )}
+            </button>
+
+            {/* DEPARTMAN & UNVAN KATALOĞU */}
+            <button
+              onClick={() => { switchTab('CATALOG'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'CATALOG' ? 'active' : ''}`}
+              title="Departman & Unvan Kataloğu"
+            >
+              <div className="super-admin-nav-item-left">
+                <Building2 style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+                {!sidebarCollapsed && <span>Departman & Unvan</span>}
+              </div>
+            </button>
+            </>
+          )}
+
+          <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup('TICARIYETKI')} aria-expanded={!closedNavGroups.TICARIYETKI}>
+            <span>Ticari & Yetki</span>
+            <ChevronDown className={`super-admin-nav-group-chevron ${closedNavGroups.TICARIYETKI ? 'closed' : ''}`} />
           </button>
+          {(sidebarCollapsed || !closedNavGroups.TICARIYETKI) && (
+            <>
 
-          {/* MESLEK TANIMLARI (TİCARET BAKANLIĞI) */}
-          <button
-            onClick={() => { switchTab('PROFESSIONS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'PROFESSIONS' ? 'active' : ''}`}
-            title="Meslek Grubu Tanımları (Ticaret Bakanlığı)"
-          >
-            <div className="super-admin-nav-item-left">
-              <Briefcase style={{ width: 17, height: 17, color: 'var(--ac-38bdf8)' }} />
-              {!sidebarCollapsed && <span>Meslek Tanımları</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{professions.length}</span>
-            )}
+            {/* KİRALAMA PAKETLERİ */}
+            <button
+              onClick={() => { switchTab('PLANS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'PLANS' ? 'active' : ''}`}
+              title="Kiralama Paketleri"
+            >
+              <div className="super-admin-nav-item-left">
+                <Package style={{ width: 17, height: 17, color: 'var(--ac-34d399)' }} />
+                {!sidebarCollapsed && <span>Kiralama Paketleri</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{plans.length}</span>
+              )}
+            </button>
+
+            {/* İZİN KATALOĞU */}
+            <button
+              onClick={() => { switchTab('PERMISSIONS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'PERMISSIONS' ? 'active' : ''}`}
+              title="İzin Kataloğu (RBAC)"
+            >
+              <div className="super-admin-nav-item-left">
+                <KeyRound style={{ width: 17, height: 17, color: 'var(--ac-fbbf24)' }} />
+                {!sidebarCollapsed && <span>İzin Kataloğu (RBAC)</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{permissions.length}</span>
+              )}
+            </button>
+
+            {/* YETKİ ROLLERİ (Madde 1) */}
+            <button
+              onClick={() => { switchTab('ROLES'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'ROLES' ? 'active' : ''}`}
+              title="Yetki Rolleri (RBAC)"
+            >
+              <div className="super-admin-nav-item-left">
+                <ShieldCheck style={{ width: 17, height: 17, color: '#10b981' }} />
+                {!sidebarCollapsed && <span>Yetki Rolleri</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{roles.length}</span>
+              )}
+            </button>
+            </>
+          )}
+
+          <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup('ILETISIMOTOMASYON')} aria-expanded={!closedNavGroups.ILETISIMOTOMASYON}>
+            <span>İletişim & Otomasyon</span>
+            <ChevronDown className={`super-admin-nav-group-chevron ${closedNavGroups.ILETISIMOTOMASYON ? 'closed' : ''}`} />
           </button>
+          {(sidebarCollapsed || !closedNavGroups.ILETISIMOTOMASYON) && (
+            <>
 
-          {/* DEPARTMAN & UNVAN KATALOĞU */}
-          <button
-            onClick={() => { switchTab('CATALOG'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'CATALOG' ? 'active' : ''}`}
-            title="Departman & Unvan Kataloğu"
-          >
-            <div className="super-admin-nav-item-left">
-              <Building2 style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
-              {!sidebarCollapsed && <span>Departman & Unvan</span>}
-            </div>
+            {/* E-POSTA ŞABLONLARI (Madde 1) */}
+            <button
+              onClick={() => { switchTab('EMAIL_TEMPLATES'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'EMAIL_TEMPLATES' ? 'active' : ''}`}
+              title="E-Posta Şablonları & HTML Editör"
+            >
+              <div className="super-admin-nav-item-left">
+                <Mail style={{ width: 17, height: 17, color: '#f43f5e' }} />
+                {!sidebarCollapsed && <span>E-Posta Şablonları</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{emailTemplates.length}</span>
+              )}
+            </button>
+
+            {/* ZAMANLAYICILAR (Madde 2) */}
+            <button
+              onClick={() => { switchTab('SCHEDULES'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'SCHEDULES' ? 'active' : ''}`}
+              title="Zamanlayıcılar (Schedules)"
+            >
+              <div className="super-admin-nav-item-left">
+                <Clock style={{ width: 17, height: 17, color: '#10b981' }} />
+                {!sidebarCollapsed && <span>Zamanlayıcılar (Schedules)</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{schedules.length}</span>
+              )}
+            </button>
+            </>
+          )}
+
+          <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup('YAPAYZEKA')} aria-expanded={!closedNavGroups.YAPAYZEKA}>
+            <span>Yapay Zeka</span>
+            <ChevronDown className={`super-admin-nav-group-chevron ${closedNavGroups.YAPAYZEKA ? 'closed' : ''}`} />
           </button>
+          {(sidebarCollapsed || !closedNavGroups.YAPAYZEKA) && (
+            <>
 
-          <div className="super-admin-nav-section-title">Ticari & Yetki</div>
+            {/* GENEL AI MODELİ */}
+            <button
+              onClick={() => { switchTab('AI_MODEL_SETTINGS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'AI_MODEL_SETTINGS' ? 'active' : ''}`}
+              title="Genel AI Modeli (Manifesto)"
+            >
+              <div className="super-admin-nav-item-left">
+                <Zap style={{ width: 17, height: 17, color: '#f43f5e' }} />
+                {!sidebarCollapsed && <span>Genel AI Modelleri</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ background: 'rgba(244,63,94,0.2)', color: '#f43f5e', fontSize: '0.6rem', padding: '2px 5px', borderRadius: 4, fontWeight: 700 }}>
+                  ÇEKİRDEK
+                </span>
+              )}
+            </button>
 
-          {/* KİRALAMA PAKETLERİ */}
-          <button
-            onClick={() => { switchTab('PLANS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'PLANS' ? 'active' : ''}`}
-            title="Kiralama Paketleri"
-          >
-            <div className="super-admin-nav-item-left">
-              <Package style={{ width: 17, height: 17, color: 'var(--ac-34d399)' }} />
-              {!sidebarCollapsed && <span>Kiralama Paketleri</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{plans.length}</span>
-            )}
-          </button>
+            {/* SÜPER YÖNETİCİ ASİSTANI */}
+            <button
+              onClick={() => { switchTab('AI_ASSISTANT'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'AI_ASSISTANT' ? 'active' : ''}`}
+              title="Süper Yönetici Asistanı"
+            >
+              <div className="super-admin-nav-item-left">
+                <Bot style={{ width: 17, height: 17, color: '#38bdf8' }} />
+                {!sidebarCollapsed && <span>Yönetici Asistanı</span>}
+              </div>
+            </button>
 
-          {/* İZİN KATALOĞU */}
-          <button
-            onClick={() => { switchTab('PERMISSIONS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'PERMISSIONS' ? 'active' : ''}`}
-            title="İzin Kataloğu (RBAC)"
-          >
-            <div className="super-admin-nav-item-left">
-              <KeyRound style={{ width: 17, height: 17, color: 'var(--ac-fbbf24)' }} />
-              {!sidebarCollapsed && <span>İzin Kataloğu (RBAC)</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{permissions.length}</span>
-            )}
-          </button>
-
-          {/* YETKİ ROLLERİ (Madde 1) */}
-          <button
-            onClick={() => { switchTab('ROLES'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'ROLES' ? 'active' : ''}`}
-            title="Yetki Rolleri (RBAC)"
-          >
-            <div className="super-admin-nav-item-left">
-              <ShieldCheck style={{ width: 17, height: 17, color: '#10b981' }} />
-              {!sidebarCollapsed && <span>Yetki Rolleri</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{roles.length}</span>
-            )}
-          </button>
-
-          <div className="super-admin-nav-section-title">İletişim & Otomasyon</div>
-
-          {/* E-POSTA ŞABLONLARI (Madde 1) */}
-          <button
-            onClick={() => { switchTab('EMAIL_TEMPLATES'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'EMAIL_TEMPLATES' ? 'active' : ''}`}
-            title="E-Posta Şablonları & HTML Editör"
-          >
-            <div className="super-admin-nav-item-left">
-              <Mail style={{ width: 17, height: 17, color: '#f43f5e' }} />
-              {!sidebarCollapsed && <span>E-Posta Şablonları</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{emailTemplates.length}</span>
-            )}
-          </button>
-
-          {/* ZAMANLAYICILAR (Madde 2) */}
-          <button
-            onClick={() => { switchTab('SCHEDULES'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'SCHEDULES' ? 'active' : ''}`}
-            title="Zamanlayıcılar (Schedules)"
-          >
-            <div className="super-admin-nav-item-left">
-              <Clock style={{ width: 17, height: 17, color: '#10b981' }} />
-              {!sidebarCollapsed && <span>Zamanlayıcılar (Schedules)</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{schedules.length}</span>
-            )}
-          </button>
-
-          <div className="super-admin-nav-section-title">Yapay Zeka</div>
-
-          {/* GENEL AI MODELİ */}
-          <button
-            onClick={() => { switchTab('AI_MODEL_SETTINGS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'AI_MODEL_SETTINGS' ? 'active' : ''}`}
-            title="Genel AI Modeli (Manifesto)"
-          >
-            <div className="super-admin-nav-item-left">
-              <Zap style={{ width: 17, height: 17, color: '#f43f5e' }} />
-              {!sidebarCollapsed && <span>Genel AI Modelleri</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ background: 'rgba(244,63,94,0.2)', color: '#f43f5e', fontSize: '0.6rem', padding: '2px 5px', borderRadius: 4, fontWeight: 700 }}>
-                ÇEKİRDEK
-              </span>
-            )}
-          </button>
-
-          {/* SÜPER YÖNETİCİ ASİSTANI */}
-          <button
-            onClick={() => { switchTab('AI_ASSISTANT'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'AI_ASSISTANT' ? 'active' : ''}`}
-            title="Süper Yönetici Asistanı"
-          >
-            <div className="super-admin-nav-item-left">
-              <Bot style={{ width: 17, height: 17, color: '#38bdf8' }} />
-              {!sidebarCollapsed && <span>Yönetici Asistanı</span>}
-            </div>
-          </button>
-
-          {/* EVREN MODELLERİ */}
-          <button
-            onClick={() => { switchTab('MODELS'); setSearchQuery(''); }}
-            className={`super-admin-nav-item ${activeTab === 'MODELS' ? 'active' : ''}`}
-            title="EVREN Modelleri"
-          >
-            <div className="super-admin-nav-item-left">
-              <Cpu style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
-              {!sidebarCollapsed && <span>EVREN Modelleri</span>}
-            </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{models.length}</span>
-            )}
-          </button>
+            {/* EVREN MODELLERİ */}
+            <button
+              onClick={() => { switchTab('MODELS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'MODELS' ? 'active' : ''}`}
+              title="EVREN Modelleri"
+            >
+              <div className="super-admin-nav-item-left">
+                <Cpu style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+                {!sidebarCollapsed && <span>EVREN Modelleri</span>}
+              </div>
+              {!sidebarCollapsed && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{models.length}</span>
+              )}
+            </button>
+            </>
+          )}
         </nav>
 
         {/* ALT AKSİYONLAR */}
@@ -2596,7 +2324,7 @@ export default function SuperAdminConsole({
             <Menu size={18} />
           </button>
           <div className="super-admin-header-title">
-            <span>RECDx Süper Yönetim Konsolu</span>
+            <span>Ana Kontrol Merkezi</span>
             <span style={{ color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>/</span>
             <span style={{ color: '#146ceb', fontSize: '0.825rem' }}>
               {activeTab === 'DASHBOARD' && 'Sistem Genel Bakış & Dashboard'}
@@ -7928,15 +7656,9 @@ export default function SuperAdminConsole({
                   <button
                     type="button"
                     onClick={async () => {
+                      // HTML elle düzenlendiyse görsel editör bloklarını güncel HTML'den yeniden oluştur
                       if (!templateBlocksInSync && templateForm.html_content?.trim()) {
-                        const ok = await confirmDialog({
-                          title: 'Görsel editöre geç',
-                          message: 'Bu şablonun HTML içeriği görsel editör bloklarıyla eşleşmiyor. Görsel editörde yapacağınız ilk değişiklik mevcut HTML içeriğinin yerine geçer. Devam edilsin mi?',
-                          danger: true,
-                          confirmText: 'Evet, görsel editöre geç',
-                        });
-                        if (!ok) return;
-                        setTemplateBlocksInSync(true);
+                        setTemplateCanvasBlocks(htmlToBlocks(templateForm.html_content));
                       }
                       setTemplateEditorTab('BUILDER');
                     }}
@@ -8013,7 +7735,7 @@ export default function SuperAdminConsole({
               {/* Dinamik Değişken İpuçları */}
               <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.18)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-38bdf8)' }}>Dinamik Değişkenler:</span>
-                {['company_name', 'contact_name', 'login_email', 'password_instruction', 'action_url', 'plan_name', 'package_expiry_date', 'days_remaining', 'login_url'].map((v) => (
+                {(templateForm.variables?.length ? templateForm.variables : ['company_name', 'contact_name', 'login_url']).map((v) => (
                   <button
                     type="button"
                     key={v}
@@ -8035,519 +7757,15 @@ export default function SuperAdminConsole({
 
               {/* GÖRSEL BUILDER MODU (Madde 5) */}
               {templateEditorTab === 'BUILDER' ? (
-                <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '270px 1.4fr 1.1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>
-                  {/* Kolon 1: Bileşen Blokları Paleti */}
-                  <div style={{ background: 'rgb(var(--rgb-ov) / 0.02)', border: '1px solid rgb(var(--rgb-ov) / 0.08)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--nt-94a3b8)', letterSpacing: 0.5, marginBottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span>Bileşen Blokları</span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--nt-64748b)' }}>Sürükle / Tıkla</span>
-                    </div>
-
-                    {EMAIL_PRESET_BLOCKS.map((preset) => (
-                      <div
-                        key={preset.type}
-                        draggable={true}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/plain', preset.type);
-                          setDraggedPresetType(preset.type);
-                        }}
-                        onDragEnd={() => setDraggedPresetType(null)}
-                        onClick={() => handleAddBlockToCanvas(preset.type)}
-                        style={{
-                          background: 'rgb(var(--rgb-ov) / 0.04)',
-                          border: '1px solid rgb(var(--rgb-ov) / 0.08)',
-                          borderRadius: 8,
-                          padding: '8px 10px',
-                          cursor: 'grab',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 8,
-                          transition: 'all 0.2s'
-                        }}
-                        title="Tuvale eklemek için tıklayın veya sürükleyin"
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <GripVertical style={{ width: 14, height: 14, color: 'var(--nt-64748b)' }} />
-                          <div>
-                            <div style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--nt-f1f5f9)' }}>{preset.label}</div>
-                            <div style={{ fontSize: '0.62rem', color: 'var(--nt-94a3b8)', fontFamily: 'monospace' }}>{preset.type}</div>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          style={{ width: 22, height: 22, borderRadius: 6, background: 'rgb(var(--rgb-ov) / 0.08)', border: 'none', color: 'var(--nt-cbd5e1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                        >
-                          <Plus style={{ width: 12, height: 12 }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Kolon 2: Tasarım Tuvali (Canvas) */}
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.style.borderColor = 'var(--ac-38bdf8)';
-                    }}
-                    onDragLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'rgb(var(--rgb-ov) / 0.12)';
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.currentTarget.style.borderColor = 'rgb(var(--rgb-ov) / 0.12)';
-                      const type = e.dataTransfer.getData('text/plain') || draggedPresetType;
-                      if (type) {
-                        handleAddBlockToCanvas(type);
-                      }
-                    }}
-                    style={{
-                      background: 'rgb(var(--rgb-sf-0f172a) / 0.4)',
-                      border: '2px dashed rgb(var(--rgb-ov) / 0.12)',
-                      borderRadius: 10,
-                      padding: 12,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                      overflowY: 'auto'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-a78bfa)' }}>
-                        📋 Tuval Düzeni ({templateCanvasBlocks.length} Blok)
-                      </span>
-                      <span style={{ fontSize: '0.68rem', color: 'var(--nt-64748b)' }}>
-                        Oklarla veya sürükleyerek sıralayın
-                      </span>
-                    </div>
-
-                    {templateCanvasBlocks.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>
-                        Soldaki blokları buraya sürükleyin veya tıklayarak ekleyin.
-                      </div>
-                    ) : (
-                      templateCanvasBlocks.map((block, idx) => (
-                        <div
-                          key={block.id}
-                          draggable={true}
-                          onDragStart={() => setDraggedBlockIdx(idx)}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => {
-                            if (draggedBlockIdx !== null && draggedBlockIdx !== idx) {
-                              const updated = [...templateCanvasBlocks];
-                              const [moved] = updated.splice(draggedBlockIdx, 1);
-                              updated.splice(idx, 0, moved);
-                              setTemplateCanvasBlocks(updated);
-                              setTemplateForm(prev => ({ ...prev, html_content: compileBlocksToHtml(updated) }));
-                              setDraggedBlockIdx(null);
-                            }
-                          }}
-                          style={{
-                            background: 'rgb(var(--rgb-sf-1e293b) / 0.85)',
-                            border: '1px solid rgb(var(--rgb-ov) / 0.1)',
-                            borderRadius: 8,
-                            padding: 10,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                            cursor: 'move'
-                          }}
-                        >
-                          {/* Blok Başlık Barı */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <GripVertical style={{ width: 14, height: 14, color: 'var(--nt-94a3b8)' }} />
-                              <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'rgba(113,52,226,0.25)', color: '#c4b5fd' }}>
-                                {block.type}
-                              </span>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-e2e8f0)' }}>
-                                {EMAIL_PRESET_BLOCKS.find(p => p.type === block.type)?.label || block.type}
-                              </span>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <button
-                                type="button"
-                                disabled={idx === 0}
-                                onClick={() => handleMoveBlock(idx, -1)}
-                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgb(var(--rgb-ov) / 0.06)', border: 'none', color: idx === 0 ? 'var(--nt-475569)' : 'var(--nt-cbd5e1)', cursor: idx === 0 ? 'default' : 'pointer' }}
-                                title="Yukarı Taşı"
-                              >
-                                <ArrowUp style={{ width: 12, height: 12 }} />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={idx === templateCanvasBlocks.length - 1}
-                                onClick={() => handleMoveBlock(idx, 1)}
-                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgb(var(--rgb-ov) / 0.06)', border: 'none', color: idx === templateCanvasBlocks.length - 1 ? 'var(--nt-475569)' : 'var(--nt-cbd5e1)', cursor: idx === templateCanvasBlocks.length - 1 ? 'default' : 'pointer' }}
-                                title="Aşağı Taşı"
-                              >
-                                <ArrowDown style={{ width: 12, height: 12 }} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveBlockFromCanvas(block.id)}
-                                style={{ width: 22, height: 22, borderRadius: 4, background: 'rgba(239,68,68,0.15)', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer' }}
-                                title="Bloğu Kaldır"
-                              >
-                                <Trash2 style={{ width: 12, height: 12 }} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Blok İçerik Inputları */}
-                          {block.type === 'HEADER' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <input
-                                type="text"
-                                value={block.subtitle || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'subtitle', e.target.value)}
-                                placeholder="Alt başlık / slogan..."
-                                className="super-admin-input"
-                                style={{ fontSize: '0.75rem', padding: '5px 8px' }}
-                              />
-
-                              {/* Logo Seçim Dialogu (Madde 1) */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '6px 10px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
-                                <input
-                                  type="file"
-                                  id={`logo-upload-${block.id}`}
-                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
-                                  style={{ display: 'none' }}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      if (file.size > 3 * 1024 * 1024) {
-                                        notify("Logo dosya boyutu 3MB'tan küçük olmalıdır.");
-                                        return;
-                                      }
-                                      const reader = new FileReader();
-                                      reader.onload = (ev) => {
-                                        handleUpdateBlockField(block.id, 'logoUrl', ev.target.result);
-                                      };
-                                      reader.readAsDataURL(file);
-                                    }
-                                  }}
-                                />
-                                <label
-                                  htmlFor={`logo-upload-${block.id}`}
-                                  className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
-                                  title="Dosya Seçici Penceresi: PNG, JPG, SVG logo dosyası yükleyin"
-                                >
-                                  <ImageIcon style={{ width: 13, height: 13 }} />
-                                  <span>{block.logoUrl ? '🖼️ Logoyu Değiştir (PNG, JPG)' : '📁 Logo Dosyası Seç (PNG, JPG)'}</span>
-                                </label>
-
-                                {block.logoUrl ? (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                                    <div style={{ height: 26, maxWidth: 90, background: '#ffffff', borderRadius: 4, padding: '2px 4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <img
-                                        src={block.logoUrl}
-                                        alt="Seçilen Logo"
-                                        style={{ maxHeight: 22, maxWidth: 80, objectFit: 'contain' }}
-                                      />
-                                    </div>
-                                    <span style={{ fontSize: '0.68rem', color: 'var(--ac-34d399)', fontWeight: 700 }}>✓ Logo Yüklendi</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateBlockField(block.id, 'logoUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
-                                      title="Logoyu kaldırıp varsayılan RECOrion başlığına dön"
-                                    >
-                                      Kaldır ✕
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span style={{ fontSize: '0.65rem', color: 'var(--nt-64748b)' }}>Varsayılan RECOrion logosu devrede</span>
-                                )}
-                              </div>
-                              {renderBlockStyleControls(block)}
-                            </div>
-                          )}
-                          {block.type === 'IMAGE' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '6px 10px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
-                                <input
-                                  type="file"
-                                  id={`img-upload-${block.id}`}
-                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
-                                  style={{ display: 'none' }}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      if (file.size > 4 * 1024 * 1024) {
-                                        notify("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
-                                        return;
-                                      }
-                                      const reader = new FileReader();
-                                      reader.onload = (ev) => {
-                                        handleUpdateBlockField(block.id, 'imageUrl', ev.target.result);
-                                      };
-                                      reader.readAsDataURL(file);
-                                    }
-                                  }}
-                                />
-                                <label
-                                  htmlFor={`img-upload-${block.id}`}
-                                  className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.72rem', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
-                                  title="PNG, JPG görsel seçin"
-                                >
-                                  <ImageIcon style={{ width: 13, height: 13 }} />
-                                  <span>{block.imageUrl ? '🖼️ Görseli Değiştir' : '📁 Görsel Dosyası Seç (PNG, JPG)'}</span>
-                                </label>
-
-                                {block.imageUrl && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                                    <img
-                                      src={block.imageUrl}
-                                      alt="Önizleme"
-                                      style={{ height: 26, maxWidth: 60, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
-                                    >
-                                      Kaldır ✕
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                              <input
-                                type="text"
-                                value={block.caption || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'caption', e.target.value)}
-                                placeholder="Görsel alt yazısı / açıklama..."
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                            </div>
-                          )}
-                          {block.type === 'GREETING' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              <input
-                                type="text"
-                                value={block.text || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'text', e.target.value)}
-                                placeholder="Karşılama metni..."
-                                className="super-admin-input"
-                                style={{ fontSize: '0.75rem', padding: '5px 8px' }}
-                              />
-                              {renderBlockStyleControls(block)}
-                            </div>
-                          )}
-                          {block.type === 'CONTENT' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <textarea
-                                rows="2"
-                                value={block.text || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'text', e.target.value)}
-                                placeholder="Duyuru veya açıklama paragrafı..."
-                                className="super-admin-input"
-                                style={{ fontSize: '0.75rem', padding: '5px 8px' }}
-                              />
-                              {/* Body Görsel Seçici (Madde 3) */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '5px 8px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
-                                <input
-                                  type="file"
-                                  id={`body-img-upload-${block.id}`}
-                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
-                                  style={{ display: 'none' }}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      if (file.size > 4 * 1024 * 1024) {
-                                        notify("Görsel dosya boyutu 4MB'tan küçük olmalıdır.");
-                                        return;
-                                      }
-                                      const reader = new FileReader();
-                                      reader.onload = (ev) => {
-                                        handleUpdateBlockField(block.id, 'imageUrl', ev.target.result);
-                                      };
-                                      reader.readAsDataURL(file);
-                                    }
-                                  }}
-                                />
-                                <label
-                                  htmlFor={`body-img-upload-${block.id}`}
-                                  className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
-                                  title="Body paragrafına PNG, JPG görsel ekleyin"
-                                >
-                                  <ImageIcon style={{ width: 12, height: 12 }} />
-                                  <span>{block.imageUrl ? '🖼️ Body Görselini Değiştir' : '📁 Body Görseli Ekle (PNG, JPG)'}</span>
-                                </label>
-                                {block.imageUrl && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                                    <img src={block.imageUrl} alt="Önizleme" style={{ height: 22, maxWidth: 50, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }} />
-                                    <span style={{ fontSize: '0.65rem', color: 'var(--ac-34d399)', fontWeight: 700 }}>✓ Görsel Eklendi</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
-                                      title="Görseli Kaldır"
-                                    >
-                                      Kaldır ✕
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                              {renderBlockStyleControls(block)}
-                            </div>
-                          )}
-                          {block.type === 'PACKAGE_INFO' && (
-                            <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                              <input
-                                type="text"
-                                value={block.planName || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'planName', e.target.value)}
-                                placeholder="Paket Adı"
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                              <input
-                                type="text"
-                                value={block.expiryDate || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'expiryDate', e.target.value)}
-                                placeholder="Bitiş Tarihi"
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                              <input
-                                type="text"
-                                value={block.daysRemaining || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'daysRemaining', e.target.value)}
-                                placeholder="Kalan Gün"
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                            </div>
-                          )}
-                          {block.type === 'CREDENTIALS' && (
-                            <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                              <input
-                                type="text"
-                                value={block.loginEmail || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'loginEmail', e.target.value)}
-                                placeholder="Kullanıcı / E-posta"
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                              <input
-                                type="text"
-                                value={block.passwordText || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'passwordText', e.target.value)}
-                                placeholder="Şifre"
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                            </div>
-                          )}
-                          {block.type === 'BUTTON' && (
-                            <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                              <input
-                                type="text"
-                                value={block.buttonText || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'buttonText', e.target.value)}
-                                placeholder="Buton Metni"
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                              <input
-                                type="text"
-                                value={block.buttonUrl || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'buttonUrl', e.target.value)}
-                                placeholder="Hedef URL"
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                            </div>
-                          )}
-                          {block.type === 'FOOTER' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <textarea
-                                rows="2"
-                                value={block.footerText || ''}
-                                onChange={(e) => handleUpdateBlockField(block.id, 'footerText', e.target.value)}
-                                placeholder="Alt bilgi ve yasal metin..."
-                                className="super-admin-input"
-                                style={{ fontSize: '0.72rem', padding: '4px 6px' }}
-                              />
-                              {/* Footer Görsel / İmza Seçici (Madde 3) */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k)))', padding: '5px 8px', borderRadius: 6, border: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
-                                <input
-                                  type="file"
-                                  id={`footer-img-upload-${block.id}`}
-                                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
-                                  style={{ display: 'none' }}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      if (file.size > 3 * 1024 * 1024) {
-                                        notify("Görsel dosya boyutu 3MB'tan küçük olmalıdır.");
-                                        return;
-                                      }
-                                      const reader = new FileReader();
-                                      reader.onload = (ev) => {
-                                        handleUpdateBlockField(block.id, 'imageUrl', ev.target.result);
-                                      };
-                                      reader.readAsDataURL(file);
-                                    }
-                                  }}
-                                />
-                                <label
-                                  htmlFor={`footer-img-upload-${block.id}`}
-                                  className="super-admin-btn-secondary"
-                                  style={{ cursor: 'pointer', fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 5, margin: 0, background: 'rgba(56,189,248,0.15)', color: 'var(--ac-38bdf8)', borderColor: 'rgba(56,189,248,0.3)' }}
-                                  title="Footer alanına PNG, JPG imza veya logo ekleyin"
-                                >
-                                  <ImageIcon style={{ width: 12, height: 12 }} />
-                                  <span>{block.imageUrl ? '🖼️ Footer İmzayı / Logoyu Değiştir' : '📁 Footer Görseli / İmzası Ekle (PNG, JPG)'}</span>
-                                </label>
-                                {block.imageUrl && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                                    <img src={block.imageUrl} alt="Footer Görseli" style={{ height: 22, maxWidth: 50, objectFit: 'contain', borderRadius: 4, background: '#fff', padding: 2 }} />
-                                    <span style={{ fontSize: '0.65rem', color: 'var(--ac-34d399)', fontWeight: 700 }}>✓ Görsel Eklendi</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateBlockField(block.id, 'imageUrl', '')}
-                                      style={{ background: 'transparent', border: 'none', color: 'var(--ac-f87171)', cursor: 'pointer', fontSize: '0.68rem', marginLeft: 'auto', fontWeight: 700 }}
-                                      title="Görseli Kaldır"
-                                    >
-                                      Kaldır ✕
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                              {renderBlockStyleControls(block)}
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Kolon 3: Canlı Önizleme */}
-                  <div style={{ background: 'var(--sf-0b0f19)', border: '1px solid rgb(var(--rgb-ov) / 0.08)', borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4 }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--ac-38bdf8)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Eye style={{ width: 13, height: 13 }} />
-                        <span>Canlı Görsel Önizleme</span>
-                      </span>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--nt-64748b)' }}>620px Responsive</span>
-                    </div>
-                    <div style={{ flex: 1, borderRadius: 8, overflow: 'hidden', border: '1px solid rgb(var(--rgb-ov) / 0.1)', background: '#ffffff', minHeight: 0 }}>
-                      <iframe
-                        title="HTML Preview"
-                        srcDoc={templateForm.html_content}
-                        sandbox=""
-                        style={{ width: '100%', height: '100%', border: 'none' }}
-                      />
-                    </div>
-                  </div>
-                </div>
+                <EmailTemplateBuilder
+                  blocks={templateCanvasBlocks}
+                  variables={templateForm.variables?.length ? templateForm.variables : ['company_name', 'contact_name', 'login_url']}
+                  onChange={(next) => {
+                    setTemplateCanvasBlocks(next);
+                    setTemplateBlocksInSync(true);
+                    setTemplateForm((prev) => ({ ...prev, html_content: compileBlocksToHtml(next) }));
+                  }}
+                />
               ) : (
                 /* HTML KOD EDİTÖRÜ MODU */
                 <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, minHeight: 520, height: 'auto', maxHeight: '72vh' }}>

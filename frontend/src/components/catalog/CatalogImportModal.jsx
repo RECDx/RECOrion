@@ -26,6 +26,12 @@ export default function CatalogImportModal({ tenantId, open, onClose, onImported
   }, [open, tenantId]);
 
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const selectable = (rows) => rows.filter((d) => !d.imported).map((d) => d.id);
+  const allOf = (rows) => { const ids = selectable(rows); return ids.length > 0 && ids.every((id) => selected.includes(id)); };
+  const setGroup = (rows, on) => {
+    const ids = selectable(rows);
+    setSelected((s) => (on ? [...new Set([...s, ...ids])] : s.filter((x) => !ids.includes(x))));
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -49,12 +55,24 @@ export default function CatalogImportModal({ tenantId, open, onClose, onImported
       ) : (
         <div className="cat-pick">
           <span className="cat-hint">Şirketinizin sektör ve meslek gruplarına göre önerilen RECOrion departmanları. Eklenen departmanlara ait unvanlar AI personel işe alımında önerilir.</span>
+          <label className="cat-select-all">
+            <input type="checkbox" checked={allOf(data.departments)} disabled={!selectable(data.departments).length}
+              onChange={(e) => setGroup(data.departments, e.target.checked)} />
+            <span>Tümünü seç ({selectable(data.departments).length} departman)</span>
+          </label>
           {GROUPS.map(([rank, label]) => {
             const rows = data.departments.filter((d) => d.rank === rank);
             if (!rows.length) return null;
             return (
               <React.Fragment key={rank}>
-                <strong style={{ fontSize: '0.8rem', marginTop: 8 }}>{label}</strong>
+                <div className="cat-group-head">
+                  <strong>{label}</strong>
+                  {selectable(rows).length > 0 && (
+                    <button type="button" className="cat-link" onClick={() => setGroup(rows, !allOf(rows))}>
+                      {allOf(rows) ? 'Bu grubun seçimini kaldır' : 'Bu grubu seç'}
+                    </button>
+                  )}
+                </div>
                 {rows.map((d) => (
                   <label key={d.id} className={d.imported ? 'done' : ''}>
                     <input type="checkbox" disabled={d.imported} checked={d.imported || selected.includes(d.id)} onChange={() => toggle(d.id)} />

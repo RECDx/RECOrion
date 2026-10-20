@@ -1,0 +1,69 @@
+/* Sürükle-bırak e-posta şablonu düzenleyicisi. Yalnızca tema değişkenleri kullanılır. */
+.eb { display: grid; grid-template-columns: 230px minmax(0, 1fr) minmax(300px, 1fr); gap: 12px; height: min(72vh, 760px); min-height: 480px; }
+.eb-palette, .eb-canvas, .eb-side {
+  border: 1px solid var(--border-subtle); border-radius: 12px; background: rgb(var(--rgb-ov) / 0.02);
+  padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0;
+}
+.eb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.75rem; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.04em; }
+.eb-head > span:not(.eb-tools) { font-size: 0.65rem; font-weight: 500; text-transform: none; color: var(--text-dim); letter-spacing: 0; }
+.eb-tools { display: inline-flex; gap: 4px; }
+.eb-tools .ui-icon-btn.active { border-color: var(--border-highlight); color: var(--text-main); }
+.eb-group { display: flex; flex-direction: column; gap: 4px; }
+.eb-group-title { font-size: 0.66rem; color: var(--text-dim); margin-top: 6px; font-weight: 700; }
+.eb-preset {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border-radius: 9px;
+  border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-main);
+  font-size: 0.78rem; text-align: left; cursor: grab;
+}
+.eb-preset span { flex: 1; }
+.eb-preset:hover { border-color: var(--border-highlight); }
+.eb-preset:active { cursor: grabbing; }
+.eb-preset svg { color: var(--text-dim); flex-shrink: 0; }
+
+.eb-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 30px;
+  border: 2px dashed var(--border-subtle); border-radius: 12px; color: var(--text-dim); font-size: 0.82rem;
+}
+.eb-empty.over { border-color: var(--border-highlight); color: var(--text-main); }
+.eb-card {
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 8px; border-radius: 10px;
+  border: 1px solid var(--border-subtle); background: var(--bg-card); cursor: pointer; user-select: none;
+}
+.eb-card:hover { border-color: var(--border-highlight); }
+.eb-card.selected { border-color: var(--border-highlight); box-shadow: var(--focus-ring); }
+.eb-grip { color: var(--text-dim); cursor: grab; flex-shrink: 0; }
+.eb-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.eb-card-body strong { font-size: 0.8rem; color: var(--text-main); }
+.eb-card-body span { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eb-card-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.eb-card-actions .ui-icon-btn { width: 26px; height: 26px; }
+.eb-drop-line { height: 3px; border-radius: 3px; background: var(--gradient-brand); margin: -2px 0; }
+
+.eb-fields { display: flex; flex-direction: column; gap: 10px; }
+.eb-field-title { font-size: 0.85rem; font-weight: 800; color: var(--text-main); }
+.eb-field { display: flex; flex-direction: column; gap: 5px; }
+.eb-field label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+.eb-field textarea { font-family: inherit; resize: vertical; }
+.eb-code { font-family: ui-monospace, Consolas, monospace !important; font-size: 0.78rem; }
+.eb-color { display: flex; gap: 6px; align-items: center; }
+.eb-color input[type="color"] { width: 38px; height: 36px; padding: 2px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-input); flex-shrink: 0; }
+.eb-vars { display: flex; flex-wrap: wrap; gap: 4px; }
+.eb-var {
+  padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border-subtle); background: transparent;
+  color: var(--text-muted); font-family: ui-monospace, Consolas, monospace; font-size: 0.7rem; cursor: pointer;
+}
+.eb-var:hover { border-color: var(--border-highlight); color: var(--text-main); }
+.eb-hint { font-size: 0.72rem; color: var(--text-dim); margin: 0; }
+.eb-preview { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; align-items: center; }
+.eb-frame { flex: 1; width: 100%; min-height: 360px; border: 1px solid var(--border-subtle); border-radius: 10px; background: #ffffff; }
+.eb-frame.mobile { width: 375px; max-width: 100%; }
+
+@media (max-width: 1280px) {
+  .eb { grid-template-columns: 200px minmax(0, 1fr); height: auto; }
+  .eb-side { grid-column: 1 / -1; min-height: 420px; }
+  .eb-palette, .eb-canvas { max-height: 60vh; }
+}
+@media (max-width: 640px) {
+  .eb { grid-template-columns: 1fr; }
+  .eb-palette { max-height: 220px; }
+}

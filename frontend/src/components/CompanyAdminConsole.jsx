@@ -164,7 +164,7 @@ export default function CompanyAdminConsole({
     description: '',
     base_role_prompt: '',
     required_skills: '',
-    recommended_model_code: 'glm-5.3',
+    recommended_model_code: '',
     autonomy_level: 'L1',
     source_template_id: null
   });
@@ -191,7 +191,7 @@ export default function CompanyAdminConsole({
   const [editingAgent, setEditingAgent] = useState(null);
   const [agentForm, setAgentForm] = useState({
     display_name: '',
-    model_code: 'glm-5.3',
+    model_code: '',
     job_title_id: '',
     department_id: '',
     description: '',
@@ -250,7 +250,7 @@ export default function CompanyAdminConsole({
   const [naceSearchResults, setNaceSearchResults] = useState([]);
   const [isSearchingNace, setIsSearchingNace] = useState(false);
   const [customSectorInput, setCustomSectorInput] = useState('');
-  const [manifestoModel, setManifestoModel] = useState('glm-5.3');
+  const [manifestoModel, setManifestoModel] = useState('');
   const [manifestoInstructions, setManifestoInstructions] = useState('');
   const [isGeneratingManifesto, setIsGeneratingManifesto] = useState(false);
   const [isSavingManifesto, setIsSavingManifesto] = useState(false);
@@ -904,7 +904,7 @@ export default function CompanyAdminConsole({
       description: '',
       base_role_prompt: '',
       required_skills: '',
-      recommended_model_code: 'glm-5.3',
+      recommended_model_code: '',
       autonomy_level: 'L1',
       source_template_id: null
     });
@@ -929,7 +929,7 @@ export default function CompanyAdminConsole({
       description: tpl.description || '',
       base_role_prompt: tpl.base_role_prompt || '', // Otomatik olarak tanımdan eklenir!
       required_skills: (tpl.required_skills || []).join(', '),
-      recommended_model_code: tpl.recommended_model_code || 'glm-5.3',
+      recommended_model_code: tpl.recommended_model_code || '',
       autonomy_level: tpl.autonomy_level || 'L1',
       source_template_id: tpl.id
     }));
@@ -948,7 +948,7 @@ export default function CompanyAdminConsole({
       description: titleObj.description || '',
       base_role_prompt: titleObj.base_role_prompt || '',
       required_skills: (titleObj.required_skills || []).join(', '),
-      recommended_model_code: titleObj.recommended_model_code || 'glm-5.3',
+      recommended_model_code: titleObj.recommended_model_code || '',
       autonomy_level: titleObj.autonomy_level || 'L1',
       source_template_id: null
     });
@@ -980,7 +980,7 @@ export default function CompanyAdminConsole({
         category: titleForm.category,
         description: titleForm.description,
         required_skills: skillsArray,
-        model_code: titleForm.recommended_model_code || 'glm-5.3',
+        model_code: titleForm.recommended_model_code || undefined,
         autonomy_level: titleForm.autonomy_level || 'L1'
       });
       if (res && res.role_prompt) {
@@ -1141,7 +1141,7 @@ export default function CompanyAdminConsole({
     const deptId = agent.department_id || matchedTitle?.department_id || '';
     setAgentForm({
       display_name: agent.display_name || '',
-      model_code: agent.model_code || matchedTitle?.recommended_model_code || 'glm-5.3',
+      model_code: agent.model_code || matchedTitle?.recommended_model_code || '',
       job_title_id: agent.job_title_id || '',
       department_id: deptId,
       description: agent.description || '',
@@ -1162,7 +1162,7 @@ export default function CompanyAdminConsole({
         ...prev,
         job_title_id: titleId,
         department_id: selected.department_id || '', // Madde 3: Bağlı departman otomatik gelir
-        model_code: selected.recommended_model_code || prev.model_code || 'glm-5.3', // Madde 4: Otomatik gelir
+        model_code: selected.recommended_model_code || prev.model_code || '', // ünvanın modeli otomatik gelir
         autonomy_level: selected.autonomy_level || prev.autonomy_level || 'L1', // Madde 4: Otomatik gelir
         system_prompt: selected.base_role_prompt || prev.system_prompt,
         description: prev.description ? prev.description : (selected.description || '')
@@ -1205,7 +1205,7 @@ export default function CompanyAdminConsole({
         category,
         description: desc,
         required_skills: skillsArray,
-        model_code: agentForm.model_code || 'glm-5.3',
+        model_code: agentForm.model_code || undefined,
         autonomy_level: agentForm.autonomy_level || 'L1'
       });
       if (res && res.role_prompt) {
@@ -1242,7 +1242,7 @@ export default function CompanyAdminConsole({
         job_title_id: agentForm.job_title_id,
         agent_name: agentForm.display_name?.trim() || undefined,
         agent_id: editingAgent?.id || undefined,
-        model_code: agentForm.model_code || 'glm-5.3'
+        model_code: agentForm.model_code || undefined
       });
 
       if (res && res.success) {
@@ -1518,7 +1518,7 @@ export default function CompanyAdminConsole({
     try {
       const res = await api.triggerAgentDeepSearch(targetId, selectedAgentForDocs.id, {
         query: deepSearchQuery.trim(),
-        model_code: 'glm-5.3'
+        model_code: selectedAgentForDocs.model_code || undefined
       });
 
       const updatedDocs = await api.getAgentDocuments(targetId, selectedAgentForDocs.id);
@@ -1554,7 +1554,7 @@ export default function CompanyAdminConsole({
       const res = await api.deepSearchExistingAgentSectorTitle(
         targetId,
         selectedAgentForDocs.id,
-        selectedAgentForDocs.model_code || 'glm-5.3'
+        selectedAgentForDocs.model_code || undefined
       );
       const updatedDocs = await api.getAgentDocuments(targetId, selectedAgentForDocs.id);
       setAgentDocuments(updatedDocs || []);
@@ -3903,7 +3903,7 @@ export default function CompanyAdminConsole({
                                 padding: '2px 8px',
                                 borderRadius: '6px'
                               }}>
-                                🤖 {t.recommended_model_code || 'glm-5.3'}
+                                🤖 {t.recommended_model_code || 'Varsayılan model'}
                               </span>
 
                               <span style={{
@@ -4223,7 +4223,7 @@ export default function CompanyAdminConsole({
                               </span>
                             </td>
                             <td style={{ padding: '16px 20px', color: 'var(--nt-cbd5e1)', fontSize: '0.8rem' }}>
-                              🤖 {t.recommended_model_code || 'glm-5.3'}
+                              🤖 {t.recommended_model_code || 'Varsayılan model'}
                             </td>
                             <td style={{ padding: '16px 20px', textAlign: 'center' }}>
                               <span style={{
@@ -4828,7 +4828,7 @@ export default function CompanyAdminConsole({
                               alignItems: 'center',
                               gap: '4px'
                             }}>
-                              🤖 {agent.model_code || 'glm-5.3'}
+                              🤖 {agent.model_code || 'Varsayılan model'}
                             </span>
 
                             <span style={{
@@ -5103,7 +5103,7 @@ export default function CompanyAdminConsole({
                                 fontSize: '0.72rem',
                                 fontWeight: '700'
                               }}>
-                                🤖 {agent.model_code || 'glm-5.3'}
+                                🤖 {agent.model_code || 'Varsayılan model'}
                               </span>
                             </td>
                             <td style={{ padding: '16px 20px', color: 'var(--ac-38bdf8)', fontSize: '0.825rem', fontWeight: '600' }}>
@@ -5816,19 +5816,14 @@ export default function CompanyAdminConsole({
                         outline: 'none'
                       }}
                     >
+                      <option value="">Platform varsayılan modeli</option>
                       {availableModels && availableModels.length > 0 ? (
                         availableModels.map(m => (
                           <option key={m.model_code} value={m.model_code}>
                             🤖 {m.name} ({m.model_code})
                           </option>
                         ))
-                      ) : (
-                        <>
-                          <option value="glm-5.3">🤖 GLM 5.3 (Ultra Hızlı Akıl Yürütme)</option>
-                          <option value="gpt-5-turbo">🤖 GPT-5 Turbo (Stratejik Analiz)</option>
-                          <option value="claude-3-opus">🤖 Claude 3.5 Sonnet (Kurumsal Üslup)</option>
-                        </>
-                      )}
+                      ) : null}
                     </select>
                   </div>
 
@@ -7486,23 +7481,14 @@ export default function CompanyAdminConsole({
                       cursor: 'pointer'
                     }}
                   >
+                    <option value="">Platform varsayılan modeli</option>
                     {availableModels && availableModels.length > 0 ? (
                       availableModels.map((m) => (
                         <option key={m.id || m.model_code} value={m.model_code}>
                           {m.display_name} ({m.model_code})
                         </option>
                       ))
-                    ) : (
-                      <>
-                        <option value="glm-5.3">glm-5.3 (Sistem Mimarı & İleri Muhakeme)</option>
-                        <option value="deepseek-v4.1-flash">deepseek-v4.1-flash (Kıdemli Kodlama & Test)</option>
-                        <option value="mimo-v2.6-pro">mimo-v2.6-pro (Stratejik Planlama & Analiz)</option>
-                        <option value="deepseek-v4-flash">deepseek-v4-flash (Hızlı Kod & QA)</option>
-                        <option value="qwen3.8-flash-next">qwen3.8-flash-next (Operasyonel Asistan)</option>
-                        <option value="gemma-4-31b">gemma-4-31b (Dokümantasyon & PR)</option>
-                        <option value="qwen3-vl-30b">qwen3-vl-30b (Vision & Tasarım)</option>
-                      </>
-                    )}
+                    ) : null}
                   </select>
                 </div>
 
@@ -8103,23 +8089,14 @@ export default function CompanyAdminConsole({
                       cursor: 'pointer'
                     }}
                   >
+                    <option value="">Platform varsayılan modeli</option>
                     {availableModels && availableModels.length > 0 ? (
                       availableModels.map((m) => (
                         <option key={m.id || m.model_code} value={m.model_code}>
                           {m.display_name} ({m.model_code})
                         </option>
                       ))
-                    ) : (
-                      <>
-                        <option value="glm-5.3">GLM 5.3 (Sistem Mimarı & İleri Muhakeme)</option>
-                        <option value="deepseek-v4.1-flash">DeepSeek V4.1 Flash (Kıdemli Kodlama & Test)</option>
-                        <option value="mimo-v2.6-pro">MIMO V2.6 Pro (İş Analisti & Muhakeme)</option>
-                        <option value="deepseek-v4-flash">DeepSeek V4 Flash (Hızlı Kod & QA)</option>
-                        <option value="qwen3.8-flash-next">Qwen3.8 Flash Next (Operasyonel Asistan)</option>
-                        <option value="gemma-4-31b">Gemma 4 31B (Dokümantasyon & PR)</option>
-                        <option value="qwen3-vl-30b">Qwen3 VL 30B (Vision & Tasarım)</option>
-                      </>
-                    )}
+                    ) : null}
                   </select>
                 </div>
 

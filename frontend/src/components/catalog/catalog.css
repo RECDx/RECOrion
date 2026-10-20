@@ -58,3 +58,9 @@
 .hire-summary strong { color: var(--text-main); }
 .cat-pick label.selected { border-color: var(--border-highlight); background: rgb(var(--rgb-ov) / 0.05); }
 .cat-hint.full { grid-column: 1 / -1; }
+
+/* Katalogdan departman ekle: tümünü / grubu seç */
+.cat-pick label.cat-select-all { background: rgb(var(--rgb-ov) / 0.04); font-weight: 600; align-items: center; }
+.cat-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 0.8rem; }
+.cat-link { background: none; border: none; padding: 0; color: var(--text-muted); font-size: 0.75rem; text-decoration: underline; cursor: pointer; }
+.cat-link:hover { color: var(--text-main); }

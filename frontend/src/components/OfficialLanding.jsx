@@ -67,6 +67,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   // Sektör ve Meslek Grubu Seçim State'leri (Madde 2 - T.C. Ticaret Bakanlığı)
   const [sectors, setSectors] = useState([]);
   const [professions, setProfessions] = useState([]);
+  const [sectorSearch, setSectorSearch] = useState('');
+  const [professionSearch, setProfessionSearch] = useState('');
   const [llmModelCount, setLlmModelCount] = useState(null);
   const [selectedSectors, setSelectedSectors] = useState([]);
   const [selectedProfessions, setSelectedProfessions] = useState([]);
@@ -178,10 +180,26 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   };
 
   const handleToggleProfession = (profCode) => {
+    // Aramayla başka bir sektörün meslek grubu seçilirse o sektör de seçilir
+    const prof = professions.find(pr => pr.code === profCode);
+    if (prof && !selectedSectors.includes(prof.sector_code)) {
+      setSelectedSectors(prev => [...prev, prof.sector_code]);
+    }
     setSelectedProfessions((prev) => {
       return prev.includes(profCode) ? prev.filter(p => p !== profCode) : [...prev, profCode];
     });
   };
+
+  // Arama: Türkçe büyük/küçük harf duyarsız; sektör araması o sektörün meslek gruplarında da arar
+  const trLower = (v) => String(v || '').toLocaleLowerCase('tr');
+  const sectorQuery = trLower(sectorSearch.trim());
+  const professionQuery = trLower(professionSearch.trim());
+  const visibleSectors = sectors.filter(sec => !sectorQuery || selectedSectors.includes(sec.code)
+    || trLower(`${sec.code} ${sec.name}`).includes(sectorQuery)
+    || professions.some(pr => pr.sector_code === sec.code && trLower(pr.name).includes(sectorQuery)));
+  const visibleProfessions = professions.filter(pr => (professionQuery
+    ? trLower(`${pr.code} ${pr.name}`).includes(professionQuery)
+    : selectedSectors.includes(pr.sector_code)));
 
   const handleOpenPurchase = (plan) => {
     resetPurchaseForm();
@@ -783,9 +801,18 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       Şirketinizin faaliyet gösterdiği ana sektörü/sektörleri seçiniz. Seçtiğiniz sektörlere ait resmi meslek grupları aşağıda otomatik filtrelenecektir.
                     </p>
 
+                    <label className="purchase-search">
+                      <Search style={{ width: 15, height: 15 }} />
+                      <input type="search" value={sectorSearch} onChange={(e) => setSectorSearch(e.target.value)}
+                        placeholder="Sektör veya meslek ara (örn. mobilya, kuaför, nakliye)…" aria-label="Sektör ara" />
+                    </label>
+
                     {/* Sektör Seçim Butonları Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))', gap: 8, marginTop: 4 }}>
-                      {sectors.map((sec) => {
+                      {visibleSectors.length === 0 && (
+                        <span style={{ fontSize: '0.78rem', color: 'var(--nt-94a3b8)' }}>"{sectorSearch}" ile eşleşen sektör bulunamadı.</span>
+                      )}
+                      {visibleSectors.map((sec) => {
                         const isSelected = selectedSectors.includes(sec.code);
                         return (
                           <button
@@ -846,7 +873,13 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                         </span>
                       </div>
 
-                      {selectedSectors.length === 0 ? (
+                      <label className="purchase-search">
+                        <Search style={{ width: 15, height: 15 }} />
+                        <input type="search" value={professionSearch} onChange={(e) => setProfessionSearch(e.target.value)}
+                          placeholder="Tüm meslek gruplarında ara (seçtiğiniz grubun sektörü otomatik eklenir)…" aria-label="Meslek grubu ara" />
+                      </label>
+
+                      {selectedSectors.length === 0 && !professionQuery ? (
                         <div style={{ padding: '16px', borderRadius: 10, background: 'rgba(234, 179, 8, 0.06)', border: '1px dashed rgba(234, 179, 8, 0.3)', color: '#fde047', textAlign: 'center', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                           <AlertCircle style={{ width: 16, height: 16 }} />
                           <span>Lütfen önce yukarıdan en az bir <strong>Faaliyet Sektörü</strong> seçiniz. İlgili resmi meslek grupları burada listelenecektir.</span>
@@ -854,12 +887,13 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                           <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: 0 }}>
-                            Seçili sektör(ler)e bağlı <strong>{professions.filter(pr => selectedSectors.includes(pr.sector_code)).length} meslek grubu</strong> bulundu. Şirketiniz bünyesindeki meslek alanlarını işaretleyiniz:
+                            {professionQuery
+                              ? <>Aramanızla eşleşen <strong>{visibleProfessions.length} meslek grubu</strong> bulundu.</>
+                              : <>Seçili sektör(ler)e bağlı <strong>{visibleProfessions.length} meslek grubu</strong> bulundu. Şirketiniz bünyesindeki meslek alanlarını işaretleyiniz:</>}
                           </p>
 
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 180, overflowY: 'auto', padding: 8, borderRadius: 8, background: 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
-                            {professions
-                              .filter(pr => selectedSectors.includes(pr.sector_code))
+                            {visibleProfessions
                               .map((pr) => {
                                 const isAdded = selectedProfessions.includes(pr.code);
                                 return (

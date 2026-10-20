@@ -304,7 +304,7 @@ export const api = {
   addAgentVideoLink: (tenantId, agentId, data) => request(`/company/${tenantId}/ai-agents/${agentId}/video-links`, { method: 'POST', body: JSON.stringify(data) }),
   triggerAgentDeepSearch: (tenantId, agentId, data) => request(`/company/${tenantId}/ai-agents/${agentId}/deep-search`, { method: 'POST', body: JSON.stringify(data) }),
   deepSearchSectorTitle: (tenantId, data) => request(`/company/${tenantId}/ai-agents/deep-search-sector-title`, { method: 'POST', body: JSON.stringify(data) }),
-  deepSearchExistingAgentSectorTitle: (tenantId, agentId, modelCode = 'glm-5.3') => request(`/company/${tenantId}/ai-agents/${agentId}/deep-search-sector-title?model_code=${encodeURIComponent(modelCode)}`, { method: 'POST' }),
+  deepSearchExistingAgentSectorTitle: (tenantId, agentId, modelCode) => request(`/company/${tenantId}/ai-agents/${agentId}/deep-search-sector-title${modelCode ? `?model_code=${encodeURIComponent(modelCode)}` : ''}`, { method: 'POST' }),
   deleteAgentDocument: (tenantId, agentId, documentId) => request(`/company/${tenantId}/ai-agents/${agentId}/documents/${documentId}`, { method: 'DELETE' }),
   getAgentDocumentDownloadUrl: (tenantId, agentId, documentId) => `${BASE_URL}/company/${tenantId}/ai-agents/${agentId}/documents/${documentId}/download`,
   downloadAgentDocument: (tenantId, agentId, documentId, fallbackName) =>

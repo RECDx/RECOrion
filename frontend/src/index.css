@@ -2201,3 +2201,26 @@ option:hover {
 
 
 
+
+/* Ana Kontrol Merkezi: açılıp kapanan menü grupları */
+.super-admin-nav-group-toggle {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  background: transparent; border: none; cursor: pointer; text-align: left; font-family: inherit;
+}
+.super-admin-nav-group-toggle:hover { color: var(--text-main); }
+.super-admin-nav-group-chevron { width: 13px; height: 13px; transition: transform 0.15s; }
+.super-admin-nav-group-chevron.closed { transform: rotate(-90deg); }
+.super-admin-sidebar.collapsed .super-admin-nav-group-toggle { pointer-events: none; }
+.super-admin-sidebar.collapsed .super-admin-nav-group-chevron { display: none; }
+
+/* Satın alma: sektör ve meslek grubu araması */
+.purchase-search {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 0 12px;
+  border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-input); color: var(--text-dim);
+}
+.purchase-search:focus-within { border-color: var(--border-highlight); box-shadow: var(--focus-ring); }
+.purchase-search input:focus { outline: none; box-shadow: none; border: none; }
+.purchase-search input {
+  flex: 1; min-width: 0; padding: 9px 0; border: none; outline: none; background: transparent;
+  color: var(--text-main); font-family: inherit; font-size: 0.85rem;
+}
