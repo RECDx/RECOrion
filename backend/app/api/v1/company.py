@@ -169,7 +169,7 @@ async def delete_department(tenant_id: uuid.UUID, department_id: uuid.UUID, db: 
 
 
 # ==================================================================
-# MADDE 2: ŞİRKET ÜNVANLARI VE RECORION AI KONTROL MOTORU
+# MADDE 2: ŞİRKET ÜNVANLARI VE RECAi KONTROL MOTORU
 # ==================================================================
 class CompanyJobTitleIn(BaseModel):
     title: str = Field(..., description="Ünvan Adı")
@@ -240,7 +240,7 @@ async def _evaluate_job_title_with_ai(
     db: AsyncSession
 ) -> tuple[bool, int, str]:
     """
-    RECOrion kendi AI Modeli her yeni tanımlanan unvanları kontrol eder (Madde 2).
+    RECAi her yeni tanımlanan unvanları kontrol eder (Madde 2).
     Sistemin geneli için faydalı olarak gördüğü Ünvanları Ana şablona ekler.
     """
     from app.services import llm_gateway
@@ -407,7 +407,7 @@ async def create_company_job_title(
     Şirket için yeni ünvan tanımlar.
     - Şirketin tanımladığı departmanlardan biri seçilebilir (Madde 2).
     - Süper Yönetim Konsolundaki ünvanlardan seçilmişse Sistem Rol Promptu otomatik gelir veya kullanıcı yazar.
-    - RECOrion kendi AI Modeli yeni ünvanı inceler; sistem geneli için faydalı bulursa Ana Şablona ekler.
+    - RECAi yeni ünvanı inceler; sistem geneli için faydalı bulursa Ana Şablona ekler.
     """
     tenant = await _get_tenant_or_404(db, tenant_id)
     ent = await entitlements(db, tenant, current)
@@ -459,7 +459,7 @@ async def create_company_job_title(
     await db.flush()
 
     # -------------------------------------------------------------
-    # RECOrion AI MODELİ KONTROLÜ (Madde 2)
+    # RECAi MODELİ KONTROLÜ (Madde 2)
     # -------------------------------------------------------------
     is_beneficial, score, reason = await _evaluate_job_title_with_ai(
         title=title_clean,
@@ -472,7 +472,7 @@ async def create_company_job_title(
     if is_beneficial:
         job_title.ai_review_status = "PROMOTED_GLOBAL"
         job_title.ai_review_feedback = (
-            f"RECOrion AI tarafından incelendi: Sistem geneli için yüksek fayda sağladığı tespit edildi "
+            f"RECAi tarafından incelendi: Sistem geneli için yüksek fayda sağladığı tespit edildi "
             f"(Fayda Skoru: %{score}). Ana şablona otomatik eklendi. {reason}"
         )
 
@@ -497,14 +497,14 @@ async def create_company_job_title(
                 recommended_model_code=payload.recommended_model_code,
                 autonomy_level=payload.autonomy_level,
                 ai_review_status="PROMOTED_GLOBAL",
-                ai_review_feedback=f"Müşteri tanımından RECOrion AI tarafından terfi ettirildi (%{score}): {reason}",
+                ai_review_feedback=f"Müşteri tanımından RECAi tarafından terfi ettirildi (%{score}): {reason}",
                 is_active=True
             )
             db.add(global_template)
     else:
         job_title.ai_review_status = "COMPANY_LOCAL"
         job_title.ai_review_feedback = (
-            f"RECOrion AI tarafından incelendi: Şirket operasyonunuza özel yerel ünvan olarak onaylandı "
+            f"RECAi tarafından incelendi: Şirket operasyonunuza özel yerel ünvan olarak onaylandı "
             f"(Fayda Skoru: %{score}). {reason}"
         )
 

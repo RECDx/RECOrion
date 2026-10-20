@@ -198,7 +198,7 @@ export default function HireWizard({ tenantId, open, onClose, onHired }) {
                 <textarea id="hw-prompt" className="ui-input" rows={9} value={form.system_prompt} readOnly={!ent.can_edit_role_prompt}
                   onChange={(e) => setForm({ ...form, system_prompt: e.target.value })} />
                 <span className="cat-hint">
-                  {ent.can_edit_role_prompt ? 'Şirketinize göre düzenleyebilirsiniz.' : `'${ent.plan_name}' paketiniz rol promptunu değiştirmeye izin vermiyor; RECOrion'un hazır promptu kullanılır.`}
+                  {ent.can_edit_role_prompt ? 'Şirketinize göre düzenleyebilirsiniz.' : `'${ent.plan_name}' paketiniz rol promptunu değiştirmeye izin vermiyor; RECOrion kataloğundaki hazır rol promptu kullanılır.`}
                 </span>
               </div>
             </div>

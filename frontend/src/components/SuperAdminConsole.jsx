@@ -7094,7 +7094,7 @@ export default function SuperAdminConsole({
               {/* Dinamik Limitler (Madde 15) */}
               <div style={{ padding: 12, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-a78bfa)', marginBottom: 8, textTransform: 'uppercase' }}>
-                  Paket Kaynak ve Adetsel Limitleri (Madde 15)
+                  Paket Kaynak ve Adetsel Limitleri
                 </div>
                 <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
                   <div>
@@ -7529,7 +7529,7 @@ export default function SuperAdminConsole({
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--ac-38bdf8)', marginBottom: 3 }}>Vergi Dairesi (Madde 12)</label>
+                  <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--ac-38bdf8)', marginBottom: 3 }}>Vergi Dairesi</label>
                   <input
                     type="text"
                     value={newTenantForm.tax_office}
@@ -7857,7 +7857,7 @@ export default function SuperAdminConsole({
                     ) : (
                       <Sparkles style={{ width: 12, height: 12 }} />
                     )}
-                    <span>{isGeneratingNewTenantManifesto ? 'LLM Yazıyor...' : '✨ RECOrion AI ile Manifesto Üret'}</span>
+                    <span>{isGeneratingNewTenantManifesto ? 'LLM Yazıyor...' : '✨ RECAi ile Manifesto Üret'}</span>
                   </button>
                 </div>
 

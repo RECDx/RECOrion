@@ -1234,7 +1234,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       <div style={{ padding: '10px 14px', background: 'rgb(var(--rgb-ov) / 0.03)', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.785rem', fontWeight: 700, color: 'var(--ac-c084fc)' }}>
                           <Sparkles style={{ width: 14, height: 14 }} />
-                          <span>RECOrion AI Tarafından Üretilen Kurumsal Manifesto</span>
+                          <span>RECAi Tarafından Üretilen Kurumsal Manifesto</span>
                         </div>
                         <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, background: 'rgba(56,189,248,0.2)', color: 'var(--ac-38bdf8)' }}>
                           {purchaseResult.assigned_skills?.length || 0} Yetenek Atandı

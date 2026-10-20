@@ -137,7 +137,7 @@ export default function CompanyAdminConsole({
   const [isDeletingDept, setIsDeletingDept] = useState(false);
 
   // =========================================================================
-  // MADDE 2: ŞİRKET ÜNVANLARI & RECORION AI KONTROL MOTORU STATE
+  // MADDE 2: ŞİRKET ÜNVANLARI & RECAi KONTROL MOTORU STATE
   // =========================================================================
   const [jobTitles, setJobTitles] = useState([]);
   const [isLoadingTitles, setIsLoadingTitles] = useState(false);
@@ -879,7 +879,7 @@ export default function CompanyAdminConsole({
   };
 
   // =========================================================================
-  // MADDE 2 HANDLERS (Şirket Ünvanları & RECOrion AI Kontrol Motoru)
+  // MADDE 2 HANDLERS (Şirket Ünvanları & RECAi Kontrol Motoru)
   // =========================================================================
   const handleOpenCreateTitle = () => {
     setEditingTitle(null);
@@ -1052,7 +1052,7 @@ export default function CompanyAdminConsole({
         setJobTitles(prev => [created, ...prev]);
 
         if (created.ai_review_status === 'PROMOTED_GLOBAL') {
-          showToast(`🌟 RECOrion AI: '${title}' ünvanı sistem geneli için faydalı bulundu ve ana şablona otomatik eklendi!`, 'success');
+          showToast(`🌟 RECAi: '${title}' ünvanı sistem geneli için faydalı bulundu ve ana şablona otomatik eklendi!`, 'success');
         } else {
           showToast(`'${title}' ünvanı şirketinize özel olarak başarıyla tanımlandı.`);
         }
@@ -2417,12 +2417,13 @@ export default function CompanyAdminConsole({
                 marginBottom: '20px',
                 flexWrap: 'wrap'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '260px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 'min(100%, 260px)', flexWrap: 'wrap' }}>
                   {/* Arama Inputu */}
                   <div style={{
                     position: 'relative',
-                    flex: 1,
-                    maxWidth: '360px'
+                    flex: '1 1 260px',
+                    minWidth: 'min(100%, 220px)',
+                    maxWidth: '380px'
                   }}>
                     <Search size={15} color="var(--nt-64748b)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                     <input
@@ -2516,6 +2517,9 @@ export default function CompanyAdminConsole({
                       value={userDeptFilter}
                       onChange={(e) => setUserDeptFilter(e.target.value)}
                       style={{
+                        width: 'auto',
+                        flex: '0 1 240px',
+                        maxWidth: '100%',
                         background: 'var(--sf-131826)',
                         border: '1px solid rgb(var(--rgb-ov) / 0.1)',
                         borderRadius: '8px',
@@ -3563,20 +3567,9 @@ export default function CompanyAdminConsole({
                     <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: 'var(--nt-ffffff)' }}>
                       Şirket Ünvanları ve Rol Tanımları
                     </h2>
-                    <span style={{
-                      background: 'linear-gradient(135deg, rgba(113, 52, 226, 0.2) 0%, rgba(20, 108, 235, 0.2) 100%)',
-                      color: 'var(--ac-c084fc)',
-                      border: '1px solid rgba(113, 52, 226, 0.4)',
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.7rem',
-                      fontWeight: '700'
-                    }}>
-                      MADDE 2: NACE & AI MOTORU
-                    </span>
                   </div>
                   <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
-                    Süper Yönetim Konsolu şablonlarından NACE uyumlu seçim yapın veya özel ünvan tanımlayın. RECOrion AI motoru yeni tanımları denetleyip ekosisteme kazandırır.
+                    RECOrion kataloğundan sektörünüze uygun unvanı seçin veya şirketinize özel unvan tanımlayın. RECAi yeni tanımları inceleyip ekosisteme kazandırır.
                   </p>
                 </div>
 
@@ -3690,7 +3683,7 @@ export default function CompanyAdminConsole({
                       {jobTitles.filter(t => t.ai_review_status === 'PROMOTED_GLOBAL').length}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
-                      RECOrion AI: Ana Şablona Eklenen
+                      RECAi: Ana Şablona Eklenen
                     </div>
                   </div>
                 </div>
@@ -3833,7 +3826,7 @@ export default function CompanyAdminConsole({
                   <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', lineHeight: 1.5, marginBottom: '20px' }}>
                     {titleSearch
                       ? `'${titleSearch}' aramasına uygun bir ünvan bulunamadı.`
-                      : 'Şirketinizde çalışacak yapay zeka ajanları ve personeller için Süper Admin şablonlarından NACE bazlı ünvan seçebilir veya kendi özel ünvanınızı tanımlayabilirsiniz.'}
+                      : 'Şirketinizde çalışacak yapay zeka ajanları ve personeller için RECOrion kataloğundan sektörünüze uygun ünvan seçebilir veya kendi özel ünvanınızı tanımlayabilirsiniz.'}
                   </p>
                   {!titleSearch && (
                     <button
@@ -3976,7 +3969,7 @@ export default function CompanyAdminConsole({
                             {t.description || 'Bu ünvan için detaylı açıklama girilmedi.'}
                           </p>
 
-                          {/* RECOrion AI Kontrol Değerlendirmesi Rozeti (Madde 2) */}
+                          {/* RECAi Kontrol Değerlendirmesi Rozeti (Madde 2) */}
                           <div style={{
                             background: isPromoted ? 'rgba(168, 85, 247, 0.12)' : 'rgb(var(--rgb-ov) / 0.04)',
                             border: isPromoted ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid rgb(var(--rgb-ov) / 0.08)',
@@ -4001,10 +3994,10 @@ export default function CompanyAdminConsole({
                                 alignItems: 'center',
                                 gap: '6px'
                               }}>
-                                <span>{isPromoted ? 'RECOrion AI: Ana Şablona Eklendi' : 'Şirkete Özel Yerel Ünvan'}</span>
+                                <span>{isPromoted ? 'RECAi: Ana Şablona Eklendi' : 'Şirkete Özel Yerel Ünvan'}</span>
                               </div>
                               <div style={{ fontSize: '0.72rem', color: 'var(--nt-cbd5e1)', lineHeight: 1.4, marginTop: '2px' }}>
-                                {t.ai_review_feedback || 'RECOrion AI motoru tarafından incelendi.'}
+                                {t.ai_review_feedback || 'RECAi motoru tarafından incelendi.'}
                               </div>
                             </div>
                           </div>
@@ -4166,7 +4159,7 @@ export default function CompanyAdminConsole({
                       }}>
                         <th style={{ padding: '14px 20px' }}>Ünvan Adı & Kod</th>
                         <th style={{ padding: '14px 20px' }}>Kategori</th>
-                        <th style={{ padding: '14px 20px' }}>RECOrion AI Değerlendirmesi</th>
+                        <th style={{ padding: '14px 20px' }}>RECAi Değerlendirmesi</th>
                         <th style={{ padding: '14px 20px' }}>Önerilen Model</th>
                         <th style={{ padding: '14px 20px', textAlign: 'center' }}>Aktör</th>
                         <th style={{ padding: '14px 20px', textAlign: 'right' }}>İşlemler</th>
@@ -4307,17 +4300,6 @@ export default function CompanyAdminConsole({
                     <h2 style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, color: 'var(--nt-ffffff)' }}>
                       AI Ajanlarının İşe Alım / Tanımlama
                     </h2>
-                    <span style={{
-                      background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(56, 189, 248, 0.2) 100%)',
-                      color: 'var(--ac-34d399)',
-                      border: '1px solid rgba(16, 185, 129, 0.4)',
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.7rem',
-                      fontWeight: '700'
-                    }}>
-                      MADDE 3: DİJİTAL İŞ GÜCÜ
-                    </span>
                   </div>
                   <p style={{ fontSize: '0.85rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                     Şirketiniz bünyesinde görev yapacak otonom yapay zeka personellerini işe alın, ünvan atayın ve çalışma durumlarını yönetin.
@@ -5922,7 +5904,7 @@ export default function CompanyAdminConsole({
                 </div>
 
                 <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '0 0 12px 0' }}>
-                  Bu metin doğrudan klavyenizle serbestçe düzenlenebilir veya yukarıdaki AI motoruna zenginleştirilebilir. Tüm AI personelleriniz ve departmanlarınız kararlarında bu manifestoyu kurumsal anayasa olarak referans alır.
+                  Bu metin doğrudan klavyenizle serbestçe düzenlenebilir veya yukarıdan RECAi ile zenginleştirilebilir. Tüm AI personelleriniz ve departmanlarınız kararlarında bu manifestoyu kurumsal anayasa olarak referans alır.
                 </p>
 
                 <textarea
@@ -6035,7 +6017,7 @@ export default function CompanyAdminConsole({
                     {editingUser ? 'Kullanıcıyı Düzenle' : 'Kullanıcı Tanımlama'}
                   </h3>
                   <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
-                    Madde 1: Personel Kimlik, Rol, Şifre ve İzin Kataloğu Ek İzinleri
+                    Personel kimlik, rol, şifre ve ek izinler
                   </span>
                 </div>
               </div>
@@ -6771,7 +6753,7 @@ export default function CompanyAdminConsole({
                     {editingDept ? 'Departmanı Düzenle' : 'Yeni Departman Tanımla'}
                   </h3>
                   <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
-                    Madde 1: Departman Adı ve Açıklama Bilgileri
+                    Departman adı ve açıklama bilgileri
                   </span>
                 </div>
               </div>
@@ -6976,7 +6958,7 @@ export default function CompanyAdminConsole({
                     {editingTitle ? 'Ünvanı Düzenle' : 'Şirket Ünvanı Tanımla'}
                   </h3>
                   <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
-                    Madde 2: NACE Sektörel Şablon Seçimi & Otomatik Rol Promptu
+                    Sektörel şablon seçimi ve otomatik rol promptu
                   </span>
                 </div>
               </div>
@@ -7015,7 +6997,7 @@ export default function CompanyAdminConsole({
                 </div>
               )}
 
-              {/* RECOrion AI Kontrol Bilgilendirme Bannerı */}
+              {/* RECAi Kontrol Bilgilendirme Bannerı */}
               <div style={{
                 background: 'linear-gradient(135deg, rgba(113, 52, 226, 0.12) 0%, rgba(20, 108, 235, 0.08) 100%)',
                 border: '1px solid rgba(113, 52, 226, 0.3)',
@@ -7028,7 +7010,7 @@ export default function CompanyAdminConsole({
               }}>
                 <Sparkles size={18} color="var(--ac-c084fc)" style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div style={{ fontSize: '0.78rem', color: 'var(--nt-cbd5e1)', lineHeight: 1.45 }}>
-                  <strong style={{ color: 'var(--nt-ffffff)' }}>RECOrion AI Otonom Denetim Motoru:</strong> Tanımlayacağınız ünvan ve Sistem Rol Promptu, kaydettiğiniz anda RECOrion AI modeli tarafından incelenecek; sistem geneli ve sektör için faydalı görülenler otomatik olarak Ana Sistem Şablonuna eklenecektir.
+                  <strong style={{ color: 'var(--nt-ffffff)' }}>RECAi Otonom Denetim Motoru:</strong> Tanımlayacağınız ünvan ve Sistem Rol Promptu, kaydettiğiniz anda RECAi modeli tarafından incelenecek; sistem geneli ve sektör için faydalı görülenler otomatik olarak Ana Sistem Şablonuna eklenecektir.
                 </div>
               </div>
 
@@ -7686,7 +7668,7 @@ export default function CompanyAdminConsole({
                   {isSavingTitle ? (
                     <>
                       <RefreshCw size={15} className="spin" />
-                      <span>RECOrion AI İnceliyor & Kaydediyor...</span>
+                      <span>RECAi İnceliyor & Kaydediyor...</span>
                     </>
                   ) : (
                     <>
@@ -7939,7 +7921,7 @@ export default function CompanyAdminConsole({
                     {editingAgent ? 'AI Ajan Bilgilerini Düzenle' : 'Yeni AI Ajan İşe Alım / Tanımlama'}
                   </h3>
                   <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
-                    Madde 3: Ajan Adı, LLM Modeli, Şirket Ünvanı ve İşe Alım Tarihi
+                    Ajan adı, LLM modeli, şirket ünvanı ve işe alım tarihi
                   </span>
                 </div>
               </div>
@@ -8027,7 +8009,7 @@ export default function CompanyAdminConsole({
               <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--ac-38bdf8)', marginBottom: '6px' }}>
-                    Şirket Ünvanı (Madde 2'den Seçim) <span style={{ color: '#f43f5e' }}>*</span>
+                    Şirket Ünvanı <span style={{ color: '#f43f5e' }}>*</span>
                   </label>
                   <select
                     value={agentForm.job_title_id}

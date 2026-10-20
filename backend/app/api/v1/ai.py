@@ -329,7 +329,7 @@ async def _platform_prompt(db: AsyncSession) -> str:
         rows.append(f"- {t.name}{owner} | paket: {plan.name if plan else '-'} | {'aktif' if t.is_active else 'pasif'} | "
                     f"bitiş: {expiry} | kullanıcı+AI: {counts.get(t.id, 0)} (AI: {agent_counts.get(t.id, 0)}) | "
                     f"{period} kredi kullanımı: {abs(_f(used.get(t.id))):.0f} / {plan.monthly_credits if plan else 0}")
-    return f"""Sen RECOrion platformunun Süper Yönetici asistanısın (RECDx). RECDx yöneticilerine müşteri şirketler,
+    return f"""Sen RECAi'sin: RECOrion platformunun yapay zekasısın ve burada Süper Yönetici asistanı olarak çalışıyorsun (RECDx). RECDx yöneticilerine müşteri şirketler,
 paketler, başvurular, kredi kullanımı ve platform modelleri hakkında yardımcı olursun.
 KVKK gereği müşteri şirketlerin proje, sohbet, hafıza ve doküman içeriklerine erişimin yoktur; sorulursa bunu belirt.
 Yalnızca aşağıdaki verilere dayan, sayı uydurma. Müşteri sayısına RECDx ana şirketini katma.
