@@ -25,7 +25,8 @@ from sqlalchemy import select
 
 from app.db.models import MemoryItem, AgentDocument, Actor, ChatMessage, Tenant, JobTitle
 from app.services.collective_memory import collective_memory
-from app.services.evren_gateway import evren_gateway
+from app.services import llm_gateway
+from app.services.llm_gateway import LLMContext
 
 logger = logging.getLogger("agent_learning_service")
 
@@ -109,7 +110,7 @@ class AgentLearningService:
         agent_id: uuid.UUID,
         query: str,
         db: AsyncSession,
-        model_code: str = "glm-5.3"
+        model_code: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         AI Ajanı için Deep Search başlatır:
@@ -166,15 +167,12 @@ class AgentLearningService:
             f"Lütfen bu kaynakları sentezleyip JSON formatında araştırma raporunu ve hafızaya kaydedilecek öğrenim maddelerini üret."
         )
 
-        ai_resp = await evren_gateway.chat_completion(
+        ai = await llm_gateway.chat(
+            LLMContext(tenant_id=tenant_id, purpose="DEEP_SEARCH", actor_id=agent_id),
+            [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             model_code=model_code,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
         )
-
-        raw_content = ai_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+        raw_content = ai.content
         # JSON bloğunu ayıkla
         cleaned_json = raw_content.strip()
         if "```json" in cleaned_json:
@@ -301,7 +299,7 @@ class AgentLearningService:
         db: AsyncSession,
         agent_name: Optional[str] = None,
         agent_id: Optional[uuid.UUID] = None,
-        model_code: str = "glm-5.3"
+        model_code: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         AI Ajanı Tanımlanırken veya Eğitilirken:
@@ -397,15 +395,13 @@ class AgentLearningService:
         )
 
         try:
-            ai_resp = await evren_gateway.chat_completion(
+            ai = await llm_gateway.chat(
+                LLMContext(tenant_id=tenant_id, purpose="DEEP_SEARCH", actor_id=agent_id),
+                [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
                 model_code=model_code,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                timeout=25.0
+                timeout=60.0,
             )
-            raw_content = ai_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw_content = ai.content
             cleaned_json = raw_content.strip()
             if "```json" in cleaned_json:
                 cleaned_json = cleaned_json.split("```json")[1].split("```")[0].strip()
@@ -676,7 +672,7 @@ class AgentLearningService:
         messages: List[Dict[str, str]],
         task_id: Optional[uuid.UUID],
         db: AsyncSession,
-        model_code: str = "glm-5.3"
+        model_code: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Sohbet veya görev diyaloglarından kalıcı kurumsal kararları, müşteri tercihlerini,
@@ -721,15 +717,12 @@ class AgentLearningService:
         user_prompt = f"İncelenecek Sohbet Diyaloğu:\n\n{dialogue_text}\n\nLütfen öğrenilecek bilgi maddelerini JSON olarak çıkar."
 
         try:
-            ai_resp = await evren_gateway.chat_completion(
+            ai = await llm_gateway.chat(
+                LLMContext(tenant_id=tenant_id, purpose="LEARNING", actor_id=agent_id),
+                [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
                 model_code=model_code,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
             )
-
-            raw_content = ai_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw_content = ai.content
             cleaned_json = raw_content.strip()
             if "```json" in cleaned_json:
                 cleaned_json = cleaned_json.split("```json")[1].split("```")[0].strip()

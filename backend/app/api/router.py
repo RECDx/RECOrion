@@ -12,6 +12,7 @@ from app.api.v1.company import router as company_router
 from app.api.v1.sectors import router as sectors_router
 from app.api.v1.professions import router as professions_router
 from app.api.v1.public import router as public_router
+from app.api.v1.ai import router as ai_router
 from app.core.access_policy import enforce_access_policy
 
 # Tüm uçlar merkezi erişim politikasından geçer (app/core/access_policy.py)
@@ -30,3 +31,4 @@ api_router.include_router(company_router)
 api_router.include_router(sectors_router)
 api_router.include_router(professions_router)
 api_router.include_router(public_router)
+api_router.include_router(ai_router)

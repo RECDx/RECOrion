@@ -1,0 +1,247 @@
+"""
+RECOrion LLM Gateway: tüm yapay zeka çağrılarının tek kapısı.
+
+Her çağrıda:
+1. Model çözülür (açık seçim → AI personelin modeli → şirketin Beyin AI modeli →
+   platform varsayılanı) ve şirket paketinin izin verdiği modeller arasında olduğu doğrulanır.
+2. Kredi ön kontrolü yapılır (RECDx platform kullanımı sınırlanmaz, yalnızca ölçülür).
+3. EVREN çağrılır; token kullanımı yanıttaki usage alanından okunur.
+4. llm_calls (ölçüm) ve credit_ledger (kredi düşümü) kaydedilir; eşik aşıldıysa uyarı gider.
+
+Hata durumunda sahte yanıt üretilmez: LLMError (503 / 402 / 403) fırlatılır.
+Ölçüm kayıtları çağıranın veritabanı oturumundan bağımsız, kendi oturumunda tutulur.
+"""
+import logging
+import time
+import uuid
+from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models import Actor, LLMCall, LLMModel, Plan, SystemSetting, Tenant
+from app.db.session import AsyncSessionLocal
+from app.services import credits
+from app.services.evren_client import EvrenError, estimate_tokens, evren_client
+
+logger = logging.getLogger("recorion.llm")
+
+HQ_SLUG = "recdx_hq"
+
+# Amaç → varsayılan model ayarı (system_settings)
+PURPOSE_SETTING = {
+    "BRAIN": "model.default.brain",
+    "PLATFORM_ASSISTANT": "model.platform_assistant",
+    "MANIFESTO": "default_manifesto_model",
+    "ROLE_PROMPT": "default_manifesto_model",
+    "TITLE_REVIEW": "default_manifesto_model",
+    "EMBEDDING": "model.default.embedding",
+    "RERANK": "model.default.rerank",
+}
+DEFAULT_CHAT_SETTING = "model.default.chat"
+CHAT_TYPES = {"CHAT", "VISION", "DECISION"}
+
+
+class LLMError(Exception):
+    status_code = 503
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+class LLMUnavailable(LLMError):
+    status_code = 503
+
+
+class CreditExhausted(LLMError):
+    status_code = 402
+
+
+class ModelNotAllowed(LLMError):
+    status_code = 403
+
+
+@dataclass
+class LLMContext:
+    """Çağrının kime ve neye ait olduğu (ölçüm, kredi ve model seçimi için)."""
+    tenant_id: Optional[uuid.UUID]  # None: RECDx platformu
+    purpose: str = "CHAT"
+    actor_id: Optional[uuid.UUID] = None  # AI personel (modeli buradan da çözülebilir)
+    task_id: Optional[uuid.UUID] = None
+    project_id: Optional[uuid.UUID] = None
+
+
+@dataclass
+class GatewayChatResult:
+    content: str
+    thought: Optional[str]
+    model_code: str
+    tokens_in: int
+    tokens_out: int
+    credits: float
+    raw: Dict[str, Any] = field(default_factory=dict)
+
+
+async def _setting(db: AsyncSession, key: str) -> Optional[str]:
+    row = await db.get(SystemSetting, key)
+    return str(row.value) if row and row.value else None
+
+
+async def _tenant(db: AsyncSession, tenant_id: Optional[uuid.UUID]) -> Tenant:
+    if tenant_id:
+        tenant = await db.get(Tenant, tenant_id)
+        if tenant:
+            return tenant
+    tenant = (await db.execute(select(Tenant).where(Tenant.slug == HQ_SLUG))).scalar_one_or_none()
+    if not tenant:
+        raise LLMError("Şirket bulunamadı.")
+    return tenant
+
+
+async def allowed_model_codes(db: AsyncSession, tenant: Tenant) -> Optional[set]:
+    """Paketin izin verdiği modeller; None = sınırsız (platform veya listesiz paket)."""
+    if tenant.slug == HQ_SLUG or not tenant.plan_id:
+        return None
+    plan = await db.get(Plan, tenant.plan_id)
+    codes = {str(m).lower() for m in (plan.allowed_models or [])} if plan else set()
+    return codes or None
+
+
+async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requested: Optional[str],
+                        actor_id: Optional[uuid.UUID]) -> LLMModel:
+    allowed = await allowed_model_codes(db, tenant)
+    kind_embedding, kind_rerank = purpose == "EMBEDDING", purpose == "RERANK"
+
+    candidates: List[str] = []
+    if requested:
+        candidates.append(requested)
+    if actor_id and not (kind_embedding or kind_rerank):
+        actor = await db.get(Actor, actor_id)
+        if actor and actor.preferred_model_id:
+            m = await db.get(LLMModel, actor.preferred_model_id)
+            if m:
+                candidates.append(m.model_code)
+    if purpose == "BRAIN" and tenant.brain_model_code:
+        candidates.append(tenant.brain_model_code)
+    for key in (PURPOSE_SETTING.get(purpose), DEFAULT_CHAT_SETTING if not (kind_embedding or kind_rerank) else None):
+        if key and (value := await _setting(db, key)):
+            candidates.append(value)
+
+    for i, code in enumerate(candidates):
+        model = (await db.execute(select(LLMModel).where(func.lower(LLMModel.model_code) == code.lower()))).scalar_one_or_none()
+        if not model or model.status != "ACTIVE":
+            continue
+        # Altyapı modelleri (embedding/rerank) paket listesinden bağımsızdır; sohbet modelleri pakete bağlıdır
+        if allowed is not None and not (kind_embedding or kind_rerank) and model.model_code.lower() not in allowed:
+            if i == 0 and requested:
+                raise ModelNotAllowed(f"'{model.model_code}' modeli şirketinizin paketinde yer almıyor.")
+            continue
+        return model
+
+    # Son çare: paketin izin verdiği ilk aktif sohbet modeli
+    if not (kind_embedding or kind_rerank):
+        stmt = select(LLMModel).where(LLMModel.status == "ACTIVE", LLMModel.model_type.in_(CHAT_TYPES)).order_by(LLMModel.model_code)
+        for model in (await db.execute(stmt)).scalars():
+            if allowed is None or model.model_code.lower() in allowed:
+                return model
+    raise LLMError("Bu işlem için kullanılabilir bir yapay zeka modeli bulunamadı.")
+
+
+async def _preflight(db: AsyncSession, tenant: Tenant, model: LLMModel, est_in: int, est_out: int) -> None:
+    if tenant.slug == HQ_SLUG:
+        return
+    await credits.ensure_period_grant(db, tenant)
+    bal = await credits.balance(db, tenant.id)
+    if bal <= 0 or bal < credits.credit_cost(model.effort_coefficient, est_in, est_out):
+        raise CreditExhausted("Şirketinizin RECOrion kredisi bu işlem için yetersiz. Yeni dönemi bekleyebilir veya ek kredi için RECDx ile iletişime geçebilirsiniz.")
+
+
+async def _record(db: AsyncSession, tenant: Tenant, model: LLMModel, ctx: LLMContext, tokens_in: int, tokens_out: int,
+                  started: float, error: Optional[str] = None, raw: Optional[Dict[str, Any]] = None) -> Decimal:
+    cost = Decimal(0) if error else credits.credit_cost(model.effort_coefficient, tokens_in, tokens_out)
+    evren = ((raw or {}).get("usage") or {}).get("evren") or {}
+    call = LLMCall(
+        id=uuid.uuid4(), tenant_id=tenant.id, task_id=ctx.task_id, actor_id=ctx.actor_id, project_id=ctx.project_id,
+        model_id=model.id, model_code=model.model_code, purpose=ctx.purpose, tokens_in=tokens_in, tokens_out=tokens_out,
+        credits_cost=cost, latency_ms=int((time.monotonic() - started) * 1000),
+        status="FAILED" if error else "SUCCESS", error=(error or None) and error[:500],
+        evren_credits=_num(evren.get("credits_charged_cr") or evren.get("credits_held_cr")),
+        evren_balance_after=_num(evren.get("credits_remaining_cr")),
+    )
+    db.add(call)
+    if not error and tenant.slug != HQ_SLUG:
+        await credits.record_usage(db, tenant.id, cost, call.id, f"{ctx.purpose} · {model.model_code}")
+    await db.commit()
+    if not error and tenant.slug != HQ_SLUG:
+        try:
+            await credits.check_alerts(db, tenant)
+        except Exception as exc:
+            logger.warning("Kredi uyarısı gönderilemedi: %s", exc)
+    return cost
+
+
+def _num(value) -> Optional[Decimal]:
+    try:
+        return Decimal(str(value)) if value is not None else None
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------- genel arayüz
+async def chat(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Optional[str] = None,
+               temperature: float = 0.7, max_tokens: int = 4096, timeout: Optional[float] = None) -> GatewayChatResult:
+    async with AsyncSessionLocal() as db:
+        tenant = await _tenant(db, ctx.tenant_id)
+        model = await resolve_model(db, tenant, ctx.purpose, model_code, ctx.actor_id)
+        if model.max_output_tokens:
+            max_tokens = min(max_tokens, model.max_output_tokens)
+        est_in = estimate_tokens(" ".join(str(m.get("content", "")) for m in messages))
+        await _preflight(db, tenant, model, est_in, min(max_tokens, 512))
+        started = time.monotonic()
+        try:
+            result = await evren_client.chat(model.model_code, messages, temperature=temperature, max_tokens=max_tokens, timeout=timeout)
+        except EvrenError as exc:
+            await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
+            logger.error("LLM çağrısı başarısız (%s, %s): %s", ctx.purpose, model.model_code, exc)
+            raise LLMUnavailable(f"Yapay zeka servisi şu anda yanıt veremiyor ({model.model_code}). Lütfen biraz sonra tekrar deneyin.") from exc
+        if not result.content.strip():
+            await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
+            raise LLMUnavailable("Model bir yanıt üretemedi (düşünme bütçesi doldu). Lütfen isteği kısaltıp tekrar deneyin.")
+        cost = await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
+        return GatewayChatResult(content=result.content, thought=result.thought, model_code=model.model_code,
+                                 tokens_in=result.tokens_in, tokens_out=result.tokens_out, credits=float(cost), raw=result.raw)
+
+
+async def embed(ctx: LLMContext, text: str) -> List[float]:
+    ctx.purpose = "EMBEDDING"
+    async with AsyncSessionLocal() as db:
+        tenant = await _tenant(db, ctx.tenant_id)
+        model = await resolve_model(db, tenant, "EMBEDDING", None, None)
+        await _preflight(db, tenant, model, estimate_tokens(text), 0)
+        started = time.monotonic()
+        try:
+            result = await evren_client.embed(text, model.model_code)
+        except EvrenError as exc:
+            await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
+            raise LLMUnavailable("Hafıza vektörleme servisi şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.") from exc
+        await _record(db, tenant, model, ctx, result.tokens_in, 0, started)
+        return result.vector
+
+
+async def rerank(ctx: LLMContext, query: str, documents: List[str], top_n: int = 5) -> List[Dict[str, Any]]:
+    ctx.purpose = "RERANK"
+    async with AsyncSessionLocal() as db:
+        tenant = await _tenant(db, ctx.tenant_id)
+        model = await resolve_model(db, tenant, "RERANK", None, None)
+        await _preflight(db, tenant, model, estimate_tokens(query + " ".join(documents)), 0)
+        started = time.monotonic()
+        try:
+            result = await evren_client.rerank(query, documents, model.model_code, top_n=top_n)
+        except EvrenError as exc:
+            await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
+            raise LLMUnavailable("Yeniden sıralama servisi yanıt vermedi.") from exc
+        await _record(db, tenant, model, ctx, result.tokens_in, 0, started)
+        return result.results

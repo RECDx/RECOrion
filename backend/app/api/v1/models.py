@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.db.models import LLMModel, LLMProvider
 from pydantic import BaseModel
 import uuid
+from datetime import date, datetime, timezone
 
 router = APIRouter(prefix="/models", tags=["LLM Models"])
 
@@ -18,6 +19,14 @@ class ModelResponse(BaseModel):
     context_window: int
     effort_coefficient: float
     status: str
+    evren_task: Optional[str] = None
+    modalities: Optional[List[str]] = None
+    max_output_tokens: Optional[int] = None
+    prompt_token_price: Optional[float] = None
+    completion_token_price: Optional[float] = None
+    pricing_currency: Optional[str] = None
+    free_until: Optional[date] = None
+    last_synced_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -86,6 +95,67 @@ async def create_model(payload: ModelCreate, db: AsyncSession = Depends(get_db))
     await db.commit()
     await db.refresh(model_obj)
     return model_obj
+
+# EVREN görev türü → RECOrion model türü
+EVREN_TASK_TYPES = {
+    "chat": "CHAT", "vision_chat": "VISION", "embedding": "EMBEDDING", "rerank": "RERANKER", "ocr": "OCR",
+    "audio_transcription": "AUDIO", "tts": "TTS", "guard": "GUARD", "decision": "DECISION",
+}
+
+
+@router.post("/sync-evren")
+async def sync_evren_models(db: AsyncSession = Depends(get_db)):
+    """
+    EVREN model kataloğunu çeker. Mevcut modellerin bağlam, çıktı sınırı ve fiyat bilgileri güncellenir;
+    yeni modeller PASİF eklenir (Süper Admin katsayısını belirleyip aktifleştirir). Katalogda artık
+    bulunmayan modeller silinmez, listede ayrıca bildirilir.
+    """
+    from fastapi import HTTPException
+    from app.services.evren_client import EvrenError, evren_client
+
+    try:
+        remote = await evren_client.list_models()
+    except EvrenError as exc:
+        raise HTTPException(status_code=503, detail=f"EVREN model listesi alınamadı: {exc}")
+
+    existing = {m.model_code.lower(): m for m in (await db.execute(select(LLMModel))).scalars()}
+    provider = (await db.execute(select(LLMProvider).limit(1))).scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    added, updated = [], []
+    for item in remote:
+        code = str(item.get("id") or "").strip().lower()
+        if not code:
+            continue
+        pricing = item.get("pricing") or {}
+        free_until = pricing.get("free_until")
+        fields = {
+            "evren_task": item.get("task"),
+            "modalities": item.get("modalities"),
+            "max_output_tokens": item.get("default_max_output_tokens"),
+            "prompt_token_price": pricing.get("prompt_token_price"),
+            "completion_token_price": pricing.get("completion_token_price"),
+            "pricing_currency": pricing.get("currency"),
+            "free_until": date.fromisoformat(free_until) if free_until else None,
+            "last_synced_at": now,
+        }
+        if item.get("context_length"):
+            fields["context_window"] = int(item["context_length"])
+        model = existing.get(code)
+        if model:
+            for key, value in fields.items():
+                setattr(model, key, value)
+            updated.append(code)
+        else:
+            db.add(LLMModel(provider_id=provider.id if provider else None, model_code=code, display_name=code,
+                            model_type=EVREN_TASK_TYPES.get(str(item.get("task")), "CHAT"),
+                            context_window=fields.pop("context_window", 8192), effort_coefficient=1.0,
+                            status="INACTIVE", **fields))
+            added.append(code)
+    await db.commit()
+    remote_codes = {str(i.get("id") or "").lower() for i in remote}
+    return {"success": True, "added": added, "updated": updated,
+            "missing_in_evren": sorted(c for c in existing if c not in remote_codes)}
+
 
 @router.get("/{model_id}", response_model=ModelResponse)
 async def get_model(model_id: uuid.UUID, db: AsyncSession = Depends(get_db)):

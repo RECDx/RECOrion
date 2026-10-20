@@ -4,7 +4,8 @@ from typing import List, Dict, Any, Optional
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as qmodels
 from app.config import settings
-from app.services.evren_gateway import evren_gateway
+from app.services import llm_gateway
+from app.services.llm_gateway import LLMContext, LLMError
 
 logger = logging.getLogger("collective_memory")
 
@@ -39,8 +40,8 @@ class CollectiveMemoryService:
         point_id = str(uuid.uuid4())
         metadata = metadata or {}
 
-        # 1. Embedding üret (Qwen3-Embedding-8b)
-        vector = await evren_gateway.create_embedding(content)
+        # 1. Embedding üret (LLM Gateway üzerinden; ölçülür ve şirket kredisinden düşer)
+        vector = await llm_gateway.embed(LLMContext(tenant_id=uuid.UUID(str(tenant_id)), actor_id=uuid.UUID(str(agent_id)) if agent_id else None), content)
 
         payload = {
             "tenant_id": str(tenant_id),
@@ -65,7 +66,9 @@ class CollectiveMemoryService:
             )
             logger.info(f"Hafıza noktası Qdrant'a eklendi: {point_id} (Scope: {scope})")
         except Exception as e:
+            # Önceden hata yutuluyor ve kayıt eklenmiş gibi davranılıyordu
             logger.error(f"Qdrant ekleme hatası: {e}")
+            raise LLMError("Hafıza kaydı vektör veritabanına yazılamadı.") from e
 
         return {
             "point_id": point_id,
@@ -88,7 +91,11 @@ class CollectiveMemoryService:
         - Zorunlu olarak tenant_id filtresi uygulanır.
         - Şirket Kurum Hafızası (NS_GLOBAL) VE (varsa) görevli ajanın hafızası (NS_AGENT) taranır.
         """
-        query_vector = await evren_gateway.create_embedding(query)
+        try:
+            query_vector = await llm_gateway.embed(LLMContext(tenant_id=uuid.UUID(str(tenant_id))), query)
+        except LLMError as e:
+            logger.warning(f"Hafıza araması yapılamadı: {e}")
+            return []
 
         # Qdrant Filtreleri
         must_conditions: List[Any] = [
@@ -138,13 +145,17 @@ class CollectiveMemoryService:
 
             # Qwen3-Reranker-8b ile en iyi sonuçları sırala
             if doc_texts:
-                reranked = await evren_gateway.rerank(query, doc_texts, top_n=limit)
+                try:
+                    reranked = await llm_gateway.rerank(LLMContext(tenant_id=uuid.UUID(str(tenant_id))), query, doc_texts, top_n=limit)
+                except LLMError as e:
+                    logger.warning(f"Yeniden sıralama yapılamadı, vektör sırası kullanılıyor: {e}")
+                    return hits[:limit]
                 ordered_hits = []
                 for item in reranked:
-                    idx = item["index"]
+                    idx = item.get("index", -1)
                     if idx < len(hits):
                         hit_copy = hits[idx]
-                        hit_copy["rerank_score"] = item["relevance_score"]
+                        hit_copy["rerank_score"] = item.get("relevance_score")
                         ordered_hits.append(hit_copy)
                 return ordered_hits
 

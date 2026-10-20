@@ -54,11 +54,14 @@ import {
   PauseCircle,
   PlayCircle,
   Globe,
-  Menu
+  Menu,
+  Coins,
+  Bot
 } from 'lucide-react';
 import { api } from '../api';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
+import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
 
 const TAB_SLUG_MAP = {
   DASHBOARD: 'dashboard',
@@ -72,6 +75,7 @@ const TAB_SLUG_MAP = {
   EMAIL_TEMPLATES: 'email-templates',
   SCHEDULES: 'schedules',
   AI_MODEL_SETTINGS: 'ai-models',
+  AI_ASSISTANT: 'ai-assistant',
   MODELS: 'models'
 };
 
@@ -87,6 +91,7 @@ const SLUG_TAB_MAP = {
   'email-templates': 'EMAIL_TEMPLATES',
   'schedules': 'SCHEDULES',
   'ai-models': 'AI_MODEL_SETTINGS',
+  'ai-assistant': 'AI_ASSISTANT',
   'models': 'MODELS'
 };
 
@@ -428,6 +433,8 @@ export default function SuperAdminConsole({
     toast[type](feedback.text, { duration });
   };
   const [processingId, setProcessingId] = useState(null);
+  const [creditTenant, setCreditTenant] = useState(null);
+  const [syncingModels, setSyncingModels] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
 
   // ================= MODAL STATE'LERİ =================
@@ -931,6 +938,22 @@ export default function SuperAdminConsole({
   };
 
   // Müşterinin kartını pasife alma / aktife alma (Madde 4)
+  const handleSyncEvrenModels = async () => {
+    setSyncingModels(true);
+    try {
+      const res = await api.syncEvrenModels();
+      setModels(await api.getModels());
+      const parts = [`${res.updated.length} model güncellendi`];
+      if (res.added.length) parts.push(`${res.added.length} yeni model PASİF olarak eklendi (${res.added.join(', ')}); katsayısını belirleyip aktifleştirin`);
+      if (res.missing_in_evren.length) parts.push(`EVREN'de artık bulunmayan: ${res.missing_in_evren.join(', ')}`);
+      toast.success(parts.join(' · '));
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSyncingModels(false);
+    }
+  };
+
   const handleToggleTenantStatus = async (t) => {
     const isCurrentlyActive = t.is_active;
     const confirmMsg = isCurrentlyActive
@@ -2444,13 +2467,25 @@ export default function SuperAdminConsole({
           >
             <div className="super-admin-nav-item-left">
               <Zap style={{ width: 17, height: 17, color: '#f43f5e' }} />
-              {!sidebarCollapsed && <span>Genel AI Modeli</span>}
+              {!sidebarCollapsed && <span>Genel AI Modelleri</span>}
             </div>
             {!sidebarCollapsed && (
               <span style={{ background: 'rgba(244,63,94,0.2)', color: '#f43f5e', fontSize: '0.6rem', padding: '2px 5px', borderRadius: 4, fontWeight: 700 }}>
                 ÇEKİRDEK
               </span>
             )}
+          </button>
+
+          {/* SÜPER YÖNETİCİ ASİSTANI */}
+          <button
+            onClick={() => { switchTab('AI_ASSISTANT'); setSearchQuery(''); }}
+            className={`super-admin-nav-item ${activeTab === 'AI_ASSISTANT' ? 'active' : ''}`}
+            title="Süper Yönetici Asistanı"
+          >
+            <div className="super-admin-nav-item-left">
+              <Bot style={{ width: 17, height: 17, color: '#38bdf8' }} />
+              {!sidebarCollapsed && <span>Yönetici Asistanı</span>}
+            </div>
           </button>
 
           {/* EVREN MODELLERİ */}
@@ -2556,7 +2591,8 @@ export default function SuperAdminConsole({
               {activeTab === 'PERMISSIONS' && 'Sistem Yetki Kataloğu (RBAC)'}
               {activeTab === 'PLANS' && 'Kiralama Paketleri Yönetimi'}
               {activeTab === 'MODELS' && 'EVREN Model Kataloğu'}
-              {activeTab === 'AI_MODEL_SETTINGS' && 'Çekirdek Manifesto & Ajan AI Modeli Seçimi'}
+              {activeTab === 'AI_MODEL_SETTINGS' && 'Genel AI Modelleri & Yapay Zeka Kullanımı'}
+              {activeTab === 'AI_ASSISTANT' && 'Süper Yönetici Asistanı'}
               {activeTab === 'SECTORS' && 'Sektör Tanımları (Ticaret Bakanlığı)'}
               {activeTab === 'PROFESSIONS' && 'Meslek Grubu Tanımları (Ticaret Bakanlığı)'}
             </span>
@@ -3628,6 +3664,15 @@ export default function SuperAdminConsole({
                           scrollbarWidth: 'thin'
                         }}
                       >
+                        <button
+                          onClick={() => setCreditTenant(t)}
+                          className="super-admin-btn-secondary"
+                          style={{ flex: '1 1 calc(50% - 6px)', minWidth: '85px', justifyContent: 'center', padding: '6px 8px', fontSize: '0.72rem', whiteSpace: 'nowrap' }}
+                          title="Kredi durumu ve ek kredi yükleme"
+                        >
+                          <Coins style={{ width: 13, height: 13, color: '#facc15' }} />
+                          <span>Kredi</span>
+                        </button>
                         {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 3: Yalnızca Kayıtlı Şirketler Listesinden Yapılır) */}
                         <button
                           onClick={() => handleToggleTenantStatus(t)}
@@ -3940,6 +3985,14 @@ export default function SuperAdminConsole({
                             {/* 11. İşlemler */}
                             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <button
+                                  onClick={() => setCreditTenant(t)}
+                                  className="super-admin-btn-secondary"
+                                  style={{ padding: '5px 8px', fontSize: '0.72rem' }}
+                                  title="Kredi durumu ve ek kredi yükleme"
+                                >
+                                  <Coins style={{ width: 12, height: 12, color: '#facc15' }} />
+                                </button>
                                 {/* Müşteri Kartını Pasife Al / Aktife Al Butonu (Madde 3: Yalnızca Kayıtlı Şirketler Listesinden Yapılır) */}
                                 <button
                                   onClick={() => handleToggleTenantStatus(t)}
@@ -4752,95 +4805,13 @@ export default function SuperAdminConsole({
 
           {/* TAB 5: GENEL AI & MANİFESTO MODELİ SEÇİMİ (Madde 6) */}
           {activeTab === 'AI_MODEL_SETTINGS' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(113,52,226,0.18) 0%, rgba(49,76,205,0.15) 50%, rgba(20,108,235,0.18) 100%)',
-                border: '1px solid rgba(113,52,226,0.4)',
-                borderRadius: 16,
-                padding: '24px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 16
-              }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 14,
-                  background: 'linear-gradient(135deg, #7134e2 0%, #146ceb 100%)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', flexShrink: 0, boxShadow: '0 0 16px rgba(113,52,226,0.5)'
-                }}>
-                  <Sparkles style={{ width: 24, height: 24 }} />
-                </div>
-                <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
-                    Çekirdek Genel AI Modeli (Manifesto & Ajan Rol Mimarı)
-                  </h2>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--nt-cbd5e1)', marginTop: 4, lineHeight: 1.5, maxWidth: 750 }}>
-                    Seçilen NACE kodları bazında müşterilerin <strong>şirket manifestosunu yazan</strong> ve 
-                    AI Ajan personel unvanlarının <strong>sistem rollerini/promptlarını oluşturan</strong> en güçlü EVREN modelini buradan seçebilirsiniz.
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: '0.8rem' }}>
-                    <span style={{ color: 'var(--nt-94a3b8)' }}>Aktif Seçili Model:</span>
-                    <span style={{ background: '#7134e2', color: '#fff', padding: '3px 10px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 800 }}>
-                      {systemSettings.default_manifesto_model}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="super-admin-card-grid">
-                {models.map((m) => {
-                  const isSelected = systemSettings.default_manifesto_model === m.model_code;
-                  return (
-                    <div
-                      key={m.id}
-                      onClick={() => handleSelectDefaultManifestoModel(m.model_code)}
-                      className="super-admin-card"
-                      style={isSelected ? {
-                        borderColor: '#7134e2',
-                        boxShadow: '0 0 24px rgba(113,52,226,0.4)',
-                        background: 'var(--sf-12182c)'
-                      } : { cursor: 'pointer' }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: '0.725rem', color: 'var(--nt-94a3b8)' }}>
-                            {m.model_code}
-                          </span>
-                          {isSelected && (
-                            <span style={{ background: '#7134e2', color: '#fff', fontSize: '0.65rem', fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
-                              ✓ SEÇİLİ MODEL
-                            </span>
-                          )}
-                        </div>
-
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--nt-ffffff)', marginTop: 8 }}>{m.display_name}</h3>
-
-                        <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                          <span style={{ background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontFamily: 'monospace' }}>
-                            {m.model_type}
-                          </span>
-                          <span style={{ background: 'rgb(var(--rgb-ov) / 0.06)', padding: '2px 6px', borderRadius: 4, fontSize: '0.68rem', fontFamily: 'monospace' }}>
-                            {m.context_window.toLocaleString()} token
-                          </span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, paddingTop: 14, borderTop: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>Efor: {m.effort_coefficient}x</span>
-                        <button
-                          disabled={isSelected}
-                          className={isSelected ? "super-admin-btn-secondary" : "super-admin-btn-corporate"}
-                          style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-                        >
-                          {isSelected ? 'Aktif Model' : 'Bunu Model Yap'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="ai-stack">
+              <ModelSettingsPanel />
+              <PlatformUsagePanel />
             </div>
           )}
+
+          {activeTab === 'AI_ASSISTANT' && <PlatformAssistantPanel />}
 
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
           {activeTab === 'MODELS' && (
@@ -4857,6 +4828,10 @@ export default function SuperAdminConsole({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button onClick={handleSyncEvrenModels} disabled={syncingModels} className="super-admin-btn-secondary" title="EVREN model kataloğunu çek: bağlam, çıktı sınırı ve fiyat bilgilerini güncelle, yeni modelleri pasif ekle">
+                    <RefreshCw style={{ width: 14, height: 14 }} className={syncingModels ? 'animate-spin' : ''} />
+                    <span>EVREN'den Modelleri Çek</span>
+                  </button>
                   <button onClick={() => handleOpenModelModal(null)} className="super-admin-btn-corporate">
                     <Plus style={{ width: 14, height: 14 }} />
                     <span>Yeni Model Ekle</span>
@@ -8977,6 +8952,7 @@ export default function SuperAdminConsole({
         </div>
       )}
 
+      <TenantCreditsModal tenant={creditTenant} onClose={() => setCreditTenant(null)} />
     </div>
   );
 }

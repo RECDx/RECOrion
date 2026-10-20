@@ -53,6 +53,9 @@ import {
 import { api } from '../api';
 import ThemeToggle from '../ui/ThemeToggle';
 import { notify, toast } from '../ui/feedback';
+import CreditsPanel from './ai/CreditsPanel';
+import BrainPanel from './ai/BrainPanel';
+import { Coins, Brain } from 'lucide-react';
 
 export default function CompanyAdminConsole({
   currentUser,
@@ -2211,6 +2214,35 @@ export default function CompanyAdminConsole({
               >
                 <FileText size={18} color={activeTab === 'MANIFESTO' ? '#f59e0b' : 'var(--nt-64748b)'} />
                 <span style={{ flex: 1 }}>Sektörel Manifesto</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('BRAIN')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '10px',
+                  background: activeTab === 'BRAIN' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
+                  border: activeTab === 'BRAIN' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
+                  color: activeTab === 'BRAIN' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
+                  fontSize: '0.85rem', fontWeight: activeTab === 'BRAIN' ? '700' : '500',
+                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
+                }}
+              >
+                <Brain size={18} color={activeTab === 'BRAIN' ? '#c084fc' : 'var(--nt-64748b)'} />
+                <span style={{ flex: 1 }}>Beyin AI</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('CREDITS')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '10px',
+                  background: activeTab === 'CREDITS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
+                  border: activeTab === 'CREDITS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
+                  color: activeTab === 'CREDITS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
+                  fontSize: '0.85rem', fontWeight: activeTab === 'CREDITS' ? '700' : '500',
+                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
+                }}
+              >
+                <Coins size={18} color={activeTab === 'CREDITS' ? '#facc15' : 'var(--nt-64748b)'} />
+                <span style={{ flex: 1 }}>Kredi ve Kullanım</span>
               </button>
             </nav>
           </div>
@@ -5226,6 +5258,16 @@ export default function CompanyAdminConsole({
           {/* ========================================================================= */}
           {/* TAB 4 / MADDE 6: KURUMSAL MANİFESTO SEKMESİ */}
           {/* ========================================================================= */}
+          {activeTab === 'BRAIN' && (
+            <BrainPanel
+              tenantId={tenantId}
+              currentUser={currentUser}
+              canManage={currentUser?.is_super_admin || (currentUser?.permissions || []).includes('tenant:manage') || currentUser?.role === 'COMPANY_ADMIN'}
+            />
+          )}
+
+          {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
+
           {activeTab === 'MANIFESTO' && (
             <div style={{ padding: '4px 0 30px 0', maxWidth: '1100px', margin: '0 auto' }}>
               {/* Başlık ve Aksiyon Barı */}

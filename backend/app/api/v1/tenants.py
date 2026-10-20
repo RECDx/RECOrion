@@ -1338,17 +1338,21 @@ async def send_manual_expiration_reminder(tenant_id: uuid.UUID, db: AsyncSession
 @router.post("/generate-manifesto")
 async def generate_company_manifesto_endpoint(payload: ManifestoRequest, db: AsyncSession = Depends(get_db)):
     """
-    Şirket adı ve seçilen Sektör / Meslek gruplarına göre Kurumsal AI Manifestosu üretir.
+    Süper Admin yeni müşteri kaydında: şirket adı ve sektör/meslek gruplarına göre
+    detaylı kurumsal manifestoyu LLM ile üretir (platform maliyeti). Önerilen yetenekler
+    ve sektör odağı şablon servisinden gelir.
     """
-    from app.services.manifesto_service import ManifestoService
+    from app.services.manifesto_service import ManifestoService, generate_detailed_manifesto
 
     data = ManifestoService.generate_manifesto(
-        company_name=payload.company_name,
-        sectors=payload.sectors,
-        professions=payload.professions,
-        website=payload.website
+        company_name=payload.company_name, sectors=payload.sectors,
+        professions=payload.professions, website=payload.website,
     )
-    return data
+    detailed = await generate_detailed_manifesto(
+        db, tenant_id=None, company_name=payload.company_name, sector_codes=payload.sectors,
+        profession_codes=payload.professions, website=payload.website,
+    )
+    return {**data, "manifesto": detailed["manifesto"], "model_code": detailed["model_code"]}
 
 
 

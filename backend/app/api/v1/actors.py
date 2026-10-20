@@ -190,16 +190,12 @@ async def regenerate_job_title_prompt(title_id: uuid.UUID, db: AsyncSession = De
     """
     Sektörün rol promptunu Genel AI Modeli (EVREN) ile yeniden oluşturma (Madde 6 & 13).
     """
-    from app.db.models import SystemSetting
-    from app.services.evren_gateway import EvrenLLMGateway
+    from app.services import llm_gateway
+    from app.services.llm_gateway import LLMContext
 
     job_title = await db.get(JobTitle, title_id)
     if not job_title:
         raise HTTPException(status_code=404, detail="Ünvan bulunamadı.")
-
-    # Sistemde seçilmiş en güçlü Genel AI Modelini al
-    setting = await db.get(SystemSetting, "default_manifesto_model")
-    model_code = setting.value if setting and setting.value else "deepseek-v4.1-flash"
 
     skills_str = ", ".join(job_title.required_skills) if job_title.required_skills else "Genel Uzmanlık"
     prompt_instruction = f"""Sen RECOrion Otonom Kurumsal Yapay Zeka ekosisteminin Baş Mimarı ve Baş Operasyon Yöneticisisin.
@@ -221,41 +217,24 @@ Prompt formatı:
 
 Yalnızca doğrudan ajanın sistem promptu olarak kullanılacak metni Türkçe olarak üret."""
 
-    gateway = EvrenLLMGateway()
     messages = [
         {"role": "system", "content": "Sen RECOrion Otonom Yapay Zeka Ajan Mimarisisin."},
         {"role": "user", "content": prompt_instruction}
     ]
-
-    try:
-        response = await gateway.chat_completion(model_code=model_code, messages=messages, temperature=0.7, max_tokens=2048)
-        msg_obj = response.get("choices", [{}])[0].get("message", {})
-        new_prompt = msg_obj.get("content") or msg_obj.get("reasoning") or ""
-        if not new_prompt:
-            raise ValueError("Boş içerik döndü")
-    except Exception as e:
-        new_prompt = f"""# {job_title.title.upper()} - SİSTEM AJAN ROL PROMPTU (EVREN v3.2)
-Sen RECOrion Otonom Ekosistemi bünyesinde '{job_title.category}' sektöründe görev yapan kıdemli bir {job_title.title} uzmanısın.
-Otonomi Seviyen: {job_title.autonomy_level}. Temel yetenek havuzun: {skills_str}.
-
-## GÖREVLER VE PRENSİPLER:
-1. Deterministik çıktı: Halüsinasyon içermeyen, doğrulanabilir ve sektörel mevzuata uygun analizler üret.
-2. Kalite Kapısı: Ürettiğin her çıktıyı çift kontrol et, eksik veya belirsiz parametreleri netleştir.
-3. Dark DB & Kurum Hafızası: Ürettiğin kritik kararları ve raporları şirket kolektif hafızasına yazılması için yapılandırılmış formatta ilet."""
-
-    # Ünvanın base_role_prompt alanını güncelle
-    job_title.base_role_prompt = new_prompt.strip()
+    # Platform (RECDx) maliyeti. Hata olursa mevcut prompt korunur; önceden genel şablon
+    # ünvanın kayıtlı promptunun üzerine yazılıyordu.
+    result = await llm_gateway.chat(LLMContext(tenant_id=None, purpose="ROLE_PROMPT"), messages,
+                                    temperature=0.7, max_tokens=6144, timeout=120)
+    job_title.base_role_prompt = result.content.strip()
     await db.commit()
     await db.refresh(job_title)
 
     return {
         "success": True,
-        "message": f"'{job_title.title}' için rol promptu '{model_code}' modeli kullanılarak başarıyla yeniden üretildi.",
-        "model_used": model_code,
+        "message": f"'{job_title.title}' için rol promptu '{result.model_code}' modeli ile yeniden üretildi.",
+        "model_used": result.model_code,
         "new_prompt": job_title.base_role_prompt
     }
-
-
 
 @router.get("", response_model=List[ActorResponse])
 @router.get("/", response_model=List[ActorResponse])

@@ -243,10 +243,9 @@ async def _evaluate_job_title_with_ai(
     RECOrion kendi AI Modeli her yeni tanımlanan unvanları kontrol eder (Madde 2).
     Sistemin geneli için faydalı olarak gördüğü Ünvanları Ana şablona ekler.
     """
-    from app.services.evren_gateway import EvrenLLMGateway
+    from app.services import llm_gateway
+    from app.services.llm_gateway import LLMContext, LLMError
 
-    setting = await db.get(SystemSetting, "default_manifesto_model")
-    model_code = setting.value if setting and setting.value else "glm-5.3"
 
     eval_instruction = f"""Sen RECOrion Otonom Kurumsal Yapay Zeka Fabrikasının Baş Mimarı ve Kolektif Bilgi İnceleme Motorusun.
 Bir şirket kendi organizasyonu için yeni bir dijital personel ünvanı ve Sistem Rol Promptu tanımladı:
@@ -267,37 +266,30 @@ Yanıtını YALNIZCA geçerli bir JSON objesi olarak ver:
 {{"score": 88, "is_beneficial": true, "reason": "Sektörel standartlara uygun, temiz ve tekrar kullanılabilir mimari prompt"}}"""
 
     try:
-        gateway = EvrenLLMGateway()
-        resp = await asyncio.wait_for(
-            gateway.chat_completion(
-                model_code=model_code,
-                messages=[
-                    {"role": "system", "content": "Sen geçerli bir JSON objesi üreten deterministik bir AI denetim motorusun."},
-                    {"role": "user", "content": eval_instruction}
-                ],
-                temperature=0.3,
-                max_tokens=512
-            ),
-            timeout=5.0
+        result = await llm_gateway.chat(
+            LLMContext(tenant_id=None, purpose="TITLE_REVIEW"),  # platform (RECDx) maliyeti
+            [
+                {"role": "system", "content": "Sen geçerli bir JSON objesi üreten deterministik bir AI denetim motorusun."},
+                {"role": "user", "content": eval_instruction},
+            ],
+            temperature=0.3, max_tokens=1024, timeout=60,
         )
-        content = resp.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        clean_json = content
+        clean_json = result.content.strip()
         if "```json" in clean_json:
             clean_json = clean_json.split("```json")[1].split("```")[0].strip()
         elif "```" in clean_json:
             clean_json = clean_json.split("```")[1].split("```")[0].strip()
 
         parsed = json.loads(clean_json)
-        score = int(parsed.get("score", 70))
+        score = int(parsed.get("score", 0))
         is_beneficial = bool(parsed.get("is_beneficial", score >= 75))
         reason = str(parsed.get("reason", "İncelendi.")).strip()
         return is_beneficial, score, reason
-    except Exception as e:
-        # Heuristik fallback
-        is_valuable = len(role_prompt) > 60 and not any(k in role_prompt.lower() for k in ["özel", "şirketime", "gizli", "bizim firma"])
-        score = 85 if is_valuable else 60
-        reason = "Genel sektörel standartlara uygunluk incelendi."
-        return is_valuable, score, reason
+    except (LLMError, ValueError, KeyError) as e:
+        # Önceden basit bir kurala göre "faydalı" sayılıp global şablona eklenebiliyordu.
+        # AI incelemesi yapılamazsa ünvan şirkete özel kalır; RECDx daha sonra inceleyebilir.
+        logger.warning(f"Ünvan AI incelemesi yapılamadı: {e}")
+        return False, 0, "AI incelemesi yapılamadı; ünvan şirkete özel olarak kaydedildi."
 
 
 @router.get("/{tenant_id}/job-titles/system-templates", response_model=List[SystemJobTitleTemplateOut])
@@ -700,7 +692,7 @@ class GenerateRolePromptIn(BaseModel):
     category: Optional[str] = Field("GENEL", description="Sektör / Kategori")
     description: Optional[str] = Field(None, description="Görev Tanımı / Açıklama")
     required_skills: Optional[List[str]] = Field(default_factory=list, description="Gerekli Beceriler")
-    model_code: Optional[str] = Field("glm-5.3", description="Promptu üretecek LLM Modeli")
+    model_code: Optional[str] = Field(None, description="Promptu üretecek LLM Modeli (boşsa platform varsayılanı)")
     autonomy_level: Optional[str] = Field("L1", description="Otonomi Seviyesi")
 
 
@@ -714,13 +706,13 @@ async def generate_company_role_prompt(
     Şirket ünvanı veya AI Ajanı için seçilen EVREN AI Modeli ile Sistem Rol Promptu (Persona & Talimatlar) üretir.
     """
     tenant = await _get_tenant_or_404(db, tenant_id)
-    from app.services.evren_gateway import EvrenLLMGateway
+    from app.services import llm_gateway
+    from app.services.llm_gateway import LLMContext
 
     title_clean = (payload.title or "").strip()
     if not title_clean:
         raise HTTPException(status_code=422, detail="Ünvan adı boş bırakılamaz.")
 
-    model_code = payload.model_code or "glm-5.3"
     skills_str = ", ".join(payload.required_skills) if payload.required_skills else "Genel Uzmanlık, Kalite Güvencesi"
     category = payload.category or "GENEL"
     desc = payload.description or f"{title_clean} rolüne ait temel kurumsal iş süreçleri"
@@ -745,45 +737,20 @@ Rol Promptu Yapısı:
 
 Lütfen doğrudan sistem promptu (persona yönergesi) olarak kullanılacak markdown formatındaki metni Türkçe olarak üret. Başka giriş veya selamlama cümlesi ekleme."""
 
-    gateway = EvrenLLMGateway()
     messages = [
         {"role": "system", "content": f"Sen {tenant.name} şirketi için uzman AI Rol Promptu ve Persona Tasarımcısısın."},
         {"role": "user", "content": prompt_instruction}
     ]
-
-    try:
-        response = await gateway.chat_completion(
-            model_code=model_code,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2048,
-            timeout=15.0
-        )
-        msg_obj = response.get("choices", [{}])[0].get("message", {})
-        generated_prompt = msg_obj.get("content") or msg_obj.get("reasoning") or ""
-        if not generated_prompt:
-            raise ValueError("Boş içerik döndü")
-    except Exception as e:
-        generated_prompt = f"""# {title_clean.upper()} - SİSTEM ROL PROMPTU (PERSONA & TALİMATLAR)
-Sen {tenant.name} bünyesinde '{category}' kategorisinde görev yapan kıdemli bir {title_clean} uzmanısın.
-
-## 1. MİSYON VE KİMLİK
-- Görev Tanımın: {desc}
-- Otonomi Seviyen: {autonomy}. Kararlarını ve analizlerini şirket kalite standartlarına göre titizlikle uygula.
-- Temel Yetkinliklerin: {skills_str}.
-
-## 2. TEMEL SORUMLULUKLAR
-- Görev kapsamındaki tüm talepleri deterministik, eksiksiz ve kanıtlanabilir verilerle yanıtla.
-- Kurumsal hafızayı (Memory) etkin kullan, geçmiş kararlarla tutarlı kal.
-
-## 3. KALİTE KAPILARI & ÇIKTI STANDARTLARI
-- Her çıktıyı teslim etmeden önce doğruluğunu ve şirket politikalarına uygunluğunu denetle.
-- Belirsiz durumlarda varsayım yapmak yerine netleştirici sorular sor."""
-
+    # Hata olursa genel şablon döndürülmez; kullanıcı AI servisinin yanıt veremediğini görür
+    result = await llm_gateway.chat(
+        LLMContext(tenant_id=tenant.id, purpose="ROLE_PROMPT"), messages,
+        model_code=payload.model_code, temperature=0.7, max_tokens=6144, timeout=120,
+    )
     return {
         "success": True,
-        "model_code": model_code,
-        "role_prompt": generated_prompt.strip()
+        "model_code": result.model_code,
+        "role_prompt": result.content.strip(),
+        "credits": result.credits,
     }
 
 
@@ -1868,7 +1835,7 @@ async def add_agent_video_link(
 
 class DeepSearchIn(BaseModel):
     query: str = Field(..., description="Araştırılacak konu veya pazar sorgusu")
-    model_code: Optional[str] = Field("glm-5.3", description="Araştırma ve sentez modeli")
+    model_code: Optional[str] = Field(None, description="Araştırma ve sentez modeli (boşsa personelin modeli)")
 
 
 @router.post("/{tenant_id}/ai-agents/{agent_id}/deep-search")
@@ -1900,7 +1867,7 @@ async def trigger_agent_deep_search(
             agent_id=agent_id,
             query=data.query.strip(),
             db=db,
-            model_code=data.model_code or "glm-5.3"
+            model_code=data.model_code
         )
         return result
     except Exception as e:
@@ -1912,7 +1879,7 @@ class DeepSearchSectorTitleIn(BaseModel):
     job_title_id: uuid.UUID = Field(..., description="Ajanın ünvanı")
     agent_name: Optional[str] = Field(None, description="AI Ajan adı")
     agent_id: Optional[uuid.UUID] = Field(None, description="Mevcut ajan varsa ID'si")
-    model_code: Optional[str] = Field("glm-5.3", description="Model kodu")
+    model_code: Optional[str] = Field(None, description="Model kodu (boşsa personelin modeli)")
 
 
 @router.post("/{tenant_id}/ai-agents/deep-search-sector-title")
@@ -1936,7 +1903,7 @@ async def deep_search_sector_title_onboarding(
             db=db,
             agent_name=data.agent_name,
             agent_id=data.agent_id,
-            model_code=data.model_code or "glm-5.3"
+            model_code=data.model_code
         )
         return result
     except Exception as e:
@@ -1948,7 +1915,7 @@ async def deep_search_sector_title_onboarding(
 async def deep_search_sector_title_existing_agent(
     tenant_id: uuid.UUID,
     agent_id: uuid.UUID,
-    model_code: Optional[str] = Query("glm-5.3"),
+    model_code: Optional[str] = Query(None),
     current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1969,7 +1936,7 @@ async def deep_search_sector_title_existing_agent(
             db=db,
             agent_name=agent.display_name,
             agent_id=agent.id,
-            model_code=model_code or "glm-5.3"
+            model_code=model_code
         )
         return result
     except Exception as e:
@@ -2075,7 +2042,7 @@ async def update_company_manifesto(
 
 
 class GenerateCompanyManifestoIn(BaseModel):
-    model_code: Optional[str] = Field("glm-5.3", description="Seçili LLM Modeli")
+    model_code: Optional[str] = Field(None, description="Seçili LLM Modeli (boşsa platform varsayılanı)")
     instructions: Optional[str] = Field(None, description="Kullanıcının Özel Düzenleme / Vurgu Talimatı")
     current_manifesto: Optional[str] = Field(None, description="Mevcut Manifesto Metni")
     sectors: Optional[List[str]] = Field(None, description="Seçili Sektörler")
@@ -2092,82 +2059,18 @@ async def generate_company_manifesto(
     Şirketin seçtiği EVREN AI Modeli ile Kurumsal Manifestosunu yeniden düzenler veya üretir.
     """
     tenant = await _get_tenant_or_404(db, tenant_id)
-    from app.services.evren_gateway import EvrenLLMGateway
+    from app.services.manifesto_service import generate_detailed_manifesto
 
-    model_code = payload.model_code or "glm-5.3"
     effective_sectors = payload.sectors if payload.sectors is not None else (tenant.sectors or [])
-    effective_nace = payload.nace_codes if payload.nace_codes is not None else (tenant.nace_codes or [])
-
-    sectors_str = ", ".join(effective_sectors) if effective_sectors else "Genel Sanayi ve Ticaret"
-    nace_items = []
-    for n in effective_nace:
-        if isinstance(n, dict):
-            nace_items.append(f"{n.get('code', '')} - {n.get('title', '')}")
-        else:
-            nace_items.append(str(n))
-    nace_str = ", ".join(nace_items) if nace_items else "Genel Faaliyet Alanı"
-
-    instr = payload.instructions or "Sektörel liderlik, dijital otonomi, kalite standartları ve kurumsal vizyonu öne çıkar."
-    current = payload.current_manifesto or tenant.sector_manifesto or ""
-
-    prompt_instruction = f"""Sen RECOrion Otonom Kurumsal Yapay Zeka ekosisteminin Baş Stratejisti ve Kurumsal Kimlik Danışmanısın.
-'{tenant.name}' şirketinin kurumsal stratejisini, iş ahlakını, dijital dönüşüm ilkelerini ve kalite vizyonunu yansıtan etkileyici, ilham verici ve profesyonel bir 'KURUMSAL MANİFESTO' hazırla veya mevcut metni düzenle:
-
-Şirket Adı: {tenant.name}
-Faaliyet Sektörleri: {sectors_str}
-NACE Kodları / Faaliyet Alanı: {nace_str or 'Genel Kurumsal'}
-Özel Düzenleme / Vurgu Talimatı: {instr}
-{"Mevcut Manifesto Taslağı: " + current if current else ""}
-
-Manifesto Formatı:
-1. Kurumsal Misyon ve Varoluş Amacı
-2. Temel Değerler ve Etik Standartlar
-3. Dijitalleşme, Yapay Zeka ve İnovasyon Taahhüdü
-4. Müşteri ve Paydaş Güveni
-5. Gelecek Vizyonu ve Kalite Kapıları
-
-Lütfen doğrudan kurumsal manifesto metni olarak kullanılacak markdown biçimli içeriği Türkçe olarak üret. Ek selamlama veya giriş cümleleri ekleme."""
-
-    gateway = EvrenLLMGateway()
-    messages = [
-        {"role": "system", "content": f"Sen {tenant.name} şirketi için üst düzey Kurumsal Manifesto Stratejistisin."},
-        {"role": "user", "content": prompt_instruction}
-    ]
-
-    try:
-        response = await gateway.chat_completion(
-            model_code=model_code,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2048,
-            timeout=15.0
-        )
-        msg_obj = response.get("choices", [{}])[0].get("message", {})
-        generated_manifesto = msg_obj.get("content") or msg_obj.get("reasoning") or ""
-        if not generated_manifesto:
-            raise ValueError("Boş içerik döndü")
-    except Exception as e:
-        generated_manifesto = f"""# {tenant.name.upper()} - KURUMSAL MANİFESTO
-
-## 1. BİZ KİMİZ VE MİSYONUMUZ
-{tenant.name} olarak, {sectors_str} sektöründe yenilikçi, güvenilir ve sürdürülebilir katma değer üretmeyi temel misyonumuz kabul ediyoruz.
-
-## 2. TEMEL DEĞERLERİMİZ VE ETİK İLKELERİMİZ
-- **Dürüstlük ve Şeffaflık:** Tüm paydaşlarımızla kurduğumuz ilişkilerde en yüksek etik standartları uygularız.
-- **Mükemmeliyetçilik:** Ürettiğimiz her üründe ve hizmette sıfır hata ve tavizsiz kalite anlayışını benimseriz.
-- **İnsan Odaklılık:** Teknolojiyi insan yeteneğini ve refahını yücelten bir güç çarpanı olarak konumlandırırız.
-
-## 3. DİJİTAL DÖNÜŞÜM VE YAPAY ZEKA TAAHHÜDÜMÜZ
-RECOrion Otonom Yapay Zeka ekosistemi gücüyle, karar alma süreçlerimizi deterministik verilerle destekler, operasyonel hızımızı ve kurumsal hafızamızı geleceğe taşırız.
-
-## 4. GELECEK VİZYONUMUZ
-Sektörümüzde ulusal ve küresel standartları belirleyen, etik değerlere bağlı, çevreye duyarlı ve teknolojiyle güçlendirilmiş lider bir ekosistem inşa ediyoruz."""
-
-    return {
-        "success": True,
-        "model_code": model_code,
-        "manifesto": generated_manifesto.strip()
-    }
+    departments = [d.name for d in (await db.execute(select(Department).where(Department.tenant_id == tenant.id))).scalars()]
+    titles = [t.title for t in (await db.execute(select(JobTitle).where(JobTitle.tenant_id == tenant.id))).scalars()]
+    data = await generate_detailed_manifesto(
+        db, tenant_id=tenant.id, company_name=tenant.name, sector_codes=effective_sectors,
+        profession_codes=tenant.professions or [], website=tenant.website,
+        instructions=payload.instructions, current=payload.current_manifesto or tenant.sector_manifesto,
+        departments=departments, titles=titles, model_code=payload.model_code,
+    )
+    return {"success": True, **data}
 
 
 # ==================================================================

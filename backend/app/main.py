@@ -52,6 +52,17 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+# Yapay zeka hataları: sahte yanıt yerine anlaşılır hata (503 servis yok, 402 kredi, 403 model izni)
+from fastapi import Request as _Request
+from fastapi.responses import JSONResponse
+from app.services.llm_gateway import LLMError
+
+
+@app.exception_handler(LLMError)
+async def llm_error_handler(request: _Request, exc: LLMError):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
+
 # API Rotaları
 app.include_router(api_router)
 

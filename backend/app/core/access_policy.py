@@ -91,6 +91,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/models/"): SUPER_ADMIN,
     ("PUT", f"{P}/models/{{model_id}}"): SUPER_ADMIN,
     ("DELETE", f"{P}/models/{{model_id}}"): SUPER_ADMIN,
+    ("POST", f"{P}/models/sync-evren"): SUPER_ADMIN,
 
     ("GET", f"{P}/system/permissions"): AUTH,
     ("GET", f"{P}/system/permissions/{{perm_id}}"): AUTH,
@@ -104,6 +105,11 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/system/settings"): AUTH,
     ("GET", f"{P}/system/settings/default-manifesto-model"): AUTH,
     ("POST", f"{P}/system/settings/default-manifesto-model"): SUPER_ADMIN,
+    ("GET", f"{P}/system/settings/models"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/settings/models"): SUPER_ADMIN,
+    ("GET", f"{P}/system/llm/usage"): SUPER_ADMIN,
+    ("POST", f"{P}/system/assistant/chat"): SUPER_ADMIN,
+    ("GET", f"{P}/system/assistant/history"): SUPER_ADMIN,
     ("GET", f"{P}/system/email-templates"): SUPER_ADMIN,
     ("POST", f"{P}/system/email-templates"): SUPER_ADMIN,
     ("GET", f"{P}/system/email-templates/{{tmpl_id}}"): SUPER_ADMIN,
@@ -148,6 +154,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/tenants/{{tenant_id}}/approve"): SUPER_ADMIN,
     ("POST", f"{P}/tenants/{{tenant_id}}/send-welcome"): SUPER_ADMIN,
     ("POST", f"{P}/tenants/{{tenant_id}}/send-reminder"): SUPER_ADMIN,
+    ("POST", f"{P}/tenants/{{tenant_id}}/credits/topup"): SUPER_ADMIN,
     ("GET", f"{P}/tenants/{{tenant_id}}/roles"): TENANT("tenant:view"),
     ("POST", f"{P}/tenants/{{tenant_id}}/roles"): TENANT("role:create"),
 
@@ -175,6 +182,9 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{C}/manifesto"): TENANT("tenant:manage"),
     ("POST", f"{C}/generate-manifesto"): TENANT("tenant:manage"),
     ("GET", f"{C}/user-quota"): TENANT("tenant:view"),
+    ("GET", f"{C}/credits"): TENANT("billing:view"),
+    ("GET", f"{C}/brain/settings"): TENANT("tenant:view"),
+    ("PUT", f"{C}/brain/settings"): TENANT("tenant:manage"),
     ("GET", f"{C}/users"): TENANT("tenant:view"),
     ("POST", f"{C}/users"): TENANT("user:manage"),
     ("PUT", f"{C}/users/{{user_id}}"): TENANT("user:manage"),
@@ -189,6 +199,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{AGENT}/video-links"): TENANT("agent:configure", content=True),
     ("POST", f"{AGENT}/deep-search"): TENANT("agent:configure", content=True),
     ("POST", f"{AGENT}/deep-search-sector-title"): TENANT("agent:configure", content=True),
+
+    # --- Beyin AI (manifesto, hafıza ve sohbet içerir: süper admin erişemez) ---
+    ("POST", f"{C}/brain/chat"): TENANT("chat:participate", content=True),
+    ("GET", f"{C}/brain/history"): TENANT("chat:participate", content=True),
 
     # --- Work Space içeriği (şirket kontrolü uç içinde) ---
     ("GET", f"{P}/projects"): HANDLER(),

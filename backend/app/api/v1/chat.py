@@ -6,7 +6,8 @@ from typing import List, Optional, Dict, Any
 from app.db.session import get_db
 from app.core.security import CurrentUser, ensure_tenant_content, get_current_user
 from app.db.models import ChatMessage, Task, Actor, LLMModel, Project
-from app.services.evren_gateway import evren_gateway
+from app.services import llm_gateway
+from app.services.llm_gateway import LLMContext, LLMError
 from app.services.collective_memory import collective_memory
 from app.services.redis_stream import redis_stream
 from pydantic import BaseModel
@@ -156,8 +157,8 @@ async def send_chat_message(
     project_id = project.id
     task_id = task.id
 
-    # Görevli ajanın modelini çöz
-    model_code = payload.override_model_code or "glm-5.3"
+    # Görevli ajan: rol promptu buradan, model LLM Gateway'de çözülür
+    # (açık seçim → personelin modeli → platform varsayılanı; paket izni kontrol edilir)
     system_prompt = "Sen RECOrion otonom iş platformunun yetkili AI personelisiniz."
     agent_id = None
 
@@ -165,8 +166,6 @@ async def send_chat_message(
         agent_id = str(task.assignee.id)
         if task.assignee.system_prompt:
             system_prompt = task.assignee.system_prompt
-        if not payload.override_model_code and task.assignee.preferred_model:
-            model_code = task.assignee.preferred_model.model_code
 
     # 1. Kullanıcı mesajını kaydet
     user_msg = ChatMessage(
@@ -211,17 +210,22 @@ async def send_chat_message(
         llm_messages.append({"role": m.role if m.role in ["user", "assistant"] else "user", "content": m.content})
 
     # Redis'e anlık düşünce adımı fırlat
-    await redis_stream.publish_thought(str(task.id), "ANALYSIS", f"Görev analiz ediliyor. Model: {model_code}. 2 Kademeli hafıza tarandı.")
+    await redis_stream.publish_thought(str(task.id), "ANALYSIS", "Görev analiz ediliyor. 2 Kademeli hafıza tarandı.")
 
-    # 4. EVREN Modelini Çalıştır
-    ai_resp = await evren_gateway.chat_completion(
-        model_code=model_code,
-        messages=llm_messages
-    )
+    # 4. LLM Gateway (ölçüm + kredi düşümü). Hata olursa sahte yanıt üretilmez.
+    try:
+        ai = await llm_gateway.chat(
+            LLMContext(tenant_id=tenant_id, purpose="AGENT_CHAT", actor_id=task.assignee.id if task.assignee else None,
+                       task_id=task_id, project_id=project_id),
+            llm_messages,
+            model_code=payload.override_model_code,
+        )
+    except LLMError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
-    choice = ai_resp.get("choices", [{}])[0]
-    assistant_content = choice.get("message", {}).get("content", "")
-    thought_process = choice.get("message", {}).get("thought", "Düşünce adımları başarıyla tamamlandı.")
+    model_code = ai.model_code
+    assistant_content = ai.content
+    thought_process = ai.thought
 
     # 5. AI Yanıtını chat_messages tablosuna kalıcı yaz
     assistant_msg = ChatMessage(

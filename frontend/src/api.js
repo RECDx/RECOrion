@@ -325,6 +325,24 @@ export const api = {
   createCompanyUser: (tenantId, data) => request(`/company/${tenantId}/users`, { method: 'POST', body: JSON.stringify(data) }),
   updateCompanyUser: (tenantId, userId, data) => request(`/company/${tenantId}/users/${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCompanyUser: (tenantId, userId) => request(`/company/${tenantId}/users/${userId}`, { method: 'DELETE' }),
+
+  // Kredi ve yapay zeka kullanımı (Adım 4)
+  getCompanyCredits: (tenantId) => request(`/company/${tenantId}/credits`),
+  topupCredits: (tenantId, data) => request(`/tenants/${tenantId}/credits/topup`, { method: 'POST', body: JSON.stringify(data) }),
+  getPlatformLLMUsage: () => request('/system/llm/usage'),
+  syncEvrenModels: () => request('/models/sync-evren', { method: 'POST' }),
+  getModelSettings: () => request('/system/settings/models'),
+  updateModelSettings: (settings) => request('/system/settings/models', { method: 'PUT', body: JSON.stringify({ settings }) }),
+
+  // Beyin AI (şirketin organizatör yapay zekası)
+  getBrainSettings: (tenantId) => request(`/company/${tenantId}/brain/settings`),
+  updateBrainSettings: (tenantId, brainModelCode) => request(`/company/${tenantId}/brain/settings`, { method: 'PUT', body: JSON.stringify({ brain_model_code: brainModelCode || null }) }),
+  getBrainHistory: (tenantId) => request(`/company/${tenantId}/brain/history`),
+  sendBrainMessage: (tenantId, content) => request(`/company/${tenantId}/brain/chat`, { method: 'POST', body: JSON.stringify({ content }) }),
+
+  // Süper Yönetici asistanı
+  getAssistantHistory: () => request('/system/assistant/history'),
+  sendAssistantMessage: (content) => request('/system/assistant/chat', { method: 'POST', body: JSON.stringify({ content }) }),
 };
 
 

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Text, Boolean, Integer, Numeric, DateTime, ForeignKey, Index
+    Column, String, Text, Boolean, Integer, Numeric, DateTime, Date, ForeignKey, Index
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -73,8 +73,17 @@ class LLMModel(Base):
     model_type = Column(String(32), nullable=False)
     capabilities = Column(JSONB, default=dict)
     context_window = Column(Integer, default=131072)
-    effort_coefficient = Column(Numeric, default=1.0)
+    effort_coefficient = Column(Numeric, default=1.0)  # RECOrion kredi katsayısı
     status = Column(String(32), default="ACTIVE")
+    # EVREN /models senkronundan gelen bilgiler
+    evren_task = Column(String(32))
+    modalities = Column(JSONB)
+    max_output_tokens = Column(Integer)
+    prompt_token_price = Column(Numeric(18, 8))
+    completion_token_price = Column(Numeric(18, 8))
+    pricing_currency = Column(String(8))
+    free_until = Column(Date)
+    last_synced_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     provider = relationship("LLMProvider", back_populates="models")
@@ -227,6 +236,7 @@ class Tenant(Base):
     package_start_date = Column(DateTime(timezone=True), default=datetime.utcnow)
     package_expiry_date = Column(DateTime(timezone=True))
     last_reminder_sent_at = Column(DateTime(timezone=True))
+    brain_model_code = Column(String(128))  # şirketin Beyin AI (organizatör) modeli
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -475,4 +485,42 @@ class AuditEvent(Base):
     target_type = Column(String(64))
     target_id = Column(String(64))
     payload = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class LLMCall(Base):
+    """Her LLM çağrısının ölçümü (token, kredi, süre). Şirket/kullanıcı silinse de kayıt kalır."""
+    __tablename__ = "llm_calls"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True))
+    task_id = Column(UUID(as_uuid=True))
+    actor_id = Column(UUID(as_uuid=True))
+    model_id = Column(UUID(as_uuid=True))
+    project_id = Column(UUID(as_uuid=True))
+    purpose = Column(String(32))
+    model_code = Column(String(128))
+    tokens_in = Column(Integer, default=0)
+    tokens_out = Column(Integer, default=0)
+    credits_cost = Column(Numeric, default=0)
+    latency_ms = Column(Integer, default=0)
+    status = Column(String(32), default="SUCCESS")
+    error = Column(Text)
+    evren_credits = Column(Numeric(18, 6))
+    evren_balance_after = Column(Numeric(18, 4))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class CreditLedgerEntry(Base):
+    """Değiştirilemez kredi defteri. Bakiye = amount toplamı (kullanım negatif)."""
+    __tablename__ = "credit_ledger"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    entry_type = Column(String(24), nullable=False)  # MONTHLY_GRANT, TOPUP, USAGE, EXPIRE, ADJUSTMENT
+    amount = Column(Numeric(16, 4), nullable=False)
+    period = Column(String(7), nullable=False)
+    llm_call_id = Column(UUID(as_uuid=True))
+    note = Column(Text)
+    created_by_actor_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

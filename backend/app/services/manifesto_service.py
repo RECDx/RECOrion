@@ -102,3 +102,79 @@ Bu manifesto, {company_name} şirketinin tüm dijital personelleri için bağlay
             "sector_focus": sector_focus,
             "assigned_skills": sorted(list(skills))
         }
+
+
+# ---------------------------------------------------------------------------
+# Detaylı, LLM ile üretilen manifesto (Odoo #228)
+# ---------------------------------------------------------------------------
+MANIFESTO_SECTIONS = """1. Kimliğimiz ve Misyonumuz (şirketin ne yaptığı, kime değer ürettiği)
+2. Vizyonumuz (3-5 yıllık hedef tablo)
+3. Temel Değerlerimiz (her değer için davranışa dökülmüş 2-3 somut ilke)
+4. Faaliyet Alanımıza Özgü İş İlkeleri (seçili sektör ve meslek gruplarının gerçek iş süreçleri, riskleri ve iyi uygulamaları)
+5. Müşteri ve Paydaş Taahhütlerimiz (hizmet kalitesi, iletişim, şikâyet yönetimi)
+6. Kalite, Mevzuat ve Uyum (sektörün tabi olduğu Türk mevzuatı, KVKK, iş güvenliği, sektörel standartlar ve belgeler)
+7. AI Personellerimizin Çalışma İlkeleri (insan onayı, gizlilik, doğruluk, emin olmadığında sorma, kurum hafızasını kullanma)
+8. Karar Alma, Onay ve Eskalasyon (hangi kararları AI'ın, hangilerini insan yöneticinin verdiği)
+9. Kurumsal İletişim Dili ve Üslubumuz (müşteriye ve ekibe hitap şekli, kaçınılacak ifadeler)
+10. Ölçülebilir Hedeflerimiz (her biri sayısal ölçütlü 4-6 hedef)"""
+
+
+async def describe_activity(db, sector_codes, profession_codes) -> str:
+    """Sektör ve meslek kodlarını Ticaret Bakanlığı tanım adlarına çevirir."""
+    from sqlalchemy import select
+    from app.db.models import Profession, Sector
+
+    lines = []
+    if sector_codes:
+        rows = (await db.execute(select(Sector).where(Sector.code.in_([str(c) for c in sector_codes])))).scalars().all()
+        lines += [f"Sektör {s.code}: {s.name}" for s in rows] or [str(c) for c in sector_codes]
+    if profession_codes:
+        rows = (await db.execute(select(Profession).where(Profession.code.in_([str(c) for c in profession_codes])))).scalars().all()
+        lines += [f"Meslek grubu {p.code}: {p.name}" for p in rows] or [str(c) for c in profession_codes]
+    return "\n".join(lines) or "Belirtilmedi (genel ticari faaliyet)"
+
+
+async def generate_detailed_manifesto(db, *, tenant_id, company_name: str, sector_codes=None, profession_codes=None,
+                                      website: str = None, instructions: str = None, current: str = None,
+                                      departments=None, titles=None, model_code: str = None) -> dict:
+    """
+    LLM Gateway ile şirkete özgü, 10 bölümlü detaylı manifesto üretir. Hata durumunda şablona
+    düşülmez (önceden sessizce genel şablon dönüyor ve kullanıcı bunu AI çıktısı sanıyordu).
+    """
+    from app.services import llm_gateway
+    from app.services.llm_gateway import LLMContext
+
+    activity = await describe_activity(db, sector_codes, profession_codes)
+    org = ""
+    if departments:
+        org += "Departmanlar: " + ", ".join(departments[:30]) + "\n"
+    if titles:
+        org += "Tanımlı ünvanlar: " + ", ".join(titles[:40]) + "\n"
+    prompt = f"""'{company_name}' için kurumsal manifesto yaz{' (mevcut metni geliştirerek)' if current else ''}.
+
+ŞİRKET BİLGİLERİ
+Ünvan: {company_name}
+Web sitesi: {website or 'belirtilmedi'}
+Faaliyet alanı (T.C. Ticaret Bakanlığı sınıflandırması):
+{activity}
+{org}
+{('Yöneticinin özel talimatı: ' + instructions) if instructions else ''}
+{('MEVCUT MANİFESTO (koru, geliştir, tutarsızlıkları düzelt):' + chr(10) + current[:6000]) if current else ''}
+
+BÖLÜMLER (her bölüm başlıklı ve dolu olmalı):
+{MANIFESTO_SECTIONS}
+
+KURALLAR
+- Genel geçer slogan yerine bu faaliyet alanına özgü, somut ve uygulanabilir ifadeler kullan.
+- Bu metin şirketin AI personellerinin sistem talimatlarına eklenecek; açık, yönlendirici ve tutarlı yaz.
+- Doğrulanamayan rakam, ödül, müşteri adı veya sertifika uydurma; mevzuat adlarını genel düzeyde an.
+- Markdown kullan (## başlıklar, madde işaretleri). Giriş/kapanış cümlesi ekleme. Türkçe yaz."""
+    result = await llm_gateway.chat(
+        LLMContext(tenant_id=tenant_id, purpose="MANIFESTO"),
+        [
+            {"role": "system", "content": "Sen Türk iş dünyasını, sektör mevzuatını ve kurumsal kültür tasarımını iyi bilen kıdemli bir strateji danışmanısın."},
+            {"role": "user", "content": prompt},
+        ],
+        model_code=model_code, temperature=0.6, max_tokens=8192, timeout=180,
+    )
+    return {"manifesto": result.content.strip(), "model_code": result.model_code, "credits": result.credits}
