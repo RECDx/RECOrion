@@ -75,13 +75,17 @@ async def sync_lead_to_odoo(lead_id: uuid.UUID) -> None:
             await db.commit()
             return
         try:
-            partner_id = lead.odoo_partner_id or await asyncio.to_thread(
-                OdooService.get_or_create_partner,
-                lead.company_name, lead.contact_email, lead.phone or "", lead.address, lead.website, lead.tax_id,
-            )
+            partner_id = lead.odoo_partner_id
             if not partner_id:
-                raise RuntimeError("Odoo müşteri kaydı oluşturulamadı.")
-            lead.odoo_partner_id = partner_id
+                partner = await asyncio.to_thread(
+                    OdooService.get_or_create_partner,
+                    lead.company_name, lead.contact_email, lead.phone or "", lead.address, lead.website, lead.tax_id,
+                )
+                if not partner:
+                    raise RuntimeError("Odoo müşteri kaydı oluşturulamadı.")
+                partner_id = partner["id"]
+                lead.odoo_partner_id = partner_id
+                lead.odoo_partner_name = partner["name"]
             if not lead.odoo_order_id:
                 res = await asyncio.to_thread(
                     OdooService.create_sale_order, partner_id, plan.odoo_product_id, float(plan.monthly_price or 0),

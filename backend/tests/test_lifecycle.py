@@ -285,3 +285,26 @@ def test_odoo_mail_fallback_treats_none_marshal_fault_as_sent(monkeypatch):
 
     monkeypatch.setattr(OdooService, "_get_connection", classmethod(lambda cls: (2, FakeModels(), {"db": "d", "password": "p"})))
     assert NotificationService._send_via_odoo({"from_email": "a@b.c"}, "x@y.z", "Konu", "<p>x</p>") is True
+
+
+@pytest.mark.parametrize("tax_id", ["1234567890", "1111111111", "1222222223"])
+def test_fake_tax_ids_rejected(client, tag, tax_id):
+    """Ardışık/tekrarlı veya kontrol hanesi tutmayan vergi numaraları reddedilir."""
+    email = f"vkn{tax_id[-3:]}_{tag}@deneme-sirket.com.tr"
+    client.post("/api/v1/tenants/purchase-request/send-code", json={"email": email})
+    r = client.post("/api/v1/tenants/purchase-request", json=purchase_payload(email, code_from_outbox(email), tax_id=tax_id))
+    assert r.status_code == 400
+
+
+def test_valid_tckn_accepted():
+    from app.api.v1.tenants import validate_tax_id
+    assert validate_tax_id("100 000 001 46") == "10000000146"
+
+
+def test_odoo_partner_matching_requires_same_company():
+    """Aynı vergi numaralı ama başka şirkete ait Odoo kaydı kullanılmaz (S00061/S00062 hatası)."""
+    from app.services.odoo_service import partner_matches
+    assert not partner_matches("SIRIUS MES", "a@siriusmes.com", {"name": "Antigravity Odoo Test A.Ş.", "email": "t@antigravity-corp.com"})
+    assert not partner_matches("SIRIUS MES", "a@siriusmes.com", {"name": "KRT İnşaat A.Ş.", "email": "info@krt.com"})
+    assert partner_matches("SIRIUSMES", "x@baska.com", {"name": "SİRİUS MES Mühendislik Ltd. Şti.", "email": ""})
+    assert partner_matches("Yeni Ünvan A.Ş.", "a@siriusmes.com", {"name": "Eski Ünvan", "email": "b@siriusmes.com"})

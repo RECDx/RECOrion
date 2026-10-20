@@ -435,7 +435,33 @@ def validate_tax_id(tax_id: Optional[str]) -> Optional[str]:
     clean = re.sub(r"\s+", "", str(tax_id))
     if not clean.isdigit() or len(clean) not in (10, 11):
         raise HTTPException(status_code=400, detail="Vergi numarası 10 haneli VKN veya 11 haneli TCKN olmalıdır.")
+    if len(set(clean)) == 1 or clean in "01234567890123" or clean in "98765432109876":
+        raise HTTPException(status_code=400, detail="Lütfen gerçek vergi numaranızı girin (ardışık veya tekrar eden rakamlar kabul edilmez).")
+    if not (_vkn_checksum_ok(clean) if len(clean) == 10 else _tckn_checksum_ok(clean)):
+        raise HTTPException(status_code=400, detail="Vergi numarası geçersiz (kontrol hanesi tutmuyor). Lütfen numarayı kontrol edin.")
     return clean
+
+
+def _vkn_checksum_ok(v: str) -> bool:
+    """Gelir İdaresi 10 haneli VKN kontrol hanesi algoritması."""
+    d = [int(c) for c in v]
+    total = 0
+    for i in range(9):
+        t = (d[i] + (9 - i)) % 10
+        if t:
+            t = (t * 2 ** (9 - i)) % 9 or 9
+        total += t
+    return (10 - total % 10) % 10 == d[9]
+
+
+def _tckn_checksum_ok(v: str) -> bool:
+    """11 haneli T.C. kimlik numarası kontrol haneleri."""
+    d = [int(c) for c in v]
+    if d[0] == 0:
+        return False
+    if (sum(d[0:9:2]) * 7 - sum(d[1:8:2])) % 10 != d[9]:
+        return False
+    return sum(d[:10]) % 10 == d[10]
 
 
 def validate_corporate_email(email: Optional[str], field_name: str = "E-posta") -> str:
@@ -922,6 +948,7 @@ class LeadOut(BaseModel):
     odoo_partner_id: Optional[int] = None
     odoo_order_id: Optional[int] = None
     odoo_order_name: Optional[str] = None
+    odoo_partner_name: Optional[str] = None
     odoo_sync_status: Optional[str] = None
     odoo_sync_error: Optional[str] = None
     created_at: Optional[datetime] = None

@@ -1,4 +1,5 @@
 import os
+import re
 import xmlrpc.client
 import logging
 from datetime import date, datetime
@@ -53,59 +54,55 @@ class OdooService:
         address: Optional[str] = None,
         website: Optional[str] = None,
         tax_id: Optional[str] = None
-    ) -> Optional[int]:
+    ) -> Optional[Dict[str, Any]]:
         """
-        Odoo 19 res.partner modülünde müşteri arar. Yoksa yeni müşteri kaydı açar.
+        Odoo'da müşteriyi bulur, yoksa açar. Dönen sözlük: {id, name, matched_by}.
+
+        Eşleştirme sırası (yanlış müşteriye sipariş açılmasını önlemek için):
+        1. Aynı vergi numarası, ancak firma adı benziyor veya e-posta alan adı aynıysa
+           (Odoo'da aynı numarayı taşıyan deneme/kirli kayıtlar başka şirketle eşleşmesin)
+        2. Aynı e-posta adresi
+        3. Aynı firma adı
+        4. Hiçbiri yoksa yeni müşteri
         """
         uid, models, cfg = cls._get_connection()
         if not uid or not models:
             return None
 
+        def search(domain):
+            return models.execute_kw(cfg['db'], uid, cfg['password'], 'res.partner', 'search_read', [domain],
+                                     {'fields': ['id', 'name', 'email', 'vat'], 'limit': 20})
+
         try:
-            # 1. Önce Vergi No veya E-posta veya İsim ile ara
-            # Vergi numarası yalnızca geçerli biçimdeyse (10 haneli VKN / 11 haneli TCKN) eşleştirmede kullanılır;
-            # aksi halde "123456" gibi deneme değerleri başka bir şirketle eşleşebilir.
             vat = (tax_id or "").replace(" ", "")
             if vat.isdigit() and len(vat) in (10, 11):
-                search_domain = ['|', ['vat', '=', vat], ['vat', '=', f"TR{vat}"]]
-            elif contact_email:
-                search_domain = [['email', '=ilike', contact_email]]
-            else:
-                search_domain = [['name', '=ilike', company_name]]
+                for p in search(['|', ['vat', '=', vat], ['vat', '=', f"TR{vat}"]]):
+                    if partner_matches(company_name, contact_email, p):
+                        return cls._found(p, "vat", company_name)
+                    logger.warning(f"Odoo'da aynı vergi numaralı ama farklı firma atlandı: ID={p['id']} '{p['name']}' (aranan: {company_name})")
+            if contact_email:
+                found = search([['email', '=ilike', contact_email]])
+                if found:
+                    return cls._found(found[0], "email", company_name)
+            if company_name:
+                found = search([['name', '=ilike', company_name.strip()]])
+                if found:
+                    return cls._found(found[0], "name", company_name)
 
-            partner_ids = models.execute_kw(
-                cfg['db'], uid, cfg['password'],
-                'res.partner', 'search',
-                [search_domain]
-            )
-
-            if partner_ids:
-                found = models.execute_kw(cfg['db'], uid, cfg['password'], 'res.partner', 'read', [[partner_ids[0]]], {'fields': ['name']})
-                logger.info(f"Odoo'da mevcut müşteri bulundu (ID: {partner_ids[0]}, Ad: {found[0]['name'] if found else '?'}, aranan: {company_name})")
-                return partner_ids[0]
-
-            # 2. Yoksa yeni partner oluştur
-            partner_data = {
-                'name': company_name,
-                'email': contact_email,
-                'phone': phone,
-                'street': address or '',
-                'website': website or '',
-                'vat': tax_id or '',
-                'is_company': True
-            }
-
-            partner_id = models.execute_kw(
-                cfg['db'], uid, cfg['password'],
-                'res.partner', 'create',
-                [partner_data]
-            )
+            partner_id = models.execute_kw(cfg['db'], uid, cfg['password'], 'res.partner', 'create', [{
+                'name': company_name, 'email': contact_email, 'phone': phone, 'street': address or '',
+                'website': website or '', 'vat': vat or '', 'is_company': True,
+            }])
             logger.info(f"Odoo'da yeni müşteri açıldı (ID: {partner_id}, Firma: {company_name})")
-            return partner_id
-
+            return {"id": partner_id, "name": company_name, "matched_by": "created"}
         except Exception as e:
             logger.error(f"Odoo res.partner işlemi sırasında hata: {e}")
             return None
+
+    @staticmethod
+    def _found(p: Dict[str, Any], how: str, wanted: str) -> Dict[str, Any]:
+        logger.info(f"Odoo'da mevcut müşteri kullanıldı ({how}): ID={p['id']} '{p['name']}' (aranan: {wanted})")
+        return {"id": p["id"], "name": p["name"], "matched_by": how}
 
     @classmethod
     def create_sale_order(cls, partner_id: int, product_id: int, price: float, description: str) -> Dict[str, Any]:
@@ -180,3 +177,27 @@ class OdooService:
         except Exception as e:
             logger.warning(f"Odoo sipariş onaylama (action_confirm) uyarısı: {e}")
             return False
+
+
+_LEGAL_WORDS = {"as", "a", "s", "ltd", "sti", "şti", "tic", "san", "ve", "limited", "sirketi", "şirketi", "anonim", "the", "inc", "co"}
+
+
+def _name_words(name: str) -> list:
+    """Firma adının anlamlı kelimeleri (Türkçe karakterler sadeleştirilir, şirket türü ekleri atılır)."""
+    tr = str.maketrans("çğıöşüâîİI", "cgiosuaiii")
+    words = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower().translate(tr)).split()
+    return [w for w in words if w not in _LEGAL_WORDS and len(w) > 1]
+
+
+def partner_matches(company_name: str, contact_email: str, partner: Dict[str, Any]) -> bool:
+    """Odoo kaydı bu şirkete mi ait: e-posta alan adı aynı veya firma adları örtüşüyor."""
+    want_domain = (contact_email or "").split("@")[-1].lower()
+    have_domain = (partner.get("email") or "").split("@")[-1].lower()
+    if want_domain and want_domain == have_domain:
+        return True
+    a, b = _name_words(company_name), _name_words(partner.get("name") or "")
+    if not a or not b:
+        return False
+    overlap = len(set(a) & set(b)) / min(len(set(a)), len(set(b)))
+    joined_a, joined_b = "".join(a), "".join(b)  # "SIRIUSMES" ile "SIRIUS MES" eşleşsin
+    return overlap >= 0.5 or joined_a in joined_b or joined_b in joined_a

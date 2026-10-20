@@ -198,6 +198,7 @@ class TenantLead(Base):
     rejection_reason = Column(Text)
     reviewed_by_actor_id = Column(UUID(as_uuid=True), nullable=True)
     reviewed_at = Column(DateTime(timezone=True))
+    odoo_partner_name = Column(String(255))  # eşleşen/açılan Odoo müşterisinin adı
     odoo_sync_status = Column(String(32), default="PENDING")  # PENDING, SYNCED, FAILED, SKIPPED
     odoo_sync_error = Column(Text)
     email_verified_at = Column(DateTime(timezone=True))

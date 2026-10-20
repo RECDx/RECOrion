@@ -807,7 +807,16 @@ export default function SuperAdminConsole({
   const renderLeadOdoo = (lead) => {
     const status = lead.odoo_sync_status;
     if (lead.odoo_order_name) {
-      return <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--ac-34d399)', fontWeight: 800 }}>{lead.odoo_order_name}</span>;
+      return (
+        <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--ac-34d399)', fontWeight: 800 }}>{lead.odoo_order_name}</span>
+          {lead.odoo_partner_name && (
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }} title="Siparişin açıldığı Odoo müşterisi">
+              Odoo: {lead.odoo_partner_name}
+            </span>
+          )}
+        </span>
+      );
     }
     if (status === 'FAILED') {
       return (
