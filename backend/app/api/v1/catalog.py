@@ -342,3 +342,119 @@ async def import_departments(tenant_id: uuid.UUID, payload: ImportDepartmentsIn,
         created.append(cd.name)
     await db.commit()
     return {"success": True, "created": created, "linked": linked}
+
+
+# ---------------------------------------------------------------- işe alım sihirbazı (ADIM 5.3)
+@router.get("/company/{tenant_id}/hire/options")
+async def hire_options(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Sihirbazın 1. adımı: şirketin sektörleri, seçilebilir departmanlar (şirketin kendi departmanları +
+    katalogdan önerilenler), paket izinleri, kullanılabilir modeller ve AI personel kotası.
+    """
+    from app.db.models import Actor, LLMModel, Plan
+    from app.services.llm_gateway import CHAT_TYPES
+    from app.services.plan_features import entitlements
+
+    tenant = await _tenant(db, tenant_id)
+    ent = await entitlements(db, tenant, current)
+    rec = await recommended_for_company(tenant_id, db)
+    sectors = {s.code: s.name for s in (await db.execute(select(Sector).where(Sector.code.in_(rec["sectors"] or ["-"])))).scalars()}
+    company_depts = (await db.execute(select(Department).where(Department.tenant_id == tenant.id).order_by(Department.name))).scalars().all()
+    linked = {d.catalog_department_id: d for d in company_depts if d.catalog_department_id}
+
+    departments = [{
+        "key": f"company:{d.id}", "department_id": str(d.id),
+        "catalog_department_id": str(d.catalog_department_id) if d.catalog_department_id else None,
+        "name": d.name, "description": d.description, "source": "COMPANY", "rank": -1, "profession_match": False,
+    } for d in company_depts]
+    for cd in rec["departments"]:
+        if uuid.UUID(cd["id"]) in linked:
+            continue
+        departments.append({"key": f"catalog:{cd['id']}", "department_id": None, "catalog_department_id": cd["id"],
+                            "name": cd["name"], "description": cd["description"], "source": "CATALOG", "rank": cd["rank"],
+                            "profession_match": cd["profession_match"], "title_count": cd["title_count"]})
+
+    models = (await db.execute(select(LLMModel).where(LLMModel.status == "ACTIVE", LLMModel.model_type.in_(CHAT_TYPES))
+                               .order_by(LLMModel.model_code))).scalars().all()
+    plan = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
+    active = (await db.execute(select(func.count(Actor.id)).where(
+        Actor.tenant_id == tenant.id, Actor.actor_type == "AI_AGENT", Actor.status != "DISABLED"))).scalar() or 0
+    return {
+        "company_name": tenant.name,
+        "sectors": [{"code": c, "name": sectors.get(c, c)} for c in rec["sectors"]],
+        "professions": rec["professions"],
+        "departments": departments,
+        "entitlements": {"plan_name": ent.plan_name, "can_change_llm": ent.can_change_llm,
+                         "can_edit_role_prompt": ent.can_edit_role_prompt},
+        "models": [{"model_code": m.model_code, "display_name": m.display_name, "effort_coefficient": float(m.effort_coefficient or 1)}
+                   for m in models if ent.model_allowed(m.model_code)],
+        "quota": {"max_agents": plan.max_agents if plan else None, "active_agents": active,
+                  "is_limit_reached": bool(plan and plan.max_agents is not None and active >= plan.max_agents)},
+    }
+
+
+@router.get("/company/{tenant_id}/hire/titles")
+async def hire_titles(tenant_id: uuid.UUID, department_id: Optional[uuid.UUID] = None,
+                      catalog_department_id: Optional[uuid.UUID] = None, db: AsyncSession = Depends(get_db)):
+    """
+    Sihirbazın 2. adımı: seçilen departmandaki unvanlar. Şirketin kendi unvanları ve (departman katalogla
+    bağlıysa) şirketin sektör/meslek grubuna uyan katalog unvanları; şirkete zaten alınmış katalog
+    unvanları şirket unvanı olarak bir kez listelenir.
+    """
+    from app.services.hiring import title_fits_tenant
+
+    tenant = await _tenant(db, tenant_id)
+    if department_id:
+        dept = await db.get(Department, department_id)
+        if not dept or dept.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Departman bulunamadı.")
+        catalog_department_id = catalog_department_id or dept.catalog_department_id
+    company_titles = []
+    if department_id:
+        company_titles = (await db.execute(select(JobTitle).where(
+            JobTitle.tenant_id == tenant.id, JobTitle.department_id == department_id, JobTitle.is_active))).scalars().all()
+    adopted = {t.source_title_id: t for t in (await db.execute(select(JobTitle).where(
+        JobTitle.tenant_id == tenant.id, JobTitle.source_title_id.isnot(None)))).scalars()}
+    professions = {str(p) for p in (tenant.professions or [])}
+
+    def item(t: JobTitle, kind: str) -> dict:
+        return {"id": str(t.id), "kind": kind, "title": t.title, "seniority": t.seniority, "description": t.description,
+                "recommended_model_code": t.recommended_model_code, "autonomy_level": t.autonomy_level,
+                "profession_match": bool(professions & set(t.profession_codes or []))}
+
+    items = [item(t, "COMPANY") for t in company_titles]
+    seen = {t.id for t in company_titles} | {t.source_title_id for t in company_titles if t.source_title_id}
+    if catalog_department_id:
+        for t in (await db.execute(select(JobTitle).where(
+                JobTitle.tenant_id.is_(None), JobTitle.is_active, JobTitle.catalog_department_id == catalog_department_id))).scalars():
+            if t.id in seen or not title_fits_tenant(t, tenant):
+                continue
+            if t.id in adopted:
+                items.append(item(adopted[t.id], "COMPANY"))
+            else:
+                items.append(item(t, "CATALOG"))
+    items.sort(key=lambda r: (r["kind"] != "COMPANY", not r["profession_match"], r["title"]))
+    return items
+
+
+@router.get("/company/{tenant_id}/hire/preview")
+async def hire_preview(tenant_id: uuid.UUID, title_id: uuid.UUID, department_name: Optional[str] = Query(None, max_length=128),
+                       current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Sihirbazın 3. adımı: unvanın şirket ve departman adıyla doldurulmuş rol promptu ve kullanılacak model."""
+    from app.api.v1.company import _forced_model_code
+    from app.services.hiring import render_role_prompt
+    from app.services.plan_features import entitlements
+
+    tenant = await _tenant(db, tenant_id)
+    t = await db.get(JobTitle, title_id)
+    if not t or (t.tenant_id is not None and t.tenant_id != tenant.id):
+        raise HTTPException(status_code=404, detail="Unvan bulunamadı.")
+    ent = await entitlements(db, tenant, current)
+    rec = (t.recommended_model_code or "").lower() or None
+    return {
+        "title": t.title, "description": t.description, "seniority": t.seniority, "autonomy_level": t.autonomy_level or "L1",
+        "responsibilities": t.responsibilities or [], "required_skills": t.required_skills or [], "kpis": t.kpis or [],
+        "role_prompt": render_role_prompt(t.base_role_prompt, tenant.name, department_name),
+        "recommended_model_code": rec if rec and ent.model_allowed(rec) else None,
+        "model_code": rec if (ent.can_change_llm and rec and ent.model_allowed(rec)) else _forced_model_code(ent, t),
+    }

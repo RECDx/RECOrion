@@ -40,3 +40,21 @@
 @media (max-width: 640px) {
   .cat-form { grid-template-columns: 1fr; }
 }
+
+/* İşe alım sihirbazı */
+.hire-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.hire-step {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border-subtle); background: transparent; color: var(--text-dim); font-size: 0.78rem; font-weight: 600;
+}
+.hire-step span {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%;
+  background: rgb(var(--rgb-ov) / 0.08); font-size: 0.7rem;
+}
+.hire-step.active { border-color: var(--border-highlight); color: var(--text-main); }
+.hire-step.active span { background: var(--gradient-brand); color: #ffffff; }
+.hire-step.done { color: var(--text-muted); cursor: pointer; }
+.hire-summary { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.78rem; color: var(--text-muted); }
+.hire-summary strong { color: var(--text-main); }
+.cat-pick label.selected { border-color: var(--border-highlight); background: rgb(var(--rgb-ov) / 0.05); }
+.cat-hint.full { grid-column: 1 / -1; }

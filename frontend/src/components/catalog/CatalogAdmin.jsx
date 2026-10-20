@@ -3,10 +3,9 @@ import { Building2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, DataTable, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
+import { AUTONOMY, SENIORITY } from './labels';
 import './catalog.css';
 
-const SENIORITY = { JUNIOR: 'Uzman Yardımcısı', MID: 'Uzman', SENIOR: 'Kıdemli Uzman', LEAD: 'Takım Lideri', MANAGER: 'Yönetici' };
-const AUTONOMY = { L1: 'L1 · öneri + insan onayı', L2: 'L2 · rutin işleri kendisi yapar', L3: 'L3 · tam otonom' };
 const lines = (v) => (Array.isArray(v) ? v.join('\n') : '');
 const toList = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
 

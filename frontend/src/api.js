@@ -339,6 +339,9 @@ export const api = {
   updateCatalogTitle: (id, data) => request(`/catalog/titles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCatalogTitle: (id) => request(`/catalog/titles/${id}`, { method: 'DELETE' }),
   getCompanyCatalogRecommended: (tenantId) => request(`/company/${tenantId}/catalog/recommended`),
+  getHireOptions: (tenantId) => request(`/company/${tenantId}/hire/options`),
+  getHireTitles: (tenantId, params) => request(`/company/${tenantId}/hire/titles?${new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()}`),
+  getHirePreview: (tenantId, titleId, departmentName) => request(`/company/${tenantId}/hire/preview?title_id=${titleId}&department_name=${encodeURIComponent(departmentName || '')}`),
   importCatalogDepartments: (tenantId, ids) => request(`/company/${tenantId}/departments/from-catalog`, { method: 'POST', body: JSON.stringify({ catalog_department_ids: ids }) }),
 
   // Kredi ve yapay zeka kullanımı (Adım 4)

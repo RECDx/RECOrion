@@ -570,9 +570,11 @@ async def delete_company_job_title(
 # ==================================================================
 class AIAgentIn(BaseModel):
     display_name: str = Field(..., description="AI Ajan Adı")
-    model_code: str = Field(..., description="AI Ajan LLM Modeli Kodu (örn: glm-5.3)")
-    job_title_id: uuid.UUID = Field(..., description="AI Ajan Ünvanı (Şirket ünvanlarından seçim)")
-    department_id: Optional[uuid.UUID] = Field(None, description="Departman ID")
+    model_code: Optional[str] = Field(None, description="AI Ajan LLM Modeli Kodu (paket izin vermiyorsa ünvanın modeli)")
+    job_title_id: Optional[uuid.UUID] = Field(None, description="Şirket unvanı")
+    catalog_title_id: Optional[uuid.UUID] = Field(None, description="Platform kataloğundan unvan (işe alımda şirkete eklenir)")
+    department_id: Optional[uuid.UUID] = Field(None, description="Şirket departmanı")
+    catalog_department_id: Optional[uuid.UUID] = Field(None, description="Katalog departmanı (işe alımda şirkete eklenir)")
     description: Optional[str] = Field(None, description="AI Ajan Açıklaması")
     hired_at: Optional[datetime] = Field(None, description="İşe Alım Tarihi (Tanımlama Tarihi)")
     autonomy_level: str = Field("L1", description="Otonomi Seviyesi (L1, L2, L3)")
@@ -880,18 +882,13 @@ async def hire_ai_agent(
     if not name:
         raise HTTPException(status_code=422, detail="AI Ajan adı boş bırakılamaz.")
 
-    # 1. Ünvan Kontrolü (Şirketin kendi ünvanı veya genel sistem şablonu olmalı)
-    job_title = await db.get(JobTitle, payload.job_title_id)
-    if not job_title or (job_title.tenant_id is not None and job_title.tenant_id != tenant_id):
-        raise HTTPException(status_code=404, detail="Seçilen ünvan bulunamadı veya bu şirkete ait değil.")
-
-    # 2. Departman Kontrolü (Eğer verilmişse şirkete ait olmalı)
-    dept_name = None
-    if payload.department_id:
-        dept = await db.get(Department, payload.department_id)
-        if not dept or dept.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Seçilen departman bulunamadı.")
-        dept_name = dept.name
+    # 1-2. Sektör > Departman > Unvan: katalog seçimleri şirkete aktarılır (ADIM 5.3)
+    from app.services.hiring import render_role_prompt, resolve_hire_target
+    job_title, dept = await resolve_hire_target(
+        db, tenant, job_title_id=payload.job_title_id, catalog_title_id=payload.catalog_title_id,
+        department_id=payload.department_id, catalog_department_id=payload.catalog_department_id,
+    )
+    dept_name = dept.name if dept else None
 
     # 3. LLM Modeli: paket izinleri (#241)
     ent = await entitlements(db, tenant, current)
@@ -908,12 +905,14 @@ async def hire_ai_agent(
         raise HTTPException(status_code=400, detail="Geçerli bir LLM modeli seçiniz.")
     preferred_model_id = model.id
 
-    # 4. Sistem Rol Promptu (Özel verilmemişse ünvandan devralınır; paket izin vermiyorsa değiştirilemez)
-    base_prompt = (job_title.base_role_prompt or "").strip()
+    # 4. Sistem Rol Promptu (Özel verilmemişse ünvandan devralınır; paket izin vermiyorsa değiştirilemez).
+    # {{company_name}} / {{department_name}} yer tutucuları şirket ve departman adıyla doldurulur.
+    raw_prompt = (job_title.base_role_prompt or "").strip()
+    base_prompt = render_role_prompt(raw_prompt, tenant.name, dept_name)
     custom_prompt = (payload.system_prompt or "").strip()
-    if custom_prompt and custom_prompt != base_prompt and not ent.can_edit_role_prompt:
+    if custom_prompt and custom_prompt not in (base_prompt, raw_prompt) and not ent.can_edit_role_prompt:
         deny(f"'{ent.plan_name}' paketiniz ünvan rol promptunu değiştirmeye izin vermiyor; ünvanın hazır rol promptu kullanılır.")
-    role_prompt = custom_prompt or base_prompt or f"Sen bir {job_title.title} AI personelsin."
+    role_prompt = render_role_prompt(custom_prompt, tenant.name, dept_name) if custom_prompt else         (base_prompt or f"Sen bir {job_title.title} AI personelsin.")
 
     # 5. İşe Alım Tarihi (Payload'da varsa o, yoksa şu an)
     hire_date = payload.hired_at or datetime.utcnow()
@@ -927,7 +926,7 @@ async def hire_ai_agent(
         display_name=name,
         role=role_code,
         job_title_id=job_title.id,
-        department_id=payload.department_id,
+        department_id=dept.id if dept else None,
         preferred_model_id=preferred_model_id,
         system_prompt=role_prompt,
         description=payload.description.strip() if payload.description else None,

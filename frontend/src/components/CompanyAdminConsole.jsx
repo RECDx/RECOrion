@@ -56,6 +56,7 @@ import { notify, toast } from '../ui/feedback';
 import CreditsPanel from './ai/CreditsPanel';
 import BrainPanel from './ai/BrainPanel';
 import CatalogImportModal from './catalog/CatalogImportModal';
+import HireWizard from './catalog/HireWizard';
 import { Coins, Brain } from 'lucide-react';
 
 export default function CompanyAdminConsole({
@@ -76,6 +77,7 @@ export default function CompanyAdminConsole({
 
   const [activeTab, setActiveTab] = useState('DEPARTMENTS');
   const [catalogImportOpen, setCatalogImportOpen] = useState(false);
+  const [hireWizardOpen, setHireWizardOpen] = useState(false);
   const [tenantId, setTenantId] = useState(resolveInitialTenantId);
   const [tenant, setTenant] = useState(() => {
     const initId = resolveInitialTenantId();
@@ -1126,32 +1128,8 @@ export default function CompanyAdminConsole({
   // =========================================================================
   // MADDE 3 HANDLERS (AI Ajan İşe Alım & Yaşam Döngüsü)
   // =========================================================================
-  const handleOpenHireAgent = () => {
-    setEditingAgent(null);
-    setAgentFormError('');
-    setDeepSearchSectorTitleResult(null);
-    setIsDeepSearchingSectorTitle(false);
-
-    const defaultTitle = jobTitles[0] || null;
-    const defaultModel = defaultTitle?.recommended_model_code || 'glm-5.3';
-    const defaultPrompt = defaultTitle?.base_role_prompt || '';
-    const defaultDesc = defaultTitle?.description || '';
-    const defaultDept = defaultTitle?.department_id || '';
-
-    setAgentForm({
-      display_name: '',
-      model_code: defaultModel,
-      job_title_id: defaultTitle?.id || '',
-      department_id: defaultDept,
-      description: defaultDesc,
-      hired_at: new Date().toISOString().split('T')[0],
-      autonomy_level: defaultTitle?.autonomy_level || 'L1',
-      system_prompt: defaultPrompt,
-      pending_learnings: null,
-      deep_search_metadata: null
-    });
-    setIsAgentModalOpen(true);
-  };
+  // Yeni işe alım sihirbazla yapılır (ADIM 5.3); aşağıdaki form düzenleme için kullanılır
+  const handleOpenHireAgent = () => setHireWizardOpen(true);
 
   const handleOpenEditAgent = (agent) => {
     setEditingAgent(agent);
@@ -5283,6 +5261,13 @@ export default function CompanyAdminConsole({
           )}
 
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
+
+          <HireWizard
+            tenantId={tenantId}
+            open={hireWizardOpen}
+            onClose={() => setHireWizardOpen(false)}
+            onHired={(created) => { setAiAgents((prev) => [created, ...prev]); loadDepartments(); loadJobTitles(); loadAgentQuota(); }}
+          />
 
           <CatalogImportModal tenantId={tenantId} open={catalogImportOpen} onClose={() => setCatalogImportOpen(false)} onImported={loadDepartments} />
 
