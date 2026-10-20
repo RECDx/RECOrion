@@ -237,7 +237,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
       setErrorMessage('Giriş şifresi en az 8 karakter olmalıdır.');
       return;
     }
-    if (codeSentTo !== contactEmail.trim().toLowerCase() || emailCode.trim().length !== 6) {
+    // Kodun doğruluğunu backend kontrol eder; burada yalnızca biçim kontrolü yapılır
+    // (pencere yeniden açılsa da e-postadaki kod 10 dakika geçerlidir)
+    if (emailCode.trim().length !== 6) {
       setErrorMessage('Lütfen e-posta adresinize gönderilen 6 haneli doğrulama kodunu girin.');
       return;
     }

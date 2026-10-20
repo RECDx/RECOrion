@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATION_EMAIL: str = "info@recdx.com"
     # smtp: gerçek gönderim · log: göndermeden bellekte tut (test/geliştirme)
     EMAIL_DELIVERY: str = "smtp"
+    # SMTP sunucusunun TLS sertifikası doğrulansın mı (kendinden imzalı sertifikalı sunucularda false; bağlantı yine şifrelidir)
+    SMTP_TLS_VERIFY: bool = True
     # Odoo satış siparişi senkronizasyonu (testlerde kapalı)
     ODOO_SYNC_ENABLED: bool = True
     ODOO_PRICELIST_ID: int = 1

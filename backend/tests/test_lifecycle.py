@@ -261,3 +261,27 @@ def test_template_values_are_html_escaped():
 def test_public_stats(client):
     r = client.get("/api/v1/public/stats")
     assert r.status_code == 200 and r.json()["sectors"] == 11 and r.json()["llm_models"] >= 13
+
+
+def test_invalid_tax_id_rejected(client, tag):
+    """'123456' gibi geçersiz vergi numaraları Odoo'da başka bir şirketle eşleşebiliyordu."""
+    email = f"vkn_{tag}@deneme-sirket.com.tr"
+    client.post("/api/v1/tenants/purchase-request/send-code", json={"email": email})
+    r = client.post("/api/v1/tenants/purchase-request", json=purchase_payload(email, code_from_outbox(email), tax_id="123456"))
+    assert r.status_code == 400 and "VKN" in r.json()["detail"]
+
+
+def test_odoo_mail_fallback_treats_none_marshal_fault_as_sent(monkeypatch):
+    """Odoo mail.mail.send None döndürür; XML-RPC hatası gönderimin başarısız olduğu anlamına gelmez."""
+    import xmlrpc.client
+    from app.services.notification_service import NotificationService
+    from app.services.odoo_service import OdooService
+
+    class FakeModels:
+        def execute_kw(self, db, uid, pw, model, method, args, *rest):
+            if method == "create":
+                return 7
+            raise xmlrpc.client.Fault(1, "TypeError: cannot marshal None unless allow_none is enabled")
+
+    monkeypatch.setattr(OdooService, "_get_connection", classmethod(lambda cls: (2, FakeModels(), {"db": "d", "password": "p"})))
+    assert NotificationService._send_via_odoo({"from_email": "a@b.c"}, "x@y.z", "Konu", "<p>x</p>") is True

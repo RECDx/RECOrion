@@ -63,13 +63,15 @@ class OdooService:
 
         try:
             # 1. Önce Vergi No veya E-posta veya İsim ile ara
-            search_domain = []
-            if tax_id:
-                search_domain = [['vat', '=', tax_id]]
+            # Vergi numarası yalnızca geçerli biçimdeyse (10 haneli VKN / 11 haneli TCKN) eşleştirmede kullanılır;
+            # aksi halde "123456" gibi deneme değerleri başka bir şirketle eşleşebilir.
+            vat = (tax_id or "").replace(" ", "")
+            if vat.isdigit() and len(vat) in (10, 11):
+                search_domain = ['|', ['vat', '=', vat], ['vat', '=', f"TR{vat}"]]
             elif contact_email:
-                search_domain = [['email', '=', contact_email]]
+                search_domain = [['email', '=ilike', contact_email]]
             else:
-                search_domain = [['name', '=', company_name]]
+                search_domain = [['name', '=ilike', company_name]]
 
             partner_ids = models.execute_kw(
                 cfg['db'], uid, cfg['password'],
@@ -78,7 +80,8 @@ class OdooService:
             )
 
             if partner_ids:
-                logger.info(f"Odoo'da mevcut müşteri bulundu (ID: {partner_ids[0]})")
+                found = models.execute_kw(cfg['db'], uid, cfg['password'], 'res.partner', 'read', [[partner_ids[0]]], {'fields': ['name']})
+                logger.info(f"Odoo'da mevcut müşteri bulundu (ID: {partner_ids[0]}, Ad: {found[0]['name'] if found else '?'}, aranan: {company_name})")
                 return partner_ids[0]
 
             # 2. Yoksa yeni partner oluştur

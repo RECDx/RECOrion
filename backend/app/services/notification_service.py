@@ -68,6 +68,10 @@ class NotificationService:
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
         msg.attach(MIMEText(html_body, "html", "utf-8"))
         context = ssl.create_default_context()
+        if not settings.SMTP_TLS_VERIFY:
+            # Kendinden imzalı sertifika: bağlantı şifreli kalır, yalnızca sertifika doğrulanmaz
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
         if cfg["port"] == 465:
             with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=15, context=context) as server:
                 server.login(cfg["user"], cfg["password"])
@@ -84,9 +88,16 @@ class NotificationService:
         uid, models, odoo_cfg = OdooService._get_connection()
         if not uid or not models:
             return False
+        import xmlrpc.client
+
         mail_id = models.execute_kw(odoo_cfg["db"], uid, odoo_cfg["password"], "mail.mail", "create",
                                     [{"email_from": cfg["from_email"], "email_to": to_email, "subject": subject, "body_html": html_body}])
-        models.execute_kw(odoo_cfg["db"], uid, odoo_cfg["password"], "mail.mail", "send", [[mail_id]])
+        try:
+            models.execute_kw(odoo_cfg["db"], uid, odoo_cfg["password"], "mail.mail", "send", [[mail_id]])
+        except xmlrpc.client.Fault as fault:
+            # Odoo 'send' None döndürür ve XML-RPC bunu iletemez; e-posta yine de gönderilmiştir
+            if "cannot marshal None" not in str(fault):
+                raise
         return True
 
     @classmethod

@@ -425,6 +425,19 @@ PUBLIC_EMAIL_DOMAINS = {
     "aol.com", "aim.com"
 }
 
+def validate_tax_id(tax_id: Optional[str]) -> Optional[str]:
+    """
+    Vergi kimlik numarası: şirketler için 10 haneli VKN, şahıs şirketleri için 11 haneli TCKN.
+    Boş bırakılabilir; girilmişse biçimi doğrulanır (Odoo müşteri eşleştirmesi bu numarayla yapılır).
+    """
+    if not tax_id or not str(tax_id).strip():
+        return None
+    clean = re.sub(r"\s+", "", str(tax_id))
+    if not clean.isdigit() or len(clean) not in (10, 11):
+        raise HTTPException(status_code=400, detail="Vergi numarası 10 haneli VKN veya 11 haneli TCKN olmalıdır.")
+    return clean
+
+
 def validate_corporate_email(email: Optional[str], field_name: str = "E-posta") -> str:
     """
     Müşterinin official (kurumsal) mail adresi ile kayıt edilmesini zorunlu kılar.
@@ -567,6 +580,7 @@ async def update_tenant(tenant_id: uuid.UUID, payload: TenantUpdate, db: AsyncSe
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
 
     # Vergi No ve Vergi Dairesi mükerrerlik kontrolü (Madde 2)
+    payload.tax_id = validate_tax_id(payload.tax_id)
     await validate_unique_tax_info(db, payload.tax_id, payload.tax_office, exclude_tenant_id=tenant_id)
 
     prev_active = tenant.is_active
@@ -1000,6 +1014,7 @@ async def submit_purchase_request(
         raise HTTPException(status_code=429, detail="Çok fazla başvuru denemesi. Lütfen daha sonra tekrar deneyin.")
 
     email = validate_corporate_email(payload.contact_email, "İletişim e-posta")
+    payload.tax_id = validate_tax_id(payload.tax_id)
     if len((payload.password or "").strip()) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"Şifre en az {MIN_PASSWORD_LENGTH} karakter olmalıdır.")
     if not await verify_email_code(email, payload.email_code):
@@ -1189,6 +1204,7 @@ async def admin_create_tenant(
     from app.services.manifesto_service import ManifestoService
 
     email = validate_corporate_email(payload.contact_email, "İletişim e-posta")
+    payload.tax_id = validate_tax_id(payload.tax_id)
     name = (payload.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Şirket ünvanı zorunludur.")
