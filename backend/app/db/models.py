@@ -345,6 +345,7 @@ class Project(Base):
     closed_at = Column(DateTime(timezone=True))
     close_summary = Column(Text)
     start_notified_at = Column(DateTime(timezone=True))
+    workflow_id = Column(String(128))  # Temporal proje akışı (ADIM 7)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -375,7 +376,8 @@ class Task(Base):
     description = Column(Text)
     acceptance_criteria = Column(Text)
     priority = Column(String(16), default="MEDIUM")
-    status = Column(String(32), default="BACKLOG")  # BACKLOG, READY, IN_PROGRESS, WAITING_APPROVAL, DONE
+    # BACKLOG, READY, IN_PROGRESS, WAITING_APPROVAL, REVISION, QUARANTINED, DONE, CANCELLED
+    status = Column(String(32), default="BACKLOG")
     assignee_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
     estimated_effort = Column(Numeric, default=1.0)  # iş günü
     order_index = Column(Integer, nullable=False, default=0)
@@ -385,13 +387,38 @@ class Task(Base):
     start_date = Column(Date)
     due_date = Column(Date)
     estimated_credits = Column(Numeric(14, 2))
+    # İş akışı (ADIM 7): kontrol personeli, onaylayıcı (boş: proje yöneticisi), ret sınırı
+    reviewer_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    approver_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    requires_approval = Column(Boolean, nullable=False, default=True)
+    max_rejections = Column(Integer, nullable=False, default=3)
+    rejection_count = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime(timezone=True))
+    submitted_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     project = relationship("Project", back_populates="tasks")
-    assignee = relationship("Actor")
+    assignee = relationship("Actor", foreign_keys=[assignee_actor_id])
     artifacts = relationship("Artifact", back_populates="task", cascade="all, delete-orphan")
     messages = relationship("ChatMessage", back_populates="task", cascade="all, delete-orphan")
+
+
+class TaskEvent(Base):
+    """İş akışı olay geçmişi (yalnızca ekleme)."""
+    __tablename__ = "task_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
+    # PROJECT_STARTED, TASK_STARTED, SUBMITTED, APPROVED, REJECTED, QUARANTINED, RELEASED, DONE, CANCELLED, PROJECT_FINISHED ...
+    kind = Column(String(32), nullable=False)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    note = Column(Text)
+    data = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class Artifact(Base):

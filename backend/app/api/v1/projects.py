@@ -99,6 +99,14 @@ class TaskResponse(BaseModel):
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     estimated_credits: Optional[float] = None
+    reviewer_actor_id: Optional[uuid.UUID] = None
+    approver_actor_id: Optional[uuid.UUID] = None
+    requires_approval: bool = True
+    max_rejections: int = 3
+    rejection_count: int = 0
+    started_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -199,8 +207,36 @@ class StatusIn(BaseModel):
 async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentUser = Depends(get_current_user),
                         db: AsyncSession = Depends(get_db)):
     project = await svc.load(db, user, project_id, manage=True)
+    previous = project.status
     await svc.transition(db, project, payload.action, payload.summary)
+    try:
+        await _sync_workflow(project, payload.action, user)
+    except HTTPException:
+        # Akış motoruna ulaşılamadıysa durum geri alınır; kullanıcı tekrar dener
+        project.status = previous
+        if payload.action == "start":
+            project.started_at = None
+        if payload.action in ("complete", "cancel"):
+            project.closed_at = None
+        await db.commit()
+        raise
+    await db.commit()
     return _out(project)
+
+
+async def _sync_workflow(project: Project, action: str, user: CurrentUser) -> None:
+    """Proje durum geçişlerini Temporal proje akışına yansıtır (ADIM 7.1)."""
+    from app.config import settings
+    from app.workflows import engine
+
+    if not settings.WORKFLOW_ENABLED:
+        return
+    if action == "start":
+        project.workflow_id = await engine.start_project(str(project.id), str(user.actor_id))
+    elif project.workflow_id and action in ("pause", "resume"):
+        await engine.signal_project(str(project.id), action)
+    elif project.workflow_id and action in ("complete", "cancel"):
+        await engine.signal_project(str(project.id), "cancel", {"actor_id": str(user.actor_id), "note": "Proje kapatıldı."})
 
 
 # ---------------------------------------------------------------- ekip

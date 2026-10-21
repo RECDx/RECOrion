@@ -262,6 +262,11 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/projects/{{project_id}}/simulate"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/tasks"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/tasks"): HANDLER("task:create"),
+    # İş akışı (ADIM 7.1): yetki proje üyeliği/onaylayıcılığa göre uç içinde
+    ("GET", f"{P}/projects/{{project_id}}/workflow"): HANDLER(),
+    ("POST", f"{P}/tasks/{{task_id}}/submit"): HANDLER(),
+    ("POST", f"{P}/tasks/{{task_id}}/decision"): HANDLER(),
+    ("POST", f"{P}/tasks/{{task_id}}/release"): HANDLER(),
     ("GET", f"{P}/chat/history/{{task_id}}"): HANDLER(),
     ("GET", f"{P}/chat/project/{{project_id}}"): HANDLER(),
     ("POST", f"{P}/chat/send"): HANDLER("chat:participate"),

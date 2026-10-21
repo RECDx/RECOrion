@@ -19,20 +19,20 @@ export default function RightPane({
   memoryItems, 
   onPromoteMemory, 
   onApproveQualityGate, 
-  onRejectQualityGate 
+  onRejectQualityGate,
+  onSubmitTask
 }) {
   const [activeTab, setActiveTab] = useState('GLOBAL'); // GLOBAL vs AGENT
-  const [gateStatus, setGateStatus] = useState('WAITING_APPROVAL'); // WAITING_APPROVAL, APPROVED, REVISION
-
-  const handleApprove = () => {
-    setGateStatus('APPROVED');
-    onApproveQualityGate && onApproveQualityGate(selectedTask);
-  };
-
-  const handleReject = () => {
-    setGateStatus('REVISION');
-    onRejectQualityGate && onRejectQualityGate(selectedTask);
-  };
+  // Kalite kapısı iş adımının gerçek akış durumunu gösterir (ADIM 7.1)
+  const status = selectedTask?.status;
+  const gate = {
+    WAITING_APPROVAL: ['⏳ ONAY BEKLİYOR', 'rgba(245, 158, 11, 0.2)', 'var(--ac-fbbf24)'],
+    DONE: ['✓ ONAYLANDI', 'rgba(16, 185, 129, 0.2)', 'var(--ac-34d399)'],
+    REVISION: ['↺ REVİZYONDA', 'rgba(244, 63, 94, 0.2)', '#f43f5e'],
+    QUARANTINED: ['⛔ KARANTİNADA', 'rgba(244, 63, 94, 0.2)', '#f43f5e'],
+    IN_PROGRESS: ['● ÇALIŞILIYOR', 'rgba(56, 189, 248, 0.18)', 'var(--ac-38bdf8)'],
+    CANCELLED: ['İPTAL', 'rgb(var(--rgb-ov) / 0.08)', 'var(--text-dim)'],
+  }[status] || ['SIRADA', 'rgb(var(--rgb-ov) / 0.08)', 'var(--text-dim)'];
 
   const filteredMemories = memoryItems?.filter((m) => m.scope === activeTab) || [];
 
@@ -64,10 +64,10 @@ export default function RightPane({
             </span>
             <span className="badge" style={{
               fontSize: '0.62rem',
-              background: gateStatus === 'APPROVED' ? 'rgba(16, 185, 129, 0.2)' : gateStatus === 'REVISION' ? 'rgba(244, 63, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-              color: gateStatus === 'APPROVED' ? 'var(--ac-34d399)' : gateStatus === 'REVISION' ? '#f43f5e' : 'var(--ac-fbbf24)'
+              background: gate[1],
+              color: gate[2]
             }}>
-              {gateStatus === 'APPROVED' ? '✓ ONAYLANDI' : gateStatus === 'REVISION' ? '↺ REVİZYON' : '⏳ ONAY BEKLİYOR'}
+              {gate[0]}
             </span>
           </div>
 
@@ -75,24 +75,30 @@ export default function RightPane({
             AI Personeli tarafından üretilen kod ve doküman artefaktları deterministik doğrulama kriterlerini karşılamadan iş akışında ilerleyemez.
           </p>
 
-          <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <button 
-              onClick={handleApprove}
-              className="btn btn-success"
-              style={{ fontSize: '0.75rem', padding: '7px' }}
-            >
+          {status === 'WAITING_APPROVAL' && (
+            <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button onClick={() => onApproveQualityGate?.(selectedTask)} className="btn btn-success" style={{ fontSize: '0.75rem', padding: '7px' }}>
+                <CheckCircle2 size={13} />
+                Onayla & İlerlet
+              </button>
+              <button onClick={() => onRejectQualityGate?.(selectedTask)} className="btn btn-secondary"
+                style={{ fontSize: '0.75rem', padding: '7px', borderColor: 'rgba(244, 63, 94, 0.3)', color: '#f43f5e' }}>
+                <RotateCcw size={13} />
+                Revizyon İste
+              </button>
+            </div>
+          )}
+          {['IN_PROGRESS', 'REVISION'].includes(status) && (
+            <button onClick={() => onSubmitTask?.(selectedTask)} className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '7px', width: '100%' }}>
               <CheckCircle2 size={13} />
-              Onayla & İlerlet
+              Çıktıyı teslim et
             </button>
-            <button 
-              onClick={handleReject}
-              className="btn btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '7px', borderColor: 'rgba(244, 63, 94, 0.3)', color: '#f43f5e' }}
-            >
-              <RotateCcw size={13} />
-              Revizyon İste
-            </button>
-          </div>
+          )}
+          {status === 'QUARANTINED' && (
+            <p style={{ fontSize: '0.72rem', color: '#f43f5e', margin: 0 }}>
+              Bu adım {selectedTask?.rejection_count} kez reddedildi. Kararı proje yöneticisi Projeler &gt; İş Akışı ekranından verir.
+            </p>
+          )}
         </div>
 
         {/* 2. ARTIFACT PREVIEW */}

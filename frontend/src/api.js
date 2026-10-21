@@ -141,6 +141,11 @@ export const api = {
   getTelegramStatus: () => request('/auth/telegram'),
   linkTelegram: () => request('/auth/telegram/link', { method: 'POST' }),
   unlinkTelegram: () => request('/auth/telegram/link', { method: 'DELETE' }),
+  // İş akışı (Adım 7.1)
+  getProjectWorkflow: (projectId) => request(`/projects/${projectId}/workflow`),
+  submitTask: (taskId, note) => request(`/tasks/${taskId}/submit`, { method: 'POST', body: JSON.stringify({ note: note || null }) }),
+  decideTask: (taskId, approve, note) => request(`/tasks/${taskId}/decision`, { method: 'POST', body: JSON.stringify({ approve, note: note || null }) }),
+  releaseTask: (taskId, action, note, assigneeId) => request(`/tasks/${taskId}/release`, { method: 'POST', body: JSON.stringify({ action, note: note || null, assignee_actor_id: assigneeId || null }) }),
   createProject: (data) => request('/projects/', { method: 'POST', body: JSON.stringify(data) }),
   getTasks: (projectId) => request(`/projects/${projectId}/tasks`),
   createTask: (projectId, data) => request(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),

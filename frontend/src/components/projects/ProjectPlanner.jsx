@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, MessagesSquare, Pause, Play, Save } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import DocumentLibrary from '../docs/DocumentLibrary';
 import PlanTab from './PlanTab';
+import WorkflowTab from './WorkflowTab';
 import { CloseTab, ReadinessTab, TeamSimTab } from './ProjectTabs';
 import { ProjectFields } from './ProjectHub';
 import { KIND, fmtDay, isEditable, statusOf } from './projectMeta';
@@ -16,6 +17,7 @@ const TABS = [
   ['plan', 'Beyin AI Planlama'],
   ['team', 'Ekip & Simülasyon'],
   ['ready', 'Hazırlık & Bildirim'],
+  ['flow', 'İş Akışı'],
   ['close', 'Kapanış'],
 ];
 const CONFIRM = {
@@ -38,11 +40,16 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
   const [tab, setTab] = useState('info');
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
+  const firstLoad = useRef(true);
 
   const reload = useCallback(async () => {
     try {
       const [p, a] = await Promise.all([api.getProject(projectId), api.getActors(tenant.id)]);
       setProject(p);
+      if (firstLoad.current) {  // başlamış projede İş Akışı sekmesiyle açılır
+        firstLoad.current = false;
+        if (['ACTIVE', 'PAUSED'].includes(p.status)) setTab('flow');
+      }
       setForm(pickForm(p));
       setActors(a);
     } catch (e) {
@@ -147,6 +154,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       {tab === 'plan' && <PlanTab project={project} agents={agents} onChanged={reload} />}
       {tab === 'team' && <TeamSimTab project={project} actors={actors} onChanged={reload} />}
       {tab === 'ready' && <ReadinessTab project={project} onAction={action} busy={busy} />}
+      {tab === 'flow' && <WorkflowTab project={project} />}
       {tab === 'close' && <CloseTab project={project} currentUser={currentUser} onAction={action} busy={busy} />}
     </div>
   );

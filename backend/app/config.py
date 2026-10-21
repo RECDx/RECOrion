@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # Telegram bildirimleri (ADIM 6.5): BotFather'dan alınan token ve botun kullanıcı adı (@ olmadan)
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_BOT_USERNAME: str = ""
+    # İş akışı motoru (ADIM 7): Temporal sunucusu; worker backend sürecinde çalışır
+    WORKFLOW_ENABLED: bool = True
+    TEMPORAL_HOST: str = "temporal"
+    TEMPORAL_PORT: int = 7233
+    TEMPORAL_NAMESPACE: str = "default"
+    TEMPORAL_TASK_QUEUE: str = "recorion-main"
     # Web başvurusu kötüye kullanım sınırları (IP başına, saatlik)
     PURCHASE_IP_LIMIT_PER_HOUR: int = 5
     EMAIL_CODE_IP_LIMIT_PER_HOUR: int = 20

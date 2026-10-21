@@ -11,7 +11,7 @@ import ResetPassword from './components/ResetPassword';
 import ProjectHub from './components/projects/ProjectHub';
 import ProjectPlanner from './components/projects/ProjectPlanner';
 import { api, session } from './api';
-import { notify } from './ui/feedback';
+import { notify, promptDialog, toast } from './ui/feedback';
 
 // Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
 function loadSavedUser() {
@@ -264,6 +264,22 @@ export default function App() {
       notify(`Mesaj gönderilemedi: ${err.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // İş akışı komutları (Adım 7.1): sinyal akışa gider, durum birkaç saniye içinde güncellenir
+  const runTaskAction = async (fn, message) => {
+    try {
+      await fn();
+      toast.success(message);
+      setTimeout(async () => {
+        if (!activeProject) return;
+        const tList = await api.getTasks(activeProject.id);
+        setTasks(tList);
+        setSelectedTask((cur) => tList.find((x) => x.id === cur?.id) || cur);
+      }, 1500);
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
@@ -543,8 +559,15 @@ export default function App() {
           selectedTask={selectedTask}
           memoryItems={memoryItems}
           onPromoteMemory={handlePromoteMemory}
-          onApproveQualityGate={() => notify("Kalite Kapısı onaylandı. Görev sonraki AI personeline devredildi.")}
-          onRejectQualityGate={() => notify("Revizyon talep edildi. Ajan geribildirime göre çıktıyı güncelleyecek.")}
+          onApproveQualityGate={(t) => runTaskAction(() => api.decideTask(t.id, true), 'Onaylandı; iş akışı sonraki adıma geçiyor.')}
+          onRejectQualityGate={async (t) => {
+            const note = await promptDialog({ message: 'Revizyon gerekçesi (personel buna göre düzeltecek):' });
+            if (note && note.trim()) runTaskAction(() => api.decideTask(t.id, false, note.trim()), 'Revizyon istendi.');
+          }}
+          onSubmitTask={async (t) => {
+            const note = await promptDialog({ message: 'Teslim notu (isteğe bağlı):' });
+            if (note !== null) runTaskAction(() => api.submitTask(t.id, note), 'Teslim edildi; onaya gönderiliyor.');
+          }}
         />
       </div>
 

@@ -43,6 +43,9 @@ settings.SCHEDULER_ENABLED = False
 settings.REDIS_DB = 15
 settings.PURCHASE_IP_LIMIT_PER_HOUR = 1000
 settings.EMAIL_CODE_IP_LIMIT_PER_HOUR = 1000
+# İş akışı testleri gerçek Temporal sunucusunu kullanır; her koşu kendi kuyruğunda çalışır (canlı worker'a karışmaz)
+import uuid as _uuid  # noqa: E402
+settings.TEMPORAL_TASK_QUEUE = f"recorion-test-{_uuid.uuid4().hex[:8]}"
 
 
 def _flush_test_redis():
@@ -118,6 +121,35 @@ def db(test_db_url):
 def client(test_db_url):
     from fastapi.testclient import TestClient
     from app.main import app
+    from app.workflows import engine
 
+    started = []
+    original = engine.start_project
+
+    async def recording_start(project_id, actor_id):
+        wid = await original(project_id, actor_id)
+        started.append(wid)
+        return wid
+
+    engine.start_project = recording_start
     with TestClient(app) as c:
         yield c
+    engine.start_project = original
+    _terminate_workflows(started)
+
+
+def _terminate_workflows(ids):
+    """Testlerde başlatılan proje akışlarını kapatır (alt akışlar ebeveynle birlikte sonlanır)."""
+    if not ids:
+        return
+    import asyncio
+    from temporalio.client import Client
+
+    async def run():
+        c = await Client.connect(f"{settings.TEMPORAL_HOST}:{settings.TEMPORAL_PORT}", namespace=settings.TEMPORAL_NAMESPACE)
+        for wid in ids:
+            try:
+                await c.get_workflow_handle(wid).terminate("test bitti")
+            except Exception:
+                pass
+    asyncio.run(run())
