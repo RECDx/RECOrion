@@ -8,6 +8,8 @@ import OfficialLanding from './components/OfficialLanding';
 import SuperAdminConsole from './components/SuperAdminConsole';
 import CompanyAdminConsole from './components/CompanyAdminConsole';
 import ResetPassword from './components/ResetPassword';
+import ProjectHub from './components/projects/ProjectHub';
+import ProjectPlanner from './components/projects/ProjectPlanner';
 import { api, session } from './api';
 import { notify } from './ui/feedback';
 
@@ -36,7 +38,7 @@ export default function App() {
     if (hash === '#/company-admin' && savedUser) {
       return 'COMPANY_ADMIN_CONSOLE';
     }
-    if (hash === '#/workspace' && savedUser) {
+    if (hash.startsWith('#/workspace') && savedUser) {
       return 'WORKSPACE';
     }
     if (savedUser?.role === 'SUPER_ADMIN') {
@@ -78,6 +80,13 @@ export default function App() {
   const [kvkkRestricted, setKvkkRestricted] = useState(false);
   // Tablet/telefonda aynı anda tek bölme gösterilir
   const [activePane, setActivePane] = useState('middle');
+  // Work Space modu: HUB (proje listesi), PLANNER (proje planlama), WORK (görev sohbeti)
+  const [workspaceMode, setWorkspaceMode] = useState(() => (typeof window !== 'undefined' && /^#\/workspace\?project=/.test(window.location.hash) ? 'PLANNER' : 'HUB'));
+  // E-posta/Telegram bildirimindeki #/workspace?project=<id> bağlantısı doğrudan projeyi açar
+  const [plannerProjectId, setPlannerProjectId] = useState(() => {
+    const m = typeof window !== 'undefined' ? window.location.hash.match(/^#\/workspace\?project=([0-9a-f-]{36})/i) : null;
+    return m ? m[1] : null;
+  });
 
   // URL Hash ve Görünüm Eşitlemesi
   useEffect(() => {
@@ -93,7 +102,7 @@ export default function App() {
           window.history.replaceState(null, '', '#/company-admin');
         }
       } else if (currentView === 'WORKSPACE') {
-        if (window.location.hash !== '#/workspace') {
+        if (!window.location.hash.startsWith('#/workspace')) {
           window.history.replaceState(null, '', '#/workspace');
         }
       } else {
@@ -125,7 +134,7 @@ export default function App() {
         } else {
           setCurrentView('LANDING');
         }
-      } else if (hash === '#/workspace') {
+      } else if (hash.startsWith('#/workspace')) {
         if (u) {
           setCurrentView('WORKSPACE');
         } else {
@@ -482,6 +491,35 @@ export default function App() {
         currentUser={currentUser}
       />
 
+      <nav className="ws-mode" aria-label="Work Space">
+        {[['HUB', 'Projeler'], ['WORK', 'Çalışma Alanı']].map(([key, label]) => (
+          <button key={key} type="button" className={(workspaceMode === key || (key === 'HUB' && workspaceMode === 'PLANNER')) ? 'active' : ''}
+            onClick={() => setWorkspaceMode(key)} disabled={kvkkRestricted && key === 'HUB'}>
+            {label}{key === 'WORK' && activeProject ? ` · ${activeProject.name}` : ''}
+          </button>
+        ))}
+      </nav>
+
+      {workspaceMode === 'HUB' && !kvkkRestricted && tenant && (
+        <ProjectHub
+          tenant={tenant}
+          currentUser={currentUser}
+          actors={actors}
+          onOpen={(p) => { setPlannerProjectId(p.id); setWorkspaceMode('PLANNER'); }}
+        />
+      )}
+      {workspaceMode === 'PLANNER' && !kvkkRestricted && tenant && plannerProjectId && (
+        <ProjectPlanner
+          key={plannerProjectId}
+          projectId={plannerProjectId}
+          tenant={tenant}
+          currentUser={currentUser}
+          onBack={() => { setWorkspaceMode('HUB'); window.history.replaceState(null, '', '#/workspace'); }}
+          onOpenWork={(p) => { setActiveProject(p); setWorkspaceMode('WORK'); }}
+        />
+      )}
+
+      {(workspaceMode === 'WORK' || kvkkRestricted) && (<>
       {/* Tri-Pane Work Area */}
       <nav className="pane-switcher" aria-label="Çalışma alanı bölmeleri">
         {[['left', 'Proje & Görevler'], ['middle', 'Sohbet'], ['right', 'Çıktı & Hafıza']].map(([key, label]) => (
@@ -524,6 +562,8 @@ export default function App() {
           onRejectQualityGate={() => notify("Revizyon talep edildi. Ajan geribildirime göre çıktıyı güncelleyecek.")}
         />
       </div>
+
+      </>)}
 
       {/* Task Creation Modal */}
       <CreateTaskModal 

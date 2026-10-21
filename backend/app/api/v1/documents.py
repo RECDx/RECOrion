@@ -43,6 +43,7 @@ def doc_out(d: AgentDocument, full: bool = False) -> Dict[str, Any]:
         "error": d.error, "has_card": bool(d.learning_card), "test_percent": (d.test_result or {}).get("percent"),
         "memory_item_id": str(d.memory_item_id) if d.memory_item_id else None, "storage_path": d.storage_path,
         "created_at": d.created_at, "updated_at": d.updated_at, "approved_at": d.approved_at,
+        "promoted_at": getattr(d, "promoted_at", None),
     }
     if full:
         out.update({"learning_card": d.learning_card, "test_result": d.test_result, "guard_result": d.guard_result})
@@ -168,6 +169,10 @@ async def _doc(db: AsyncSession, document_id: uuid.UUID, user: CurrentUser, mana
     if doc.layer == "PLATFORM_TITLE":
         if not user.is_super_admin:
             raise forbidden("Platform katalog dokümanlarını yalnızca RECDx yöneticileri yönetebilir.")
+    elif doc.layer == "PROJECT" and doc.project_id:
+        from app.services import projects as psvc
+
+        await psvc.load(db, user, doc.project_id, manage=manage)
     else:
         ensure_tenant_content(user, doc.tenant_id, "agent:configure" if manage else "tenant:view")
     return doc
@@ -279,20 +284,20 @@ async def download_document(document_id: uuid.UUID, current: CurrentUser = Depen
 
 
 # ---------------------------------------------------------------- proje ekleri (ADIM 5.5)
-async def _project(db: AsyncSession, project_id: uuid.UUID, user: CurrentUser, permission: str):
-    from app.db.models import Project
+async def _project(db: AsyncSession, project_id: uuid.UUID, user: CurrentUser, permission: Optional[str] = None, manage: bool = False):
+    """Proje ekleri proje kurallarına bağlıdır: ekip görür ve ekler; proje yöneticisi (veya project:manage) yönetir."""
+    from app.services import projects as psvc
 
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Proje bulunamadı.")
-    ensure_tenant_content(user, project.tenant_id, permission)
+    project = await psvc.load(db, user, project_id, manage=manage)
+    if permission and not user.has(permission):
+        raise forbidden()
     return project
 
 
 @router.get("/projects/{project_id}/documents")
 async def list_project_documents(project_id: uuid.UUID, current: CurrentUser = Depends(get_current_user),
                                  db: AsyncSession = Depends(get_db)):
-    project = await _project(db, project_id, current, "tenant:view")
+    project = await _project(db, project_id, current)
     return await _list(db, AgentDocument.tenant_id == project.tenant_id, AgentDocument.project_id == project.id,
                        AgentDocument.layer == "PROJECT")
 
@@ -300,8 +305,9 @@ async def list_project_documents(project_id: uuid.UUID, current: CurrentUser = D
 @router.post("/projects/{project_id}/documents", status_code=201)
 async def upload_project_document(project_id: uuid.UUID, bg: BackgroundTasks, file: UploadFile = File(...),
                                   current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Yalnızca bu projede çalışan AI personelin göreceği proje eki."""
-    project = await _project(db, project_id, current, "project:manage")
+    """Yalnızca bu projede çalışan AI personelin göreceği proje eki. Ekip üyeleri (sohbet ekleri dahil) yükleyebilir;
+    ek, proje yöneticisi onaylayınca öğrenilir."""
+    project = await _project(db, project_id, current)
     data = await file.read()
     tenant = await db.get(Tenant, project.tenant_id)
     ent = await entitlements(db, tenant, current)

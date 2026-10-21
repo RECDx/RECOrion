@@ -91,6 +91,12 @@ img, video, canvas, iframe { max-width: 100%; }
 
 /* ---------- Work Space (üç bölmeli çalışma alanı) ---------- */
 .pane-switcher { display: none; }
+/* Work Space modu: Projeler | Çalışma Alanı */
+.ws-mode { display: flex; gap: 4px; padding: 6px 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+.ws-mode button { padding: 7px 14px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: var(--text-muted);
+  font-family: var(--font-sans); font-size: 0.82rem; font-weight: 600; cursor: pointer; max-width: 50vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-mode button.active { background: var(--gradient-brand); color: #ffffff; }
+.ws-mode button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 @media (max-width: 1280px) {
   .tri-pane-container { grid-template-columns: 270px 1fr 300px; }

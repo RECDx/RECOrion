@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Otomatik zamanlayıcı (mail hatırlatmaları)
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_INTERVAL_MINUTES: int = 60
+    # Telegram bildirimleri (ADIM 6.5): BotFather'dan alınan token ve botun kullanıcı adı (@ olmadan)
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_BOT_USERNAME: str = ""
     # Web başvurusu kötüye kullanım sınırları (IP başına, saatlik)
     PURCHASE_IP_LIMIT_PER_HOUR: int = 5
     EMAIL_CODE_IP_LIMIT_PER_HOUR: int = 20

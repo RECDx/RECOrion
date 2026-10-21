@@ -124,7 +124,23 @@ export const api = {
   },
 
   // Projeler & İş Akışı Görevleri
-  getProjects: (tenantId) => request(`/projects/${tenantId ? `?tenant_id=${tenantId}` : ''}`),
+  getProjects: (tenantId, scope = 'mine') => request(`/projects/?${new URLSearchParams({ ...(tenantId ? { tenant_id: tenantId } : {}), scope }).toString()}`),
+  // Proje/Case (Adım 6)
+  getProject: (projectId) => request(`/projects/${projectId}`),
+  updateProject: (projectId, data) => request(`/projects/${projectId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  changeProjectStatus: (projectId, action, summary) => request(`/projects/${projectId}/status`, { method: 'POST', body: JSON.stringify({ action, summary }) }),
+  addProjectMember: (projectId, actorId, role) => request(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ actor_id: actorId, role }) }),
+  removeProjectMember: (projectId, actorId) => request(`/projects/${projectId}/members/${actorId}`, { method: 'DELETE' }),
+  suggestProjectPlan: (projectId, feedback, useChat = false) => request(`/projects/${projectId}/plan/suggest`, { method: 'POST', body: JSON.stringify({ feedback: feedback || null, use_chat: useChat }) }),
+  saveProjectPlan: (projectId, plan) => request(`/projects/${projectId}/plan`, { method: 'PUT', body: JSON.stringify(plan) }),
+  approveProjectPlan: (projectId) => request(`/projects/${projectId}/plan/approve`, { method: 'POST' }),
+  getProjectPlanChat: (projectId) => request(`/projects/${projectId}/plan/chat`),
+  sendProjectPlanChat: (projectId, content) => request(`/projects/${projectId}/plan/chat`, { method: 'POST', body: JSON.stringify({ content }) }),
+  simulateProject: (projectId, startDate) => request(`/projects/${projectId}/simulate`, { method: 'POST', body: JSON.stringify({ start_date: startDate || null }) }),
+  // Telegram bildirimleri (Adım 6.5)
+  getTelegramStatus: () => request('/auth/telegram'),
+  linkTelegram: () => request('/auth/telegram/link', { method: 'POST' }),
+  unlinkTelegram: () => request('/auth/telegram/link', { method: 'DELETE' }),
   createProject: (data) => request('/projects/', { method: 'POST', body: JSON.stringify(data) }),
   getTasks: (projectId) => request(`/projects/${projectId}/tasks`),
   createTask: (projectId, data) => request(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),

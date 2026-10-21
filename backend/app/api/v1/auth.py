@@ -306,3 +306,35 @@ async def confirm_password_reset(payload: PasswordResetConfirm, db: AsyncSession
     await db.commit()
     await _clear_failures((actor.email or "").lower())
     return {"success": True, "message": "Şifreniz belirlendi. Yeni şifrenizle giriş yapabilirsiniz.", "email": actor.email}
+
+
+# ---------------------------------------------------------------- Telegram bağlantısı (ADIM 6.5)
+@router.get("/telegram")
+async def telegram_status(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.services import telegram_service
+
+    actor = await db.get(Actor, user.actor_id)
+    return {"enabled": telegram_service.enabled(), "linked": bool(actor.telegram_chat_id),
+            "linked_at": actor.telegram_linked_at, "bot_username": settings.TELEGRAM_BOT_USERNAME or None}
+
+
+@router.post("/telegram/link")
+async def telegram_link(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Tek kullanımlık bağlama kodu üretir; kullanıcı botta /start KOD yazınca hesap bağlanır."""
+    from app.services import telegram_service
+
+    if not telegram_service.enabled():
+        raise HTTPException(status_code=503, detail="Telegram bildirimleri henüz yapılandırılmadı (TELEGRAM_BOT_TOKEN).")
+    actor = await db.get(Actor, user.actor_id)
+    actor.telegram_link_code = telegram_service.new_link_code()
+    await db.commit()
+    return {"code": actor.telegram_link_code, "deep_link": telegram_service.deep_link(actor.telegram_link_code),
+            "bot_username": settings.TELEGRAM_BOT_USERNAME or None}
+
+
+@router.delete("/telegram/link")
+async def telegram_unlink(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    actor = await db.get(Actor, user.actor_id)
+    actor.telegram_chat_id, actor.telegram_link_code, actor.telegram_linked_at = None, None, None
+    await db.commit()
+    return {"success": True}

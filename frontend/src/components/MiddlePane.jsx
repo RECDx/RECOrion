@@ -15,8 +15,12 @@ import {
   MessageSquare,
   Zap,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  Paperclip
 } from 'lucide-react';
+import { api } from '../api';
+import { toast } from '../ui/feedback';
+import { ACCEPT } from './docs/docMeta';
 
 export default function MiddlePane({ 
   selectedTask, 
@@ -31,7 +35,27 @@ export default function MiddlePane({
   const [inputText, setInputText] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [expandedThoughts, setExpandedThoughts] = useState({});
+  const [uploading, setUploading] = useState(0);
   const messagesEndRef = useRef(null);
+  const fileRef = useRef(null);
+
+  // Sohbete eklenen dosya/görseller Proje Eklerine gider; onaylanınca projedeki AI personel öğrenir
+  const attachFiles = async (files) => {
+    const list = [...(files || [])];
+    if (!list.length || !selectedTask?.project_id) return;
+    setUploading(list.length);
+    for (const file of list) {
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        await api.uploadProjectDocument(selectedTask.project_id, fd);
+        toast.success(`'${file.name}' Proje Eklerine yüklendi; onaylandıktan sonra projedeki AI personel öğrenir.`);
+      } catch (err) {
+        toast.error(`${file.name}: ${err.message}`);
+      }
+      setUploading((n) => n - 1);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -282,6 +306,17 @@ export default function MiddlePane({
             border: '1px solid var(--border-subtle)',
             transition: 'border-color 0.2s'
           }}>
+            <button
+              type="button"
+              className="ui-icon-btn"
+              aria-label="Dosya veya görsel ekle"
+              title="Dosya veya görsel ekle (Proje Eklerine yüklenir)"
+              disabled={!selectedTask || uploading > 0}
+              onClick={() => fileRef.current?.click()}
+            >
+              {uploading ? <RefreshCw size={15} className="spin" /> : <Paperclip size={15} />}
+            </button>
+            <input ref={fileRef} type="file" multiple accept={ACCEPT} hidden onChange={(e) => { attachFiles(e.target.files); e.target.value = ''; }} />
             <textarea
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}

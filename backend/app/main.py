@@ -27,9 +27,15 @@ async def lifespan(app: FastAPI):
         import asyncio
         from app.services.scheduler_service import scheduler_loop
         scheduler_task = asyncio.create_task(scheduler_loop())
+    telegram_task = None
+    from app.services import telegram_service
+    if settings.SCHEDULER_ENABLED and telegram_service.enabled():
+        import asyncio
+        telegram_task = asyncio.create_task(telegram_service.poll_loop())
     yield
-    if scheduler_task:
-        scheduler_task.cancel()
+    for task in (scheduler_task, telegram_task):
+        if task:
+            task.cancel()
     logger.info("🛑 RECOrion Backend Durduruluyor...")
 
 

@@ -305,6 +305,9 @@ class Actor(Base):
     hired_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     dismissed_at = Column(DateTime(timezone=True), nullable=True)
     extra_permissions = Column(JSONB, default=list)
+    telegram_chat_id = Column(String(64))  # proje bildirimleri (ADIM 6.5)
+    telegram_link_code = Column(String(16))
+    telegram_linked_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -324,14 +327,43 @@ class Project(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text)
     field_package = Column(String(32), default="GENEL")  # YAZILIM, GENEL
-    status = Column(String(32), default="DRAFT")  # DRAFT, PROVISIONING, READY, ACTIVE, RELEASED
+    # DRAFT > PLANNING > READY > ACTIVE > (PAUSED) > COMPLETED | CANCELLED
+    status = Column(String(32), default="DRAFT")
     repo_url = Column(String(255))
     created_by_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    kind = Column(String(16), nullable=False, default="PROJECT")  # PROJECT, CASE
+    requirements = Column(Text)  # isterler
+    manager_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))  # insan proje yöneticisi
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"))
+    start_date = Column(Date)
+    end_date = Column(Date)
+    plan = Column(JSONB)  # Beyin AI iş adımları taslağı
+    simulation = Column(JSONB)  # süre, kredi, risk
+    planning_approved_at = Column(DateTime(timezone=True))
+    ready_at = Column(DateTime(timezone=True))
+    started_at = Column(DateTime(timezone=True))
+    closed_at = Column(DateTime(timezone=True))
+    close_summary = Column(Text)
+    start_notified_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tenant = relationship("Tenant", back_populates="projects")
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
+
+
+class ProjectMember(Base):
+    """Projedeki personel: MANAGER (insan proje yöneticisi), MEMBER (insan), AGENT (AI personel)."""
+    __tablename__ = "project_members"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(16), nullable=False)
+    added_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    actor = relationship("Actor")
 
 
 class Task(Base):
@@ -345,7 +377,14 @@ class Task(Base):
     priority = Column(String(16), default="MEDIUM")
     status = Column(String(32), default="BACKLOG")  # BACKLOG, READY, IN_PROGRESS, WAITING_APPROVAL, DONE
     assignee_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
-    estimated_effort = Column(Numeric, default=1.0)
+    estimated_effort = Column(Numeric, default=1.0)  # iş günü
+    order_index = Column(Integer, nullable=False, default=0)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"))
+    job_title_id = Column(UUID(as_uuid=True), ForeignKey("job_titles.id", ondelete="SET NULL"))  # gereken unvan
+    depends_on = Column(JSONB, default=list)  # önce bitmesi gereken görevlerin kimlikleri
+    start_date = Column(Date)
+    due_date = Column(Date)
+    estimated_credits = Column(Numeric(14, 2))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
