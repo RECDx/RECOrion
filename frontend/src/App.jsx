@@ -65,8 +65,6 @@ export default function App() {
   const [health, setHealth] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [actors, setActors] = useState([]);
-  const [models, setModels] = useState([]);
-  const [selectedModel, setSelectedModel] = useState('glm-5.3');
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -174,9 +172,6 @@ export default function App() {
       const savedUser = loadSavedUser();
       if (!savedUser?.tenant_id) return;
       try {
-        const mData = await api.getModels();
-        setModels(mData);
-        if (mData.length > 0) setSelectedModel(mData[0].model_code);
         await loadTenantWorkspace(savedUser.tenant_id);
       } catch (err) {
         console.error("Platform başlatma hatası:", err);
@@ -237,7 +232,7 @@ export default function App() {
   }, [selectedTask, chatFilter, actors]);
 
   // 4. Send Message (Gemini Web Persistent Flow)
-  const handleSendMessage = async ({ content, isPrivate, overrideModel }) => {
+  const handleSendMessage = async ({ content, isPrivate }) => {
     if (!selectedTask || !content.trim()) return;
 
     setIsLoading(true);
@@ -246,7 +241,6 @@ export default function App() {
       const response = await api.sendMessage({
         task_id: selectedTask.id,
         content: content,
-        override_model_code: overrideModel || selectedModel,
         is_private: isPrivate,
         message_type: 'CHAT'
       });
@@ -341,9 +335,6 @@ export default function App() {
     // Giriş yapan kullanıcının şirketini derhal yükle ve senkronize et
     if (user.tenant_id) {
       try {
-        const mData = await api.getModels();
-        setModels(mData);
-        if (mData.length > 0) setSelectedModel(mData[0].model_code);
         await loadTenantWorkspace(user.tenant_id);
       } catch (e) {
         console.warn("Giriş yapan kullanıcının şirketi senkronize edilemedi:", e);
@@ -475,9 +466,6 @@ export default function App() {
       <Navbar 
         health={health}
         tenant={tenant}
-        models={models}
-        selectedModel={selectedModel}
-        onSelectModel={setSelectedModel}
         onGoToOfficialSite={() => setCurrentView('LANDING')}
         onGoToAdminConsole={() => {
           setCurrentView('SUPER_ADMIN_CONSOLE');
@@ -548,9 +536,6 @@ export default function App() {
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
           actors={actors}
-          models={models}
-          selectedModel={selectedModel}
-          onSelectModel={setSelectedModel}
         />
 
         {/* Right Pane: Quality Gate & 2-Tier Collective Memory */}

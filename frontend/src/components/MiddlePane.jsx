@@ -28,10 +28,8 @@ export default function MiddlePane({
   onSendMessage, 
   isLoading, 
   actors, 
-  models,
-  selectedModel,
-  onSelectModel
 }) {
+  const assignee = actors?.find((a) => a.id === selectedTask?.assignee_actor_id);
   const [inputText, setInputText] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [expandedThoughts, setExpandedThoughts] = useState({});
@@ -77,8 +75,7 @@ export default function MiddlePane({
     if (!inputText.trim() || isLoading) return;
     onSendMessage({
       content: inputText,
-      isPrivate: isPrivate,
-      overrideModel: selectedModel
+      isPrivate: isPrivate
     });
     setInputText('');
   };
@@ -113,7 +110,7 @@ export default function MiddlePane({
                 {selectedTask?.title || 'Lütfen sol panelden bir görev seçin'}
               </span>
               <span className="badge badge-ai" style={{ fontSize: '0.65rem' }}>
-                {selectedTask?.assignee?.display_name || 'İş Analisti Ajanı'}
+                {assignee?.display_name || 'Atanmadı'}
               </span>
             </div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
@@ -124,30 +121,14 @@ export default function MiddlePane({
           </div>
         </div>
 
-        {/* Dynamic Model Switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Model:</span>
-          <select 
-            value={selectedModel}
-            onChange={(e) => onSelectModel(e.target.value)}
-            style={{
-              background: 'rgb(var(--rgb-sf-111827) / 0.9)',
-              color: 'var(--ac-38bdf8)',
-              border: '1px solid rgba(99, 102, 241, 0.35)',
-              borderRadius: '6px',
-              padding: '4px 8px',
-              fontSize: '0.75rem',
-              fontFamily: 'var(--font-mono)',
-              outline: 'none'
-            }}
-          >
-            {models?.map((m) => (
-              <option key={m.model_code} value={m.model_code}>
-                {m.model_code}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* AI personelin unvanına göre atanmış modeli (sohbette değiştirilmez; Şirket Yönetimi > AI Personel) */}
+        {assignee?.actor_type === 'AI_AGENT' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-dim)' }}
+            title="Model, AI personelin ayarlarından Şirket Yönetimi'nde değiştirilir.">
+            <Cpu size={13} />
+            <span>Model: <b style={{ color: 'var(--ac-38bdf8)', fontFamily: 'var(--font-mono)' }}>{assignee.preferred_model_code || 'şirket varsayılanı'}</b></span>
+          </div>
+        )}
       </div>
 
       {/* Messages Stream (Gemini Web Persistent Chat) */}

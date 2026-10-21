@@ -38,6 +38,7 @@ class ActorResponse(BaseModel):
     capability_profile: Optional[str] = None
     autonomy_level: str
     status: str
+    preferred_model_code: Optional[str] = None  # AI personelin unvanına göre atanmış modeli
 
     class Config:
         from_attributes = True
@@ -253,8 +254,9 @@ async def list_actors(
     if actor_type:
         stmt = stmt.where(Actor.actor_type == actor_type.upper())
     stmt = stmt.order_by(Actor.actor_type, Actor.display_name)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    actors = (await db.execute(stmt)).scalars().all()
+    codes = dict((await db.execute(select(LLMModel.id, LLMModel.model_code))).all())
+    return [{**ActorResponse.model_validate(a).model_dump(), "preferred_model_code": codes.get(a.preferred_model_id)} for a in actors]
 
 
 @router.post("/", response_model=ActorResponse)

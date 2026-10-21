@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import AdminLeadsModal from './AdminLeadsModal';
 
-export default function Navbar({ health, tenant, selectedModel, models, onSelectModel, onGoToOfficialSite, currentUser, onGoToAdminConsole, onGoToCompanyAdmin, onLogout }) {
+export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser, onGoToAdminConsole, onGoToCompanyAdmin, onLogout }) {
   const isHealthy = health?.status === 'healthy';
   const [isLeadsModalOpen, setIsLeadsModalOpen] = useState(false);
 
@@ -90,35 +90,8 @@ export default function Navbar({ health, tenant, selectedModel, models, onSelect
         </div>
       </div>
 
-      {/* Right: Active EVREN Model Selector & User Profile */}
+      {/* Right: User Profile */}
       <div className="navbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {/* EVREN Model Dropdown */}
-        <div className="ui-hide-tablet" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Aktif Model:</span>
-          <select 
-            value={selectedModel}
-            onChange={(e) => onSelectModel(e.target.value)}
-            style={{
-              background: 'rgb(var(--rgb-sf-111827) / 0.8)',
-              color: 'var(--ac-38bdf8)',
-              border: '1px solid rgba(6, 182, 212, 0.35)',
-              borderRadius: '8px',
-              padding: '5px 10px',
-              fontSize: '0.8rem',
-              fontWeight: '600',
-              fontFamily: 'var(--font-mono)',
-              cursor: 'pointer',
-              outline: 'none'
-            }}
-          >
-            {models?.map((m) => (
-              <option key={m.id || m.model_code} value={m.model_code}>
-                {m.model_code} ({m.model_type})
-              </option>
-            ))}
-          </select>
-        </div>
-
         <ThemeToggle compact />
 
         {/* Official Web & Paketler Butonu */}

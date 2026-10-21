@@ -1,5 +1,6 @@
 /* Proje/Case ekranları (ADIM 6). Yalnızca tema değişkenleri kullanılır. */
 .pj-page { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; background: var(--bg-dark); }
+.pj-page > * { flex-shrink: 0; } /* uzun içerikte sekme çubuğu ezilmesin */
 .pj-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pj-title { display: flex; flex-direction: column; gap: 4px; }
 .pj-title h2 { margin: 0; font-size: 1.35rem; color: var(--text-main); }

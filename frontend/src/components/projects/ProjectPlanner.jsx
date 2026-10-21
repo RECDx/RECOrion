@@ -27,7 +27,7 @@ const CONFIRM = {
 };
 const DONE_MSG = { start_planning: 'Planlamaya alındı.', mark_ready: 'Proje başlamaya hazır.', start: 'Proje başlatıldı.', pause: 'Proje duraklatıldı.',
   resume: 'Proje devam ediyor.', complete: 'Proje tamamlandı.', cancel: 'Proje iptal edildi.', reopen_planning: 'Proje planlamaya geri alındı.' };
-const pickForm = (p) => ({ name: p.name, kind: p.kind, field_package: p.field_package, manager_actor_id: p.manager_actor_id || '',
+const pickForm = (p) => ({ name: p.name, kind: p.kind, manager_actor_id: p.manager_actor_id || '',
   department_id: p.department_id || '', start_date: p.start_date || '', end_date: p.end_date || '', description: p.description || '', requirements: p.requirements || '' });
 
 /** Proje/Case planlama ekranı (ADIM 6.2–6.5). */

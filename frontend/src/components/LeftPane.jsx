@@ -45,7 +45,7 @@ export default function LeftPane({
             <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'flex', gap: '6px' }}>
               <span>Kod: {project?.slug || 'REC-001'}</span>
               <span>•</span>
-              <span style={{ color: 'var(--ac-22d3ee)' }}>{project?.field_package || 'YAZILIM'}</span>
+              <span style={{ color: 'var(--ac-22d3ee)' }}>{project?.kind === 'CASE' ? 'Case' : 'Proje'}</span>
             </div>
           </div>
         </div>

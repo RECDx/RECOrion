@@ -74,7 +74,7 @@ export default function ProjectHub({ tenant, currentUser, actors = [], onOpen })
 }
 
 function CreateProjectModal({ tenant, currentUser, actors, onClose, onCreated }) {
-  const [form, setForm] = useState({ name: '', kind: 'PROJECT', field_package: 'GENEL', manager_actor_id: currentUser?.actor_id || '',
+  const [form, setForm] = useState({ name: '', kind: 'PROJECT', manager_actor_id: currentUser?.actor_id || '',
     department_id: '', start_date: '', end_date: '', description: '', requirements: '' });
   const [departments, setDepartments] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -146,13 +146,6 @@ export function ProjectFields({ form, set, humans, departments, disabled = false
       <div className="pj-field">
         <label htmlFor="pj-end">Hedef bitiş</label>
         <input id="pj-end" type="date" className="ui-input" value={form.end_date || ''} onChange={set('end_date')} disabled={disabled} />
-      </div>
-      <div className="pj-field">
-        <label htmlFor="pj-field">Alan</label>
-        <select id="pj-field" className="ui-input" value={form.field_package} onChange={set('field_package')} disabled={disabled}>
-          <option value="GENEL">Genel</option>
-          <option value="YAZILIM">Yazılım</option>
-        </select>
       </div>
       <div className="pj-field full">
         <label htmlFor="pj-desc">Kısa açıklama</label>

@@ -127,7 +127,6 @@ Bilmediğin bilgiyi uydurma; eksikleri "questions" içinde yöneticiye sor.
 
 # Proje
 Adı: {project.name}
-Alan: {project.field_package}
 Açıklama: {(project.description or '-')[:2000]}
 İsterler:
 {(project.requirements or '-')[:8000]}
