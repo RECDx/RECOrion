@@ -72,17 +72,8 @@ img, video, canvas, iframe { max-width: 100%; }
 /* ---------- Şirket Yönetim Merkezi ---------- */
 @media (max-width: 1024px) {
   .company-admin-root { height: 100dvh !important; }
-  .company-admin-header { height: auto !important; min-height: 60px; padding: 10px 14px !important; flex-wrap: wrap; gap: 10px; }
   .company-admin-header > * { min-width: 0; }
   .company-admin-header-actions { flex-wrap: wrap; justify-content: flex-end; }
-  /* Sol menü üstte yatay, kaydırılabilir sekme çubuğuna dönüşür */
-  .company-admin-body { flex-direction: column; }
-  .company-admin-sidebar { width: 100% !important; padding: 8px 10px !important; border-right: none !important; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
-  .company-admin-sidebar > div:first-child > div:first-child { display: none; } /* "ORGANİZASYON YÖNETİMİ" başlığı */
-  .company-admin-sidebar > div:not(:first-child) { display: none; }             /* alt bilgi kutuları */
-  .company-admin-tabs { flex-direction: row !important; overflow-x: auto; scrollbar-width: none; gap: 6px !important; }
-  .company-admin-tabs::-webkit-scrollbar { display: none; }
-  .company-admin-tabs > * { flex-shrink: 0; white-space: nowrap; width: auto !important; }
   .company-admin-content { padding: 16px !important; }
 }
 @media (max-width: 640px) {

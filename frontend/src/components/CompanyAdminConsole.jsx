@@ -62,7 +62,26 @@ import DocumentReviewModal from './docs/DocumentReviewModal';
 import DocumentLibrary from './docs/DocumentLibrary';
 import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
-import { Coins, Brain } from 'lucide-react';
+import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+
+// Şirket Yönetimi sol menüsü (Ana Kontrol Merkezi düzeni); gruplar açılıp kapanabilir
+const COMPANY_NAV = [
+  { key: 'PERSONEL', label: 'Personel', items: [
+    { tab: 'USERS', label: 'Kullanıcı Yönetimi', icon: Users, color: 'var(--ac-818cf8)' },
+    { tab: 'AI_AGENTS', label: 'AI Ajan İşe Alım', icon: Bot, color: '#10b981' },
+  ] },
+  { key: 'ORGANIZASYON', label: 'Organizasyon', items: [
+    { tab: 'DEPARTMENTS', label: 'Departmanlar', icon: Building2, color: '#a855f7' },
+    { tab: 'JOB_TITLES', label: 'Ünvan Tanımları', icon: Briefcase, color: 'var(--ac-38bdf8)' },
+  ] },
+  { key: 'KURUM', label: 'Kurum Zekâsı', items: [
+    { tab: 'MANIFESTO', label: 'Sektörel Manifesto', icon: FileText, color: '#f59e0b' },
+    { tab: 'BRAIN', label: 'Beyin AI', icon: Brain, color: '#c084fc' },
+  ] },
+  { key: 'KULLANIM', label: 'Kullanım', items: [
+    { tab: 'CREDITS', label: 'Kredi ve Kullanım', icon: Coins, color: '#facc15' },
+  ] },
+];
 
 export default function CompanyAdminConsole({
   currentUser,
@@ -81,6 +100,17 @@ export default function CompanyAdminConsole({
   };
 
   const [activeTab, setActiveTab] = useState('DEPARTMENTS');
+  // Sol menü: daraltılabilir, gruplar açılıp kapanabilir (tercih bu tarayıcıda hatırlanır); tablet/telefonda çekmece
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [closedNavGroups, setClosedNavGroups] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('recorion_ca_nav_groups') || '{}'); } catch { return {}; }
+  });
+  const toggleNavGroup = (key) => setClosedNavGroups((prev) => {
+    const next = { ...prev, [key]: !prev[key] };
+    try { localStorage.setItem('recorion_ca_nav_groups', JSON.stringify(next)); } catch { /* depolama kapalı */ }
+    return next;
+  });
   const [catalogImportOpen, setCatalogImportOpen] = useState(false);
   const [hireWizardOpen, setHireWizardOpen] = useState(false);
   const [tenantId, setTenantId] = useState(resolveInitialTenantId);
@@ -1819,85 +1849,97 @@ export default function CompanyAdminConsole({
     }
   };
 
+  const navCounts = {
+    USERS: userQuota ? `${userQuota.active_users} / ${userQuota.max_users}` : null,
+    DEPARTMENTS: departments.length,
+    JOB_TITLES: jobTitles.length,
+  };
+
   const isManifestoUnchanged =
     manifestoText === (tenant?.sector_manifesto || '') &&
     JSON.stringify((manifestoSectors || []).slice().sort()) === JSON.stringify((tenant?.sectors || []).slice().sort()) &&
     JSON.stringify((manifestoNaceCodes || []).slice().sort()) === JSON.stringify((tenant?.nace_codes || []).slice().sort());
 
   return (
-    <div className="company-admin-root" style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      backgroundColor: 'var(--sf-0a0d14)',
-      color: 'var(--nt-f8fafc)',
-      fontFamily: 'var(--font-sans)',
-      overflow: 'hidden'
-    }}>
-      {/* ÜST TOPBAR */}
-      <header className="company-admin-header" style={{
-        height: '64px',
-        padding: '0 24px',
-        borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)',
-        background: 'rgb(var(--rgb-sf-111622) / 0.85)',
-        backdropFilter: 'blur(16px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        zIndex: 50
-      }}>
-        {/* Sol: Logo ve Şirket Başlığı */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #7134e2 0%, #146ceb 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 16px rgba(113, 52, 226, 0.45)'
-          }}>
-            <Building2 size={20} color="#ffffff" />
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontWeight: '800', fontSize: '1.15rem', letterSpacing: '-0.02em', color: 'var(--nt-ffffff)' }}>
-                {tenant?.name || 'Müşteri Yönetim Konsolu'}
-              </span>
-              <span style={{
-                background: 'rgba(113, 52, 226, 0.18)',
-                color: 'var(--ac-c084fc)',
-                border: '1px solid rgba(113, 52, 226, 0.35)',
-                fontSize: '0.675rem',
-                fontWeight: '700',
-                padding: '2px 8px',
-                borderRadius: '6px',
-                textTransform: 'uppercase'
-              }}>
-                ŞİRKET YÖNETİMİ
-              </span>
-              {tenant?.nace_codes && tenant.nace_codes.length > 0 && (
-                <span style={{
-                  background: 'rgba(6, 182, 212, 0.12)',
-                  color: 'var(--ac-22d3ee)',
-                  border: '1px solid rgba(6, 182, 212, 0.3)',
-                  fontSize: '0.675rem',
-                  fontWeight: '600',
-                  padding: '2px 8px',
-                  borderRadius: '6px'
-                }}>
-                  NACE: {tenant.nace_codes[0]?.code || tenant.nace_codes[0] || 'Genel'}
-                </span>
-              )}
+    <div className="super-admin-layout company-admin-root">
+      <div className={`super-admin-mobile-backdrop ${mobileNavOpen ? 'open' : ''}`} onClick={() => setMobileNavOpen(false)} />
+      <aside className={`super-admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-open' : ''}`}>
+        <div className="super-admin-sidebar-header" style={{ padding: sidebarCollapsed ? '16px 8px' : '16px 14px' }}>
+          {sidebarCollapsed ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
+              <div className="super-admin-logo-box" title={tenant?.name || 'Şirket Yönetimi'} style={{ width: 38, height: 38 }}>
+                <Building2 size={18} color="#ffffff" />
+              </div>
+              <button type="button" onClick={() => setSidebarCollapsed(false)} className="super-admin-sidebar-toggle-btn" title="Menüyü genişlet"
+                style={{ margin: '0 auto', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <PanelLeftOpen style={{ width: 16, height: 16 }} />
+              </button>
             </div>
-            <p style={{ fontSize: '0.72rem', color: 'var(--nt-94a3b8)', margin: 0 }}>
-              RECOrion Otonom Yapay Zeka & Departman Yönetim Merkezi
-            </p>
-          </div>
+          ) : (
+            <div className="super-admin-logo-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+                <div className="super-admin-logo-box" title={tenant?.name || 'Şirket Yönetimi'}><Building2 size={18} color="#ffffff" /></div>
+                <div style={{ overflow: 'hidden' }}>
+                  <div className="super-admin-brand-name">
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tenant?.name || 'Şirket'}</span>
+                  </div>
+                  <div className="super-admin-brand-sub">Şirket Yönetimi</div>
+                </div>
+              </div>
+              <button type="button" onClick={() => setSidebarCollapsed(true)} className="super-admin-sidebar-toggle-btn" title="Menüyü daralt">
+                <PanelLeftClose style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
+          )}
         </div>
 
+        <nav className="super-admin-nav">
+          {COMPANY_NAV.map((group) => (
+            <React.Fragment key={group.key}>
+              {!sidebarCollapsed && (
+                <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup(group.key)} aria-expanded={!closedNavGroups[group.key]}>
+                  <span>{group.label}</span>
+                  <ChevronDown className={`super-admin-nav-group-chevron ${closedNavGroups[group.key] ? 'closed' : ''}`} />
+                </button>
+              )}
+              {(sidebarCollapsed || !closedNavGroups[group.key]) && group.items.map(({ tab, label, icon: Icon, color }) => {
+                const count = navCounts[tab];
+                return (
+                  <button key={tab} type="button" onClick={() => { setActiveTab(tab); setMobileNavOpen(false); }}
+                    className={`super-admin-nav-item ${activeTab === tab ? 'active' : ''}`} title={label}>
+                    <div className="super-admin-nav-item-left">
+                      <Icon style={{ width: 17, height: 17, color }} />
+                      {!sidebarCollapsed && <span>{label}</span>}
+                    </div>
+                    {!sidebarCollapsed && count != null && <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{count}</span>}
+                  </button>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </nav>
+
+        {!sidebarCollapsed && (
+          <div style={{ margin: '12px', padding: '12px', borderRadius: 10, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--text-main)', marginBottom: 4 }}>
+              <Shield size={14} color="#7134e2" />
+              <span>Şirket Veri İzolasyonu Aktif</span>
+            </div>
+            <span>Başka şirketler ve RECDx yöneticileri proje, sohbet ve hafıza içeriğinize erişemez (KVKK).</span>
+          </div>
+        )}
+      </aside>
+
+      <main className="super-admin-main">
+        <header className="super-admin-header company-admin-header">
+          <button type="button" className="ui-icon-btn ui-show-tablet" onClick={() => setMobileNavOpen(true)} aria-label="Menüyü aç" title="Menü">
+            <Menu size={18} />
+          </button>
+          <div className="super-admin-header-title">
+            <span>Şirket Yönetimi</span>
+            <span style={{ color: 'var(--nt-64748b)', fontSize: '0.8rem' }}>/</span>
+            <span style={{ color: '#146ceb', fontSize: '0.825rem' }}>{COMPANY_NAV.flatMap((g) => g.items).find((i) => i.tab === activeTab)?.label}</span>
+          </div>
         {/* Sağ: Aksiyon Butonları & Kullanıcı */}
         <div className="company-admin-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <ThemeToggle className="ui-hide-mobile" />
@@ -2026,235 +2068,9 @@ export default function CompanyAdminConsole({
             </button>
           )}
         </div>
-      </header>
+        </header>
 
-      {/* ANA GÖVDE: SOL MENÜ + SAĞ İÇERİK */}
-      <div className="company-admin-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* SOL YAN MENÜ (SIDEBAR) - tablet/telefonda üstte yatay sekme çubuğu */}
-        <aside className="company-admin-sidebar" style={{
-          width: '260px',
-          background: 'var(--sf-0d111a)',
-          borderRight: '1px solid rgb(var(--rgb-ov) / 0.08)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '16px 12px'
-        }}>
-          <div>
-            <div style={{
-              fontSize: '0.675rem',
-              fontWeight: '700',
-              color: 'var(--nt-64748b)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              padding: '6px 12px',
-              marginBottom: '6px'
-            }}>
-              ORGANİZASYON YÖNETİMİ
-            </div>
-
-            <nav className="company-admin-tabs" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {/* TAB 0: KULLANICILAR (İNSAN PERSONEL - Madde 1) */}
-              <button
-                onClick={() => setActiveTab('USERS')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  background: activeTab === 'USERS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
-                  border: activeTab === 'USERS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'USERS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
-                  fontSize: '0.85rem',
-                  fontWeight: activeTab === 'USERS' ? '700' : '500',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Users size={18} color={activeTab === 'USERS' ? 'var(--ac-818cf8)' : 'var(--nt-64748b)'} />
-                <span style={{ flex: 1 }}>Kullanıcı Yönetimi</span>
-                <span style={{
-                  fontSize: '0.7rem',
-                  background: userQuota.is_limit_reached ? 'rgba(239, 68, 68, 0.2)' : 'rgb(var(--rgb-ov) / 0.08)',
-                  padding: '2px 7px',
-                  borderRadius: '12px',
-                  color: userQuota.is_limit_reached ? 'var(--ac-f87171)' : 'var(--nt-cbd5e1)'
-                }}>
-                  {userQuota.active_users} / {userQuota.max_users}
-                </span>
-              </button>
-
-              {/* TAB 1: DEPARTMANLAR (Madde 1) */}
-              <button
-                onClick={() => setActiveTab('DEPARTMENTS')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  background: activeTab === 'DEPARTMENTS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
-                  border: activeTab === 'DEPARTMENTS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'DEPARTMENTS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
-                  fontSize: '0.85rem',
-                  fontWeight: activeTab === 'DEPARTMENTS' ? '700' : '500',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Building2 size={18} color={activeTab === 'DEPARTMENTS' ? '#a855f7' : 'var(--nt-64748b)'} />
-                <span style={{ flex: 1 }}>Departmanlar</span>
-                <span style={{
-                  fontSize: '0.7rem',
-                  background: 'rgb(var(--rgb-ov) / 0.08)',
-                  padding: '2px 7px',
-                  borderRadius: '12px',
-                  color: 'var(--nt-cbd5e1)'
-                }}>
-                  {departments.length}
-                </span>
-              </button>
-
-              {/* TAB 2: ŞİRKET ÜNVANLARI (Madde 2) */}
-              <button
-                onClick={() => setActiveTab('JOB_TITLES')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  background: activeTab === 'JOB_TITLES' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
-                  border: activeTab === 'JOB_TITLES' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'JOB_TITLES' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
-                  fontSize: '0.85rem',
-                  fontWeight: activeTab === 'JOB_TITLES' ? '700' : '500',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Briefcase size={18} color={activeTab === 'JOB_TITLES' ? 'var(--ac-38bdf8)' : 'var(--nt-64748b)'} />
-                <span style={{ flex: 1 }}>Ünvan Tanımları</span>
-                <span style={{
-                  fontSize: '0.7rem',
-                  background: 'rgb(var(--rgb-ov) / 0.08)',
-                  padding: '2px 7px',
-                  borderRadius: '12px',
-                  color: 'var(--nt-cbd5e1)'
-                }}>
-                  {jobTitles.length}
-                </span>
-              </button>
-
-              {/* TAB 3: AI AJAN KADROSU (Madde 3) */}
-              <button
-                onClick={() => setActiveTab('AI_AGENTS')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  background: activeTab === 'AI_AGENTS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
-                  border: activeTab === 'AI_AGENTS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'AI_AGENTS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
-                  fontSize: '0.85rem',
-                  fontWeight: activeTab === 'AI_AGENTS' ? '700' : '500',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Bot size={18} color={activeTab === 'AI_AGENTS' ? '#10b981' : 'var(--nt-64748b)'} />
-                <span style={{ flex: 1 }}>AI Ajan İşe Alım</span>
-                <span style={{
-                  fontSize: '0.65rem',
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  color: 'var(--ac-34d399)',
-                  padding: '2px 6px',
-                  borderRadius: '4px'
-                }}>
-                  {entitlements?.allowed_models?.length ? `${entitlements.allowed_models.length} Model` : 'Modeller'}
-                </span>
-              </button>
-
-              {/* TAB 4: KURUMSAL MANİFESTO & NACE */}
-              <button
-                onClick={() => setActiveTab('MANIFESTO')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  background: activeTab === 'MANIFESTO' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
-                  border: activeTab === 'MANIFESTO' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'MANIFESTO' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
-                  fontSize: '0.85rem',
-                  fontWeight: activeTab === 'MANIFESTO' ? '700' : '500',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <FileText size={18} color={activeTab === 'MANIFESTO' ? '#f59e0b' : 'var(--nt-64748b)'} />
-                <span style={{ flex: 1 }}>Sektörel Manifesto</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('BRAIN')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '10px',
-                  background: activeTab === 'BRAIN' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
-                  border: activeTab === 'BRAIN' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'BRAIN' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
-                  fontSize: '0.85rem', fontWeight: activeTab === 'BRAIN' ? '700' : '500',
-                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
-                }}
-              >
-                <Brain size={18} color={activeTab === 'BRAIN' ? '#c084fc' : 'var(--nt-64748b)'} />
-                <span style={{ flex: 1 }}>Beyin AI</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('CREDITS')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '10px',
-                  background: activeTab === 'CREDITS' ? 'linear-gradient(135deg, rgba(113, 52, 226, 0.25) 0%, rgba(20, 108, 235, 0.25) 100%)' : 'transparent',
-                  border: activeTab === 'CREDITS' ? '1px solid rgba(113, 52, 226, 0.5)' : '1px solid transparent',
-                  color: activeTab === 'CREDITS' ? 'var(--nt-ffffff)' : 'var(--nt-94a3b8)',
-                  fontSize: '0.85rem', fontWeight: activeTab === 'CREDITS' ? '700' : '500',
-                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
-                }}
-              >
-                <Coins size={18} color={activeTab === 'CREDITS' ? '#facc15' : 'var(--nt-64748b)'} />
-                <span style={{ flex: 1 }}>Kredi ve Kullanım</span>
-              </button>
-            </nav>
-          </div>
-
-          {/* Alt Bilgi Kartı */}
-          <div style={{
-            background: 'rgb(var(--rgb-ov) / 0.03)',
-            border: '1px solid rgb(var(--rgb-ov) / 0.06)',
-            borderRadius: '10px',
-            padding: '12px',
-            fontSize: '0.75rem',
-            color: 'var(--nt-94a3b8)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: 'var(--nt-f8fafc)', marginBottom: '4px' }}>
-              <Shield size={14} color="#7134e2" />
-              <span>Şirket Veri İzolasyonu Aktif</span>
-            </div>
-            <span>Şirketinizin verileri her istekte şirket bazında yetki kontrolünden geçer; başka şirketler ve RECDx yöneticileri proje, sohbet ve hafıza içeriğinize erişemez (KVKK).</span>
-          </div>
-        </aside>
-
-        {/* SAĞ ANA İÇERİK ALANI */}
-        <main className="company-admin-content" style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
+        <div className="company-admin-content" style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
           {/* ========================================================================= */}
           {/* MADDE 1: KULLANICI YÖNETİMİ (İNSAN PERSONEL) SEKMESİ */}
           {/* ========================================================================= */}
@@ -5991,8 +5807,8 @@ export default function CompanyAdminConsole({
               </div>
             </div>
           )}
-        </main>
-      </div>
+        </div>
+      </main>
 
       {/* ========================================================================= */}
       {/* MODAL: NORMAL İNSAN KULLANICI TANIMLAMA / DÜZENLEME (Madde 1) */}

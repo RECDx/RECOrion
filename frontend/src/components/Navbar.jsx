@@ -63,9 +63,6 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
           <span style={{ fontWeight: '600', color: 'var(--nt-f8fafc)' }}>
             {tenant?.name || 'RECOrion Teknoloji A.Ş.'}
           </span>
-          <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.12)', color: 'var(--ac-22d3ee)', fontSize: '0.65rem' }}>
-            NACE 62.01
-          </span>
         </div>
 
         {/* Live Cluster Health Status */}
