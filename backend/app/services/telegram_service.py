@@ -20,6 +20,22 @@ from app.db.session import AsyncSessionLocal
 
 logger = logging.getLogger("recorion.telegram")
 
+
+class _MaskBotToken(logging.Filter):
+    """İstek adresindeki (/bot<TOKEN>/...) bot token'ını loglarda gizler."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        token = settings.TELEGRAM_BOT_TOKEN
+        if token:
+            msg = record.getMessage()
+            if token in msg:
+                record.msg, record.args = msg.replace(token, "***"), None
+        return True
+
+
+for _name in ("httpx", "httpcore.connection", "httpcore.http11", "recorion.telegram"):
+    logging.getLogger(_name).addFilter(_MaskBotToken())
+
 API = "https://api.telegram.org/bot{token}/{method}"
 OFFSET_KEY = "recorion:telegram:offset"
 LOCK_KEY = "recorion:telegram:poller"
