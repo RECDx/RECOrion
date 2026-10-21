@@ -149,6 +149,9 @@ MODEL_SETTINGS = {
     "default_manifesto_model": ("Manifesto, rol promptu ve ünvan inceleme modeli", CHAT_TYPES),
     "model.default.embedding": ("Hafıza vektörleme modeli", {"EMBEDDING"}),
     "model.default.rerank": ("Hafıza yeniden sıralama modeli", {"RERANKER"}),
+    "model.default.ocr": ("Taranmış belge / görsel metin okuma (OCR) modeli", {"OCR"}),
+    "model.default.vision": ("Görsel açıklama modeli (fotoğraf, şema, çizim)", {"VISION"}),
+    "model.guard": ("Doküman içerik güvenliği modeli", {"GUARD"}),
 }
 
 

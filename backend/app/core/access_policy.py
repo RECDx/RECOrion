@@ -133,6 +133,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/catalog/titles"): SUPER_ADMIN,
     ("PUT", f"{P}/catalog/titles/{{title_id}}"): SUPER_ADMIN,
     ("DELETE", f"{P}/catalog/titles/{{title_id}}"): SUPER_ADMIN,
+    ("GET", f"{P}/catalog/titles/{{title_id}}/documents"): SUPER_ADMIN,
+    ("POST", f"{P}/catalog/titles/{{title_id}}/documents"): SUPER_ADMIN,
 
     ("GET", f"{P}/actors/job-titles"): AUTH,
     ("GET", f"{P}/actors/job-titles/{{title_id}}"): AUTH,
@@ -217,6 +219,18 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{AGENT}/video-links"): TENANT("agent:configure", content=True),
     ("POST", f"{AGENT}/deep-search"): TENANT("agent:configure", content=True),
     ("POST", f"{AGENT}/deep-search-sector-title"): TENANT("agent:configure", content=True),
+    ("GET", f"{C}/job-titles/{{title_id}}/documents"): TENANT("tenant:view", content=True),
+    ("POST", f"{C}/job-titles/{{title_id}}/documents"): TENANT("agent:configure", content=True),
+
+    # --- Öğrenme dokümanı işlemleri (yetki dokümanın katmanından uç içinde çözülür) ---
+    ("GET", f"{P}/documents/{{document_id}}"): HANDLER(),
+    ("GET", f"{P}/documents/{{document_id}}/download"): HANDLER(),
+    ("POST", f"{P}/documents/{{document_id}}/approve"): HANDLER(),
+    ("POST", f"{P}/documents/{{document_id}}/reject"): HANDLER(),
+    ("POST", f"{P}/documents/{{document_id}}/test"): HANDLER(),
+    ("POST", f"{P}/documents/{{document_id}}/reprocess"): HANDLER(),
+    ("POST", f"{P}/documents/{{document_id}}/versions"): HANDLER(),
+    ("DELETE", f"{P}/documents/{{document_id}}"): HANDLER(),
 
     # --- Beyin AI (manifesto, hafıza ve sohbet içerir: süper admin erişemez) ---
     ("POST", f"{C}/brain/chat"): TENANT("chat:participate", content=True),

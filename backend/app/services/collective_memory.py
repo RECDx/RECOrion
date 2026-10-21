@@ -79,6 +79,34 @@ class CollectiveMemoryService:
             "source_reference": source_reference
         }
 
+    async def index_chunk(self, *, embed_tenant_id: Optional[uuid.UUID], content: str, payload: Dict[str, Any],
+                          actor_id: Optional[uuid.UUID] = None) -> str:
+        """
+        Onaylı doküman parçasını vektörler ve Qdrant'a yazar (ADIM 5.4). embed_tenant_id boşsa (platform
+        kataloğu) embedding maliyeti RECDx'e yazılır. Nokta kimliğini döner.
+        """
+        point_id = str(uuid.uuid4())
+        vector = await llm_gateway.embed(LLMContext(tenant_id=embed_tenant_id, actor_id=actor_id, purpose="EMBEDDING"), content)
+        try:
+            await self.client.upsert(collection_name=self.collection_name, points=[
+                qmodels.PointStruct(id=point_id, vector=vector, payload={**payload, "content": content}),
+            ])
+        except Exception as e:
+            logger.error(f"Qdrant ekleme hatası: {e}")
+            raise LLMError("Hafıza kaydı vektör veritabanına yazılamadı.") from e
+        return point_id
+
+    async def delete_points(self, point_ids: List[str]) -> None:
+        ids = [str(p) for p in point_ids if p]
+        if not ids:
+            return
+        try:
+            await self.client.delete(collection_name=self.collection_name,
+                                     points_selector=qmodels.PointIdsList(points=ids))
+        except Exception as e:
+            logger.error(f"Qdrant silme hatası: {e}")
+            raise LLMError("Hafıza kaydı vektör veritabanından silinemedi.") from e
+
     async def search_memory(
         self,
         tenant_id: str,

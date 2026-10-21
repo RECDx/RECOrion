@@ -1,0 +1,43 @@
+/* Öğrenme dokümanları. Yalnızca tema değişkenleri kullanılır. */
+.doc-lib, .doc-review { display: flex; flex-direction: column; gap: 12px; }
+.doc-hint { font-size: 0.76rem; color: var(--text-dim); margin: 0; }
+.doc-drop {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 22px 16px;
+  border: 2px dashed var(--border-subtle); border-radius: 12px; background: rgb(var(--rgb-ov) / 0.02);
+  color: var(--text-muted); cursor: pointer; text-align: center; font-family: inherit;
+}
+.doc-drop strong { color: var(--text-main); font-size: 0.88rem; }
+.doc-drop span { font-size: 0.74rem; }
+.doc-drop:hover, .doc-drop.over { border-color: var(--border-highlight); background: rgb(var(--rgb-ov) / 0.05); }
+.doc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.doc-list li {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border-subtle); background: var(--bg-card);
+}
+.doc-icon { color: var(--text-dim); flex-shrink: 0; }
+.doc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.doc-main strong { font-size: 0.85rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc-main span { font-size: 0.72rem; color: var(--text-muted); }
+.doc-main .doc-err { color: var(--ac-f87171, #f87171); }
+.doc-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 0.78rem; color: var(--text-muted); }
+.doc-note { display: flex; align-items: flex-start; gap: 6px; padding: 10px 12px; border-radius: 10px; font-size: 0.8rem; line-height: 1.5; border: 1px solid var(--border-subtle); }
+.doc-note.info { background: rgba(14, 165, 233, 0.08); border-color: rgba(14, 165, 233, 0.3); color: var(--text-main); }
+.doc-note.warning { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.35); color: var(--text-main); }
+.doc-note.danger { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.35); color: var(--text-main); }
+.doc-note.success { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.35); color: var(--text-main); }
+.doc-field { display: flex; flex-direction: column; gap: 6px; }
+.doc-field label, .doc-field summary { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); cursor: default; }
+.doc-field summary { cursor: pointer; }
+.doc-field textarea { font-family: inherit; resize: vertical; }
+.doc-quiz-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.doc-quiz { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 0.82rem; color: var(--text-main); }
+.doc-quiz ul { list-style: none; margin: 4px 0 0; padding: 0; color: var(--text-muted); }
+.doc-quiz li.right { color: var(--text-main); font-weight: 600; }
+.doc-ok { font-size: 0.74rem; color: #10b981; }
+.doc-bad { font-size: 0.74rem; color: #ef4444; }
+.doc-chunk { white-space: pre-wrap; font-family: inherit; font-size: 0.76rem; color: var(--text-muted); background: rgb(var(--rgb-ov) / 0.03); border-radius: 8px; padding: 8px 10px; margin: 6px 0 0; }
+
+@media (max-width: 640px) {
+  .doc-list li { flex-wrap: wrap; }
+  .doc-main { flex-basis: calc(100% - 30px); }
+}

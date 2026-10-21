@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Building2, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, DataTable, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
+import DocumentLibrary from '../docs/DocumentLibrary';
 import { AUTONOMY, SENIORITY } from './labels';
 import './catalog.css';
 
@@ -44,6 +45,7 @@ export default function CatalogAdmin() {
   const [deptForm, setDeptForm] = useState(null);
   const [titleForm, setTitleForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [docsTitle, setDocsTitle] = useState(null);
 
   const loadSummary = useCallback(() => api.getCatalogSummary().then(setSummary).catch((e) => toast.error(e.message)), []);
   const loadDepartments = useCallback(() => api.getCatalogDepartments({ sector_code: sector, include_inactive: true })
@@ -202,6 +204,7 @@ export default function CatalogAdmin() {
         footer={(
           <>
             {titleForm?.id && <Button variant="danger" icon={Trash2} onClick={deleteTitle}>Sil</Button>}
+            {titleForm?.id && <Button variant="secondary" icon={FileText} onClick={() => setDocsTitle({ id: titleForm.id, title: titleForm.title })}>Bilgi Dokümanları</Button>}
             <Button variant="secondary" onClick={() => setTitleForm(null)}>Vazgeç</Button>
             <Button onClick={saveTitle} disabled={saving}>Kaydet</Button>
           </>
@@ -248,6 +251,16 @@ export default function CatalogAdmin() {
               <input type="checkbox" checked={titleForm.is_active} onChange={(e) => setTitleForm({ ...titleForm, is_active: e.target.checked })} /> Aktif (pasif unvanlar yeni işe alımlarda görünmez)
             </label>
           </div>
+        )}
+      </Modal>
+      <Modal open={!!docsTitle} onClose={() => setDocsTitle(null)} size="lg" title={docsTitle ? `${docsTitle.title} · Platform Bilgi Dokümanları` : ''}>
+        {docsTitle && (
+          <DocumentLibrary
+            load={() => api.getPlatformTitleDocuments(docsTitle.id)}
+            upload={(fd) => api.uploadPlatformTitleDocument(docsTitle.id, fd)}
+            intro="Onaylanan dokümanları tüm müşterilerdeki bu unvanın AI personelleri öğrenir (Platform Unvan Bilgisi). Yalnızca genel mesleki bilgi yükleyin; hiçbir şirkete ait veri içermemelidir."
+            emptyText="Bu unvana henüz platform bilgi dokümanı eklenmedi."
+          />
         )}
       </Modal>
     </div>

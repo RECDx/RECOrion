@@ -344,6 +344,20 @@ export const api = {
   getHirePreview: (tenantId, titleId, departmentName) => request(`/company/${tenantId}/hire/preview?title_id=${titleId}&department_name=${encodeURIComponent(departmentName || '')}`),
   importCatalogDepartments: (tenantId, ids) => request(`/company/${tenantId}/departments/from-catalog`, { method: 'POST', body: JSON.stringify({ catalog_department_ids: ids }) }),
 
+  // Öğrenme dokümanları (Adım 5.4): AI personel, şirket unvanı ve platform katalog unvanı
+  getDocument: (id) => request(`/documents/${id}`),
+  approveDocument: (id, card = {}) => request(`/documents/${id}/approve`, { method: 'POST', body: JSON.stringify(card) }),
+  rejectDocument: (id, reason) => request(`/documents/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  testDocument: (id) => request(`/documents/${id}/test`, { method: 'POST' }),
+  reprocessDocument: (id) => request(`/documents/${id}/reprocess`, { method: 'POST' }),
+  uploadDocumentVersion: (id, formData) => request(`/documents/${id}/versions`, { method: 'POST', body: formData }),
+  deleteDocument: (id) => request(`/documents/${id}`, { method: 'DELETE' }),
+  downloadDocument: (id, fallbackName) => downloadFile(`/documents/${id}/download`, fallbackName),
+  getCompanyTitleDocuments: (tenantId, titleId) => request(`/company/${tenantId}/job-titles/${titleId}/documents`),
+  uploadCompanyTitleDocument: (tenantId, titleId, formData) => request(`/company/${tenantId}/job-titles/${titleId}/documents`, { method: 'POST', body: formData }),
+  getPlatformTitleDocuments: (titleId) => request(`/catalog/titles/${titleId}/documents`),
+  uploadPlatformTitleDocument: (titleId, formData) => request(`/catalog/titles/${titleId}/documents`, { method: 'POST', body: formData }),
+
   // Kredi ve yapay zeka kullanımı (Adım 4)
   getCompanyCredits: (tenantId) => request(`/company/${tenantId}/credits`),
   topupCredits: (tenantId, data) => request(`/tenants/${tenantId}/credits/topup`, { method: 'POST', body: JSON.stringify(data) }),

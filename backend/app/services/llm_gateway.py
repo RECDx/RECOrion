@@ -39,7 +39,14 @@ PURPOSE_SETTING = {
     "TITLE_REVIEW": "default_manifesto_model",
     "EMBEDDING": "model.default.embedding",
     "RERANK": "model.default.rerank",
+    "OCR": "model.default.ocr",
+    "GUARD": "model.guard",
+    "VISION": "model.default.vision",
+    "LEARNING_CARD": "default_manifesto_model",
 }
+INFRA_PURPOSES = {"EMBEDDING", "RERANK", "OCR", "GUARD", "VISION"}  # paket model listesinden bağımsız altyapı modelleri
+OCR_PAGE_TOKENS = 1000  # OCR ucu kullanım bildirmez: sayfa başına tahmini giriş tokenı
+IMAGE_TOKENS = 1200  # görsel başına tahmini giriş tokenı (kredi ön kontrolü için)
 DEFAULT_CHAT_SETTING = "model.default.chat"
 CHAT_TYPES = {"CHAT", "VISION", "DECISION"}
 
@@ -113,12 +120,12 @@ async def allowed_model_codes(db: AsyncSession, tenant: Tenant) -> Optional[set]
 async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requested: Optional[str],
                         actor_id: Optional[uuid.UUID]) -> LLMModel:
     allowed = await allowed_model_codes(db, tenant)
-    kind_embedding, kind_rerank = purpose == "EMBEDDING", purpose == "RERANK"
+    infra = purpose in INFRA_PURPOSES
 
     candidates: List[str] = []
     if requested:
         candidates.append(requested)
-    if actor_id and not (kind_embedding or kind_rerank):
+    if actor_id and not infra:
         actor = await db.get(Actor, actor_id)
         if actor and actor.preferred_model_id:
             m = await db.get(LLMModel, actor.preferred_model_id)
@@ -126,7 +133,7 @@ async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requeste
                 candidates.append(m.model_code)
     if purpose == "BRAIN" and tenant.brain_model_code:
         candidates.append(tenant.brain_model_code)
-    for key in (PURPOSE_SETTING.get(purpose), DEFAULT_CHAT_SETTING if not (kind_embedding or kind_rerank) else None):
+    for key in (PURPOSE_SETTING.get(purpose), DEFAULT_CHAT_SETTING if not infra else None):
         if key and (value := await _setting(db, key)):
             candidates.append(value)
 
@@ -134,15 +141,15 @@ async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requeste
         model = (await db.execute(select(LLMModel).where(func.lower(LLMModel.model_code) == code.lower()))).scalar_one_or_none()
         if not model or model.status != "ACTIVE":
             continue
-        # Altyapı modelleri (embedding/rerank) paket listesinden bağımsızdır; sohbet modelleri pakete bağlıdır
-        if allowed is not None and not (kind_embedding or kind_rerank) and model.model_code.lower() not in allowed:
+        # Altyapı modelleri (embedding/rerank/OCR/guard) paket listesinden bağımsızdır; sohbet modelleri pakete bağlıdır
+        if allowed is not None and not infra and model.model_code.lower() not in allowed:
             if i == 0 and requested:
                 raise ModelNotAllowed(f"'{model.model_code}' modeli şirketinizin paketinde yer almıyor.")
             continue
         return model
 
     # Son çare: paketin izin verdiği ilk aktif sohbet modeli
-    if not (kind_embedding or kind_rerank):
+    if not infra:
         stmt = select(LLMModel).where(LLMModel.status == "ACTIVE", LLMModel.model_type.in_(CHAT_TYPES)).order_by(LLMModel.model_code)
         for model in (await db.execute(stmt)).scalars():
             if allowed is None or model.model_code.lower() in allowed:
@@ -245,3 +252,57 @@ async def rerank(ctx: LLMContext, query: str, documents: List[str], top_n: int =
             raise LLMUnavailable("Yeniden sıralama servisi yanıt vermedi.") from exc
         await _record(db, tenant, model, ctx, result.tokens_in, 0, started)
         return result.results
+
+
+async def ocr(ctx: LLMContext, png_bytes: bytes) -> str:
+    """Bir sayfa/görsel için OCR. Kredi: sayfa başına tahmini giriş + okunan metin kadar çıkış tokenı."""
+    ctx.purpose = "OCR"
+    async with AsyncSessionLocal() as db:
+        tenant = await _tenant(db, ctx.tenant_id)
+        model = await resolve_model(db, tenant, "OCR", None, None)
+        await _preflight(db, tenant, model, OCR_PAGE_TOKENS, 500)
+        started = time.monotonic()
+        try:
+            text = await evren_client.ocr(png_bytes, model.model_code)
+        except EvrenError as exc:
+            await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
+            raise LLMUnavailable("Belge okuma (OCR) servisi şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.") from exc
+        await _record(db, tenant, model, ctx, OCR_PAGE_TOKENS, estimate_tokens(text), started)
+        return text
+
+
+async def guard(ctx: LLMContext, text: str) -> Dict[str, Any]:
+    """İçerik güvenliği: {"safe": bool, "level": "Safe|Unsafe|Controversial", "categories": [...]}"""
+    import re
+
+    ctx.purpose = "GUARD"
+    result = await chat(ctx, [{"role": "user", "content": text[:6000]}], temperature=0, max_tokens=64, timeout=60)
+    level = (re.search(r"Safety:\s*(\w+)", result.content) or [None, "Safe"])[1]
+    cats = (re.search(r"Categories:\s*(.+)", result.content) or [None, "None"])[1].strip()
+    return {"safe": level.lower() != "unsafe", "level": level,
+            "categories": [] if cats.lower() == "none" else [c.strip() for c in cats.split(",")]}
+
+
+async def describe_image(ctx: LLMContext, png_bytes: bytes, instruction: str) -> str:
+    """Görseli görsel-dil modeliyle açıklar (fotoğraf, şema, çizim). Görsel verisi token tahminine katılmaz."""
+    import base64
+
+    ctx.purpose = "VISION"
+    async with AsyncSessionLocal() as db:
+        tenant = await _tenant(db, ctx.tenant_id)
+        model = await resolve_model(db, tenant, "VISION", None, None)
+        await _preflight(db, tenant, model, IMAGE_TOKENS + estimate_tokens(instruction), 600)
+        messages = [{"role": "user", "content": [
+            {"type": "text", "text": instruction},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png_bytes).decode()}},
+        ]}]
+        started = time.monotonic()
+        try:
+            result = await evren_client.chat(model.model_code, messages, temperature=0.2, max_tokens=1200, timeout=120)
+        except EvrenError as exc:
+            await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
+            raise LLMUnavailable("Görsel açıklama servisi şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.") from exc
+        usage = (result.raw or {}).get("usage") or {}
+        tokens_in = int(usage.get("prompt_tokens") or IMAGE_TOKENS)
+        await _record(db, tenant, model, ctx, tokens_in, result.tokens_out, started, raw=result.raw)
+        return result.content.strip()

@@ -53,10 +53,14 @@ import {
 import { api } from '../api';
 import ThemeToggle from '../ui/ThemeToggle';
 import { notify, toast } from '../ui/feedback';
+import { Badge, Modal } from '../ui/components';
 import CreditsPanel from './ai/CreditsPanel';
 import BrainPanel from './ai/BrainPanel';
 import CatalogImportModal from './catalog/CatalogImportModal';
 import HireWizard from './catalog/HireWizard';
+import DocumentReviewModal from './docs/DocumentReviewModal';
+import DocumentLibrary from './docs/DocumentLibrary';
+import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
 import { Coins, Brain } from 'lucide-react';
 
 export default function CompanyAdminConsole({
@@ -222,6 +226,8 @@ export default function CompanyAdminConsole({
   const [selectedAgentForDocs, setSelectedAgentForDocs] = useState(null);
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
   const [agentDocuments, setAgentDocuments] = useState([]);
+  const [reviewDocId, setReviewDocId] = useState(null);
+  const [titleDocsFor, setTitleDocsFor] = useState(null);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [uploadDocError, setUploadDocError] = useState('');
@@ -1578,52 +1584,54 @@ export default function CompanyAdminConsole({
     }
   };
 
-  const handleUploadDocument = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedAgentForDocs) return;
+  const refreshAgentDocuments = async () => {
+    const targetId = getActiveTenantId();
+    if (!targetId || !selectedAgentForDocs) return;
+    try {
+      setAgentDocuments(await api.getAgentDocuments(targetId, selectedAgentForDocs.id));
+    } catch (err) {
+      console.warn('Doküman listesi yenilenemedi:', err);
+    }
+  };
 
+  // İşlenen dokümanlar varken listeyi birkaç saniyede bir yenile (ADIM 5.4)
+  useEffect(() => {
+    if (!isDocsModalOpen || !agentDocuments.some(isDocBusy)) return undefined;
+    const t = setInterval(refreshAgentDocuments, 4000);
+    return () => clearInterval(t);
+  }, [isDocsModalOpen, agentDocuments]);
+
+  const handleUploadDocument = async (e) => {
+    const files = [...(e.target.files || [])];
+    e.target.value = '';
+    if (!files.length || !selectedAgentForDocs) return;
     const targetId = getActiveTenantId();
     if (!targetId) return;
 
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    const allowed = ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'txt', 'csv', 'md', 'json', 'xml'];
-    if (!allowed.includes(ext)) {
-      setUploadDocError('Yalnızca PDF, Word (docx), Excel (xlsx), TXT, CSV, MD veya JSON formatları desteklenmektedir.');
-      return;
-    }
-
-    if (file.size > 50 * 1024 * 1024) {
-      setUploadDocError('Dosya boyutu 50MB sınırını aşamaz.');
-      return;
-    }
-
     setUploadDocError('');
     setIsUploadingDoc(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const createdDoc = await api.uploadAgentDocument(targetId, selectedAgentForDocs.id, formData);
-      setAgentDocuments(prev => [createdDoc, ...prev]);
-
-      // Ajan listesinde doküman sayısını güncelle
-      setAiAgents(prev => prev.map(a => {
-        if (a.id === selectedAgentForDocs.id) {
-          return { ...a, document_count: (a.document_count || 0) + 1 };
-        }
-        return a;
-      }));
-
-      showToast(`'${file.name}' başarıyla yüklendi ve ajanın hafızasına indekslendi!`, 'success');
-      e.target.value = '';
-    } catch (err) {
-      console.error('Doküman yükleme hatası:', err);
-      setUploadDocError(err.message || 'Doküman yüklenirken hata oluştu.');
-      showToast(err.message || 'Doküman yüklenemedi.', 'error');
-    } finally {
-      setIsUploadingDoc(false);
+    let added = 0;
+    for (const file of files) {
+      if (file.size > 50 * 1024 * 1024) {
+        setUploadDocError(`${file.name}: dosya boyutu 50 MB sınırını aşıyor.`);
+        continue;
+      }
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const createdDoc = await api.uploadAgentDocument(targetId, selectedAgentForDocs.id, formData);
+        setAgentDocuments(prev => [createdDoc, ...prev.filter(d => d.id !== createdDoc.id)]);
+        added += 1;
+      } catch (err) {
+        setUploadDocError(`${file.name}: ${err.message || 'yüklenemedi'}`);
+      }
     }
+    if (added) {
+      setAiAgents(prev => prev.map(a => (a.id === selectedAgentForDocs.id ? { ...a, document_count: (a.document_count || 0) + added } : a)));
+      showToast(`${added} dosya yüklendi. İşlendikten sonra onayınıza sunulacak; AI personel onaydan sonra öğrenir.`, 'success');
+    }
+    await refreshAgentDocuments();
+    setIsUploadingDoc(false);
   };
 
   const confirmDeleteDocument = async () => {
@@ -4093,6 +4101,14 @@ export default function CompanyAdminConsole({
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <button
+                              onClick={() => setTitleDocsFor(t)}
+                              className="ui-btn ui-btn-sm ui-btn-secondary"
+                              title="Bu unvandaki tüm AI personelin öğreneceği doküman ve görseller"
+                            >
+                              <FileText size={13} />
+                              <span>Bilgi Dokümanları</span>
+                            </button>
+                            <button
                               onClick={() => handleOpenEditTitle(t)}
                               style={{
                                 background: 'rgb(var(--rgb-ov) / 0.06)',
@@ -4239,6 +4255,13 @@ export default function CompanyAdminConsole({
                             </td>
                             <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                  onClick={() => setTitleDocsFor(t)}
+                                  className="ui-btn ui-btn-sm ui-btn-secondary"
+                                  title="Bilgi dokümanları"
+                                >
+                                  <FileText size={13} />
+                                </button>
                                 <button
                                   onClick={() => handleOpenEditTitle(t)}
                                   style={{
@@ -5250,6 +5273,21 @@ export default function CompanyAdminConsole({
             onClose={() => setHireWizardOpen(false)}
             onHired={(created) => { setAiAgents((prev) => [created, ...prev]); loadDepartments(); loadJobTitles(); loadAgentQuota(); }}
           />
+
+          {reviewDocId && (
+            <DocumentReviewModal documentId={reviewDocId} onClose={() => setReviewDocId(null)} onChanged={refreshAgentDocuments} />
+          )}
+
+          <Modal open={!!titleDocsFor} onClose={() => setTitleDocsFor(null)} size="lg" title={titleDocsFor ? `${titleDocsFor.title} · Bilgi Dokümanları` : ''}>
+            {titleDocsFor && (
+              <DocumentLibrary
+                load={() => api.getCompanyTitleDocuments(tenantId, titleDocsFor.id)}
+                upload={(fd) => api.uploadCompanyTitleDocument(tenantId, titleDocsFor.id, fd)}
+                intro="Bu unvandaki tüm AI personeller, onayladığınız dokümanları ve görselleri öğrenir (Şirket Unvan Bilgisi). Şirketinize özel bilgidir; RECDx dahil başka kimse göremez."
+                emptyText="Bu unvana henüz bilgi dokümanı eklenmedi."
+              />
+            )}
+          </Modal>
 
           <CatalogImportModal tenantId={tenantId} open={catalogImportOpen} onClose={() => setCatalogImportOpen(false)} onImported={loadDepartments} />
 
@@ -8934,7 +8972,8 @@ export default function CompanyAdminConsole({
                   <input
                     type="file"
                     id="agentDocFileInput"
-                    accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.csv,.md,.json"
+                    accept={DOC_ACCEPT}
+                    multiple
                     onChange={handleUploadDocument}
                     disabled={isUploadingDoc}
                     style={{
@@ -8971,25 +9010,27 @@ export default function CompanyAdminConsole({
                     {isUploadingDoc ? (
                       <div>
                         <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--ac-60a5fa)', margin: '0 0 4px 0' }}>
-                          Doküman Yükleniyor ve Ayrıştırılıyor...
+                          Dosyalar Yükleniyor...
                         </h4>
                         <p style={{ fontSize: '0.78rem', color: 'var(--nt-94a3b8)', margin: 0 }}>
-                          Metinler çıkarılıyor ve ajanın hafıza vektör motoruna indeksleniyor. Lütfen bekleyiniz.
+                          Yüklenen dosyalar arka planda okunacak (metin, OCR, görsel açıklama), kişisel veriler maskelenecek ve onayınıza sunulacak.
                         </p>
                       </div>
                     ) : (
                       <div>
                         <h4 style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--nt-ffffff)', margin: '0 0 4px 0' }}>
-                          Doküman Yüklemek İçin Tıklayın veya Dosyayı Sürükleyin
+                          Doküman veya Görsel Yüklemek İçin Tıklayın ya da Sürükleyin
                         </h4>
                         <p style={{ fontSize: '0.76rem', color: 'var(--nt-94a3b8)', margin: '0 0 10px 0' }}>
-                          Desteklenen formatlar: PDF, Word (.docx), Excel (.xlsx), TXT, CSV, Markdown (Azami 50MB)
+                          {DOC_ACCEPT_HINT}. Birden fazla dosya seçebilirsiniz. Görsellerdeki ürün, şema ve çizimler de açıklanıp öğrenilir.
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--ac-f87171)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>PDF</span>
                           <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--ac-60a5fa)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>WORD</span>
                           <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: 'var(--ac-4ade80)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>EXCEL</span>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(249, 115, 22, 0.15)', color: 'var(--ac-fb923c, #fb923c)', border: '1px solid rgba(249, 115, 22, 0.3)' }}>POWERPOINT</span>
                           <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: 'var(--ac-c084fc)', border: '1px solid rgba(168, 85, 247, 0.3)' }}>TXT / CSV</span>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '4px', background: 'rgba(20, 184, 166, 0.15)', color: 'var(--ac-2dd4bf, #2dd4bf)', border: '1px solid rgba(20, 184, 166, 0.3)' }}>GÖRSEL (PNG / JPG)</span>
                         </div>
                       </div>
                     )}
@@ -9588,10 +9629,14 @@ export default function CompanyAdminConsole({
                                   <span>•</span>
                                   <span>{doc.created_at ? new Date(doc.created_at).toLocaleDateString('tr-TR') : '—'}</span>
                                   <span>•</span>
-                                  <span style={{ color: 'var(--ac-34d399)', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: '600' }}>
-                                    <CheckCircle2 size={11} />
-                                    {doc.status === 'INDEXED' ? 'Hafızada & İndeksli' : 'Eklendi'}
-                                  </span>
+                                  <Badge tone={docStatusOf(doc.status).tone}>{docStatusOf(doc.status).label}</Badge>
+                                  {doc.image_count ? <span>{doc.image_count} görsel açıklandı</span> : null}
+                                  {doc.pii_findings && Object.keys(doc.pii_findings).length > 0 && <span>KVKK: {piiText(doc.pii_findings)} maskelendi</span>}
+                                  {isDocReviewable(doc) && !['web', 'youtube', 'deep_search'].includes(doc.file_type) && (
+                                    <button type="button" className="ui-btn ui-btn-sm ui-btn-secondary" onClick={() => setReviewDocId(doc.id)}>
+                                      {doc.status === 'PENDING_APPROVAL' ? 'İncele ve onayla' : 'Aç'}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>

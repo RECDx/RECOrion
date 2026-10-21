@@ -8,6 +8,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
+    # Eski Office biçimlerini (.doc, .ppt, .xls) metne çevirmek için başsız LibreOffice
+    libreoffice-writer-nogui \
+    libreoffice-impress-nogui \
+    libreoffice-calc-nogui \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements-dev.txt ./

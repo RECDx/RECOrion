@@ -14,6 +14,12 @@ websockets>=12.0
 pypdf>=4.0.0
 python-docx>=1.1.0
 openpyxl>=3.1.0
+# Doküman hattı (ADIM 5.4): sunum, eski Excel, PDF sayfa görüntüsü (OCR için), nesne deposu
+python-pptx>=1.0.0
+xlrd>=2.0.1
+pypdfium2>=4.30.0
+pillow>=10.0.0
+minio>=7.2.0
 beautifulsoup4>=4.12.0
 youtube-transcript-api>=0.6.0
 alembic>=1.13.0,<2.0.0

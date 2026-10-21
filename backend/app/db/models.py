@@ -407,8 +407,8 @@ class AgentDocument(Base):
     __tablename__ = "agent_documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)  # boş: platform
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=True)
     file_name = Column(String(255), nullable=False)
     original_name = Column(String(255), nullable=False)
     file_type = Column(String(32), nullable=False)  # pdf, docx, xlsx, txt
@@ -418,12 +418,44 @@ class AgentDocument(Base):
     summary = Column(Text, nullable=True)
     status = Column(String(32), default="INDEXED")  # INDEXED, ERROR, PROCESSING
     memory_item_id = Column(UUID(as_uuid=True), ForeignKey("memory_items.id", ondelete="SET NULL"), nullable=True)
+    # Doküman hattı (ADIM 5.4): katman, depolama, sürüm, KVKK maskeleme, öğrenme kartı ve onay
+    layer = Column(String(24), nullable=False, default="AGENT")  # AGENT, COMPANY_TITLE, PLATFORM_TITLE
+    job_title_id = Column(UUID(as_uuid=True), ForeignKey("job_titles.id", ondelete="CASCADE"))
+    storage_key = Column(String(512))
+    sha256 = Column(String(64))
+    version = Column(Integer, nullable=False, default=1)
+    previous_document_id = Column(UUID(as_uuid=True), ForeignKey("agent_documents.id", ondelete="SET NULL"))
+    masked_text = Column(Text)
+    pii_findings = Column(JSONB)
+    guard_result = Column(JSONB)
+    page_count = Column(Integer)
+    ocr_pages = Column(Integer)
+    image_count = Column(Integer)
+    chunk_count = Column(Integer)
+    learning_card = Column(JSONB)
+    test_result = Column(JSONB)
+    error = Column(Text)
+    uploaded_by_actor_id = Column(UUID(as_uuid=True))
+    approved_by_actor_id = Column(UUID(as_uuid=True))
+    approved_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tenant = relationship("Tenant")
     agent = relationship("Actor")
     memory_item = relationship("MemoryItem")
+
+
+class DocumentChunk(Base):
+    """Onaylanan dokümanın vektörlenen parçaları (KVKK maskeli metin)."""
+    __tablename__ = "document_chunks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("agent_documents.id", ondelete="CASCADE"), nullable=False)
+    idx = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    qdrant_point_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class ChatMessage(Base):

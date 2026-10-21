@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_BUCKET_NAME: str = "recorion-artifacts"
     MINIO_USE_SSL: bool = False
+    MINIO_DOCUMENTS_BUCKET: str = "recorion-documents"  # öğrenme dokümanları (ADIM 5.4)
 
     # EVREN LLM Gateway (TÜBİTAK BİLGEM & SSB SAYZEK EVREN)
     EVREN_API_BASE_URL: str = "https://evren-llmapi.ssyz.org.tr/v1"

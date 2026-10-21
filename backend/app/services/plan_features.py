@@ -67,18 +67,24 @@ def deny(message: str):
     raise HTTPException(status_code=403, detail=message)
 
 
-async def ensure_document_quota(db: AsyncSession, ent: Entitlements, tenant_id, agent_id, new_bytes: int) -> None:
-    """Personel başına doküman sayısı ve şirket depolama kotasını kontrol eder."""
+INACTIVE_DOC_STATUSES = ("DELETED", "REJECTED", "SUPERSEDED", "FAILED")
+
+
+async def ensure_document_quota(db: AsyncSession, ent: Entitlements, tenant_id, agent_id, new_bytes: int,
+                                job_title_id=None) -> None:
+    """Personel (veya unvan) başına doküman sayısı ve şirket depolama kotasını kontrol eder."""
     if ent.bypass:
         return
+    active = AgentDocument.status.notin_(INACTIVE_DOC_STATUSES)
+    owner = AgentDocument.job_title_id == job_title_id if job_title_id else AgentDocument.agent_id == agent_id
     count = (await db.execute(
-        select(func.count(AgentDocument.id)).where(AgentDocument.tenant_id == tenant_id, AgentDocument.agent_id == agent_id)
+        select(func.count(AgentDocument.id)).where(AgentDocument.tenant_id == tenant_id, owner, active)
     )).scalar() or 0
     if ent.max_documents_per_agent and count >= ent.max_documents_per_agent:
-        deny(f"'{ent.plan_name}' paketinde bir AI personele en fazla {ent.max_documents_per_agent} öğrenme kaynağı eklenebilir.")
+        deny(f"'{ent.plan_name}' paketinde bir AI personele veya unvana en fazla {ent.max_documents_per_agent} öğrenme kaynağı eklenebilir.")
     if ent.storage_gb:
         used = (await db.execute(
-            select(func.coalesce(func.sum(AgentDocument.file_size), 0)).where(AgentDocument.tenant_id == tenant_id)
+            select(func.coalesce(func.sum(AgentDocument.file_size), 0)).where(AgentDocument.tenant_id == tenant_id, active)
         )).scalar() or 0
         if used + new_bytes > ent.storage_gb * 1024 ** 3:
             deny(f"'{ent.plan_name}' paketinin {ent.storage_gb} GB depolama kotası doldu. Paketinizi yükseltebilir veya eski dokümanları kaldırabilirsiniz.")

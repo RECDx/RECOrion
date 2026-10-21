@@ -104,6 +104,15 @@ class EvrenClient:
         usage = data.get("usage") or {}
         return EmbeddingResult(vector=vector, tokens_in=int(usage.get("prompt_tokens") or usage.get("total_tokens") or estimate_tokens(text)))
 
+    async def ocr(self, png_bytes: bytes, model_code: str) -> str:
+        """EVREN /ocr ucu: gömülü (data URL) görselden metin okur. Usage döndürmez."""
+        import base64
+
+        data = await self._post("/ocr", {
+            "model": model_code, "image": "data:image/png;base64," + base64.b64encode(png_bytes).decode(),
+        }, timeout=120)
+        return str(data.get("text") or "")
+
     async def rerank(self, query: str, documents: List[str], model_code: str, top_n: int = 5) -> RerankResult:
         data = await self._post("/rerank", {"model": model_code, "query": query, "documents": documents, "top_n": top_n})
         usage = data.get("usage") or {}
