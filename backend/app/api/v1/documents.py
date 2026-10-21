@@ -276,3 +276,99 @@ async def _download(doc: AgentDocument):
 @router.get("/documents/{document_id}/download")
 async def download_document(document_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await _download(await _doc(db, document_id, current, manage=False))
+
+
+# ---------------------------------------------------------------- proje ekleri (ADIM 5.5)
+async def _project(db: AsyncSession, project_id: uuid.UUID, user: CurrentUser, permission: str):
+    from app.db.models import Project
+
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proje bulunamadı.")
+    ensure_tenant_content(user, project.tenant_id, permission)
+    return project
+
+
+@router.get("/projects/{project_id}/documents")
+async def list_project_documents(project_id: uuid.UUID, current: CurrentUser = Depends(get_current_user),
+                                 db: AsyncSession = Depends(get_db)):
+    project = await _project(db, project_id, current, "tenant:view")
+    return await _list(db, AgentDocument.tenant_id == project.tenant_id, AgentDocument.project_id == project.id,
+                       AgentDocument.layer == "PROJECT")
+
+
+@router.post("/projects/{project_id}/documents", status_code=201)
+async def upload_project_document(project_id: uuid.UUID, bg: BackgroundTasks, file: UploadFile = File(...),
+                                  current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Yalnızca bu projede çalışan AI personelin göreceği proje eki."""
+    project = await _project(db, project_id, current, "project:manage")
+    data = await file.read()
+    tenant = await db.get(Tenant, project.tenant_id)
+    ent = await entitlements(db, tenant, current)
+    await ensure_document_quota(db, ent, project.tenant_id, None, len(data), job_title_id=None)
+    doc = await pipeline.create_document(db, layer="PROJECT", tenant_id=project.tenant_id, agent_id=None, job_title_id=None,
+                                         project_id=project.id, filename=file.filename, data=data, actor_id=current.actor_id)
+    bg.add_task(pipeline.process_document, doc.id)
+    return doc_out(doc)
+
+
+class PromoteIn(BaseModel):
+    document_ids: List[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+@router.post("/projects/{project_id}/knowledge/promote")
+async def promote_project_knowledge(project_id: uuid.UUID, payload: PromoteIn, current: CurrentUser = Depends(get_current_user),
+                                    db: AsyncSession = Depends(get_db)):
+    """Seçilen onaylı proje eklerini Kurum Hafızasına aktarır (proje kapanışında kullanılır)."""
+    project = await _project(db, project_id, current, "memory:promote")
+    promoted = []
+    for doc in (await db.execute(select(AgentDocument).where(
+            AgentDocument.id.in_(payload.document_ids), AgentDocument.project_id == project.id))).scalars():
+        await pipeline.promote_to_company_memory(db, doc, current.actor_id)
+        promoted.append(str(doc.id))
+    return {"success": True, "promoted": promoted}
+
+
+# ---------------------------------------------------------------- AI personelin bilgi katmanları (ADIM 5.5)
+@router.get("/company/{tenant_id}/ai-agents/{agent_id}/knowledge")
+async def agent_knowledge_summary(tenant_id: uuid.UUID, agent_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Personelin yararlandığı katmanlar ve her katmandaki onaylı doküman sayısı."""
+    from app.db.models import MemoryItem
+    from app.services import knowledge
+
+    await _agent(db, tenant_id, agent_id)
+    scope = await knowledge.scope_for_agent(db, tenant_id, agent_id)
+
+    async def approved(*conds) -> int:
+        return (await db.execute(select(func.count()).select_from(AgentDocument).where(
+            AgentDocument.status == "APPROVED", *conds))).scalar() or 0
+
+    company_title = await db.get(JobTitle, scope.company_title_id) if scope.company_title_id else None
+    platform_title = await db.get(JobTitle, scope.platform_title_id) if scope.platform_title_id else None
+    global_items = (await db.execute(select(func.count()).select_from(MemoryItem).where(
+        MemoryItem.tenant_id == tenant_id, MemoryItem.scope == "GLOBAL", MemoryItem.status == "APPROVED"))).scalar() or 0
+    return {"layers": [
+        {"layer": "AGENT", "label": knowledge.LABELS["AGENT"], "documents": await approved(AgentDocument.agent_id == agent_id)},
+        {"layer": "TITLE", "label": knowledge.LABELS["TITLE"], "title": company_title.title if company_title else None,
+         "documents": await approved(AgentDocument.job_title_id == scope.company_title_id, AgentDocument.layer == "COMPANY_TITLE") if company_title else 0},
+        {"layer": "GLOBAL", "label": knowledge.LABELS["GLOBAL"], "documents": global_items},
+        {"layer": "PLATFORM_TITLE", "label": knowledge.LABELS["PLATFORM_TITLE"], "title": platform_title.title if platform_title else None,
+         "documents": await approved(AgentDocument.job_title_id == scope.platform_title_id, AgentDocument.layer == "PLATFORM_TITLE") if platform_title else 0},
+    ]}
+
+
+class KnowledgeQuery(BaseModel):
+    query: str = Field(min_length=2, max_length=1000)
+    project_id: Optional[uuid.UUID] = None
+
+
+@router.post("/company/{tenant_id}/ai-agents/{agent_id}/knowledge/search")
+async def agent_knowledge_search(tenant_id: uuid.UUID, agent_id: uuid.UUID, payload: KnowledgeQuery,
+                                 db: AsyncSession = Depends(get_db)):
+    """Bir soru için AI personelin hangi katmandan hangi bilgiyi kullanacağını gösterir (bilgiyi sınama)."""
+    from app.services import knowledge
+
+    await _agent(db, tenant_id, agent_id)
+    scope = await knowledge.scope_for_agent(db, tenant_id, agent_id, payload.project_id)
+    hits = await knowledge.retrieve(scope, payload.query, limit=8)
+    return {"results": hits, "counts": knowledge.layer_counts(hits)}

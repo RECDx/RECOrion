@@ -8,7 +8,7 @@ from app.core.security import CurrentUser, ensure_tenant_content, get_current_us
 from app.db.models import ChatMessage, Task, Actor, LLMModel, Project
 from app.services import llm_gateway
 from app.services.llm_gateway import LLMContext, LLMError
-from app.services.collective_memory import collective_memory
+from app.services import knowledge
 from app.services.redis_stream import redis_stream
 from pydantic import BaseModel
 import uuid
@@ -182,19 +182,10 @@ async def send_chat_message(
     await db.commit()
     await db.refresh(user_msg)
 
-    # 2. 2 Kademeli RAG Hafıza Taraması (NS_GLOBAL + NS_AGENT)
-    citations = await collective_memory.search_memory(
-        tenant_id=str(tenant_id),
-        query=payload.content,
-        assigned_agent_id=agent_id,
-        limit=3
-    )
-
-    rag_context = ""
-    if citations:
-        rag_context = "\n\n[İLGİLİ KURUMSAL & PERSONEL HAFIZA BİLGİLERİ]:\n"
-        for c in citations:
-            rag_context += f"- ({c.get('scope')}): {c.get('content')}\n"
+    # 2. 4 katmanlı bilgi + proje ekleri (ADIM 5.5): proje, AI personel, şirket unvanı, kurum hafızası, platform unvanı
+    scope = await knowledge.scope_for_agent(db, tenant_id, task.assignee.id if task.assignee else None, project_id)
+    citations = await knowledge.retrieve(scope, payload.content, limit=6)
+    rag_context = knowledge.format_context(citations)
 
     # 3. Model Mesaj Geçmişini Derle (Rolling Context)
     history_res = await db.execute(
@@ -210,7 +201,9 @@ async def send_chat_message(
         llm_messages.append({"role": m.role if m.role in ["user", "assistant"] else "user", "content": m.content})
 
     # Redis'e anlık düşünce adımı fırlat
-    await redis_stream.publish_thought(str(task.id), "ANALYSIS", "Görev analiz ediliyor. 2 Kademeli hafıza tarandı.")
+    counts = knowledge.layer_counts(citations)
+    await redis_stream.publish_thought(str(task.id), "ANALYSIS", "Bilgi katmanları tarandı: " + (
+        ", ".join(f"{knowledge.LABELS[k]} {v}" for k, v in counts.items()) or "ilgili bilgi bulunamadı") + ".")
 
     # 4. LLM Gateway (ölçüm + kredi düşümü). Hata olursa sahte yanıt üretilmez.
     try:

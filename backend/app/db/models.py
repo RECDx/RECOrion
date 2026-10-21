@@ -421,6 +421,8 @@ class AgentDocument(Base):
     # Doküman hattı (ADIM 5.4): katman, depolama, sürüm, KVKK maskeleme, öğrenme kartı ve onay
     layer = Column(String(24), nullable=False, default="AGENT")  # AGENT, COMPANY_TITLE, PLATFORM_TITLE
     job_title_id = Column(UUID(as_uuid=True), ForeignKey("job_titles.id", ondelete="CASCADE"))
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"))  # PROJECT katmanı
+    promoted_at = Column(DateTime(timezone=True))  # proje kapanınca Kurum Hafızasına aktarıldı
     storage_key = Column(String(512))
     sha256 = Column(String(64))
     version = Column(Integer, nullable=False, default=1)

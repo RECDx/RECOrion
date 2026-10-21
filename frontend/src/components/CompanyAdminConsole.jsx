@@ -60,6 +60,7 @@ import CatalogImportModal from './catalog/CatalogImportModal';
 import HireWizard from './catalog/HireWizard';
 import DocumentReviewModal from './docs/DocumentReviewModal';
 import DocumentLibrary from './docs/DocumentLibrary';
+import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
 import { Coins, Brain } from 'lucide-react';
 
@@ -8848,9 +8849,11 @@ export default function CompanyAdminConsole({
               }}>
                 <Sparkles size={20} color="var(--ac-60a5fa)" style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div style={{ fontSize: '0.825rem', color: 'var(--nt-cbd5e1)', lineHeight: 1.5 }}>
-                  <strong style={{ color: 'var(--nt-ffffff)' }}>Akıllı Vektör & Hibrit Hafıza Entegrasyonu:</strong> Yüklediğiniz dokümanların içeriği arka planda otomatik olarak analiz edilir, metinleri ayrıştırılır ve Qdrant kolektif vektör hafızasına (Qwen3-Embedding) kaydedilir. AI ajanı şirket süreçlerinde kararlar alırken bu dokümanlardaki verileri referans alır.
+                  <strong style={{ color: 'var(--nt-ffffff)' }}>Nasıl öğrenir:</strong> Yüklediğiniz doküman ve görseller arka planda okunur (OCR ve görsel açıklama dahil), kişisel veriler maskelenir ve size bir öğrenme kartı sunulur. Siz onayladıktan sonra AI personel bu bilgiyi kullanır; onaylanmayan doküman öğrenilmez.
                 </div>
               </div>
+
+              <AgentKnowledgePanel tenantId={getActiveTenantId()} agentId={selectedAgentForDocs.id} />
 
               {/* Kaynak Ekleme Sekmeleri (Dosya, Web Sayfası, YouTube Video) */}
               <div style={{

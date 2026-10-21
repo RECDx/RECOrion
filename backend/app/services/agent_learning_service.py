@@ -751,6 +751,9 @@ class AgentLearningService:
             category = item.get("category", "CHAT_LEARNING")
             source_ref = f"CHAT_TASK_{task_id}" if task_id else "CHAT_DIALOGUE"
 
+            # Kurum Hafızası tüm AI personeli etkiler: sohbetten çıkan şirket geneli bilgi onaya düşer (ADIM 5.5).
+            # Yalnızca personelin kendisini ilgilendiren bilgi doğrudan kendi hafızasına yazılır.
+            needs_approval = target_scope == "GLOBAL"
             mem = MemoryItem(
                 tenant_id=tenant_id,
                 scope=target_scope,
@@ -761,13 +764,18 @@ class AgentLearningService:
                     "source_type": "chat_dialogue",
                     "task_id": str(task_id) if task_id else None,
                     "category": category,
-                    "extracted_from": "CHAT"
+                    "extracted_from": "CHAT",
+                    "proposed_by_agent_id": str(agent_id) if agent_id else None,
                 },
-                status="APPROVED",
+                status="CANDIDATE" if needs_approval else "APPROVED",
                 confidence_score=conf
             )
             db.add(mem)
             await db.flush()
+            if needs_approval:
+                saved_items.append({"id": str(mem.id), "fact": fact, "scope": target_scope, "category": category,
+                                    "confidence": conf, "status": "CANDIDATE"})
+                continue
 
             # Qdrant Vektör İndeksine Ekle
             try:

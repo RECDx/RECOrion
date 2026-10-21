@@ -41,3 +41,16 @@
   .doc-list li { flex-wrap: wrap; }
   .doc-main { flex-basis: calc(100% - 30px); }
 }
+
+/* Bilgi katmanları (ADIM 5.5) */
+.kn-panel { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: rgb(var(--rgb-ov) / 0.02); margin-bottom: 14px; }
+.kn-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--text-main); font-size: 0.85rem; }
+.kn-layers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.kn-layer { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-card); }
+.kn-layer-name { font-size: 0.74rem; font-weight: 700; color: var(--text-muted); }
+.kn-layer-count { font-size: 1.2rem; font-weight: 800; color: var(--text-main); }
+.kn-search { display: flex; gap: 8px; }
+.kn-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kn-results li { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-card); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.kn-results p { flex-basis: 100%; margin: 0; font-size: 0.8rem; color: var(--text-main); line-height: 1.5; }
+@media (max-width: 1024px) { .kn-layers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

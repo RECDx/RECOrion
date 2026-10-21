@@ -231,6 +231,11 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/documents/{{document_id}}/reprocess"): HANDLER(),
     ("POST", f"{P}/documents/{{document_id}}/versions"): HANDLER(),
     ("DELETE", f"{P}/documents/{{document_id}}"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/documents"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/documents"): HANDLER("project:manage"),
+    ("POST", f"{P}/projects/{{project_id}}/knowledge/promote"): HANDLER("memory:promote"),
+    ("GET", f"{AGENT}/knowledge"): TENANT("tenant:view", content=True),
+    ("POST", f"{AGENT}/knowledge/search"): TENANT("tenant:view", content=True),
 
     # --- Beyin AI (manifesto, hafıza ve sohbet içerir: süper admin erişemez) ---
     ("POST", f"{C}/brain/chat"): TENANT("chat:participate", content=True),
@@ -252,6 +257,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/memory/add"): HANDLER("memory:promote"),
     ("POST", f"{P}/memory/search"): HANDLER("memory:search"),
     ("POST", f"{P}/memory/promote/{{memory_id}}"): HANDLER("memory:promote"),
+    ("POST", f"{P}/memory/{{memory_id}}/reject"): HANDLER("memory:promote"),
 }
 
 

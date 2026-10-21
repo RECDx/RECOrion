@@ -37,6 +37,8 @@ class MemoryItemResponse(BaseModel):
     content: str
     status: str
     confidence_score: float
+    metadata_json: Optional[Dict[str, Any]] = None
+    created_at: Optional[Any] = None
 
     class Config:
         from_attributes = True
@@ -47,6 +49,7 @@ class MemoryItemResponse(BaseModel):
 async def list_memory_items(
     tenant_id: uuid.UUID = Query(...),
     scope: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, description="APPROVED, CANDIDATE (onay bekleyen), REVOKED"),
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -54,6 +57,8 @@ async def list_memory_items(
     stmt = select(MemoryItem).where(MemoryItem.tenant_id == tenant_id)
     if scope:
         stmt = stmt.where(MemoryItem.scope == scope.upper())
+    if status:
+        stmt = stmt.where(MemoryItem.status == status.upper())
     stmt = stmt.order_by(MemoryItem.created_at.desc())
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -121,18 +126,34 @@ async def promote_to_corporate_memory(memory_id: uuid.UUID, user: CurrentUser = 
         raise HTTPException(status_code=404, detail="Hafıza kaydı bulunamadı.")
     ensure_tenant_content(user, item.tenant_id, "memory:promote")
 
-    item.scope = "GLOBAL"
-    item.agent_id = None
-    item.status = "APPROVED"
-    await db.commit()
-    await db.refresh(item)
-
-    # Qdrant'ta da güncelle
-    await collective_memory.add_memory(
+    if item.scope == "GLOBAL" and item.status == "APPROVED":
+        return {"status": "promoted", "message": "Bu bilgi zaten Kurum Hafızasında."}
+    # Önce vektörlenir; başarısız olursa kayıt değişmez
+    point = await collective_memory.add_memory(
         tenant_id=str(item.tenant_id),
         scope="GLOBAL",
         content=item.content,
-        source_reference=f"PROMOTED_FROM_{memory_id}"
+        source_reference=item.source_reference or f"PROMOTED_FROM_{memory_id}",
+        metadata={"memory_item_id": str(item.id), "approved_by": str(user.actor_id)},
     )
+    item.scope = "GLOBAL"
+    item.agent_id = None
+    item.status = "APPROVED"
+    item.qdrant_point_id = uuid.UUID(point["point_id"])
+    await db.commit()
 
     return {"status": "promoted", "message": "Bilgi Şirket Kurum Hafızasına (NS_GLOBAL) başarıyla katıldı."}
+
+
+@router.post("/{memory_id}/reject")
+async def reject_memory_candidate(memory_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Onay bekleyen Kurum Hafızası adayını reddeder (öğrenilmez)."""
+    item = await db.get(MemoryItem, memory_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Hafıza kaydı bulunamadı.")
+    ensure_tenant_content(user, item.tenant_id, "memory:promote")
+    if item.status != "CANDIDATE":
+        raise HTTPException(status_code=409, detail="Yalnızca onay bekleyen bilgiler reddedilebilir.")
+    item.status = "REVOKED"
+    await db.commit()
+    return {"status": "rejected"}

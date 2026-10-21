@@ -258,15 +258,14 @@ async def _converse(db: AsyncSession, ctx: LLMContext, tenant_id: uuid.UUID, act
 
 
 async def _brain_prompt(db: AsyncSession, tenant: Tenant, query: str) -> str:
-    from app.services.collective_memory import collective_memory
-
     departments = (await db.execute(select(Department).where(Department.tenant_id == tenant.id).order_by(Department.name))).scalars().all()
     titles = (await db.execute(select(JobTitle).where(JobTitle.tenant_id == tenant.id).order_by(JobTitle.title))).scalars().all()
     agents = (await db.execute(select(Actor).where(Actor.tenant_id == tenant.id, Actor.actor_type == "AI_AGENT",
                                                    Actor.dismissed_at.is_(None)).order_by(Actor.display_name))).scalars().all()
     dept_names = {d.id: d.name for d in departments}
     title_names = {t.id: t.title for t in titles}
-    memories = await collective_memory.search_memory(str(tenant.id), query, limit=5)
+    from app.services import knowledge
+    memories = await knowledge.retrieve(knowledge.Scope(tenant_id=tenant.id), query, limit=5, layers=["GLOBAL"])
 
     def lines(items):
         return "\n".join(f"- {i}" for i in items) or "- (henüz tanımlı değil)"

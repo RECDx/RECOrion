@@ -153,6 +153,14 @@ export const api = {
   },
   searchMemory: (payload) => request('/memory/search', { method: 'POST', body: JSON.stringify(payload) }),
   promoteMemory: (memoryId) => request(`/memory/promote/${memoryId}`, { method: 'POST' }),
+  rejectMemory: (memoryId) => request(`/memory/${memoryId}/reject`, { method: 'POST' }),
+  getMemoryCandidates: (tenantId) => request(`/memory/?tenant_id=${tenantId}&status=CANDIDATE`),
+  // Bilgi katmanları (Adım 5.5)
+  getAgentKnowledge: (tenantId, agentId) => request(`/company/${tenantId}/ai-agents/${agentId}/knowledge`),
+  searchAgentKnowledge: (tenantId, agentId, query, projectId) => request(`/company/${tenantId}/ai-agents/${agentId}/knowledge/search`, { method: 'POST', body: JSON.stringify({ query, project_id: projectId || null }) }),
+  getProjectDocuments: (projectId) => request(`/projects/${projectId}/documents`),
+  uploadProjectDocument: (projectId, formData) => request(`/projects/${projectId}/documents`, { method: 'POST', body: formData }),
+  promoteProjectKnowledge: (projectId, documentIds) => request(`/projects/${projectId}/knowledge/promote`, { method: 'POST', body: JSON.stringify({ document_ids: documentIds }) }),
 
   // Kimlik Doğrulama & Profil (Auth & RBAC)
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),

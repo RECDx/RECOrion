@@ -39,7 +39,7 @@ Görselde ne olduğunu Türkçe, öğrenilebilir biçimde ayrıntılı açıkla:
 ölçü ve sayılar, tablo veya şemadaki ilişkiler, süreç adımları, kalite/hata işaretleri. Emin olmadığın şeyi yazma.
 KVKK: kişileri tanımlamaya çalışma, yüz/kimlik/plaka gibi kişisel bilgileri yazma; gerekiyorsa sadece "bir kişi" de.
 Düz metin yaz (başlık, madde işareti veya markdown kullanma), en fazla 200 kelime."""
-SCOPE_BY_LAYER = {"AGENT": "AGENT", "COMPANY_TITLE": "TITLE", "PLATFORM_TITLE": "PLATFORM_TITLE"}
+SCOPE_BY_LAYER = {"AGENT": "AGENT", "COMPANY_TITLE": "TITLE", "PLATFORM_TITLE": "PLATFORM_TITLE", "PROJECT": "PROJECT"}
 ACTIVE = ("UPLOADED", "PROCESSING", "PENDING_APPROVAL", "APPROVED", "QUARANTINED")
 CONTENT_TYPES = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
                  "txt": "text/plain", "csv": "text/csv", "md": "text/markdown", "json": "application/json"}
@@ -49,14 +49,16 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-def _owner_filter(doc_layer: str, agent_id, job_title_id):
+def _owner_filter(doc_layer: str, agent_id, job_title_id, project_id=None):
+    if doc_layer == "PROJECT":
+        return AgentDocument.project_id == project_id
     return AgentDocument.agent_id == agent_id if doc_layer == "AGENT" else AgentDocument.job_title_id == job_title_id
 
 
 # ---------------------------------------------------------------- yükleme
 async def create_document(db: AsyncSession, *, layer: str, tenant_id: Optional[uuid.UUID], agent_id: Optional[uuid.UUID],
                           job_title_id: Optional[uuid.UUID], filename: str, data: bytes, actor_id: Optional[uuid.UUID],
-                          previous: Optional[AgentDocument] = None) -> AgentDocument:
+                          previous: Optional[AgentDocument] = None, project_id: Optional[uuid.UUID] = None) -> AgentDocument:
     original = (filename or "dokuman").strip()[:200]
     ext = original.rsplit(".", 1)[-1].lower() if "." in original else ""
     if ext not in SUPPORTED_EXTS:
@@ -69,19 +71,19 @@ async def create_document(db: AsyncSession, *, layer: str, tenant_id: Optional[u
 
     sha = hashlib.sha256(data).hexdigest()
     dup = (await db.execute(select(AgentDocument).where(
-        AgentDocument.layer == layer, _owner_filter(layer, agent_id, job_title_id),
+        AgentDocument.layer == layer, _owner_filter(layer, agent_id, job_title_id, project_id),
         AgentDocument.sha256 == sha, AgentDocument.status.in_(ACTIVE)))).scalars().first()
     if dup:
         raise HTTPException(status_code=409, detail=f"Bu dosya zaten yüklü ('{dup.original_name}', sürüm {dup.version}).")
 
     clean = re.sub(r"[^A-Za-z0-9_.-]", "_", original)
     doc = AgentDocument(
-        id=uuid.uuid4(), tenant_id=tenant_id, agent_id=agent_id, job_title_id=job_title_id, layer=layer,
+        id=uuid.uuid4(), tenant_id=tenant_id, agent_id=agent_id, job_title_id=job_title_id, project_id=project_id, layer=layer,
         file_name=clean, original_name=original, file_type=ext, file_size=len(data), sha256=sha,
         status="UPLOADED", uploaded_by_actor_id=actor_id,
         version=(previous.version + 1) if previous else 1, previous_document_id=previous.id if previous else None,
     )
-    owner = agent_id or job_title_id
+    owner = agent_id or job_title_id or project_id
     doc.storage_key = f"{tenant_id or 'platform'}/{layer.lower()}/{owner}/{doc.id}/{clean}"
     doc.storage_path = f"minio://{settings.MINIO_DOCUMENTS_BUCKET}/{doc.storage_key}"
     try:
@@ -294,7 +296,8 @@ async def approve(db: AsyncSession, doc: AgentDocument, actor_id: uuid.UUID, car
                                .order_by(DocumentChunk.idx))).scalars().all()
     payload = {"tenant_id": str(doc.tenant_id) if doc.tenant_id else "PLATFORM", "scope": SCOPE_BY_LAYER[doc.layer],
                "layer": doc.layer, "agent_id": str(doc.agent_id) if doc.agent_id else None,
-               "job_title_id": str(doc.job_title_id) if doc.job_title_id else None, "document_id": str(doc.id),
+               "job_title_id": str(doc.job_title_id) if doc.job_title_id else None,
+               "project_id": str(doc.project_id) if doc.project_id else None, "document_id": str(doc.id),
                "source_reference": doc.original_name, "version": doc.version}
     indexed = []
     try:
@@ -344,3 +347,28 @@ async def delete(db: AsyncSession, doc: AgentDocument) -> None:
         await storage.delete_object(doc.storage_key)
     doc.status, doc.extracted_text, doc.masked_text, doc.learning_card = "DELETED", None, None, None
     await db.commit()
+
+
+async def promote_to_company_memory(db: AsyncSession, doc: AgentDocument, actor_id: uuid.UUID) -> AgentDocument:
+    """
+    Onaylı proje ekini Kurum Hafızasına aktarır (proje kapanışında). Vektörler yeniden üretilmez; Qdrant'taki
+    noktaların kapsamı PROJECT'ten GLOBAL'e çevrilir, böylece şirketin tüm AI personeli bu bilgiyi kullanır.
+    """
+    from app.services.collective_memory import collective_memory
+
+    if doc.layer != "PROJECT" or doc.status != "APPROVED":
+        raise HTTPException(status_code=409, detail="Yalnızca onaylanmış proje ekleri Kurum Hafızasına aktarılabilir.")
+    if doc.promoted_at:
+        return doc
+    ids = [str(c.qdrant_point_id) for c in (await db.execute(select(DocumentChunk).where(
+        DocumentChunk.document_id == doc.id))).scalars() if c.qdrant_point_id]
+    await collective_memory.set_scope(ids, "GLOBAL", {"promoted_from_project": str(doc.project_id)})
+    item = MemoryItem(tenant_id=doc.tenant_id, scope="GLOBAL", source_reference=doc.original_name,
+                      content=(doc.summary or "")[:20000], status="APPROVED", confidence_score=1.0,
+                      metadata_json={"document_id": str(doc.id), "project_id": str(doc.project_id),
+                                     "promoted_by": str(actor_id), "chunks": len(ids)})
+    db.add(item)
+    await db.flush()
+    doc.memory_item_id, doc.promoted_at = item.id, _now()
+    await db.commit()
+    return doc

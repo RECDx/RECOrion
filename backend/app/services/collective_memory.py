@@ -96,6 +96,18 @@ class CollectiveMemoryService:
             raise LLMError("Hafıza kaydı vektör veritabanına yazılamadı.") from e
         return point_id
 
+    async def set_scope(self, point_ids: List[str], scope: str, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Noktaların kapsamını değiştirir (ör. proje eki -> Kurum Hafızası); vektörler korunur."""
+        ids = [str(p) for p in point_ids if p]
+        if not ids:
+            return
+        try:
+            await self.client.set_payload(collection_name=self.collection_name, payload={"scope": scope, **(extra or {})},
+                                          points=ids)
+        except Exception as e:
+            logger.error(f"Qdrant kapsam güncelleme hatası: {e}")
+            raise LLMError("Hafıza kaydı güncellenemedi.") from e
+
     async def delete_points(self, point_ids: List[str]) -> None:
         ids = [str(p) for p in point_ids if p]
         if not ids:

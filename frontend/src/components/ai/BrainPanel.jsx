@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { Button, Card, EmptyState } from '../../ui/components';
 import { toast } from '../../ui/feedback';
 import ChatPanel from './ChatPanel';
+import MemoryApprovalQueue from '../docs/MemoryApprovalQueue';
 import { fmtPrecise } from './format';
 import './ai.css';
 
@@ -67,6 +68,8 @@ export default function BrainPanel({ tenantId, currentUser, canManage }) {
           <span className="ai-dim">Katsayı yükseldikçe model daha güçlü ama işlem başına daha çok kredi harcar.</span>
         </div>
       </Card>
+
+      {!contentBlocked && <MemoryApprovalQueue tenantId={tenantId} canManage={canManage} />}
 
       <Card title="Beyin AI ile konuş" subtitle="Konuşmalarınız yalnızca size görünür. Her yanıt şirketinizin kredisinden düşer.">
         {contentBlocked ? (
