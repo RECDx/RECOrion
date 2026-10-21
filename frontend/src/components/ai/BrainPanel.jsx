@@ -69,7 +69,13 @@ export default function BrainPanel({ tenantId, currentUser, canManage }) {
         </div>
       </Card>
 
-      {!contentBlocked && <MemoryApprovalQueue tenantId={tenantId} canManage={canManage} />}
+      {!contentBlocked && (
+        <MemoryApprovalQueue
+          tenantId={tenantId}
+          // Onay yetkisi: memory:promote (varsayılan: Şirket Yöneticisi ve Proje Yöneticisi)
+          canManage={(currentUser?.permissions || []).includes('memory:promote') || ['COMPANY_ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role)}
+        />
+      )}
 
       <Card title="Beyin AI ile konuş" subtitle="Konuşmalarınız yalnızca size görünür. Her yanıt şirketinizin kredisinden düşer.">
         {contentBlocked ? (
