@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, Artifact, ChatMessage, Project, Task, Tenant
 from app.services import knowledge, llm_gateway, storage, task_flow
-from app.services.llm_gateway import LLMContext, LLMError, LLMUnavailable
+from app.services.llm_gateway import LLMContext, LLMError
 
 logger = logging.getLogger("recorion.agent_work")
 
@@ -41,21 +41,21 @@ def _truncated(result) -> bool:
 
 async def _generate(ctx: LLMContext, messages: List[Dict[str, str]]):
     """Çıktıyı üretir; token sınırında kesilirse en fazla MAX_CONTINUATIONS kez devam ettirip parçaları birleştirir."""
-    pieces, credits, result = [], 0.0, None
+    pieces, credits, result, fallback_from, fallback_model = [], 0.0, None, None, None
     for _ in range(MAX_CONTINUATIONS + 1):
-        try:
-            result = await llm_gateway.chat(ctx, messages, temperature=0.4, max_tokens=WORK_MAX_TOKENS, timeout=WORK_TIMEOUT)
-        except LLMUnavailable:
-            # Geçici servis hatası/zaman aşımı: adımı durdurmadan önce bir kez daha dene
-            logger.warning("AI personel çağrısı yanıt vermedi; bir kez daha deneniyor (görev %s).", ctx.task_id)
-            result = await llm_gateway.chat(ctx, messages, temperature=0.4, max_tokens=WORK_MAX_TOKENS, timeout=WORK_TIMEOUT)
+        # Personelin modeli meşgul/yanıtsızsa paketteki yedek modelle sürer (kullanıcı kararı, 22.10.2026)
+        # Yedek modele geçildiyse kesilen çıktının devamı da aynı (yedek) modelle üretilir
+        result = await llm_gateway.chat(ctx, messages, model_code=fallback_model, temperature=0.4, max_tokens=WORK_MAX_TOKENS,
+                                        timeout=WORK_TIMEOUT, fallback=True)
+        if result.fallback_from:
+            fallback_from, fallback_model = result.fallback_from, result.model_code
         pieces.append(result.content)
         credits += float(result.credits)
         if not _truncated(result):
             break
         messages = messages + [{"role": "assistant", "content": result.content},
                                {"role": "user", "content": "Çıktın token sınırında kesildi. Tekrar etmeden, tam kaldığın yerden devam et."}]
-    return "".join(pieces).strip(), result, len(pieces), round(credits, 4)
+    return "".join(pieces).strip(), result, len(pieces), round(credits, 4), fallback_from
 
 
 def artifact_key(task: Task, version: int) -> str:
@@ -129,7 +129,7 @@ Kabul ölçütü: {task.acceptance_criteria or '-'}
 
 Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi tam olarak yaz."""
     try:
-        content, result, parts, credits = await _generate(
+        content, result, parts, credits, fallback_from = await _generate(
             LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id),
             [{"role": "system", "content": _system(agent, tenant)}, {"role": "user", "content": prompt}])
     except LLMError as exc:
@@ -150,8 +150,10 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
     db.add(ChatMessage(tenant_id=tenant.id, project_id=project.id, task_id=task.id, sender_actor_id=agent.id, role="assistant",
                        content=content, thought_process=result.thought, message_type="CHAT"))
     await db.flush()
-    await task_flow.log(db, project, task, "AI_OUTPUT", agent.id, f"Sürüm {version} üretildi.",
-                        {"artifact_id": str(art.id), "version": version, "model": result.model_code, "credits": credits, "parts": parts})
+    note = f"Sürüm {version} üretildi." + (f" {fallback_from} yanıt vermediği için yedek model {result.model_code} kullanıldı." if fallback_from else "")
+    await task_flow.log(db, project, task, "AI_OUTPUT", agent.id, note,
+                        {"artifact_id": str(art.id), "version": version, "model": result.model_code, "credits": credits, "parts": parts,
+                         "fallback_from": fallback_from})
     await db.commit()
     return {"ok": True, "artifact_id": str(art.id), "version": version, "actor_id": str(agent.id)}
 
@@ -192,7 +194,7 @@ Sadece şu JSON'u döndür:
         result = await llm_gateway.chat(LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=reviewer.id, task_id=task.id,
                                                    project_id=project.id),
                                         [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                                        temperature=0.2, max_tokens=1500, timeout=180)
+                                        temperature=0.2, max_tokens=1500, timeout=180, fallback=True)
         verdict = _parse(result.content)
     except LLMError as exc:
         return {"ok": False, "error": exc.message}
@@ -207,7 +209,8 @@ Sadece şu JSON'u döndür:
     summary = str(verdict.get("summary") or "")[:1000]
     note = summary + ("\n- " + "\n- ".join(issues) if issues else "")
     await task_flow.log(db, project, task, "REVIEW_PASSED" if passed else "REVIEW_FAILED", reviewer.id, note.strip() or None,
-                        {"score": score, "version": art.version, "artifact_id": str(art.id), "model": result.model_code})
+                        {"score": score, "version": art.version, "artifact_id": str(art.id), "model": result.model_code,
+                         "fallback_from": result.fallback_from})
     await db.commit()
     return {"ok": True, "passed": passed, "score": score, "note": note.strip(), "actor_id": str(reviewer.id)}
 

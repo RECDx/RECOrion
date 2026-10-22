@@ -54,13 +54,16 @@ async def main():
             a.password_hash, a.status, a.department_id = hash_password(pwd), "IDLE", dept.id
             await db.flush()
             out["users"][key] = {"id": str(a.id), "email": email, "password": pwd}
-        model = (await db.execute(select(LLMModel).where(LLMModel.model_code == "mimo-v2.6-pro"))).scalar_one()
-        for name, title in (("Deniz", "İş Analisti"), ("Kaan", "Yazılım Geliştirici")):
+        # Deniz: mimo-v2.6-pro (EVREN'de yoğun; yedek model mekanizmasını gerçek ortamda sınar)
+        # Kaan: AI personel varsayılan modeli deepseek-v4-flash
+        for name, title, code in (("Deniz", "İş Analisti", "mimo-v2.6-pro"), ("Kaan", "Yazılım Geliştirici", "deepseek-v4-flash")):
+            model = (await db.execute(select(LLMModel).where(LLMModel.model_code == code))).scalar_one()
             a = (await db.execute(select(Actor).where(Actor.tenant_id == tenant.id, Actor.display_name == name))).scalar_one_or_none()
             if not a:
                 a = Actor(tenant_id=tenant.id, actor_type="AI_AGENT", display_name=name, role=title, status="IDLE",
-                          preferred_model_id=model.id, department_id=dept.id, autonomy_level="L2")
+                          department_id=dept.id, autonomy_level="L2")
                 db.add(a)
+            a.preferred_model_id = model.id
         await db.commit()
         print(json.dumps(out))
 

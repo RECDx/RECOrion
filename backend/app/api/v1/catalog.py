@@ -441,8 +441,7 @@ async def hire_titles(tenant_id: uuid.UUID, department_id: Optional[uuid.UUID] =
 async def hire_preview(tenant_id: uuid.UUID, title_id: uuid.UUID, department_name: Optional[str] = Query(None, max_length=128),
                        current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Sihirbazın 3. adımı: unvanın şirket ve departman adıyla doldurulmuş rol promptu ve kullanılacak model."""
-    from app.api.v1.company import _forced_model_code
-    from app.services.hiring import render_role_prompt
+    from app.services.hiring import default_agent_model, render_role_prompt
     from app.services.plan_features import entitlements
 
     tenant = await _tenant(db, tenant_id)
@@ -451,10 +450,12 @@ async def hire_preview(tenant_id: uuid.UUID, title_id: uuid.UUID, department_nam
         raise HTTPException(status_code=404, detail="Unvan bulunamadı.")
     ent = await entitlements(db, tenant, current)
     rec = (t.recommended_model_code or "").lower() or None
+    default = await default_agent_model(db, ent, t)
     return {
         "title": t.title, "description": t.description, "seniority": t.seniority, "autonomy_level": t.autonomy_level or "L1",
         "responsibilities": t.responsibilities or [], "required_skills": t.required_skills or [], "kpis": t.kpis or [],
         "role_prompt": render_role_prompt(t.base_role_prompt, tenant.name, department_name),
         "recommended_model_code": rec if rec and ent.model_allowed(rec) else None,
-        "model_code": rec if (ent.can_change_llm and rec and ent.model_allowed(rec)) else _forced_model_code(ent, t),
+        # Varsayılan: AI personel varsayılan modeli (model.default.agent); unvanın önerisi bilgi olarak gösterilir
+        "model_code": default,
     }

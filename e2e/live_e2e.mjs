@@ -229,6 +229,10 @@ try {
     && cnt('DONE') === titles.length && cnt('PROJECT_FINISHED') === 1,
     'Silinemez akış geçmişi tutarlı', `AI_OUTPUT:${cnt('AI_OUTPUT')} REVIEW_PASSED:${cnt('REVIEW_PASSED')} REVIEW_FAILED:${cnt('REVIEW_FAILED')} REJECTED:${cnt('REJECTED')} BLOCKED:${cnt('BLOCKED')} APPROVED:${cnt('APPROVED')} DONE:${cnt('DONE')} FINISHED:${cnt('PROJECT_FINISHED')}`);
   const credits = (mine?.events || []).filter((e) => e.kind === 'AI_OUTPUT').reduce((sum, e) => sum + (e.data?.credits || 0), 0);
+  const outs = (mine?.events || []).filter((e) => e.kind === 'AI_OUTPUT');
+  const models = [...new Set(outs.map((e) => e.data?.model))].join(', ');
+  const fallbacks = outs.filter((e) => e.data?.fallback_from).map((e) => `${e.data.fallback_from} > ${e.data.model}`);
+  step(true, 'Kullanılan modeller ve yedek model geçişleri', `${models}${fallbacks.length ? ` · yedek: ${fallbacks.join('; ')}` : ' · yedek gerekmedi'}`);
   step(credits > 0, 'AI çalışmaları ölçüldü ve krediden düştü', `${credits.toFixed(2)} kredi (${cnt('AI_OUTPUT')} çıktı)`);
 
   // 7. Çalışma Alanı Kalite Kapısı gerçek durumu gösteriyor mu

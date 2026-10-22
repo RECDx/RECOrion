@@ -158,12 +158,8 @@ Sadece şu JSON'u döndür:
   "hire_suggestions": [{{"job_title": "unvan", "department": "departman", "reason": "neden gerekli"}}],
   "risks": ["risk"], "questions": ["yöneticiye soru"]}}"""
     llm_ctx = LLMContext(tenant_id=project.tenant_id, purpose="BRAIN", project_id=project.id)
-    try:
-        result = await llm_gateway.chat(llm_ctx, [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=300)
-    except llm_gateway.LLMUnavailable:
-        # Uzun plan istemlerinde EVREN zaman zaman geç yanıt verir: bir kez daha dene
-        logger.warning("Beyin AI plan önerisi yanıt vermedi; bir kez daha deneniyor (proje %s).", project.id)
-        result = await llm_gateway.chat(llm_ctx, [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=300)
+    # Beyin AI modeli meşgul/yanıtsızsa paketteki yedek modelle önerir
+    result = await llm_gateway.chat(llm_ctx, [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=300, fallback=True)
     try:
         plan = validate_plan(_parse(result.content), {p["agent_id"] for p in ctx["pool"]})
     except (ValueError, KeyError) as exc:

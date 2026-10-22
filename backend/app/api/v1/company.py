@@ -894,7 +894,8 @@ async def hire_ai_agent(
     ent = await entitlements(db, tenant, current)
     requested_code = (payload.model_code or "").strip().lower()
     if not ent.can_change_llm:
-        forced = _forced_model_code(ent, job_title)
+        from app.services.hiring import default_agent_model
+        forced = await default_agent_model(db, ent, job_title)
         if requested_code and forced and requested_code != forced:
             deny(f"'{ent.plan_name}' paketiniz LLM modelini değiştirmeye izin vermiyor; bu ünvan için '{forced}' modeli kullanılır.")
         requested_code = forced or requested_code

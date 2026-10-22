@@ -216,11 +216,13 @@ def test_starter_cannot_change_llm_or_prompt(client, starter_company):
     url = f"/api/v1/company/{starter_company['tenant_id']}/ai-agents"
     base = {"display_name": "Ajan", "job_title_id": str(starter_company["title_id"])}
     h = starter_company["headers"]
-    assert client.post(url, headers=h, json={**base, "model_code": "deepseek-v4-flash"}).status_code == 403
-    assert client.post(url, headers=h, json={**base, "model_code": "gemma-4-31b", "system_prompt": "Başka bir prompt"}).status_code == 403
-    ok = client.post(url, headers=h, json={**base, "model_code": "gemma-4-31b"})
+    # Model değiştirme izni yoksa AI personel varsayılan modeli (model.default.agent = deepseek-v4-flash) zorunludur;
+    # unvanın önerdiği model (gemma-4-31b) seçilemez
+    assert client.post(url, headers=h, json={**base, "model_code": "gemma-4-31b"}).status_code == 403
+    assert client.post(url, headers=h, json={**base, "model_code": "deepseek-v4-flash", "system_prompt": "Başka bir prompt"}).status_code == 403
+    ok = client.post(url, headers=h, json={**base, "model_code": "deepseek-v4-flash"})
     assert ok.status_code == 201, ok.text
-    assert ok.json()["model_code"] == "gemma-4-31b"
+    assert ok.json()["model_code"] == "deepseek-v4-flash"
 
 
 def test_starter_cannot_create_custom_titles(client, starter_company):

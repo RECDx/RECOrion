@@ -103,3 +103,17 @@ async def resolve_hire_target(
         if catalog_dept:
             department = await company_department_for_catalog(db, tenant, catalog_dept)
     return await adopt_catalog_title(db, tenant, picked, department), department
+
+
+async def default_agent_model(db, ent, job_title) -> Optional[str]:
+    """Yeni AI personelin modeli: sistem varsayılanı (model.default.agent) pakette varsa o; yoksa unvanın önerisi; yoksa paketin ilk modeli."""
+    from app.db.models import SystemSetting
+
+    row = await db.get(SystemSetting, "model.default.agent")
+    default = str(row.value).lower() if row and row.value else ""
+    if default and ent.model_allowed(default):
+        return default
+    rec = (job_title.recommended_model_code or "").lower() if job_title else ""
+    if rec and ent.model_allowed(rec):
+        return rec
+    return ent.allowed_models[0] if ent.allowed_models else (rec or default or None)

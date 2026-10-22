@@ -69,9 +69,10 @@ class FakeAI:
                                           "issues": [] if passed else [f"Eksik bölüm {self.reviews}"]}), None, 500, 80, {})
         if self.broken:
             raise RuntimeError("model yanıt vermedi")
-        if self.flaky:  # geçici servis hatası (zaman aşımı vb.)
+        if self.flaky:  # personelin modeli meşgul (EVREN 503 "Model şu anda dolu")
             self.flaky -= 1
-            raise EvrenError("zaman aşımı")
+            self.busy_model = model_code
+            raise EvrenError("Model şu anda dolu")
         if "kaldığın yerden devam et" in prompt:  # devam isteği: kesilen çıktının geri kalanı
             prompt = next(m["content"] for m in messages if m["role"] == "user")
         elif self.truncate:  # token sınırında kesilen çıktı
@@ -139,7 +140,7 @@ def test_workflow_full_cycle(client, world, ai):
     admin, member, outsider = w["admin"]["h"], w["member"]["h"], w["outsider"]["h"]
     pid, human_id, dep_id = _ready_project(client, w, "Akış Projesi")
     ai.truncate = 1  # ilk AI çıktısı token sınırında kesilir; devam ettirilip birleştirilmeli
-    ai.flaky = 1  # ilk çağrı geçici hata verir; adım durmadan bir kez daha denenmeli
+    ai.flaky = 1  # personelin modeli ilk çağrıda meşgul; adım durmadan yedek modelle sürmeli
 
     assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "start"}).status_code == 200
     # AI adımı kendiliğinden çalışıp onaya gelir; insan adımı çalışılıyor; bağımlı adım bekler
@@ -153,7 +154,10 @@ def test_workflow_full_cycle(client, world, ai):
     art = client.get(f"/api/v1/tasks/{ai_task['id']}/artifacts/{ai_task['artifact']['id']}", headers=member)
     assert art.status_code == 200 and art.json()["content"].startswith("PARÇA-1 # AI adımı çıktısı")
     assert next(e for e in flow["events"] if e["kind"] == "AI_OUTPUT")["data"]["parts"] == 2
-    assert not any(e["kind"] == "BLOCKED" for e in flow["events"])  # geçici hata yeniden denemeyle aşıldı
+    assert not any(e["kind"] == "BLOCKED" for e in flow["events"])  # meşgul model yedek modelle aşıldı
+    first_out = next(e for e in flow["events"] if e["kind"] == "AI_OUTPUT")
+    assert ai.busy_model == "deepseek-v4-flash" and first_out["data"]["fallback_from"] == "deepseek-v4-flash"
+    assert first_out["data"]["model"] != "deepseek-v4-flash" and "yedek model" in first_out["note"]
     assert client.get(f"/api/v1/tasks/{ai_task['id']}/artifacts/{ai_task['artifact']['id']}", headers=outsider).status_code == 403
     assert client.post(f"/api/v1/tasks/{ai_task['id']}/submit", headers=admin, json={}).status_code == 409  # AI kendi teslim eder
 

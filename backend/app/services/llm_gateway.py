@@ -33,6 +33,7 @@ HQ_SLUG = "recdx_hq"
 # Amaç → varsayılan model ayarı (system_settings)
 PURPOSE_SETTING = {
     "BRAIN": "model.default.brain",
+    "AGENT_CHAT": "model.default.agent",
     "PLATFORM_ASSISTANT": "model.platform_assistant",
     "MANIFESTO": "default_manifesto_model",
     "ROLE_PROMPT": "default_manifesto_model",
@@ -48,6 +49,7 @@ INFRA_PURPOSES = {"EMBEDDING", "RERANK", "OCR", "GUARD", "VISION"}  # paket mode
 OCR_PAGE_TOKENS = 1000  # OCR ucu kullanım bildirmez: sayfa başına tahmini giriş tokenı
 IMAGE_TOKENS = 1200  # görsel başına tahmini giriş tokenı (kredi ön kontrolü için)
 DEFAULT_CHAT_SETTING = "model.default.chat"
+DEFAULT_AGENT_SETTING = "model.default.agent"
 CHAT_TYPES = {"CHAT", "VISION", "DECISION"}
 
 
@@ -61,6 +63,10 @@ class LLMError(Exception):
 
 class LLMUnavailable(LLMError):
     status_code = 503
+
+    def __init__(self, message: str, model_code: Optional[str] = None):
+        super().__init__(message)
+        self.model_code = model_code  # yanıt vermeyen model (yedek model seçiminde dışlanır)
 
 
 class CreditExhausted(LLMError):
@@ -90,6 +96,7 @@ class GatewayChatResult:
     tokens_out: int
     credits: float
     raw: Dict[str, Any] = field(default_factory=dict)
+    fallback_from: Optional[str] = None  # asıl model yanıt vermediyse onun kodu (yedek modelle üretildi)
 
 
 async def _setting(db: AsyncSession, key: str) -> Optional[str]:
@@ -197,9 +204,45 @@ def _num(value) -> Optional[Decimal]:
         return None
 
 
+async def fallback_model(db: AsyncSession, tenant: Tenant, exclude: str) -> Optional[LLMModel]:
+    """Asıl model meşgul/yanıtsızken kullanılacak yedek: AI personel varsayılanı, genel varsayılan, sonra paketteki ilk sohbet modeli."""
+    allowed = await allowed_model_codes(db, tenant)
+    codes = [c for c in [await _setting(db, DEFAULT_AGENT_SETTING), await _setting(db, DEFAULT_CHAT_SETTING)] if c]
+    stmt = select(LLMModel).where(LLMModel.status == "ACTIVE", LLMModel.model_type.in_(CHAT_TYPES)).order_by(LLMModel.model_code)
+    codes += [m.model_code for m in (await db.execute(stmt)).scalars()]
+    for code in codes:
+        if code.lower() == exclude.lower() or (allowed is not None and code.lower() not in allowed):
+            continue
+        model = (await db.execute(select(LLMModel).where(func.lower(LLMModel.model_code) == code.lower()))).scalar_one_or_none()
+        if model and model.status == "ACTIVE" and model.model_type in CHAT_TYPES:
+            return model
+    return None
+
+
 # ---------------------------------------------------------------- genel arayüz
 async def chat(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Optional[str] = None,
-               temperature: float = 0.7, max_tokens: int = 4096, timeout: Optional[float] = None) -> GatewayChatResult:
+               temperature: float = 0.7, max_tokens: int = 4096, timeout: Optional[float] = None,
+               fallback: bool = False) -> GatewayChatResult:
+    """fallback=True: model meşgul/yanıtsız (EVREN hatası veya boş yanıt) ise paketteki yedek modelle bir kez daha dener."""
+    try:
+        return await _chat_once(ctx, messages, model_code, temperature, max_tokens, timeout)
+    except LLMUnavailable as exc:
+        if not fallback:
+            raise
+        failed = exc.model_code
+        async with AsyncSessionLocal() as db:
+            tenant = await _tenant(db, ctx.tenant_id)
+            backup = await fallback_model(db, tenant, failed or "")
+        if not backup or not failed:
+            raise
+        logger.warning("%s yanıt vermedi; yedek model %s ile deneniyor (%s).", failed, backup.model_code, ctx.purpose)
+        result = await _chat_once(ctx, messages, backup.model_code, temperature, max_tokens, timeout)
+        result.fallback_from = failed
+        return result
+
+
+async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Optional[str],
+                     temperature: float, max_tokens: int, timeout: Optional[float]) -> GatewayChatResult:
     async with AsyncSessionLocal() as db:
         tenant = await _tenant(db, ctx.tenant_id)
         model = await resolve_model(db, tenant, ctx.purpose, model_code, ctx.actor_id)
@@ -213,10 +256,12 @@ async def chat(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Opti
         except EvrenError as exc:
             await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
             logger.error("LLM çağrısı başarısız (%s, %s): %s", ctx.purpose, model.model_code, exc)
-            raise LLMUnavailable(f"Yapay zeka servisi şu anda yanıt veremiyor ({model.model_code}). Lütfen biraz sonra tekrar deneyin.") from exc
+            raise LLMUnavailable(f"Yapay zeka servisi şu anda yanıt veremiyor ({model.model_code}). Lütfen biraz sonra tekrar deneyin.",
+                                 model_code=model.model_code) from exc
         if not result.content.strip():
             await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
-            raise LLMUnavailable("Model bir yanıt üretemedi (düşünme bütçesi doldu). Lütfen isteği kısaltıp tekrar deneyin.")
+            raise LLMUnavailable("Model bir yanıt üretemedi (düşünme bütçesi doldu). Lütfen isteği kısaltıp tekrar deneyin.",
+                                 model_code=model.model_code)
         cost = await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
         return GatewayChatResult(content=result.content, thought=result.thought, model_code=model.model_code,
                                  tokens_in=result.tokens_in, tokens_out=result.tokens_out, credits=float(cost), raw=result.raw)
