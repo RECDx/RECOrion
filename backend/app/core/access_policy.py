@@ -274,6 +274,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/projects/{{project_id}}/tasks"): HANDLER("task:create"),
     # İş akışı (ADIM 7.1): yetki proje üyeliği/onaylayıcılığa göre uç içinde
     ("GET", f"{P}/projects/{{project_id}}/workflow"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/costs"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/submit"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/decision"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/release"): HANDLER(),

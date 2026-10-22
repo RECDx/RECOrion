@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, Project, Task, TaskEvent
+from app.services import costs
 
 logger = logging.getLogger("recorion.task_flow")
 
@@ -152,6 +153,7 @@ async def submit(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
         await request_approval(db, task, project, payload)
     else:
         task.status, task.completed_at = "DONE", now()
+        await costs.snapshot_labor(db, task)
         await log(db, project, task, "DONE")
         await db.commit()
     return {"status": task.status}
@@ -160,6 +162,7 @@ async def submit(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
 async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str, Any]:
     task, project = await _load(db, task_id)
     task.status, task.completed_at = "DONE", now()
+    await costs.snapshot_labor(db, task)
     await log(db, project, task, "APPROVED", payload.get("actor_id"), payload.get("note"), {"channel": payload.get("channel") or "WEB"})
     await log(db, project, task, "DONE")
     await db.commit()

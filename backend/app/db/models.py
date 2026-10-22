@@ -322,7 +322,9 @@ class Actor(Base):
     telegram_chat_id = Column(String(64))  # proje bildirimleri (ADIM 6.5)
     telegram_link_code = Column(String(16))
     telegram_linked_at = Column(DateTime(timezone=True))
-    notification_prefs = Column(JSONB, nullable=False, default=dict)  # {"email": bool, "telegram": bool} (ADIM 7.3)
+    notification_prefs = Column(JSONB, nullable=False, default=dict)
+    # Günlük maliyet (TL, KDV hariç; ADIM 7.5.2): insan personelde ücret (kişisel veri), AI personelde isteğe bağlı sabit maliyet
+    daily_cost_try = Column(Numeric(12, 2))  # {"email": bool, "telegram": bool} (ADIM 7.3)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -411,6 +413,10 @@ class Task(Base):
     started_at = Column(DateTime(timezone=True))
     submitted_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
+    # Tamamlanınca kayda geçen personel maliyeti (ADIM 7.5.2)
+    labor_rate_try = Column(Numeric(12, 2))
+    labor_days = Column(Numeric(6, 1))
+    labor_cost_try = Column(Numeric(14, 2))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

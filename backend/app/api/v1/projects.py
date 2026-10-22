@@ -412,3 +412,12 @@ async def simulate(project_id: uuid.UUID, payload: SimulateIn, user: CurrentUser
     if project.status not in ("DRAFT", "PLANNING", "READY"):
         raise HTTPException(status_code=409, detail="Simülasyon yalnızca proje başlamadan önce yapılabilir.")
     return await planning.simulate(db, project, payload.start_date)
+
+
+@router.get("/{project_id}/costs")
+async def project_costs(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Proje maliyeti (ADIM 7.5): adım bazında personel ve token maliyeti, LLM kırılımı (TL, KDV hariç). Proje yöneticisi görür."""
+    from app.services import costs
+
+    project = await svc.load(db, user, project_id, manage=True)
+    return await costs.project_costs(db, project)

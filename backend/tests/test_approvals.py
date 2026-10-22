@@ -29,6 +29,25 @@ def telegram(monkeypatch):
     return sent
 
 
+def _until(fn, what, timeout=15):
+    """Bildirim, durum kaydından hemen sonra gönderilir: koşul sağlanana kadar bekle (zamanlama farkına dayanıklı)."""
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        value = fn()
+        if value:
+            return value
+        time.sleep(0.2)
+    raise AssertionError(f"Beklenen oluşmadı: {what}")
+
+
+def _tg_approval(telegram, title, skip=0):
+    """Telegram'a giden, butonlu son onay isteği (skip: daha önce görülenleri atla)."""
+    found = [p for m, p in telegram[skip:] if m == "sendMessage" and p.get("reply_markup") and title in p["text"]]
+    return found[-1] if found else None
+
+
 def _email_of(db, actor_id):
     return _exec(db, "SELECT email FROM actors WHERE id = %s", actor_id)[0]
 
@@ -53,7 +72,9 @@ def test_email_link_decision_and_queue(client, db, world, ai, telegram):
     assert any(q["task_id"] == human_id and q["kind"] == "APPROVAL" for q in queue)
     assert not any(q["task_id"] == human_id for q in client.get("/api/v1/me/approvals", headers=member).json())
 
-    raw = _approval_link(_email_of(db, w["admin"]["id"]), "İnsan adımı")
+    admin_email = _email_of(db, w["admin"]["id"])
+    _until(lambda: any(m["to"] == admin_email and "İnsan adımı" in m["subject"] for m in ns.OUTBOX), "onay e-postası")
+    raw = _approval_link(admin_email, "İnsan adımı")
     assert client.get("/api/v1/approvals/gecersiz-belirtec").status_code == 404
     summary = client.get(f"/api/v1/approvals/{raw}")  # giriş yok
     assert summary.status_code == 200 and summary.json()["task_title"] == "İnsan adımı"
@@ -76,7 +97,8 @@ def test_telegram_buttons_and_prefs(client, db, world, ai, telegram):
     tasks, _ = _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "AI adımı onaya gelmeli")
     ai_id = tasks["AI adımı"]["id"]
 
-    msg = next(p for m, p in reversed(telegram) if m == "sendMessage" and p.get("reply_markup") and "AI adımı" in p["text"])
+    msg = _until(lambda: _tg_approval(telegram, "AI adımı"), "Telegram onay isteği")
+    first_len = len(telegram)
     assert msg["chat_id"] == "777"
     buttons = msg["reply_markup"]["inline_keyboard"][0]
     assert buttons[0]["callback_data"].startswith("a:") and buttons[1]["callback_data"].startswith("r:")
@@ -98,7 +120,7 @@ def test_telegram_buttons_and_prefs(client, db, world, ai, telegram):
     _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL" and t["AI adımı"]["artifact"]["version"] == 2,
           "AI sürüm 2 ile onaya gelmeli")
     assert client.get(f"/api/v1/approvals/{raw}").status_code == 410
-    msg = next(p for m, p in reversed(telegram) if m == "sendMessage" and p.get("reply_markup") and "AI adımı" in p["text"])
+    msg = _until(lambda: _tg_approval(telegram, "AI adımı", first_len), "sürüm 2 için Telegram onay isteği")
     client.portal.call(telegram_service.handle_update,
                        {"callback_query": {"id": "3", "data": msg["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "message": {"chat": {"id": 777}}}})
     _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "DONE", "Telegram'dan onaylanmalı")
@@ -112,7 +134,7 @@ def test_telegram_buttons_and_prefs(client, db, world, ai, telegram):
     pid2, _, _ = _ready_project(client, w, "Tercih Projesi")
     client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "start"})
     _wait(client, admin, pid2, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "onaya gelmeli")
+    _until(lambda: any(m == "sendMessage" for m, _ in telegram[tg_before:]), "tercih açıkken Telegram bildirimi")
     assert len([m for m in ns.OUTBOX if m["to"] == admin_email]) == before
-    assert any(m == "sendMessage" for m, _ in telegram[tg_before:])
     client.put("/api/v1/auth/notification-prefs", headers=admin, json={"email": True, "telegram": True})
     client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "cancel"})

@@ -142,7 +142,8 @@ export default function CompanyAdminConsole({
     password: '',
     status: 'ACTIVE',
     role_id: '',
-    extra_permissions: []
+    extra_permissions: [],
+    daily_cost_try: ''
   });
   const [userFormError, setUserFormError] = useState('');
   const [isSavingUser, setIsSavingUser] = useState(false);
@@ -232,7 +233,8 @@ export default function CompanyAdminConsole({
     description: '',
     hired_at: new Date().toISOString().split('T')[0],
     autonomy_level: 'L1',
-    system_prompt: ''
+    system_prompt: '',
+    daily_cost_try: ''
   });
   const [agentFormError, setAgentFormError] = useState('');
   const [isSavingAgent, setIsSavingAgent] = useState(false);
@@ -659,7 +661,8 @@ export default function CompanyAdminConsole({
       password: '',
       status: 'ACTIVE',
       role_id: defaultRoleId,
-      extra_permissions: []
+      extra_permissions: [],
+      daily_cost_try: ''
     });
     setUserFormError('');
     setShowPassword(false);
@@ -676,7 +679,8 @@ export default function CompanyAdminConsole({
       password: '', // Boşsa değiştirilmez
       status: u.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
       role_id: u.role_id || '',
-      extra_permissions: Array.isArray(u.extra_permissions) ? [...u.extra_permissions] : []
+      extra_permissions: Array.isArray(u.extra_permissions) ? [...u.extra_permissions] : [],
+      daily_cost_try: u.daily_cost_try ?? ''
     });
     setUserFormError('');
     setShowPassword(false);
@@ -764,16 +768,20 @@ export default function CompanyAdminConsole({
         role_id: userForm.role_id || null,
         extra_permissions: userForm.extra_permissions || []
       };
+      // Günlük maliyet (Adım 7.5.2): boş bırakılırsa kaldırılır
+      const cost = userForm.daily_cost_try === '' || userForm.daily_cost_try == null ? null : Number(userForm.daily_cost_try);
+      const costPatch = cost == null ? { clear_daily_cost: true } : { daily_cost_try: cost };
 
       if (userForm.password && userForm.password.trim()) {
         payload.password = userForm.password.trim();
       }
 
       if (editingUser) {
-        await api.updateCompanyUser(targetId, editingUser.id, payload);
+        await api.updateCompanyUser(targetId, editingUser.id, { ...payload, ...costPatch });
         showToast(`'${cleanName}' kullanıcısı başarıyla güncellendi.`);
       } else {
-        await api.createCompanyUser(targetId, payload);
+        const created = await api.createCompanyUser(targetId, payload);
+        if (cost != null && created?.id) await api.updateCompanyUser(targetId, created.id, costPatch);
         showToast(`'${cleanName}' kullanıcısı başarıyla tanımlandı.`);
       }
 
@@ -1185,6 +1193,7 @@ export default function CompanyAdminConsole({
       hired_at: agent.hired_at ? new Date(agent.hired_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       autonomy_level: agent.autonomy_level || matchedTitle?.autonomy_level || 'L1',
       system_prompt: agent.system_prompt || '',
+      daily_cost_try: agent.daily_cost_try ?? '',
       pending_learnings: null,
       deep_search_metadata: null
     });
@@ -1363,6 +1372,9 @@ export default function CompanyAdminConsole({
       };
 
       if (editingAgent) {
+        // Günlük sabit maliyet (Adım 7.5.2): boşsa kaldırılır
+        const agentCost = agentForm.daily_cost_try === '' || agentForm.daily_cost_try == null ? null : Number(agentForm.daily_cost_try);
+        Object.assign(payload, agentCost == null ? { clear_daily_cost: true } : { daily_cost_try: agentCost });
         const updated = await api.updateAIAgent(targetId, editingAgent.id, payload);
         setAiAgents(prev => prev.map(a => a.id === editingAgent.id ? { ...a, ...updated } : a));
         showToast(`'${name}' AI ajanı güncellendi.`);
@@ -5958,6 +5970,18 @@ export default function CompanyAdminConsole({
                 </div>
               </div>
 
+              {/* Günlük maliyet (Adım 7.5.2): proje maliyet raporunda adım bazında kullanılır; kişisel veridir */}
+              <div style={{ marginBottom: '16px' }}>
+                <label htmlFor="user-daily-cost" style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
+                  Günlük maliyet (₺, KDV hariç, isteğe bağlı)
+                </label>
+                <input id="user-daily-cost" className="ui-input" type="number" min="0" step="0.01" placeholder="Örn. 2500"
+                  value={userForm.daily_cost_try} onChange={(e) => setUserForm(prev => ({ ...prev, daily_cost_try: e.target.value }))} />
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', margin: '6px 0 0' }}>
+                  Proje maliyetinde, bu kişinin yürüttüğü iş adımlarına gerçekleşen iş günü × günlük maliyet olarak yansır. Kişisel veridir: kişi bazında yalnızca Şirket Yönetimi görür.
+                </p>
+              </div>
+
               {/* 2. Satır: Departman & Ünvan Seçimi */}
               <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
@@ -8007,6 +8031,20 @@ export default function CompanyAdminConsole({
                   }}
                 />
               </div>
+
+              {/* Günlük sabit maliyet (Adım 7.5.2, isteğe bağlı) */}
+              {editingAgent && (
+                <div style={{ marginBottom: '16px' }}>
+                  <label htmlFor="agent-daily-cost" style={{ display: 'block', fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)', marginBottom: '6px' }}>
+                    Günlük sabit maliyet (₺, KDV hariç, isteğe bağlı)
+                  </label>
+                  <input id="agent-daily-cost" className="ui-input" type="number" min="0" step="0.01" placeholder="Boş: yalnızca token maliyeti"
+                    value={agentForm.daily_cost_try} onChange={(e) => setAgentForm({ ...agentForm, daily_cost_try: e.target.value })} />
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', margin: '6px 0 0' }}>
+                    AI personelin asıl maliyeti kullandığı token'ların TL karşılığıdır. Lisans, kiralama gibi sabit bir gider varsa günlük tutarı buraya yazın.
+                  </p>
+                </div>
+              )}
 
               {/* 5. AI Ajan Açıklaması */}
               <div style={{ marginBottom: '16px' }}>

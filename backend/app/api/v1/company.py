@@ -593,6 +593,8 @@ class AIAgentUpdateIn(BaseModel):
     hired_at: Optional[datetime] = None
     autonomy_level: Optional[str] = None
     system_prompt: Optional[str] = None
+    daily_cost_try: Optional[float] = Field(None, ge=0, le=10_000_000)  # isteğe bağlı günlük sabit maliyet (ADIM 7.5.2)
+    clear_daily_cost: bool = False
 
 
 class AIAgentTerminateIn(BaseModel):
@@ -622,6 +624,7 @@ class AIAgentOut(BaseModel):
     department_id: Optional[uuid.UUID] = None
     department_name: Optional[str] = None
     document_count: int = 0
+    daily_cost_try: Optional[float] = None
     created_at: Optional[datetime] = None
 
     class Config:
@@ -830,6 +833,7 @@ async def list_company_ai_agents(
             autonomy_level=a.autonomy_level or "L1",
             system_prompt=a.system_prompt,
             preferred_model_id=a.preferred_model_id,
+            daily_cost_try=float(a.daily_cost_try) if a.daily_cost_try is not None else None,
             model_code=model.model_code if model else None,
             model_display_name=model.display_name if model else None,
             job_title_id=a.job_title_id,
@@ -972,6 +976,7 @@ async def hire_ai_agent(
         autonomy_level=agent.autonomy_level,
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
+        daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
         model_code=model.model_code if model else None,
         model_display_name=model.display_name if model else None,
         job_title_id=job_title.id,
@@ -1013,6 +1018,10 @@ async def update_ai_agent(
     if payload.autonomy_level is not None:
         agent.autonomy_level = payload.autonomy_level
 
+    if payload.clear_daily_cost:
+        agent.daily_cost_try = None
+    elif payload.daily_cost_try is not None:
+        agent.daily_cost_try = payload.daily_cost_try
     if payload.system_prompt is not None:
         new_prompt = payload.system_prompt.strip()
         if new_prompt != (agent.system_prompt or "").strip() and not ent.can_edit_role_prompt:
@@ -1063,6 +1072,7 @@ async def update_ai_agent(
         autonomy_level=agent.autonomy_level,
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
+        daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
         model_code=model.model_code if model else None,
         model_display_name=model.display_name if model else None,
         job_title_id=title.id if title else None,
@@ -1113,6 +1123,7 @@ async def terminate_ai_agent(
         autonomy_level=agent.autonomy_level,
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
+        daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
         model_code=model.model_code if model else None,
         model_display_name=model.display_name if model else None,
         job_title_id=title.id if title else None,
@@ -1180,6 +1191,7 @@ async def rehire_ai_agent(
         autonomy_level=agent.autonomy_level,
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
+        daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
         model_code=model.model_code if model else None,
         model_display_name=model.display_name if model else None,
         job_title_id=title.id if title else None,
@@ -1863,6 +1875,8 @@ class CompanyUserUpdateIn(BaseModel):
     status: Optional[str] = None
     role_id: Optional[uuid.UUID] = None
     extra_permissions: Optional[List[str]] = None
+    daily_cost_try: Optional[float] = Field(None, ge=0, le=10_000_000)  # günlük maliyet (kişisel veri, ADIM 7.5.2)
+    clear_daily_cost: bool = False
 
 
 class CompanyUserOut(BaseModel):
@@ -1882,6 +1896,7 @@ class CompanyUserOut(BaseModel):
     role: str
     extra_permissions: List[str] = []
     effective_permissions: List[str] = []
+    daily_cost_try: Optional[float] = None  # yalnızca kullanıcı yönetme yetkisi olana gösterilir (KVKK)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -1923,10 +1938,11 @@ async def list_company_users(
     tenant_id: uuid.UUID,
     status: Optional[str] = Query(None, description="Filtre: ACTIVE, DISABLED"),
     search: Optional[str] = Query(None, description="Ad soyad veya e-posta arama"),
+    current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Şirketin insan kullanıcılarını listeler (Madde 1).
+    Şirketin insan kullanıcılarını listeler (Madde 1). Günlük maliyet yalnızca kullanıcı yönetme yetkisi olana döner (KVKK).
     Departman, Ünvan, Sistem Rolü ve İzin Kataloğu ek izinleri ile birlikte döner.
     """
     await _get_tenant_or_404(db, tenant_id)
@@ -1981,6 +1997,7 @@ async def list_company_users(
         effective_p = list(set(role_perms + extra_p))
 
         result.append(CompanyUserOut(
+            daily_cost_try=float(a.daily_cost_try) if a.daily_cost_try is not None and current.has("user:manage") else None,
             id=a.id,
             tenant_id=a.tenant_id,
             actor_type=a.actor_type,
@@ -2121,6 +2138,7 @@ async def create_company_user(
     effective_p = list(set(role_perms + extra_p))
 
     return CompanyUserOut(
+        daily_cost_try=float(user.daily_cost_try) if user.daily_cost_try is not None else None,
         id=user.id,
         tenant_id=user.tenant_id,
         actor_type=user.actor_type,
@@ -2158,6 +2176,11 @@ async def update_company_user(
     user = await db.get(Actor, user_id)
     if not user or user.tenant_id != tenant_id or user.actor_type != "HUMAN":
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+    if payload.clear_daily_cost:
+        user.daily_cost_try = None
+    elif payload.daily_cost_try is not None:
+        user.daily_cost_try = payload.daily_cost_try
 
     # Durum değişikliği kontrolü (Pasiften aktife alınıyorsa kota kontrolü)
     if payload.status is not None:
@@ -2266,6 +2289,7 @@ async def update_company_user(
     effective_p = list(set(role_perms + extra_p))
 
     return CompanyUserOut(
+        daily_cost_try=float(user.daily_cost_try) if user.daily_cost_try is not None else None,
         id=user.id,
         tenant_id=user.tenant_id,
         actor_type=user.actor_type,

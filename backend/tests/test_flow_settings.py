@@ -10,6 +10,7 @@ ADIM 7.4: Akış editörü ayarları plan adımında saklanır, onayda iş adım
 import re
 
 from app.services import notification_service as ns
+from tests.test_approvals import _until
 from tests.test_workflow import _exec, _wait, ai, world  # noqa: F401  (fikstürler)
 
 
@@ -48,7 +49,7 @@ def test_flow_settings_applied(client, db, world, ai):
     a = flow_tasks["Uzman onaylı adım"]
     assert a["approver"]["id"] == w["member"]["id"]
     member_email = _exec(db, "SELECT email FROM actors WHERE id = %s", w["member"]["id"])[0]
-    assert any(m["to"] == member_email and "Uzman onaylı adım" in m["subject"] for m in ns.OUTBOX)
+    _until(lambda: any(m["to"] == member_email and "Uzman onaylı adım" in m["subject"] for m in ns.OUTBOX), "uzmana onay e-postası")
     member_view = {t["title"]: t for t in client.get(f"/api/v1/projects/{pid}/workflow", headers=member).json()["tasks"]}
     assert member_view["Uzman onaylı adım"]["can_decide"]
     queue = client.get("/api/v1/me/approvals", headers=member).json()
@@ -57,8 +58,12 @@ def test_flow_settings_applied(client, db, world, ai):
     # Ret sınırı 1: ilk retle karantina
     assert client.post(f"/api/v1/tasks/{a['id']}/decision", headers=member, json={"approve": False, "note": "Eksik"}).status_code == 200
     _wait(client, admin, pid, lambda t, f: t["Uzman onaylı adım"]["status"] == "QUARANTINED", "tek retle karantina")
+    def approval_mails():
+        return [m for m in ns.OUTBOX if m["to"] == member_email and "Uzman onaylı adım" in m["subject"]]
+    sent_before = len(approval_mails())  # yeniden denemeden önce
     assert client.post(f"/api/v1/tasks/{a['id']}/release", headers=admin, json={"action": "retry"}).status_code == 200
     _wait(client, admin, pid, lambda t, f: t["Uzman onaylı adım"]["status"] == "WAITING_APPROVAL", "yeniden onaya gelmeli")
+    _until(lambda: len(approval_mails()) > sent_before, "yeni teslim için yeni onay e-postası")
     link = [m for m in ns.OUTBOX if m["to"] == member_email and "Uzman onaylı adım" in m["subject"]][-1]
     raw = re.search(r"#/approve\?token=([A-Za-z0-9_-]+)", link["html"]).group(1)
     assert client.post(f"/api/v1/approvals/{raw}", json={"approve": True}).status_code == 200
