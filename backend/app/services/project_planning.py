@@ -65,8 +65,24 @@ def _parse(text: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------- doğrulama
-def validate_plan(plan: Dict[str, Any], pool_ids: set) -> Dict[str, Any]:
-    """Adımları temizler; geçersiz personel/bağımlılıkları düşürür; döngü varsa hata verir."""
+def _pos(value) -> Optional[Dict[str, float]]:
+    """Akış şemasındaki konum (ADIM 7.4)."""
+    try:
+        return {"x": round(float(value["x"]), 1), "y": round(float(value["y"]), 1)} if value else None
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _rejections(value) -> int:
+    try:
+        return max(1, min(int(value), 5))
+    except (TypeError, ValueError):
+        return 3
+
+
+def validate_plan(plan: Dict[str, Any], pool_ids: set, human_ids: Optional[set] = None) -> Dict[str, Any]:
+    """Adımları temizler; geçersiz personel/bağımlılıkları düşürür; döngü varsa hata verir.
+    human_ids: onaylayıcı olabilecek insan personel (verilmezse onaylayıcı alanı korunmaz)."""
     steps, keys = [], set()
     for i, s in enumerate((plan.get("steps") or [])[:MAX_STEPS], 1):
         title = str(s.get("title") or "").strip()[:255]
@@ -89,6 +105,11 @@ def validate_plan(plan: Dict[str, Any], pool_ids: set) -> Dict[str, Any]:
             "agent_id": agent if agent in pool_ids else None, "estimated_days": max(0.5, min(days, 60.0)),
             # Kontrol personeli (ADIM 7.2): havuzdan, işi yapan personelden farklı bir AI personel
             "reviewer_agent_id": reviewer if reviewer in pool_ids and reviewer != agent else None,
+            # Akış ayarları (ADIM 7.4): onaylayıcı (boş: proje yöneticisi), onay gerekliliği, ret sınırı, şema konumu
+            "approver_actor_id": (str(s.get("approver_actor_id")) if human_ids is not None and str(s.get("approver_actor_id") or "") in human_ids else None),
+            "requires_approval": s.get("requires_approval") is not False,
+            "max_rejections": _rejections(s.get("max_rejections", 3)),
+            "pos": _pos(s.get("pos")),
             "depends_on": [str(d) for d in (s.get("depends_on") or [])],
             "priority": s.get("priority") if s.get("priority") in ("HIGH", "MEDIUM", "LOW") else "MEDIUM",
         })
@@ -243,6 +264,9 @@ async def approve_plan(db: AsyncSession, project: Project, actor_id: uuid.UUID) 
         agent = await db.get(Actor, uuid.UUID(s["agent_id"])) if s.get("agent_id") else None
         if agent and agent.tenant_id != project.tenant_id:
             agent = None
+        approver = await db.get(Actor, uuid.UUID(s["approver_actor_id"])) if s.get("approver_actor_id") else None
+        if approver and (approver.tenant_id != project.tenant_id or approver.actor_type != "HUMAN"):
+            approver = None
         reviewer = await db.get(Actor, uuid.UUID(s["reviewer_agent_id"])) if s.get("reviewer_agent_id") else None
         if reviewer and (reviewer.tenant_id != project.tenant_id or (agent and reviewer.id == agent.id)):
             reviewer = None
@@ -250,10 +274,12 @@ async def approve_plan(db: AsyncSession, project: Project, actor_id: uuid.UUID) 
                     acceptance_criteria=s.get("acceptance_criteria"), priority=s.get("priority", "MEDIUM"),
                     assignee_actor_id=agent.id if agent else None, estimated_effort=s.get("estimated_days", 1),
                     department_id=depts.get((s.get("department") or "").lower()), job_title_id=agent.job_title_id if agent else None,
-                    order_index=i, status="BACKLOG", depends_on=[], reviewer_actor_id=reviewer.id if reviewer else None)
+                    order_index=i, status="BACKLOG", depends_on=[], reviewer_actor_id=reviewer.id if reviewer else None,
+                    approver_actor_id=approver.id if approver else None, requires_approval=s.get("requires_approval", True) is not False,
+                    max_rejections=_rejections(s.get("max_rejections", 3)))
         db.add(task)
         key_to_task[s["key"]] = task
-        for member in (agent, reviewer):
+        for member in (agent, reviewer, approver):
             if member:
                 await psvc.set_member(db, project, member, None, actor_id)
     await db.flush()

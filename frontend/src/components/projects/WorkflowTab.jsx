@@ -3,6 +3,7 @@ import { Bot, CheckCircle2, FileText, RotateCcw, Send, ShieldAlert } from 'lucid
 import { api } from '../../api';
 import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import SimpleMarkdown from '../ai/SimpleMarkdown';
+import FlowCanvas from './FlowCanvas';
 import { confirmDialog, promptDialog, toast } from '../../ui/feedback';
 import { fmtDay } from './projectMeta';
 
@@ -19,6 +20,7 @@ export default function WorkflowTab({ project }) {
   const [flow, setFlow] = useState(null);
   const [busy, setBusy] = useState('');
   const [viewing, setViewing] = useState(null);
+  const [view, setView] = useState('list');
   const closeViewer = useCallback(() => setViewing(null), []);
   const live = ['ACTIVE', 'PAUSED'].includes(project.status);
 
@@ -73,8 +75,20 @@ export default function WorkflowTab({ project }) {
           <div className="pj-stat"><span>Karantina</span><strong>{count(['QUARANTINED'])}</strong></div>
           <div className="pj-stat"><span>Tamamlandı</span><strong>{count(['DONE'])} / {flow.tasks.length}</strong></div>
         </div>
+        <div className="ui-segmented" role="tablist" aria-label="Görünüm" style={{ alignSelf: 'flex-start' }}>
+          {[['list', 'Liste'], ['flow', 'Akış şeması']].map(([k, l]) => (
+            <button key={k} type="button" className={`ui-segmented-item ${view === k ? 'active' : ''}`} onClick={() => setView(k)}>{l}</button>
+          ))}
+        </div>
+        {view === 'flow' && (
+          <FlowCanvas height={480}
+            steps={flow.tasks.map((t) => ({ key: t.id, label: String(t.order_index), title: t.title, depends_on: t.depends_on,
+              requires_approval: t.requires_approval, max_rejections: t.max_rejections, _t: t }))}
+            describe={(st) => ({ agent: st._t.assignee?.name, reviewer: st._t.reviewer?.name, approver: st._t.approver?.name,
+              status: st._t.status, statusLabel: st._t.status_label })} />
+        )}
         {project.status === 'PAUSED' && <div className="pj-note medium">Proje duraklatıldı: süren adımlar devam eder, yeni adım açılmaz.</div>}
-        {flow.tasks.map((t) => (
+        {view === 'list' && flow.tasks.map((t) => (
           <div key={t.id} className="pj-step">
             <div className="pj-step-key">{t.order_index}</div>
             <div className="pj-steps" style={{ gap: 6 }}>

@@ -67,3 +67,20 @@
   .pj-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .pj-tab { white-space: nowrap; }
 }
+
+/* Akış şeması (ADIM 7.4) */
+.pj-flow { border: 1px solid var(--border-subtle); border-radius: 12px; overflow: hidden; background: var(--bg-card); }
+.pj-flow .react-flow__node-step { padding: 0; border: none; background: transparent; width: auto; }
+.pj-flow-node { width: 240px; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-main); font-size: 0.74rem; box-shadow: 0 4px 14px rgb(var(--rgb-shade) / calc(0.25 * var(--shade-k))); }
+.pj-flow-node.selected { border-color: #7134e2; box-shadow: 0 0 0 2px rgba(113, 52, 226, 0.35); }
+.pj-flow-node.st-success { border-left: 4px solid #10b981; }
+.pj-flow-node.st-warning { border-left: 4px solid #f59e0b; }
+.pj-flow-node.st-danger { border-left: 4px solid #ef4444; }
+.pj-flow-node.st-info { border-left: 4px solid #0ea5e9; }
+.pj-flow-node strong { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-flow-node span { display: flex; align-items: center; gap: 5px; color: var(--text-muted); }
+.pj-flow-node-head { display: flex; justify-content: space-between; align-items: center; }
+.pj-flow-key { font-weight: 800; color: var(--text-dim); }
+.pj-flow-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+@media (max-width: 1024px) { .pj-flow-layout { grid-template-columns: 1fr; } }

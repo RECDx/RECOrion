@@ -1,4 +1,4 @@
-// Canlı uçtan uca test (Adım 6, 7.1, 7.2, 7.3): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
+// Canlı uçtan uca test (Adım 6, 7.1, 7.2, 7.3, 7.4): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
 import { chromium } from 'playwright-core';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -97,12 +97,40 @@ try {
   const reviewers = page.locator('.pj-step select', { has: page.locator('option', { hasText: 'Kontrol yok' }) });
   for (let i = 0; i < await reviewers.count(); i += 1) await reviewers.nth(i).selectOption(i === 0 ? { index: 1 } : '');
   step(await reviewers.count() > 0, 'İlk adıma kontrol personeli atandı');
+
+  // 7.4 Akış şeması: düğüm/bağlantı, sürükle-bırak konum, son adımda "onay gerekmez"
+  const planSteps = await page.locator('.pj-step').count();
+  await page.getByRole('button', { name: 'Akış şeması' }).click();
+  await page.locator('.pj-flow-node').first().waitFor({ timeout: 15000 });
+  const nodeCount = await page.locator('.pj-flow-node').count();
+  const edgeCount = await page.locator('.react-flow__edge').count();
+  step(nodeCount === planSteps && edgeCount >= 1, 'Akış şeması adımları ve bağımlılıkları gösteriyor', `${nodeCount} düğüm, ${edgeCount} bağlantı`);
+  const firstNode = page.locator('.pj-flow-node').first();
+  const box = await firstNode.boundingBox();
+  await page.mouse.move(box.x + 60, box.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 160, box.y + 12, { steps: 8 });
+  await page.mouse.up();
+  await page.locator('.pj-flow-node').last().click();
+  await page.getByText('İnsan onayı gerekli').click();
+  const lastTitle = await page.locator('#si-title').inputValue();
+  step(true, 'Son adımda insan onayı kapatıldı (şema düzenleyici)', lastTitle);
+  await shot(page, '01b-akis-semasi');
   await shot(page, '01-plan');
   await page.getByRole('button', { name: 'Onayla ve iş adımlarına dönüştür' }).click();
   await dialogOk(page);
   await page.locator('.ui-badge', { hasText: 'Onaylandı' }).first().waitFor({ timeout: 20000 });
   step(true, 'Plan onaylandı, iş adımlarına dönüştü');
+  await page.getByRole('button', { name: 'Liste', exact: true }).click();
   const titles = await page.locator('input[aria-label="Adım adı"]').evaluateAll((els) => els.map((e) => e.value));
+  const savedPlan = await page.evaluate(async (name) => {
+    const token = sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token');
+    const h = { Authorization: `Bearer ${token}` };
+    const p = (await (await fetch('/api/v1/projects/?scope=mine', { headers: h })).json()).find((x) => x.name === name);
+    return (await (await fetch(`/api/v1/projects/${p.id}`, { headers: h })).json()).plan.steps;
+  }, NAME);
+  step(savedPlan.some((x) => x.pos) && savedPlan[savedPlan.length - 1].requires_approval === false,
+    'Şemadaki konum ve onay ayarı plana kaydedildi', `konumlu adım: ${savedPlan.filter((x) => x.pos).length}, son adım onay: ${savedPlan[savedPlan.length - 1].requires_approval}`);
 
   // 3. Ekip ve simülasyon
   await page.getByRole('tab', { name: /Ekip & Simülasyon/ }).click();
@@ -132,6 +160,12 @@ try {
   // 5. İş akışı: AI personel adımları kendisi yürütür (gerçek EVREN), kontrol personeli değerlendirir
   await page.getByRole('tab', { name: /İş Akışı/ }).click();
   const first = titles[0];
+  await page.getByRole('button', { name: 'Akış şeması' }).click();
+  await page.locator('.pj-flow-node').first().waitFor({ timeout: 15000 });
+  step(await page.locator('.pj-flow-node').count() === titles.length, 'İş Akışı şeması canlı durumları gösteriyor',
+    (await page.locator('.pj-flow-node .ui-badge').allTextContents()).join(', '));
+  await shot(page, '02b-canli-sema');
+  await page.getByRole('button', { name: 'Liste', exact: true }).click();
   const versionOf = async (title) => Number(((await stepCard(page, title).getByRole('button', { name: /Çıktıyı gör/ }).textContent()) || '').match(/sürüm (\d+)/)?.[1] || 0);
   // Onaya gelene kadar bekle; kontrol personeli 3 kez reddederse karantina olur (raporlanır, bir kez yeniden denenir)
   const untilApproval = async (title, minutes) => {
@@ -278,6 +312,9 @@ try {
   step(cnt('AI_OUTPUT') >= titles.length + 1 && cnt('REVIEW_PASSED') + cnt('REVIEW_FAILED') >= 1 && cnt('REJECTED') >= 1
     && cnt('DONE') === titles.length && cnt('PROJECT_FINISHED') === 1,
     'Silinemez akış geçmişi tutarlı', `AI_OUTPUT:${cnt('AI_OUTPUT')} REVIEW_PASSED:${cnt('REVIEW_PASSED')} REVIEW_FAILED:${cnt('REVIEW_FAILED')} REJECTED:${cnt('REJECTED')} BLOCKED:${cnt('BLOCKED')} APPROVED:${cnt('APPROVED')} DONE:${cnt('DONE')} FINISHED:${cnt('PROJECT_FINISHED')}`);
+  const lastTask = mine?.tasks.find((t) => t.title === lastTitle);
+  const lastKinds = (mine?.events || []).filter((e) => e.task_id === lastTask?.id).map((e) => e.kind);
+  step(lastKinds.includes('DONE') && !lastKinds.includes('APPROVED'), "'Onay gerekmez' adımı onaysız tamamlandı", `${lastTitle}: ${[...new Set(lastKinds)].join(', ')}`);
   const channels = (mine?.events || []).filter((e) => e.kind === 'APPROVED').map((e) => e.data?.channel || 'WEB');
   step(channels.includes('EMAIL'), 'Onay kanalları akış geçmişinde kayıtlı', channels.join(', '));
   const credits = (mine?.events || []).filter((e) => e.kind === 'AI_OUTPUT').reduce((sum, e) => sum + (e.data?.credits || 0), 0);

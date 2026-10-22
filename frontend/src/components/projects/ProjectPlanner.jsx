@@ -151,7 +151,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
             emptyText="Proje kapanışında onaylı ekleri Kurum Hafızasına aktarabilirsiniz." />
         </Card>
       )}
-      {tab === 'plan' && <PlanTab project={project} agents={agents} onChanged={reload} />}
+      {tab === 'plan' && <PlanTab project={project} agents={agents} humans={humans} onChanged={reload} />}
       {tab === 'team' && <TeamSimTab project={project} actors={actors} onChanged={reload} />}
       {tab === 'ready' && <ReadinessTab project={project} onAction={action} busy={busy} />}
       {tab === 'flow' && <WorkflowTab project={project} />}

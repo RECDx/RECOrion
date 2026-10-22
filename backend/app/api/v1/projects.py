@@ -357,7 +357,9 @@ async def update_plan(project_id: uuid.UUID, payload: PlanIn, user: CurrentUser 
     if project.status not in ("DRAFT", "PLANNING"):
         raise HTTPException(status_code=409, detail="Plan yalnızca planlama aşamasında düzenlenebilir.")
     pool = {p["agent_id"] for p in await planning._team_pool(db, project.tenant_id)}
-    plan = planning.validate_plan(payload.model_dump(), pool)
+    humans = {str(a) for a in (await db.execute(select(Actor.id).where(Actor.tenant_id == project.tenant_id, Actor.actor_type == "HUMAN",
+                                                                      Actor.status != "DISABLED"))).scalars()}
+    plan = planning.validate_plan(payload.model_dump(), pool, humans)
     old = project.plan or {}
     project.plan = {**plan, "model_code": old.get("model_code"), "generated_at": old.get("generated_at"),
                     "edited_at": svc.now().isoformat(), "approved": False,

@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyState } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import ChatPanel from '../ai/ChatPanel';
 import HireWizard from '../catalog/HireWizard';
+import FlowCanvas from './FlowCanvas';
 import { PRIORITY, isPlanning } from './projectMeta';
 
 const emptyStep = (n) => ({ key: `S${n}`, title: '', description: '', acceptance_criteria: '', department: '', job_title: '',
@@ -14,13 +15,16 @@ const emptyStep = (n) => ({ key: `S${n}`, title: '', description: '', acceptance
  * Beyin AI planlama (ADIM 6.3): planlama sohbeti + iş adımı taslağı.
  * Yönetici öneriyi düzenler, kaydeder ve onaylar; onayda adımlar iş adımlarına (görevlere) dönüşür.
  */
-export default function PlanTab({ project, agents, onChanged }) {
+export default function PlanTab({ project, agents, humans = [], onChanged }) {
   const editable = project.can_manage && isPlanning(project);
   const [plan, setPlan] = useState(project.plan);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState('');
   const [feedback, setFeedback] = useState('');
   const [hireOpen, setHireOpen] = useState(false);
+  // Görünüm (ADIM 7.4): liste veya akış şeması; şemada seçili adım yan panelde düzenlenir
+  const [view, setView] = useState('list');
+  const [selectedKey, setSelectedKey] = useState(null);
 
   useEffect(() => { setPlan(project.plan); setDirty(false); }, [project.plan]);
 
@@ -93,6 +97,14 @@ export default function PlanTab({ project, agents, onChanged }) {
 
   const steps = plan?.steps || [];
   const approved = plan?.approved && project.planning_approved_at;
+  const nameOf = (list, id) => list.find((a) => a.id === id)?.display_name;
+  const describe = (s) => ({ agent: nameOf(agents, s.agent_id), reviewer: nameOf(agents, s.reviewer_agent_id), approver: nameOf(humans, s.approver_actor_id) });
+  const onFlowChange = (next, error) => {
+    if (error) { toast.warning(error); return; }
+    setPlan((p) => ({ ...p, steps: next }));
+    setDirty(true);
+  };
+  const selectedIndex = steps.findIndex((s) => s.key === selectedKey);
 
   return (
     <div className="pj-split">
@@ -115,7 +127,16 @@ export default function PlanTab({ project, agents, onChanged }) {
 
       <div className="pj-steps">
         <Card title="İş adımları" subtitle={plan?.model_code ? `Öneren model: ${plan.model_code}${dirty ? ' · kaydedilmemiş değişiklik var' : ''}` : 'Henüz plan yok'}
-          actions={approved ? <Badge tone="success">Onaylandı</Badge> : plan ? <Badge tone="warning">Onay bekliyor</Badge> : null}>
+          actions={<div className="pj-actions">
+            {plan && (
+              <div className="ui-segmented" role="tablist" aria-label="Görünüm">
+                {[['list', 'Liste'], ['flow', 'Akış şeması']].map(([k, l]) => (
+                  <button key={k} type="button" className={`ui-segmented-item ${view === k ? 'active' : ''}`} onClick={() => setView(k)}>{l}</button>
+                ))}
+              </div>
+            )}
+            {approved ? <Badge tone="success">Onaylandı</Badge> : plan ? <Badge tone="warning">Onay bekliyor</Badge> : null}
+          </div>}>
           {editable && (
             <div className="pj-field" style={{ marginBottom: 10 }}>
               <label htmlFor="pj-fb">Beyin AI'ya not (isteğe bağlı)</label>
@@ -131,7 +152,17 @@ export default function PlanTab({ project, agents, onChanged }) {
           {plan?.summary && <p className="pj-note info">{plan.summary}</p>}
         </Card>
 
-        {!plan ? (
+        {plan && view === 'flow' && (
+          <div className="pj-steps">
+            <FlowCanvas steps={steps} describe={describe} editable={editable} selectedKey={selectedKey} onSelect={setSelectedKey} onChange={onFlowChange} height={460} />
+            <p className="pj-hint">Kartları sürükleyerek yerleştirin; bir kartın alt noktasından sonraki adımın üst noktasına çekerek "önce bitmesi gereken" bağlantısı kurun; bağlantıyı seçip Delete ile silin. Ayarlar için karta tıklayın.</p>
+            {selectedIndex >= 0 ? (
+              <StepInspector step={steps[selectedIndex]} agents={agents} humans={humans} editable={editable}
+                onUpdate={(patch) => update(selectedIndex, patch)} onRemove={() => { remove(selectedIndex); setSelectedKey(null); }} />
+            ) : editable && <Button variant="ghost" icon={Plus} onClick={add}>Adım ekle</Button>}
+          </div>
+        )}
+        {view === 'flow' && plan ? null : !plan ? (
           <EmptyState icon={Brain} title="Plan bekleniyor" description="İsterleri yazdıktan sonra Beyin AI'dan iş adımı önerisi isteyin." />
         ) : steps.map((s, i) => (
           <div className="pj-step" key={s.key}>
@@ -185,7 +216,7 @@ export default function PlanTab({ project, agents, onChanged }) {
             </div>
           </div>
         ))}
-        {editable && plan && <Button variant="ghost" icon={Plus} onClick={add}>Adım ekle</Button>}
+        {editable && plan && view === 'list' && <Button variant="ghost" icon={Plus} onClick={add}>Adım ekle</Button>}
 
         {(plan?.hire_suggestions?.length > 0) && (
           <Card title="İşe alım önerileri" subtitle="Havuzda uygun AI personel bulunmayan unvanlar.">
@@ -213,6 +244,58 @@ export default function PlanTab({ project, agents, onChanged }) {
   );
 }
 
+/** Akış şemasında seçili adımın ayarları (ADIM 7.4). */
+function StepInspector({ step, agents, humans, editable, onUpdate, onRemove }) {
+  return (
+    <Card title={`${step.key} · adım ayarları`} subtitle="İşi yapan, kontrol eden ve onaylayan; onay kuralları."
+      actions={editable && <Button size="sm" variant="ghost" icon={Trash2} onClick={onRemove}>Adımı sil</Button>}>
+      <div className="pj-form">
+        <div className="pj-field full">
+          <label htmlFor="si-title">Adım adı</label>
+          <input id="si-title" className="ui-input" value={step.title} disabled={!editable} onChange={(e) => onUpdate({ title: e.target.value })} />
+        </div>
+        <div className="pj-field">
+          <label htmlFor="si-agent">Personel (işi yapan)</label>
+          <select id="si-agent" className="ui-input" value={step.agent_id || ''} disabled={!editable} onChange={(e) => onUpdate({ agent_id: e.target.value })}>
+            <option value="">Personel atanmadı</option>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.display_name}{a.role ? ` · ${a.role}` : ''}</option>)}
+          </select>
+        </div>
+        <div className="pj-field">
+          <label htmlFor="si-rev">Kontrol personeli</label>
+          <select id="si-rev" className="ui-input" value={step.reviewer_agent_id || ''} disabled={!editable} onChange={(e) => onUpdate({ reviewer_agent_id: e.target.value })}>
+            <option value="">Kontrol yok (doğrudan onaya)</option>
+            {agents.filter((a) => a.id !== step.agent_id).map((a) => <option key={a.id} value={a.id}>{a.display_name}</option>)}
+          </select>
+        </div>
+        <div className="pj-field">
+          <label htmlFor="si-appr">Onaylayıcı</label>
+          <select id="si-appr" className="ui-input" value={step.approver_actor_id || ''} disabled={!editable || step.requires_approval === false}
+            onChange={(e) => onUpdate({ approver_actor_id: e.target.value })}>
+            <option value="">Proje yöneticisi</option>
+            {humans.map((h) => <option key={h.id} value={h.id}>{h.display_name}</option>)}
+          </select>
+        </div>
+        <div className="pj-field">
+          <label htmlFor="si-max">Ret sınırı (sonra karantina)</label>
+          <select id="si-max" className="ui-input" value={step.max_rejections || 3} disabled={!editable || step.requires_approval === false}
+            onChange={(e) => onUpdate({ max_rejections: Number(e.target.value) })}>
+            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} ret</option>)}
+          </select>
+        </div>
+        <div className="pj-field full">
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: editable ? 'pointer' : 'default' }}>
+            <input type="checkbox" checked={step.requires_approval !== false} disabled={!editable}
+              onChange={(e) => onUpdate({ requires_approval: e.target.checked })} />
+            İnsan onayı gerekli (kapalıysa teslim/kontrolden sonra adım doğrudan tamamlanır)
+          </label>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function normalize(s) {
-  return { ...s, estimated_days: Number(s.estimated_days) || 1, agent_id: s.agent_id || null, reviewer_agent_id: s.reviewer_agent_id || null };
+  return { ...s, estimated_days: Number(s.estimated_days) || 1, agent_id: s.agent_id || null, reviewer_agent_id: s.reviewer_agent_id || null,
+    approver_actor_id: s.approver_actor_id || null };
 }
