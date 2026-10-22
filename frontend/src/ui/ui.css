@@ -131,8 +131,9 @@
 
 /* ---------- Toast ---------- */
 .ui-toast-stack {
+  /* Altta: üst menüdeki butonların üstünü kapatmaz */
   position: fixed;
-  top: 18px;
+  bottom: 18px;
   right: 18px;
   z-index: 2000;
   display: flex;

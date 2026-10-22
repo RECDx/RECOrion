@@ -4,8 +4,9 @@ aktivitelerde (activities.py) yapılır.
 
 ProjectWorkflow ("project-<id>"): bağımlılıkları kapanan iş adımları için TaskWorkflow başlatır; tüm adımlar
   kapanınca yöneticiye bildirir. Sinyaller: pause, resume, cancel, refresh.
-TaskWorkflow ("task-<id>"): çalışma > teslim > (onay gerekiyorsa) onay/ret döngüsü; ret sınırında karantina.
-  Sinyaller: submit, decide, release, cancel.
+TaskWorkflow ("task-<id>"): çalışma > (kontrol personeli) > teslim > (onay gerekiyorsa) onay/ret döngüsü; ret sınırında
+  karantina. AI personel işi kendisi yapar ve retten sonra geri bildirimle yeniden çalışır (ADIM 7.2); insan personel
+  teslim eder. Sinyaller: submit, decide, release, cancel.
 """
 import asyncio
 from datetime import timedelta
@@ -19,6 +20,9 @@ with workflow.unsafe.imports_passed_through():
 
 OPTS = {"start_to_close_timeout": timedelta(minutes=2),
         "retry_policy": RetryPolicy(initial_interval=timedelta(seconds=2), maximum_interval=timedelta(minutes=1), maximum_attempts=0)}
+# LLM çağıran aktiviteler: hatalarını kendileri sonuç olarak döner; yalnızca beklenmeyen çökmelerde 2 kez yeniden denenir
+AI_OPTS = {"start_to_close_timeout": timedelta(minutes=45),  # devamlar ve bir yeniden deneme dahil
+           "retry_policy": RetryPolicy(initial_interval=timedelta(seconds=10), maximum_attempts=2)}
 
 
 def task_workflow_id(task_id: str) -> str:
@@ -66,14 +70,52 @@ class TaskWorkflow:
         await workflow.execute_activity(act.cancel_task, args=[task_id, self.cancelled or {}], **OPTS)
         return "CANCELLED"
 
+    async def _quarantined(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Karantinada yöneticinin kararını bekler. Devam edilecekse güncel adım bilgisini, iptalde None döner."""
+        choice = await self._wait("released")
+        if choice is None:
+            await self._cancel(task_id)
+            return None
+        result = await workflow.execute_activity(act.release_task, args=[task_id, choice], **OPTS)
+        return None if choice.get("action") == "cancel" else result
+
     @workflow.run
     async def run(self, task_id: str) -> str:
-        await workflow.execute_activity(act.start_task, task_id, **OPTS)
+        info = await workflow.execute_activity(act.start_task, task_id, **OPTS)
+        feedback = ""
         while True:
-            # Çalışma: insan personel teslim eder; AI personelin otomatik çalışması ADIM 7.2'de bu noktaya eklenir
-            work = await self._wait("submitted")
-            if work is None:
-                return await self._cancel(task_id)
+            # 1. Çalışma: AI personel kendisi üretir; insan personel teslim eder
+            if info.get("assignee_type") == "AI_AGENT":
+                out = await workflow.execute_activity(act.ai_work, args=[task_id, feedback], **AI_OPTS)
+                if self.cancelled is not None:
+                    return await self._cancel(task_id)
+                if not out["ok"]:
+                    await workflow.execute_activity(act.block_task, args=[task_id, out["error"]], **OPTS)
+                    info = await self._quarantined(task_id)
+                    if info is None:
+                        return "CANCELLED"
+                    continue
+                work = {"actor_id": out["actor_id"], "note": f"AI personel çıktısı, sürüm {out['version']}", "artifact_id": out["artifact_id"]}
+            else:
+                work = await self._wait("submitted")
+                if work is None:
+                    return await self._cancel(task_id)
+            # 2. Kontrol personeli (tanımlıysa): geçemezse ret sayılır ve geri döner
+            if info.get("has_reviewer"):
+                rv = await workflow.execute_activity(act.ai_review, task_id, **AI_OPTS)
+                if self.cancelled is not None:
+                    return await self._cancel(task_id)
+                if rv["ok"] and not rv["passed"]:
+                    feedback = rv["note"]
+                    result = await workflow.execute_activity(
+                        act.reject_task, args=[task_id, {"actor_id": rv["actor_id"], "note": rv["note"], "source": "REVIEW"}], **OPTS)
+                    if result["quarantined"]:
+                        info = await self._quarantined(task_id)
+                        if info is None:
+                            return "CANCELLED"
+                    continue
+                # Değerlendirme yapılamadıysa (rv ok=False) karar insan onaylayıcıya bırakılır
+            # 3. Teslim ve insan onayı
             result = await workflow.execute_activity(act.submit_task, args=[task_id, work], **OPTS)
             if result["status"] == "DONE":
                 return "DONE"
@@ -83,13 +125,11 @@ class TaskWorkflow:
             if decision.get("approve"):
                 await workflow.execute_activity(act.approve_task, args=[task_id, decision], **OPTS)
                 return "DONE"
+            feedback = decision.get("note") or ""
             result = await workflow.execute_activity(act.reject_task, args=[task_id, decision], **OPTS)
             if result["quarantined"]:
-                choice = await self._wait("released")
-                if choice is None:
-                    return await self._cancel(task_id)
-                await workflow.execute_activity(act.release_task, args=[task_id, choice], **OPTS)
-                if choice.get("action") == "cancel":
+                info = await self._quarantined(task_id)
+                if info is None:
                     return "CANCELLED"
 
 

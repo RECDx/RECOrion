@@ -68,7 +68,8 @@ async def start_project(project_id: str, actor_id: str) -> str:
     return wid
 
 
-async def _signal(workflow_id: str, name: str, payload: Optional[Dict[str, Any]] = None) -> None:
+async def _signal(workflow_id: str, name: str, payload: Optional[Dict[str, Any]] = None, ignore_closed: bool = False) -> None:
+    """ignore_closed: akış zaten bitmişse (ör. tüm adımlar tamamlandıktan sonra proje kapatılırken) sessizce geç."""
     try:
         handle = (await client()).get_workflow_handle(workflow_id)
         if payload is None:
@@ -76,6 +77,8 @@ async def _signal(workflow_id: str, name: str, payload: Optional[Dict[str, Any]]
         else:
             await handle.signal(name, payload)
     except RPCError as exc:
+        if ignore_closed and ("already completed" in str(exc).lower() or "not found" in str(exc).lower()):
+            return
         logger.error("Akış sinyali gönderilemedi (%s %s): %s", workflow_id, name, exc)
         raise HTTPException(status_code=409 if "not found" in str(exc).lower() else 503,
                             detail="Bu iş adımının akışı bulunamadı; proje başlatılmamış olabilir." if "not found" in str(exc).lower() else UNAVAILABLE) from exc
@@ -84,7 +87,8 @@ async def _signal(workflow_id: str, name: str, payload: Optional[Dict[str, Any]]
 
 
 async def signal_project(project_id: str, name: str, payload: Optional[Dict[str, Any]] = None) -> None:
-    await _signal(project_workflow_id(project_id), name, payload)
+    # Proje akışı tüm adımlar kapanınca kendiliğinden biter; sonraki duraklat/kapat komutları akışa iletilmez
+    await _signal(project_workflow_id(project_id), name, payload, ignore_closed=True)
 
 
 async def signal_task(task_id: str, name: str, payload: Dict[str, Any]) -> None:

@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from temporalio import activity
 
 from app.config import settings
-from app.services import task_flow
+from app.services import agent_work, task_flow
 
 _session = None
 
@@ -84,5 +84,25 @@ async def cancel_task(task_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         return await task_flow.cancel(db, task_id, payload)
 
 
-ALL = [next_ready_tasks, project_started, project_finished, cancel_remaining, start_task, submit_task, approve_task, reject_task,
+@activity.defn
+async def block_task(task_id: str, error: str) -> Dict[str, Any]:
+    async with session() as db:
+        return await task_flow.block(db, task_id, error)
+
+
+@activity.defn
+async def ai_work(task_id: str, feedback: str = "") -> Dict[str, Any]:
+    """AI personel iş adımının çıktısını üretir (ADIM 7.2)."""
+    async with session() as db:
+        return await agent_work.produce(db, task_id, feedback or None)
+
+
+@activity.defn
+async def ai_review(task_id: str) -> Dict[str, Any]:
+    """Kontrol personeli son çıktıyı değerlendirir (ADIM 7.2)."""
+    async with session() as db:
+        return await agent_work.review(db, task_id)
+
+
+ALL = [ai_work, ai_review, block_task, next_ready_tasks, project_started, project_finished, cancel_remaining, start_task, submit_task, approve_task, reject_task,
        release_task, cancel_task]

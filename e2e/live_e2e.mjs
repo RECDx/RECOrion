@@ -1,4 +1,4 @@
-// Canlı uçtan uca test: gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
+// Canlı uçtan uca test (Adım 6, 7.1, 7.2): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
 import { chromium } from 'playwright-core';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -52,6 +52,16 @@ let ok = true;
 try {
   // 1. Yönetici girişi ve proje oluşturma
   const { page } = await session('manager');
+  // Önceki yarım kalmış canlı test projeleri kapatılır (test şirketinde açık proje birikmesin)
+  const closed = await page.evaluate(async () => {
+    const token = sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token');
+    const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const ps = await (await fetch('/api/v1/projects/?scope=mine', { headers: h })).json();
+    const open = ps.filter((p) => p.name.startsWith('Canlı Test') && !['COMPLETED', 'CANCELLED'].includes(p.status));
+    for (const p of open) await fetch(`/api/v1/projects/${p.id}/status`, { method: 'POST', headers: h, body: JSON.stringify({ action: 'cancel', summary: 'Yeni canlı test başladı' }) });
+    return open.length;
+  });
+  if (closed) step(true, 'Önceki yarım kalmış test projeleri iptal edildi', `${closed} proje`);
   await page.getByRole('button', { name: 'Yeni Proje / Case' }).first().click();
   await page.locator('#pj-name').fill(NAME);
   await page.locator('#pj-desc').fill('Bayilerin sipariş verebileceği basit bir web portalı.');
@@ -65,7 +75,7 @@ try {
   await page.getByRole('tab', { name: /Beyin AI Planlama/ }).click();
   const t1 = Date.now();
   await page.getByRole('button', { name: 'Beyin AI plan önersin' }).click();
-  await page.locator('.pj-step').first().waitFor({ timeout: 240000 });
+  await page.locator('.pj-step').first().waitFor({ timeout: 11 * 60000 });
   const stepCount = await page.locator('.pj-step').count();
   step(stepCount > 0, 'Beyin AI iş adımı önerdi', `${stepCount} adım, ${Math.round((Date.now() - t1) / 1000)} sn`);
   // Personeli atanmamış adımlara havuzdan personel ata
@@ -75,6 +85,10 @@ try {
     if (!(await selects.nth(i).inputValue())) { await selects.nth(i).selectOption({ index: 1 + (i % 2) }); assigned += 1; }
   }
   if (assigned) step(true, 'Boş adımlara personel atandı', `${assigned} adım`);
+  // Kontrol personeli (7.2): yalnızca ilk adımda (süre ve kredi sınırlı kalsın)
+  const reviewers = page.locator('.pj-step select', { has: page.locator('option', { hasText: 'Kontrol yok' }) });
+  for (let i = 0; i < await reviewers.count(); i += 1) await reviewers.nth(i).selectOption(i === 0 ? { index: 1 } : '');
+  step(await reviewers.count() > 0, 'İlk adıma kontrol personeli atandı');
   await shot(page, '01-plan');
   await page.getByRole('button', { name: 'Onayla ve iş adımlarına dönüştür' }).click();
   await dialogOk(page);
@@ -107,70 +121,96 @@ try {
   await page.locator('.ui-badge', { hasText: 'Aktif' }).first().waitFor({ timeout: 15000 });
   step(true, 'Proje başlatıldı (Aktif)');
 
-  // 5. İş akışı
+  // 5. İş akışı: AI personel adımları kendisi yürütür (gerçek EVREN), kontrol personeli değerlendirir
   await page.getByRole('tab', { name: /İş Akışı/ }).click();
-  await page.locator('.pj-step .ui-badge', { hasText: 'Çalışılıyor' }).first().waitFor({ timeout: 30000 });
-  const working = await page.locator('.pj-step', { has: page.locator('.ui-badge', { hasText: 'Çalışılıyor' }) }).count();
-  step(true, 'Temporal akışı bağımsız adımları açtı', `${working} adım çalışılıyor, toplam ${titles.length}`);
-  const first = await page.locator('.pj-step', { has: page.locator('.ui-badge', { hasText: 'Çalışılıyor' }) }).first().locator('strong').first().textContent();
+  const first = titles[0];
+  const versionOf = async (title) => Number(((await stepCard(page, title).getByRole('button', { name: /Çıktıyı gör/ }).textContent()) || '').match(/sürüm (\d+)/)?.[1] || 0);
+  // Onaya gelene kadar bekle; kontrol personeli 3 kez reddederse karantina olur (raporlanır, bir kez yeniden denenir)
+  const untilApproval = async (title, minutes) => {
+    const start = Date.now();
+    let retried = 0;
+    while (Date.now() - start < minutes * 60000) {
+      const st = await statusOf(page, title);
+      if (st === 'Onay bekliyor') return retried;
+      if (st === 'Karantinada' && retried < 1) {
+        retried += 1;
+        step(false, `'${title}' kontrol personelinin 3 reddiyle karantinaya düştü`, 'yönetici yeniden deniyor');
+        await stepCard(page, title).getByRole('button', { name: 'Yeniden dene' }).click();
+      }
+      await page.waitForTimeout(3000);
+    }
+    throw new Error(`'${title}' ${minutes} dakikada onaya gelmedi (durum: ${await statusOf(page, title)})`);
+  };
+  const tw = Date.now();
+  await untilApproval(first, 20);
+  const v1 = await versionOf(first);
+  const reviewNotes = await page.locator('.pj-list li', { hasText: 'Kontrol' }).count();
+  step(v1 >= 1, 'AI personel ilk adımı kendisi yürüttü, kontrolden geçip onaya geldi',
+    `sürüm ${v1}, ${Math.round((Date.now() - tw) / 1000)} sn, kontrol kaydı: ${reviewNotes}`);
+  const noSubmit = await stepCard(page, first).getByRole('button', { name: /teslim et/ }).count();
+  step(noSubmit === 0, 'AI adımında elle teslim butonu yok (AI kendi teslim eder)');
+  await stepCard(page, first).getByRole('button', { name: /Çıktıyı gör/ }).click();
+  const modal = page.getByRole('dialog');
+  await modal.locator('.ui-modal-body').waitFor({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  const out1 = await modal.locator('.ui-modal-body').innerText();
+  step(out1.length > 200, 'AI çıktısı görüntülendi', `${out1.length} karakter: "${out1.slice(0, 70).replace(/\s+/g, ' ')}…"`);
+  await shot(page, '03-ai-cikti');
+  await modal.getByRole('button', { name: 'Kapat' }).click();
 
   // 5a. Üye ve ekip dışı kullanıcı kontrolleri
-  await stepCard(page, first).getByRole('button', { name: /teslim et/ }).click();
-  await dialogOk(page, 'İlk teslim (canlı test)');
-  await waitStatus(page, first, 'Onay bekliyor');
-  step(true, `'${first}' teslim edildi > Onay bekliyor`);
   const m = await session('member');
   await m.page.locator('.pj-card', { hasText: NAME }).click();
   await m.page.getByRole('tab', { name: /İş Akışı/ }).click();
   await m.page.locator('.pj-step').first().waitFor({ timeout: 15000 });
   const memberApprove = await m.page.getByRole('button', { name: 'Onayla', exact: true }).count();
-  step(memberApprove === 0, 'Ekip üyesi projeyi görüyor ama onaylayamıyor', `üyede Onayla butonu: ${memberApprove}`);
-  await shot(m.page, '03-uye-gorunumu');
+  const memberView = await m.page.getByRole('button', { name: /Çıktıyı gör/ }).count();
+  step(memberApprove === 0 && memberView > 0, 'Ekip üyesi çıktıyı görüyor ama onaylayamıyor', `Onayla: ${memberApprove}, Çıktıyı gör: ${memberView}`);
   await m.ctx.close();
   const o = await session('outsider');
   await o.page.getByText('Henüz proje yok').waitFor({ timeout: 15000 }).then(() => step(true, 'Ekip dışı kullanıcı projeyi göremiyor'))
     .catch(async () => step(false, 'Ekip dışı kullanıcı projeyi göremiyor', await o.page.locator('.pj-page').innerText()));
   await o.ctx.close();
 
-  // 5b. 3 ret > karantina > yeniden dene > onay
-  for (let i = 1; i <= 3; i += 1) {
-    if (i > 1) {
-      await stepCard(page, first).getByRole('button', { name: /teslim et/ }).click();
-      await dialogOk(page, `Teslim ${i}`);
-      await waitStatus(page, first, 'Onay bekliyor');
-    }
-    await stepCard(page, first).getByRole('button', { name: 'Revizyon iste' }).click();
-    await dialogOk(page, `Canlı test ret gerekçesi ${i}`);
-    await waitStatus(page, first, i === 3 ? 'Karantinada' : 'Revizyonda');
-    step(true, `Ret ${i} > ${i === 3 ? 'Karantinada' : 'Revizyonda'}`);
+  // 5b. Yönetici reddi > AI geri bildirimle düzeltir
+  await stepCard(page, first).getByRole('button', { name: 'Revizyon iste' }).click();
+  await dialogOk(page, "Çıktıya 'Riskler ve Önlemler' başlıklı bir bölüm ekle.");
+  const tr = Date.now();
+  while (Date.now() - tr < 12 * 60000 && !((await versionOf(first)) > v1 && (await statusOf(page, first)) === 'Onay bekliyor')) {
+    await page.waitForTimeout(3000);
   }
-  await shot(page, '04-karantina');
-  await stepCard(page, first).getByRole('button', { name: 'Yeniden dene' }).click();
-  await waitStatus(page, first, 'Çalışılıyor');
-  step(true, 'Yönetici yeniden denemeyi açtı > Çalışılıyor');
+  const v2 = await versionOf(first);
+  await stepCard(page, first).getByRole('button', { name: /Çıktıyı gör/ }).click();
+  await page.waitForTimeout(2000);
+  const out2 = await page.getByRole('dialog').locator('.ui-modal-body').innerText();
+  await page.getByRole('dialog').getByRole('button', { name: 'Kapat' }).click();
+  step(v2 > v1 && /risk/i.test(out2), 'Ret sonrası AI geri bildirimle düzeltilmiş sürüm üretti',
+    `sürüm ${v1} > ${v2}, ${Math.round((Date.now() - tr) / 1000)} sn, 'Risk' bölümü: ${/risk/i.test(out2) ? 'var' : 'yok'}`);
 
-  // 5c. Tüm adımlar: teslim + onay (bağımlılıklar sırayla açılır)
-  const deadline = Date.now() + 8 * 60000;
+  // 5c. Tüm adımlar AI tarafından sırayla yürütülür; yönetici onaylar
+  const deadline = Date.now() + 40 * 60000;
   let approved = 0;
+  let released = 0;
   while (Date.now() < deadline) {
-    const pending = page.locator('.pj-step', { has: page.getByRole('button', { name: /teslim et/ }) });
     const waiting = page.locator('.pj-step', { has: page.getByRole('button', { name: 'Onayla', exact: true }) });
+    const quarantined = page.locator('.pj-step', { has: page.getByRole('button', { name: 'Yeniden dene' }) });
     if (await waiting.count()) {
       await waiting.first().getByRole('button', { name: 'Onayla', exact: true }).click();
       approved += 1;
       await page.waitForTimeout(2500);
-    } else if (await pending.count()) {
-      await pending.first().getByRole('button', { name: /teslim et/ }).click();
-      await dialogOk(page, 'Canlı test teslimi');
+    } else if (await quarantined.count() && released < 2) {
+      released += 1;
+      await quarantined.first().getByRole('button', { name: 'Yeniden dene' }).click();
       await page.waitForTimeout(2500);
     } else {
       const done = await page.locator('.pj-step .ui-badge', { hasText: 'Tamamlandı' }).count();
       if (done === titles.length) break;
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
     }
   }
   const doneCount = await page.locator('.pj-step .ui-badge', { hasText: 'Tamamlandı' }).count();
-  step(doneCount === titles.length, 'Tüm iş adımları sırayla açıldı ve onaylandı', `${doneCount}/${titles.length} tamamlandı, ${approved} onay`);
+  step(doneCount === titles.length, 'Tüm adımları AI personel sırayla yürüttü, yönetici onayladı',
+    `${doneCount}/${titles.length} tamamlandı, ${approved} onay${released ? `, ${released} karantinadan yeniden deneme` : ''}`);
   await page.getByText('Tüm adımlar tamamlandı').first().waitFor({ timeout: 30000 })
     .then(() => step(true, 'Proje akışı bitti, yöneticiye bildirim kaydı düştü'))
     .catch(() => step(false, 'Proje akışı bitti kaydı'));
@@ -185,8 +225,11 @@ try {
   const mine = flow.find((x) => x.name === NAME)?.f;
   const kinds = (mine?.events || []).map((e) => e.kind);
   const cnt = (k) => kinds.filter((x) => x === k).length;
-  step(cnt('REJECTED') === 3 && cnt('QUARANTINED') === 1 && cnt('RELEASED') === 1 && cnt('DONE') === titles.length && cnt('PROJECT_FINISHED') === 1,
-    'Silinemez akış geçmişi tutarlı', `STARTED:${cnt('PROJECT_STARTED')} SUBMITTED:${cnt('SUBMITTED')} REJECTED:${cnt('REJECTED')} QUARANTINED:${cnt('QUARANTINED')} RELEASED:${cnt('RELEASED')} APPROVED:${cnt('APPROVED')} DONE:${cnt('DONE')} FINISHED:${cnt('PROJECT_FINISHED')}`);
+  step(cnt('AI_OUTPUT') >= titles.length + 1 && cnt('REVIEW_PASSED') + cnt('REVIEW_FAILED') >= 1 && cnt('REJECTED') >= 1
+    && cnt('DONE') === titles.length && cnt('PROJECT_FINISHED') === 1,
+    'Silinemez akış geçmişi tutarlı', `AI_OUTPUT:${cnt('AI_OUTPUT')} REVIEW_PASSED:${cnt('REVIEW_PASSED')} REVIEW_FAILED:${cnt('REVIEW_FAILED')} REJECTED:${cnt('REJECTED')} BLOCKED:${cnt('BLOCKED')} APPROVED:${cnt('APPROVED')} DONE:${cnt('DONE')} FINISHED:${cnt('PROJECT_FINISHED')}`);
+  const credits = (mine?.events || []).filter((e) => e.kind === 'AI_OUTPUT').reduce((sum, e) => sum + (e.data?.credits || 0), 0);
+  step(credits > 0, 'AI çalışmaları ölçüldü ve krediden düştü', `${credits.toFixed(2)} kredi (${cnt('AI_OUTPUT')} çıktı)`);
 
   // 7. Çalışma Alanı Kalite Kapısı gerçek durumu gösteriyor mu
   await page.getByRole('button', { name: 'Çalışma alanında aç' }).click();
@@ -194,6 +237,8 @@ try {
   await page.waitForTimeout(2000);
   const gate = await page.locator('aside.pane').last().innerText();
   step(/ONAYLANDI/.test(gate), 'Çalışma Alanı Kalite Kapısı gerçek durumu gösteriyor', gate.split('\n').slice(0, 3).join(' | '));
+  const chat = await page.locator('main.pane').innerText();
+  step(!/RECOrion Otonom Çalışma Alanı/.test(chat) && chat.length > 300, 'AI çıktısı görev sohbetine düştü', `${chat.length} karakter`);
   await shot(page, '06-calisma-alani');
 } catch (e) {
   ok = false;

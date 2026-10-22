@@ -159,6 +159,12 @@ export default function PlanTab({ project, agents, onChanged }) {
                   {Object.entries(PRIORITY).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select>
               </label>
+              <label className="pj-mini half"><span>Kontrol personeli (çıktıyı değerlendirir)</span>
+                <select className="ui-input" value={s.reviewer_agent_id || ''} disabled={!editable} onChange={(e) => update(i, { reviewer_agent_id: e.target.value })}>
+                  <option value="">Kontrol yok (doğrudan onaya)</option>
+                  {agents.filter((a) => a.id !== s.agent_id).map((a) => <option key={a.id} value={a.id}>{a.display_name}{a.role ? ` · ${a.role}` : ''}</option>)}
+                </select>
+              </label>
               <div className="wide pj-sub">
                 <span>Önce bitmesi gereken adımlar:</span>
                 {steps.filter((o) => o.key !== s.key).map((o) => (
@@ -208,5 +214,5 @@ export default function PlanTab({ project, agents, onChanged }) {
 }
 
 function normalize(s) {
-  return { ...s, estimated_days: Number(s.estimated_days) || 1, agent_id: s.agent_id || null };
+  return { ...s, estimated_days: Number(s.estimated_days) || 1, agent_id: s.agent_id || null, reviewer_agent_id: s.reviewer_agent_id || null };
 }

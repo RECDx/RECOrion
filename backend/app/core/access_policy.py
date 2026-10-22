@@ -267,6 +267,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/tasks/{{task_id}}/submit"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/decision"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/release"): HANDLER(),
+    ("GET", f"{P}/tasks/{{task_id}}/artifacts/{{artifact_id}}"): HANDLER(),
     ("GET", f"{P}/chat/history/{{task_id}}"): HANDLER(),
     ("GET", f"{P}/chat/project/{{project_id}}"): HANDLER(),
     ("POST", f"{P}/chat/send"): HANDLER("chat:participate"),

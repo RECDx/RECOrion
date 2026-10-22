@@ -81,11 +81,14 @@ def validate_plan(plan: Dict[str, Any], pool_ids: set) -> Dict[str, Any]:
         except (TypeError, ValueError):
             days = 1.0
         agent = str(s.get("agent_id") or "") or None
+        reviewer = str(s.get("reviewer_agent_id") or "") or None
         steps.append({
             "key": key, "title": title, "description": str(s.get("description") or "").strip()[:4000],
             "acceptance_criteria": str(s.get("acceptance_criteria") or "").strip()[:2000],
             "department": (str(s.get("department") or "").strip() or None), "job_title": (str(s.get("job_title") or "").strip() or None),
             "agent_id": agent if agent in pool_ids else None, "estimated_days": max(0.5, min(days, 60.0)),
+            # Kontrol personeli (ADIM 7.2): havuzdan, işi yapan personelden farklı bir AI personel
+            "reviewer_agent_id": reviewer if reviewer in pool_ids and reviewer != agent else None,
             "depends_on": [str(d) for d in (s.get("depends_on") or [])],
             "priority": s.get("priority") if s.get("priority") in ("HIGH", "MEDIUM", "LOW") else "MEDIUM",
         })
@@ -123,6 +126,7 @@ async def suggest_plan(db: AsyncSession, project: Project, feedback: Optional[st
 Görevin: isterlere göre uygulanabilir iş adımlarını çıkarmak ve her adım için departman + unvan bazında şirketin AI personel
 havuzundan en uygun personeli önermek. Havuzda uygun personel yoksa agent_id boş bırak ve hire_suggestions'a gereken unvanı yaz.
 Bir personele aynı anda çok iş yığma; başka projelerdeki açık işleri dikkate al. Bağımlılıklar döngüsüz olmalı.
+Kalite gerektiren adımlara, işi yapandan farklı ve konuya uygun bir kontrol personeli (reviewer_agent_id) öner.
 Bilmediğin bilgiyi uydurma; eksikleri "questions" içinde yöneticiye sor.
 
 # Proje
@@ -149,11 +153,17 @@ Sadece şu JSON'u döndür:
 {{"summary": "planın 3-5 cümlelik özeti",
   "steps": [{{"key": "S1", "title": "adım adı", "description": "ne yapılacak", "acceptance_criteria": "tamam sayılma ölçütü",
              "department": "departman", "job_title": "gereken unvan", "agent_id": "havuzdan agent_id veya boş",
+             "reviewer_agent_id": "çıktıyı kontrol edecek, işi yapandan farklı havuz agent_id'si veya boş",
              "estimated_days": 2, "depends_on": ["önceki adım key"], "priority": "HIGH|MEDIUM|LOW"}}],
   "hire_suggestions": [{{"job_title": "unvan", "department": "departman", "reason": "neden gerekli"}}],
   "risks": ["risk"], "questions": ["yöneticiye soru"]}}"""
-    result = await llm_gateway.chat(LLMContext(tenant_id=project.tenant_id, purpose="BRAIN", project_id=project.id),
-                                    [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=180)
+    llm_ctx = LLMContext(tenant_id=project.tenant_id, purpose="BRAIN", project_id=project.id)
+    try:
+        result = await llm_gateway.chat(llm_ctx, [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=300)
+    except llm_gateway.LLMUnavailable:
+        # Uzun plan istemlerinde EVREN zaman zaman geç yanıt verir: bir kez daha dene
+        logger.warning("Beyin AI plan önerisi yanıt vermedi; bir kez daha deneniyor (proje %s).", project.id)
+        result = await llm_gateway.chat(llm_ctx, [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=300)
     try:
         plan = validate_plan(_parse(result.content), {p["agent_id"] for p in ctx["pool"]})
     except (ValueError, KeyError) as exc:
@@ -237,15 +247,19 @@ async def approve_plan(db: AsyncSession, project: Project, actor_id: uuid.UUID) 
         agent = await db.get(Actor, uuid.UUID(s["agent_id"])) if s.get("agent_id") else None
         if agent and agent.tenant_id != project.tenant_id:
             agent = None
+        reviewer = await db.get(Actor, uuid.UUID(s["reviewer_agent_id"])) if s.get("reviewer_agent_id") else None
+        if reviewer and (reviewer.tenant_id != project.tenant_id or (agent and reviewer.id == agent.id)):
+            reviewer = None
         task = Task(project_id=project.id, title=s["title"], description=s.get("description"),
                     acceptance_criteria=s.get("acceptance_criteria"), priority=s.get("priority", "MEDIUM"),
                     assignee_actor_id=agent.id if agent else None, estimated_effort=s.get("estimated_days", 1),
                     department_id=depts.get((s.get("department") or "").lower()), job_title_id=agent.job_title_id if agent else None,
-                    order_index=i, status="BACKLOG", depends_on=[])
+                    order_index=i, status="BACKLOG", depends_on=[], reviewer_actor_id=reviewer.id if reviewer else None)
         db.add(task)
         key_to_task[s["key"]] = task
-        if agent:
-            await psvc.set_member(db, project, agent, None, actor_id)
+        for member in (agent, reviewer):
+            if member:
+                await psvc.set_member(db, project, member, None, actor_id)
     await db.flush()
     for s in steps:
         key_to_task[s["key"]].depends_on = [str(key_to_task[d].id) for d in s.get("depends_on", []) if d in key_to_task]

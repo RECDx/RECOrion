@@ -13,10 +13,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import CurrentUser, forbidden, get_current_user
-from app.db.models import Actor, Project, Task, TaskEvent
+from app.db.models import Actor, Artifact, Project, Task, TaskEvent
 from app.db.session import get_db
 from app.services import projects as psvc
-from app.services import task_flow
+from app.services import agent_work, task_flow
 from app.workflows import engine
 
 router = APIRouter(tags=["İş Akışı (Workflow)"])
@@ -42,7 +42,12 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
     tasks = (await db.execute(select(Task).where(Task.project_id == project.id).order_by(Task.order_index))).scalars().all()
     events = (await db.execute(select(TaskEvent).where(TaskEvent.project_id == project.id)
                                .order_by(TaskEvent.created_at.desc()).limit(300))).scalars().all()
-    ids = {t.assignee_actor_id for t in tasks} | {t.approver_actor_id for t in tasks} | {e.actor_id for e in events} | {project.manager_actor_id}
+    ids = ({t.assignee_actor_id for t in tasks} | {t.approver_actor_id for t in tasks} | {t.reviewer_actor_id for t in tasks}
+           | {e.actor_id for e in events} | {project.manager_actor_id})
+    latest = {}
+    for art in (await db.execute(select(Artifact).where(Artifact.task_id.in_([t.id for t in tasks] or [uuid.uuid4()]))
+                                 .order_by(Artifact.version))).scalars():
+        latest[art.task_id] = art
     names = {a.id: a for a in (await db.execute(select(Actor).where(Actor.id.in_([i for i in ids if i] or [uuid.uuid4()])))).scalars()}
     manages = _manages(user, project)
 
@@ -54,13 +59,19 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
     for t in tasks:
         approver_id = t.approver_actor_id or project.manager_actor_id
         is_assignee = t.assignee_actor_id == user.actor_id
+        assignee = names.get(t.assignee_actor_id)
+        art = latest.get(t.id)
         out.append({
             "id": str(t.id), "title": t.title, "status": t.status, "status_label": task_flow.STATUS_LABELS.get(t.status, t.status),
             "order_index": t.order_index, "priority": t.priority, "depends_on": t.depends_on or [],
-            "assignee": who(t.assignee_actor_id), "approver": who(approver_id), "requires_approval": t.requires_approval,
+            "assignee": who(t.assignee_actor_id), "approver": who(approver_id), "reviewer": who(t.reviewer_actor_id),
+            "requires_approval": t.requires_approval,
+            "artifact": {"id": str(art.id), "version": art.version, "name": art.name, "created_at": art.created_at} if art else None,
+            "ai_working": bool(assignee and assignee.actor_type == "AI_AGENT" and t.status in task_flow.WORKING),
             "rejection_count": t.rejection_count or 0, "max_rejections": t.max_rejections or 3,
             "started_at": t.started_at, "submitted_at": t.submitted_at, "completed_at": t.completed_at,
-            "can_submit": t.status in task_flow.WORKING and (is_assignee or manages),
+            # AI personel kendi teslim eder; insan personeli yerine yönetici de teslim edebilir
+            "can_submit": t.status in task_flow.WORKING and (assignee is None or assignee.actor_type == "HUMAN") and (is_assignee or manages),
             "can_decide": t.status == "WAITING_APPROVAL" and (approver_id == user.actor_id or user.has("project:manage")),
             "can_release": t.status == "QUARANTINED" and manages,
         })
@@ -82,6 +93,9 @@ async def submit_task(task_id: uuid.UUID, payload: SubmitIn, user: CurrentUser =
         raise HTTPException(status_code=409, detail="Bu iş adımı şu an teslim edilebilir durumda değil.")
     if task.assignee_actor_id != user.actor_id and not _manages(user, project):
         raise forbidden("Bu iş adımını yalnızca atanan personel veya proje yöneticisi teslim edebilir.")
+    assignee = await db.get(Actor, task.assignee_actor_id) if task.assignee_actor_id else None
+    if assignee and assignee.actor_type == "AI_AGENT":
+        raise HTTPException(status_code=409, detail="Bu adımı AI personel yürütüyor; çıktısını kendisi teslim eder.")
     await engine.signal_task(str(task.id), "submit", {"actor_id": str(user.actor_id), "note": (payload.note or "").strip()})
     return {"accepted": True}
 
@@ -132,3 +146,19 @@ async def release_task(task_id: uuid.UUID, payload: ReleaseIn, user: CurrentUser
         "actor_id": str(user.actor_id), "action": payload.action, "note": (payload.note or "").strip(),
         "assignee_actor_id": str(payload.assignee_actor_id) if payload.assignee_actor_id else None})
     return {"accepted": True}
+
+
+@router.get("/tasks/{task_id}/artifacts/{artifact_id}")
+async def artifact_content(task_id: uuid.UUID, artifact_id: uuid.UUID, user: CurrentUser = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db)):
+    """İş adımı çıktısının (artefakt) içeriği; proje ekibi görür."""
+    task = await db.get(Task, task_id)
+    art = await db.get(Artifact, artifact_id)
+    if not task or not art or art.task_id != task.id:
+        raise HTTPException(status_code=404, detail="Çıktı bulunamadı.")
+    await psvc.load(db, user, task.project_id)
+    versions = (await db.execute(select(Artifact.id, Artifact.version, Artifact.created_at).where(Artifact.task_id == task.id)
+                                 .order_by(Artifact.version.desc()))).all()
+    return {"id": str(art.id), "name": art.name, "version": art.version, "created_at": art.created_at,
+            "content": await agent_work.artifact_text(art, 200_000),
+            "versions": [{"id": str(v.id), "version": v.version, "created_at": v.created_at} for v in versions]}

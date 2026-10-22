@@ -111,7 +111,8 @@ async def start_task(db: AsyncSession, task_id) -> Dict[str, Any]:
     if assignee and assignee.actor_type == "HUMAN":
         await notify(db, assignee.id, f"RECOrion: '{project.name}' projesinde size yeni bir iş adımı açıldı: {task.title}")
     return {"status": task.status, "requires_approval": bool(task.requires_approval), "max_rejections": int(task.max_rejections or 3),
-            "assignee_type": assignee.actor_type if assignee else None, "rejection_count": int(task.rejection_count or 0)}
+            "assignee_type": assignee.actor_type if assignee else None, "rejection_count": int(task.rejection_count or 0),
+            "has_reviewer": bool(task.reviewer_actor_id)}
 
 
 async def submit(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -145,7 +146,8 @@ async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
 async def reject(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str, Any]:
     task, project = await _load(db, task_id)
     task.rejection_count = int(task.rejection_count or 0) + 1
-    await log(db, project, task, "REJECTED", payload.get("actor_id"), payload.get("note"), {"count": task.rejection_count})
+    if payload.get("source") != "REVIEW":  # kontrol personelinin retinde REVIEW_FAILED kaydı zaten yazıldı
+        await log(db, project, task, "REJECTED", payload.get("actor_id"), payload.get("note"), {"count": task.rejection_count})
     quarantined = task.rejection_count >= int(task.max_rejections or 3)
     if quarantined:
         task.status = "QUARANTINED"
@@ -158,7 +160,7 @@ async def reject(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
                                                   "Yeniden denemeye veya iptal etmeye siz karar verin.")
     elif task.assignee_actor_id:
         await notify(db, task.assignee_actor_id, f"RECOrion: '{task.title}' iş adımı revizyona gönderildi: {payload.get('note') or '-'}")
-    return {"status": task.status, "quarantined": quarantined}
+    return {"status": task.status, "quarantined": quarantined, "rejection_count": task.rejection_count}
 
 
 async def release(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -174,6 +176,17 @@ async def release(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
         await log(db, project, task, "RELEASED", payload.get("actor_id"), payload.get("note"),
                   {"assignee": str(task.assignee_actor_id) if task.assignee_actor_id else None})
     await db.commit()
+    assignee = await db.get(Actor, task.assignee_actor_id) if task.assignee_actor_id else None
+    return {"status": task.status, "assignee_type": assignee.actor_type if assignee else None, "has_reviewer": bool(task.reviewer_actor_id)}
+
+
+async def block(db: AsyncSession, task_id, error: str) -> Dict[str, Any]:
+    """AI personel veya kontrol personeli çalışamadı (kredi, model, bağlantı...): adım karantinaya alınır, yönetici karar verir."""
+    task, project = await _load(db, task_id)
+    task.status = "QUARANTINED"
+    await log(db, project, task, "BLOCKED", note=error)
+    await db.commit()
+    await notify(db, project.manager_actor_id, f"RECOrion: '{task.title}' iş adımı durdu: {error} Kararınız bekleniyor.")
     return {"status": task.status}
 
 

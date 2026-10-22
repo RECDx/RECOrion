@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, RotateCcw, Send, ShieldAlert } from 'lucide-react';
+import { Bot, CheckCircle2, FileText, RotateCcw, Send, ShieldAlert } from 'lucide-react';
 import { api } from '../../api';
-import { Badge, Button, Card, EmptyState } from '../../ui/components';
+import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
+import SimpleMarkdown from '../ai/SimpleMarkdown';
 import { confirmDialog, promptDialog, toast } from '../../ui/feedback';
 import { fmtDay } from './projectMeta';
 
@@ -9,13 +10,16 @@ const TONE = { BACKLOG: 'neutral', READY: 'info', IN_PROGRESS: 'info', WAITING_A
   QUARANTINED: 'danger', DONE: 'success', CANCELLED: 'neutral' };
 const EVENT = { PROJECT_STARTED: 'Proje akışı başladı', TASK_STARTED: 'Adım başladı', SUBMITTED: 'Teslim edildi', APPROVED: 'Onaylandı',
   REJECTED: 'Revizyon istendi', QUARANTINED: 'Karantinaya alındı', RELEASED: 'Yeniden denemeye açıldı', DONE: 'Tamamlandı',
-  CANCELLED: 'İptal edildi', PROJECT_FINISHED: 'Tüm adımlar tamamlandı' };
+  CANCELLED: 'İptal edildi', PROJECT_FINISHED: 'Tüm adımlar tamamlandı', AI_OUTPUT: 'AI personel çıktı üretti',
+  REVIEW_PASSED: 'Kontrolden geçti', REVIEW_FAILED: 'Kontrol personeli düzeltme istedi', BLOCKED: 'Adım durdu' };
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 /** İş Akışı (ADIM 7.1): adımların canlı akış durumu, teslim/onay/karantina kararları ve olay geçmişi. */
 export default function WorkflowTab({ project }) {
   const [flow, setFlow] = useState(null);
   const [busy, setBusy] = useState('');
+  const [viewing, setViewing] = useState(null);
+  const closeViewer = useCallback(() => setViewing(null), []);
   const live = ['ACTIVE', 'PAUSED'].includes(project.status);
 
   const load = useCallback(() => api.getProjectWorkflow(project.id).then(setFlow).catch((e) => toast.error(e.message)), [project.id]);
@@ -80,11 +84,24 @@ export default function WorkflowTab({ project }) {
               </div>
               <div className="pj-meta">
                 <span>Personel: {t.assignee ? `${t.assignee.name}${t.assignee.type === 'AI_AGENT' ? ' (AI)' : ''}` : 'Atanmadı'}</span>
+                {t.reviewer && <span>Kontrol: {t.reviewer.name}</span>}
                 {t.requires_approval && <span>Onaylayıcı: {t.approver?.name || '—'}</span>}
                 {t.rejection_count > 0 && <span>Ret: {t.rejection_count} / {t.max_rejections}</span>}
                 {t.depends_on.length > 0 && <span>Önce: {t.depends_on.map((d) => titles[d]).filter(Boolean).join(', ')}</span>}
                 {t.completed_at && <span>Bitiş: {fmtDay(t.completed_at)}</span>}
               </div>
+              {t.ai_working && (
+                <div className="pj-note info" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Bot size={15} /> {t.assignee?.name} çalışıyor{t.status === 'REVISION' ? ' (geri bildirime göre düzeltiyor)' : ''}…
+                </div>
+              )}
+              {t.artifact && (
+                <div className="pj-actions">
+                  <Button size="sm" variant="ghost" icon={FileText} onClick={() => setViewing({ task: t, id: t.artifact.id })}>
+                    Çıktıyı gör (sürüm {t.artifact.version})
+                  </Button>
+                </div>
+              )}
               {(t.can_submit || t.can_decide || t.can_release) && (
                 <div className="pj-actions">
                   {t.can_submit && (
@@ -113,6 +130,7 @@ export default function WorkflowTab({ project }) {
           </div>
         ))}
       </div>
+      {viewing && <ArtifactModal task={viewing.task} artifactId={viewing.id} onClose={closeViewer} />}
       <Card title="Akış geçmişi" subtitle="Silinemez kayıt: her teslim, onay, ret ve karar.">
         <ul className="pj-list">
           {flow.events.map((e) => (
@@ -127,5 +145,24 @@ export default function WorkflowTab({ project }) {
         </ul>
       </Card>
     </div>
+  );
+}
+
+function ArtifactModal({ task, artifactId, onClose }) {
+  const [id, setId] = useState(artifactId);
+  const [art, setArt] = useState(null);
+  useEffect(() => {
+    setArt(null);
+    api.getTaskArtifact(task.id, id).then(setArt).catch((e) => { toast.error(e.message); onClose(); });
+  }, [task.id, id, onClose]);
+  return (
+    <Modal open onClose={onClose} title={`${task.title} · çıktı`} size="lg"
+      footer={art?.versions?.length > 1 && (
+        <select className="ui-input" aria-label="Sürüm" value={id} onChange={(e) => setId(e.target.value)}>
+          {art.versions.map((v) => <option key={v.id} value={v.id}>Sürüm {v.version} · {fmtTime(v.created_at)}</option>)}
+        </select>
+      )}>
+      {!art ? <p className="pj-hint">Yükleniyor…</p> : <SimpleMarkdown text={art.content || '(boş)'} />}
+    </Modal>
   );
 }
