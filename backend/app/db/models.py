@@ -363,6 +363,8 @@ class Project(Base):
     close_summary = Column(Text)
     start_notified_at = Column(DateTime(timezone=True))
     workflow_id = Column(String(128))  # Temporal proje akışı (ADIM 7)
+    budget_try = Column(Numeric(16, 2))  # proje bütçesi (TL, KDV hariç; ADIM 7.5.3)
+    budget_note = Column(Text)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -424,6 +426,28 @@ class Task(Base):
     assignee = relationship("Actor", foreign_keys=[assignee_actor_id])
     artifacts = relationship("Artifact", back_populates="task", cascade="all, delete-orphan")
     messages = relationship("ChatMessage", back_populates="task", cascade="all, delete-orphan")
+
+
+class ProjectCostItem(Base):
+    """Diğer maliyet kalemi (ADIM 7.5.3): materyal, danışmanlık, eğitim, lisans, seyahat, donanım, diğer. TL, KDV hariç."""
+    __tablename__ = "project_cost_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"))
+    category = Column(String(24), nullable=False)
+    description = Column(String(500), nullable=False)
+    quantity = Column(Numeric(14, 3), nullable=False)
+    unit = Column(String(24))
+    unit_price_try = Column(Numeric(14, 2), nullable=False)
+    amount_try = Column(Numeric(16, 2), nullable=False)
+    incurred_on = Column(Date, nullable=False)
+    attachment_path = Column(String(512))  # belge (fatura vb.); öğrenme hattına girmez
+    attachment_name = Column(String(255))
+    created_by_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ApprovalToken(Base):

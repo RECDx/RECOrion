@@ -275,6 +275,14 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     # İş akışı (ADIM 7.1): yetki proje üyeliği/onaylayıcılığa göre uç içinde
     ("GET", f"{P}/projects/{{project_id}}/workflow"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/costs"): HANDLER(),
+    # Maliyet kalemleri ve bütçe (ADIM 7.5.3): proje yöneticisi
+    ("GET", f"{P}/projects/{{project_id}}/cost-items"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/cost-items"): HANDLER(),
+    ("PUT", f"{P}/projects/{{project_id}}/cost-items/{{item_id}}"): HANDLER(),
+    ("DELETE", f"{P}/projects/{{project_id}}/cost-items/{{item_id}}"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/cost-items/{{item_id}}/attachment"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/cost-items/{{item_id}}/attachment"): HANDLER(),
+    ("PUT", f"{P}/projects/{{project_id}}/budget"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/submit"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/decision"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/release"): HANDLER(),

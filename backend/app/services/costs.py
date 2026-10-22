@@ -15,7 +15,10 @@ from typing import Any, Dict, Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Actor, LLMCall, Project, Task
+from app.db.models import Actor, LLMCall, Project, ProjectCostItem, Task
+
+CATEGORIES = {"MATERYAL": "Materyal", "DANISMANLIK": "Danışmanlık", "EGITIM": "Eğitim", "LISANS": "Lisans / yazılım",
+              "SEYAHAT": "Seyahat", "DONANIM": "Donanım", "DIGER": "Diğer"}
 
 ZERO = Decimal("0")
 
@@ -111,12 +114,70 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
         totals["token"] += general["cost"]
         totals["unpriced_calls"] += general["unpriced_calls"]
         totals["credits"] += general["credits"]
+
+    # Diğer maliyet kalemleri (ADIM 7.5.3)
+    items = (await db.execute(select(ProjectCostItem).where(ProjectCostItem.project_id == project.id)
+                              .order_by(ProjectCostItem.incurred_on, ProjectCostItem.created_at))).scalars().all()
+    by_category: Dict[str, Decimal] = {}
+    items_by_task: Dict[Any, Decimal] = {}
+    for it in items:
+        by_category[it.category] = by_category.get(it.category, ZERO) + _d(it.amount_try)
+        items_by_task[it.task_id] = items_by_task.get(it.task_id, ZERO) + _d(it.amount_try)
+    other = sum(by_category.values(), ZERO)
+    for row in rows:
+        row["other"] = float(items_by_task.get(uuid_of(row["task_id"]), ZERO))
+    planned = await planned_costs(db, project, tasks, actors)
     return {
         "project_id": str(project.id), "currency": "TRY", "vat_included": False,
         "tasks": rows,
         "project_level_tokens": {**general, "cost": float(general["cost"]), "credits": float(general["credits"])} if general else None,
         "by_model": [{"model_code": m, **v, "cost": float(v["cost"]), "credits": float(v["credits"])} for m, v in sorted(by_model.items())],
+        "items": [item_out(it) for it in items],
+        "by_category": [{"category": k, "label": CATEGORIES.get(k, k), "amount": float(v)} for k, v in sorted(by_category.items())],
+        "planned": planned,
+        "budget": {"amount": float(project.budget_try) if project.budget_try is not None else None, "note": project.budget_note,
+                   "suggested": planned["total"]},
         "totals": {"labor": float(totals["labor"]), "labor_planned": float(totals["labor_planned"]), "token": float(totals["token"]),
-                   "actual": float(totals["labor"] + totals["token"]), "unpriced_calls": totals["unpriced_calls"],
-                   "credits": float(totals["credits"])},
+                   "other": float(other), "actual": float(totals["labor"] + totals["token"] + other),
+                   "unpriced_calls": totals["unpriced_calls"], "credits": float(totals["credits"]),
+                   "budget_variance": (float(project.budget_try - (totals["labor"] + totals["token"] + other))
+                                       if project.budget_try is not None else None)},
     }
+
+
+def uuid_of(v):
+    import uuid as _uuid
+
+    return _uuid.UUID(v) if v else None
+
+
+def item_out(it: ProjectCostItem) -> Dict[str, Any]:
+    return {"id": str(it.id), "task_id": str(it.task_id) if it.task_id else None, "category": it.category,
+            "category_label": CATEGORIES.get(it.category, it.category), "description": it.description, "quantity": float(it.quantity),
+            "unit": it.unit, "unit_price_try": float(it.unit_price_try), "amount_try": float(it.amount_try), "incurred_on": it.incurred_on,
+            "attachment_name": it.attachment_name, "has_attachment": bool(it.attachment_path), "created_at": it.created_at}
+
+
+async def planned_costs(db: AsyncSession, project: Project, tasks, actors) -> Dict[str, Any]:
+    """Plana göre tahmini maliyet: personel (günlük maliyet × planlanan gün) + token (simülasyon varsayımı × LLM fiyatı).
+    Bütçe önerisi olarak kullanılır. Fiyatı veya günlük maliyeti olmayan kalemler eksik sayılır (missing)."""
+    from app.services import pricing
+    from app.services.project_planning import TOKENS_IN_PER_DAY, TOKENS_OUT_PER_DAY
+
+    labor_total, token_total, missing_rate, missing_price = ZERO, ZERO, 0, 0
+    for t in tasks:
+        days = Decimal(str(t.estimated_effort or 1))
+        a = actors.get(t.assignee_actor_id)
+        if a and a.daily_cost_try is not None:
+            labor_total += _d(a.daily_cost_try) * days
+        elif a and a.actor_type == "HUMAN":
+            missing_rate += 1
+        if a and a.actor_type == "AI_AGENT":
+            price = await pricing.price_at(db, a.preferred_model_id)
+            if price:
+                token_total += pricing.call_cost(price, int(TOKENS_IN_PER_DAY * days), int(TOKENS_OUT_PER_DAY * days))
+            else:
+                missing_price += 1
+    return {"labor": float(labor_total.quantize(Decimal("0.01"))), "token": float(token_total.quantize(Decimal("0.01"))),
+            "total": float((labor_total + token_total).quantize(Decimal("0.01"))),
+            "missing_daily_cost": missing_rate, "missing_llm_price": missing_price}
