@@ -37,3 +37,6 @@ Thumbs.db
 
 # Kullanıcıların yüklediği dosyalar (KVKK) - git dışı
 backend/storage/
+
+# Canlı e2e test çıktıları (ekran görüntüleri, rapor)
+e2e/artifacts/

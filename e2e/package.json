@@ -1,0 +1,12 @@
+{
+  "name": "recorion-e2e",
+  "private": true,
+  "type": "module",
+  "description": "RECOrion canlı uçtan uca testleri (gerçek arayüz, backend, EVREN ve Temporal)",
+  "scripts": {
+    "test": "node live_e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56.1"
+  }
+}
