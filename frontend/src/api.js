@@ -141,6 +141,12 @@ export const api = {
   getTelegramStatus: () => request('/auth/telegram'),
   linkTelegram: () => request('/auth/telegram/link', { method: 'POST' }),
   unlinkTelegram: () => request('/auth/telegram/link', { method: 'DELETE' }),
+  // Her yerden onay ve bildirim tercihleri (Adım 7.3)
+  getApproval: (token) => request(`/approvals/${encodeURIComponent(token)}`),
+  decideApproval: (token, approve, note) => request(`/approvals/${encodeURIComponent(token)}`, { method: 'POST', body: JSON.stringify({ approve, note: note || null }) }),
+  getMyApprovals: () => request('/me/approvals'),
+  getNotificationPrefs: () => request('/auth/notification-prefs'),
+  setNotificationPrefs: (prefs) => request('/auth/notification-prefs', { method: 'PUT', body: JSON.stringify(prefs) }),
   // İş akışı (Adım 7.1)
   getProjectWorkflow: (projectId) => request(`/projects/${projectId}/workflow`),
   submitTask: (taskId, note) => request(`/tasks/${taskId}/submit`, { method: 'POST', body: JSON.stringify({ note: note || null }) }),

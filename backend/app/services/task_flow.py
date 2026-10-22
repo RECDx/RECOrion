@@ -44,16 +44,41 @@ async def approver_of(db: AsyncSession, task: Task, project: Project) -> Optiona
     return await db.get(Actor, task.approver_actor_id or project.manager_actor_id) if (task.approver_actor_id or project.manager_actor_id) else None
 
 
-async def notify(db: AsyncSession, actor_id, text: str) -> None:
-    """Kişiye bildirim (şimdilik Telegram; e-posta ve diğer kanallar ADIM 7.3'te ortak kanal altyapısına bağlanır)."""
-    from app.services import telegram_service
+async def notify(db: AsyncSession, actor_id, text: str, email_code: Optional[str] = None, **email_context) -> None:
+    """Kişiye bildirim: tercihine göre e-posta (şablon verilmişse) ve Telegram (ADIM 7.3 kanal altyapısı)."""
+    from app.services import notify as channels
 
-    actor = await db.get(Actor, _uuid(actor_id)) if actor_id else None
-    if actor and actor.actor_type == "HUMAN" and actor.telegram_chat_id:
-        try:
-            await telegram_service.send_message(actor.telegram_chat_id, text)
-        except Exception as exc:  # bildirim hatası akışı durdurmaz
-            logger.warning("Bildirim gönderilemedi: %s", exc)
+    await channels.send(db, actor_id, text, email_code=email_code, email_context=email_context)
+
+
+async def request_approval(db: AsyncSession, task: Task, project: Project, payload: Dict[str, Any]) -> None:
+    """Onaylayıcıya onay isteği: e-postada tek kullanımlık karar bağlantısı, Telegram'da Onayla / Revizyon iste butonları."""
+    from app.services import approvals
+    from app.services import notify as channels
+
+    approver = await approver_of(db, task, project)
+    if not approver or approver.actor_type != "HUMAN":
+        return
+    by = await db.get(Actor, _uuid(payload.get("actor_id"))) if payload.get("actor_id") else None
+    raw_mail, tok = await approvals.create(db, task, approver.id, "EMAIL")
+    raw_tg, _ = await approvals.create(db, task, approver.id, "TELEGRAM")
+    await db.commit()
+    text = (f"RECOrion: '{project.name}' projesinde '{task.title}' iş adımı onayınızı bekliyor."
+            f"{' Teslim eden: ' + by.display_name + '.' if by else ''}{' Not: ' + payload['note'] if payload.get('note') else ''}")
+    await channels.send(
+        db, approver.id, text, email_code="TASK_APPROVAL_REQUEST",
+        email_context={"project_name": project.name, "task_title": task.title, "submitted_by": by.display_name if by else "-",
+                       "submit_note": payload.get("note") or "", "approve_url": approvals.approve_url(raw_mail),
+                       "expires_at": tok.expires_at.strftime("%d.%m.%Y %H:%M")},
+        buttons=[[{"text": "✅ Onayla", "callback_data": f"a:{raw_tg}"}, {"text": "↩️ Revizyon iste", "callback_data": f"r:{raw_tg}"}]]
+        # Telegram bağlantı butonu yalnızca herkese açık https adresini kabul eder (localhost mesajı reddettirir)
+        + ([[{"text": "🔎 İncele", "url": approvals.approve_url(raw_tg)}]] if approvals.public_url() else []))
+
+
+def _url(project: Project) -> str:
+    from app.services.notify import project_url
+
+    return project_url(project.id)
 
 
 async def _load(db: AsyncSession, task_id) -> tuple:
@@ -97,7 +122,8 @@ async def project_finished(db: AsyncSession, project_id) -> None:
     await log(db, project, None, "PROJECT_FINISHED", note="Tüm iş adımları kapandı.")
     await db.commit()
     await notify(db, project.manager_actor_id,
-                 f"RECOrion: '{project.name}' projesinin tüm iş adımları tamamlandı. Kapanış özetini yazıp projeyi kapatabilirsiniz.")
+                 f"RECOrion: '{project.name}' projesinin tüm iş adımları tamamlandı. Kapanış özetini yazıp projeyi kapatabilirsiniz.",
+                 "PROJECT_FINISHED", project_name=project.name, project_url=_url(project))
 
 
 # ---------------------------------------------------------------- iş adımı akışı
@@ -109,7 +135,8 @@ async def start_task(db: AsyncSession, task_id) -> Dict[str, Any]:
     await db.commit()
     assignee = await db.get(Actor, task.assignee_actor_id) if task.assignee_actor_id else None
     if assignee and assignee.actor_type == "HUMAN":
-        await notify(db, assignee.id, f"RECOrion: '{project.name}' projesinde size yeni bir iş adımı açıldı: {task.title}")
+        await notify(db, assignee.id, f"RECOrion: '{project.name}' projesinde size yeni bir iş adımı açıldı: {task.title}",
+                     "TASK_ASSIGNED", project_name=project.name, task_title=task.title, project_url=_url(project))
     return {"status": task.status, "requires_approval": bool(task.requires_approval), "max_rejections": int(task.max_rejections or 3),
             "assignee_type": assignee.actor_type if assignee else None, "rejection_count": int(task.rejection_count or 0),
             "has_reviewer": bool(task.reviewer_actor_id)}
@@ -122,9 +149,7 @@ async def submit(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
     if task.requires_approval:
         task.status = "WAITING_APPROVAL"
         await db.commit()
-        approver = await approver_of(db, task, project)
-        if approver:
-            await notify(db, approver.id, f"RECOrion: '{project.name}' projesinde '{task.title}' iş adımı onayınızı bekliyor.")
+        await request_approval(db, task, project, payload)
     else:
         task.status, task.completed_at = "DONE", now()
         await log(db, project, task, "DONE")
@@ -135,7 +160,7 @@ async def submit(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
 async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str, Any]:
     task, project = await _load(db, task_id)
     task.status, task.completed_at = "DONE", now()
-    await log(db, project, task, "APPROVED", payload.get("actor_id"), payload.get("note"))
+    await log(db, project, task, "APPROVED", payload.get("actor_id"), payload.get("note"), {"channel": payload.get("channel") or "WEB"})
     await log(db, project, task, "DONE")
     await db.commit()
     if task.assignee_actor_id:
@@ -147,7 +172,8 @@ async def reject(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
     task, project = await _load(db, task_id)
     task.rejection_count = int(task.rejection_count or 0) + 1
     if payload.get("source") != "REVIEW":  # kontrol personelinin retinde REVIEW_FAILED kaydı zaten yazıldı
-        await log(db, project, task, "REJECTED", payload.get("actor_id"), payload.get("note"), {"count": task.rejection_count})
+        await log(db, project, task, "REJECTED", payload.get("actor_id"), payload.get("note"),
+                  {"count": task.rejection_count, "channel": payload.get("channel") or "WEB"})
     quarantined = task.rejection_count >= int(task.max_rejections or 3)
     if quarantined:
         task.status = "QUARANTINED"
@@ -156,10 +182,13 @@ async def reject(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
         task.status = "REVISION"
     await db.commit()
     if quarantined:
-        await notify(db, project.manager_actor_id, f"RECOrion: '{task.title}' iş adımı {task.rejection_count} kez reddedildi ve karantinaya alındı. "
-                                                  "Yeniden denemeye veya iptal etmeye siz karar verin.")
+        reason = f"{task.rejection_count} kez reddedildi ve karantinaya alındı."
+        await notify(db, project.manager_actor_id, f"RECOrion: '{task.title}' iş adımı {reason} Yeniden denemeye veya iptal etmeye siz karar verin.",
+                     "TASK_ATTENTION", project_name=project.name, task_title=task.title, reason=reason, project_url=_url(project))
     elif task.assignee_actor_id:
-        await notify(db, task.assignee_actor_id, f"RECOrion: '{task.title}' iş adımı revizyona gönderildi: {payload.get('note') or '-'}")
+        await notify(db, task.assignee_actor_id, f"RECOrion: '{task.title}' iş adımı revizyona gönderildi: {payload.get('note') or '-'}",
+                     "TASK_REVISION", project_name=project.name, task_title=task.title, note=payload.get("note") or "-",
+                     project_url=_url(project))
     return {"status": task.status, "quarantined": quarantined, "rejection_count": task.rejection_count}
 
 
@@ -186,7 +215,8 @@ async def block(db: AsyncSession, task_id, error: str) -> Dict[str, Any]:
     task.status = "QUARANTINED"
     await log(db, project, task, "BLOCKED", note=error)
     await db.commit()
-    await notify(db, project.manager_actor_id, f"RECOrion: '{task.title}' iş adımı durdu: {error} Kararınız bekleniyor.")
+    await notify(db, project.manager_actor_id, f"RECOrion: '{task.title}' iş adımı durdu: {error} Kararınız bekleniyor.",
+                 "TASK_ATTENTION", project_name=project.name, task_title=task.title, reason=error, project_url=_url(project))
     return {"status": task.status}
 
 

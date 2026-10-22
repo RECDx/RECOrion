@@ -1,4 +1,4 @@
-// Canlı uçtan uca test (Adım 6, 7.1, 7.2): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
+// Canlı uçtan uca test (Adım 6, 7.1, 7.2, 7.3): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
 import { chromium } from 'playwright-core';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -41,11 +41,19 @@ const dialogOk = async (page, text) => {
   if (text !== undefined) await d.locator('input').fill(text);
   await d.locator('button[type="submit"]').click();
 };
-const stepCard = (page, title) => page.locator('.pj-step', { hasText: title });
+// Başlık tam eşleşmeli: bir adımın adı diğerinin içinde geçebilir ("Tasarım" / "Tasarım Doğrulama")
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const stepCard = (page, title) => page.locator('.pj-step').filter({
+  has: page.locator('strong', { hasText: new RegExp(`^\\s*${escapeRe(title.trim())}\\s*$`) }),
+}).first();
 const statusOf = async (page, title) => (await stepCard(page, title).locator('.ui-badge').first().textContent())?.trim();
 const waitStatus = async (page, title, label, timeout = 45000) => {
   await stepCard(page, title).locator('.ui-badge', { hasText: label }).waitFor({ timeout });
 };
+
+// Onay bağlantısı belirteci (e-postadakiyle aynı tür; yalnızca canlı test şirketi için üretilebilir)
+const mintToken = (taskId) => execFileSync('docker', ['exec', '-w', '/app', process.env.BACKEND_CONTAINER || 'recorion_backend',
+  'python', 'scripts/live_test_token.py', taskId], { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } }).trim().split('\n').pop();
 
 const NAME = `Canlı Test ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
 let ok = true;
@@ -158,6 +166,17 @@ try {
   await shot(page, '03-ai-cikti');
   await modal.getByRole('button', { name: 'Kapat' }).click();
 
+  // 5.1 Onaylarım kuyruğu (7.3): sayaç ve liste; İncele projeye götürür
+  await page.getByRole('button', { name: /Onaylarım \(\d+\)/ }).waitFor({ timeout: 45000 });
+  await page.getByRole('button', { name: /Onaylarım/ }).click();
+  await page.locator('.pj-list li', { hasText: first }).waitFor({ timeout: 20000 });
+  const inboxText = await page.locator('.pj-list li', { hasText: first }).innerText();
+  step(/Onay bekliyor/.test(inboxText), 'Onaylarım kuyruğunda bekleyen karar görünüyor', inboxText.replace(/\s+/g, ' ').slice(0, 90));
+  await shot(page, '03b-onaylarim');
+  await page.locator('.pj-list li', { hasText: first }).getByRole('button', { name: 'İncele' }).click();
+  await stepCard(page, first).waitFor({ timeout: 20000 });
+  step(true, 'Onaylarım > İncele projenin İş Akışı sekmesini açtı');
+
   // 5a. Üye ve ekip dışı kullanıcı kontrolleri
   const m = await session('member');
   await m.page.locator('.pj-card', { hasText: NAME }).click();
@@ -191,10 +210,40 @@ try {
   const deadline = Date.now() + 40 * 60000;
   let approved = 0;
   let released = 0;
+  let linkApproved = false;
   while (Date.now() < deadline) {
     const waiting = page.locator('.pj-step', { has: page.getByRole('button', { name: 'Onayla', exact: true }) });
     const quarantined = page.locator('.pj-step', { has: page.getByRole('button', { name: 'Yeniden dene' }) });
-    if (await waiting.count()) {
+    if (await waiting.count() && !linkApproved) {
+      // 7.3: e-postadaki bağlantının açtığı sayfa, giriş yapılmamış tarayıcıda
+      linkApproved = true;
+      const title = (await waiting.first().locator('strong').first().textContent()).trim();
+      const taskId = await page.evaluate(async ({ name, t }) => {
+        const token = sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token');
+        const h = { Authorization: `Bearer ${token}` };
+        const p = (await (await fetch('/api/v1/projects/?scope=mine', { headers: h })).json()).find((x) => x.name === name);
+        return (await (await fetch(`/api/v1/projects/${p.id}/workflow`, { headers: h })).json()).tasks.find((x) => x.title === t).id;
+      }, { name: NAME, t: title });
+      const raw = mintToken(taskId);
+      const anon = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const ap = await anon.newPage();
+      ap.on('response', (r) => { if (r.status() >= 500) problems.push(`[onay sayfası] ${r.status()} ${r.url()}`); });
+      await ap.goto(`${APP}/#/approve?token=${raw}`);
+      await ap.getByText(title).first().waitFor({ timeout: 20000 });
+      const hasOutput = await ap.getByText(/Çıktı · sürüm/).count();
+      await ap.screenshot({ path: `${OUT}/04b-onay-sayfasi.png` });
+      await ap.getByRole('button', { name: 'Onayla', exact: true }).click();
+      await ap.getByText('Kararınız iş akışına iletildi').waitFor({ timeout: 20000 });
+      await ap.goto(`${APP}/#/landing`);
+      await ap.goto(`${APP}/#/approve?token=${raw}`);
+      await ap.reload();
+      const reused = await ap.getByText('Bağlantı kullanılamıyor').waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
+      await anon.close();
+      await waitStatus(page, title, 'Tamamlandı', 60000);
+      step(hasOutput > 0 && reused, 'Onay bağlantısıyla girişsiz karar verildi; bağlantı ikinci kez kullanılamıyor',
+        `'${title}' onaylandı, çıktı gösterildi: ${hasOutput > 0 ? 'evet' : 'hayır'}, tekrar kullanım engellendi: ${reused ? 'evet' : 'hayır'}`);
+      approved += 1;
+    } else if (await waiting.count()) {
       await waiting.first().getByRole('button', { name: 'Onayla', exact: true }).click();
       approved += 1;
       await page.waitForTimeout(2500);
@@ -209,6 +258,7 @@ try {
     }
   }
   const doneCount = await page.locator('.pj-step .ui-badge', { hasText: 'Tamamlandı' }).count();
+  if (!linkApproved) step(false, 'Onay bağlantısı senaryosu çalışmadı (onay bekleyen adım bulunamadı)');
   step(doneCount === titles.length, 'Tüm adımları AI personel sırayla yürüttü, yönetici onayladı',
     `${doneCount}/${titles.length} tamamlandı, ${approved} onay${released ? `, ${released} karantinadan yeniden deneme` : ''}`);
   await page.getByText('Tüm adımlar tamamlandı').first().waitFor({ timeout: 30000 })
@@ -228,6 +278,8 @@ try {
   step(cnt('AI_OUTPUT') >= titles.length + 1 && cnt('REVIEW_PASSED') + cnt('REVIEW_FAILED') >= 1 && cnt('REJECTED') >= 1
     && cnt('DONE') === titles.length && cnt('PROJECT_FINISHED') === 1,
     'Silinemez akış geçmişi tutarlı', `AI_OUTPUT:${cnt('AI_OUTPUT')} REVIEW_PASSED:${cnt('REVIEW_PASSED')} REVIEW_FAILED:${cnt('REVIEW_FAILED')} REJECTED:${cnt('REJECTED')} BLOCKED:${cnt('BLOCKED')} APPROVED:${cnt('APPROVED')} DONE:${cnt('DONE')} FINISHED:${cnt('PROJECT_FINISHED')}`);
+  const channels = (mine?.events || []).filter((e) => e.kind === 'APPROVED').map((e) => e.data?.channel || 'WEB');
+  step(channels.includes('EMAIL'), 'Onay kanalları akış geçmişinde kayıtlı', channels.join(', '));
   const credits = (mine?.events || []).filter((e) => e.kind === 'AI_OUTPUT').reduce((sum, e) => sum + (e.data?.credits || 0), 0);
   const outs = (mine?.events || []).filter((e) => e.kind === 'AI_OUTPUT');
   const models = [...new Set(outs.map((e) => e.data?.model))].join(', ');

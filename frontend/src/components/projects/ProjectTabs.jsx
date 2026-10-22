@@ -161,8 +161,32 @@ export function ReadinessTab({ project, onAction, busy }) {
           </p>
         )}
       </Card>
-      <TelegramCard />
+      <div className="pj-steps">
+        <TelegramCard />
+        <NotificationPrefsCard />
+      </div>
     </div>
+  );
+}
+
+function NotificationPrefsCard() {
+  const [prefs, setPrefs] = useState(null);
+  useEffect(() => { api.getNotificationPrefs().then(setPrefs).catch(() => setPrefs(null)); }, []);
+  const toggle = async (key) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    try { setPrefs(await api.setNotificationPrefs(next)); toast.success('Bildirim tercihiniz kaydedildi.'); } catch (e) { toast.error(e.message); }
+  };
+  if (!prefs) return null;
+  return (
+    <Card title="Bildirim tercihlerim" subtitle="Onay istekleri, revizyonlar, duran adımlar ve proje bitişi bu kanallardan gelir.">
+      <ul className="pj-check">
+        {[['email', 'E-posta (onay isteklerinde tek tıkla karar bağlantısı)'], ['telegram', 'Telegram (Onayla / Revizyon iste butonları)']].map(([k, l]) => (
+          <li key={k}><label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" checked={prefs[k]} onChange={() => toggle(k)} />{l}
+          </label></li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

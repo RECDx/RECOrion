@@ -10,6 +10,8 @@ import CompanyAdminConsole from './components/CompanyAdminConsole';
 import ResetPassword from './components/ResetPassword';
 import ProjectHub from './components/projects/ProjectHub';
 import ProjectPlanner from './components/projects/ProjectPlanner';
+import ApprovePage from './components/approvals/ApprovePage';
+import ApprovalsInbox from './components/approvals/ApprovalsInbox';
 import { api, session } from './api';
 import { notify, promptDialog, toast } from './ui/feedback';
 
@@ -78,7 +80,9 @@ export default function App() {
   const [kvkkRestricted, setKvkkRestricted] = useState(false);
   // Tablet/telefonda aynı anda tek bölme gösterilir
   const [activePane, setActivePane] = useState('middle');
-  // Work Space modu: HUB (proje listesi), PLANNER (proje planlama), WORK (görev sohbeti)
+  // Bekleyen kararlar (Onaylarım sayacı)
+  const [approvalCount, setApprovalCount] = useState(0);
+  // Work Space modu: HUB (proje listesi), PLANNER (proje planlama), WORK (görev sohbeti), INBOX (Onaylarım)
   const [workspaceMode, setWorkspaceMode] = useState(() => (typeof window !== 'undefined' && /^#\/workspace\?project=/.test(window.location.hash) ? 'PLANNER' : 'HUB'));
   // E-posta/Telegram bildirimindeki #/workspace?project=<id> bağlantısı doğrudan projeyi açar
   const [plannerProjectId, setPlannerProjectId] = useState(() => {
@@ -89,7 +93,7 @@ export default function App() {
   // URL Hash ve Görünüm Eşitlemesi
   useEffect(() => {
     try {
-      if (window.location.hash.startsWith('#/reset-password')) return; // şifre belirleme sayfası adresini koru
+      if (window.location.hash.startsWith('#/reset-password') || window.location.hash.startsWith('#/approve')) return; // bağımsız sayfa adresini koru
       localStorage.setItem('recorion_current_view', currentView);
       if (currentView === 'SUPER_ADMIN_CONSOLE') {
         if (!window.location.hash.startsWith('#/super-admin')) {
@@ -117,7 +121,7 @@ export default function App() {
   useEffect(() => {
     const handleLocationChange = () => {
       const hash = window.location.hash;
-      if (hash.startsWith('#/reset-password')) return;
+      if (hash.startsWith('#/reset-password') || hash.startsWith('#/approve')) return;
       const u = currentUser || loadSavedUser();
 
       if (hash.startsWith('#/super-admin')) {
@@ -179,6 +183,15 @@ export default function App() {
     }
     initPlatform();
   }, []);
+
+  // Onaylarım sayacı: Work Space açıkken periyodik yenilenir
+  useEffect(() => {
+    if (currentView !== 'WORKSPACE' || kvkkRestricted || !currentUser) return undefined;
+    const load = () => api.getMyApprovals().then((r) => setApprovalCount(r.length)).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [currentView, kvkkRestricted, currentUser]);
 
   // Oturum süresi dolarsa veya token geçersizse otomatik çıkış
   useEffect(() => {
@@ -393,6 +406,11 @@ export default function App() {
     setCurrentView('WORKSPACE');
   };
 
+  // E-posta/Telegram'daki onay bağlantısı (#/approve?token=...) oturumdan bağımsız açılır (Adım 7.3)
+  if (typeof window !== 'undefined' && window.location.hash.startsWith('#/approve')) {
+    return <ApprovePage onDone={() => { window.location.hash = currentUser ? '#/workspace' : '#/landing'; window.location.reload(); }} />;
+  }
+
   // E-postadaki şifre belirleme bağlantısı (#/reset-password?token=...) oturumdan bağımsız açılır
   if (typeof window !== 'undefined' && window.location.hash.startsWith('#/reset-password')) {
     return (
@@ -496,9 +514,9 @@ export default function App() {
       />
 
       <nav className="ws-mode" aria-label="Work Space">
-        {[['HUB', 'Projeler'], ['WORK', 'Çalışma Alanı']].map(([key, label]) => (
+        {[['HUB', 'Projeler'], ['INBOX', approvalCount ? `Onaylarım (${approvalCount})` : 'Onaylarım'], ['WORK', 'Çalışma Alanı']].map(([key, label]) => (
           <button key={key} type="button" className={(workspaceMode === key || (key === 'HUB' && workspaceMode === 'PLANNER')) ? 'active' : ''}
-            onClick={() => setWorkspaceMode(key)} disabled={kvkkRestricted && key === 'HUB'}>
+            onClick={() => setWorkspaceMode(key)} disabled={kvkkRestricted && key !== 'WORK'}>
             {label}{key === 'WORK' && activeProject ? ` · ${activeProject.name}` : ''}
           </button>
         ))}
@@ -510,6 +528,12 @@ export default function App() {
           currentUser={currentUser}
           actors={actors}
           onOpen={(p) => { setPlannerProjectId(p.id); setWorkspaceMode('PLANNER'); }}
+        />
+      )}
+      {workspaceMode === 'INBOX' && !kvkkRestricted && (
+        <ApprovalsInbox
+          onCount={setApprovalCount}
+          onOpenProject={(id) => { setPlannerProjectId(id); setWorkspaceMode('PLANNER'); }}
         />
       )}
       {workspaceMode === 'PLANNER' && !kvkkRestricted && tenant && plannerProjectId && (

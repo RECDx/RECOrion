@@ -52,6 +52,8 @@ async def main():
                 a = Actor(tenant_id=tenant.id, actor_type="HUMAN", display_name=name, email=email, role=role, status="IDLE")
                 db.add(a)
             a.password_hash, a.status, a.department_id = hash_password(pwd), "IDLE", dept.id
+            # Test adresleri gerçek değil (.example): e-posta bildirimi kapalı, geri dönen e-posta oluşmasın
+            a.notification_prefs = {"email": False, "telegram": True}
             await db.flush()
             out["users"][key] = {"id": str(a.id), "email": email, "password": pwd}
         # Deniz: mimo-v2.6-pro (EVREN'de yoğun; yedek model mekanizmasını gerçek ortamda sınar)

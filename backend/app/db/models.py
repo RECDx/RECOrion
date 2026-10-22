@@ -308,6 +308,7 @@ class Actor(Base):
     telegram_chat_id = Column(String(64))  # proje bildirimleri (ADIM 6.5)
     telegram_link_code = Column(String(16))
     telegram_linked_at = Column(DateTime(timezone=True))
+    notification_prefs = Column(JSONB, nullable=False, default=dict)  # {"email": bool, "telegram": bool} (ADIM 7.3)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -403,6 +404,21 @@ class Task(Base):
     assignee = relationship("Actor", foreign_keys=[assignee_actor_id])
     artifacts = relationship("Artifact", back_populates="task", cascade="all, delete-orphan")
     messages = relationship("ChatMessage", back_populates="task", cascade="all, delete-orphan")
+
+
+class ApprovalToken(Base):
+    """E-posta/Telegram onay bağlantısı (tek kullanımlık, süreli; yalnızca özeti saklanır)."""
+    __tablename__ = "approval_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=False)
+    channel = Column(String(16), nullable=False)  # EMAIL, TELEGRAM
+    submitted_at = Column(DateTime(timezone=True))  # hangi teslime ait
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class TaskEvent(Base):

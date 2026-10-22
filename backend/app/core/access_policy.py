@@ -61,6 +61,12 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/auth/login"): PUBLIC,
     ("GET", f"{P}/auth/me"): AUTH,
     ("GET", f"{P}/auth/telegram"): AUTH,
+    # Her yerden onay (ADIM 7.3): belirteçli bağlantı giriş gerektirmez (belirteç tek kullanımlık, süreli, onaylayıcıya özel)
+    ("GET", f"{P}/approvals/{{token}}"): PUBLIC,
+    ("POST", f"{P}/approvals/{{token}}"): PUBLIC,
+    ("GET", f"{P}/me/approvals"): AUTH,
+    ("GET", f"{P}/auth/notification-prefs"): AUTH,
+    ("PUT", f"{P}/auth/notification-prefs"): AUTH,
     ("POST", f"{P}/auth/telegram/link"): AUTH,
     ("DELETE", f"{P}/auth/telegram/link"): AUTH,
     ("GET", f"{P}/auth/profile/{{actor_id}}"): SELF,
