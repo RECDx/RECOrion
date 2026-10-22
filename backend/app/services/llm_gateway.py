@@ -185,6 +185,13 @@ async def _record(db: AsyncSession, tenant: Tenant, model: LLMModel, ctx: LLMCon
         evren_credits=_num(evren.get("credits_charged_cr") or evren.get("credits_held_cr")),
         evren_balance_after=_num(evren.get("credits_remaining_cr")),
     )
+    if not error:
+        # TL maliyet: çağrı anında geçerli LLM fiyatı (ADIM 7.5.1); fiyat tanımlı değilse boş kalır
+        from app.services import pricing
+
+        price = await pricing.price_at(db, model.id)
+        if price:
+            call.cost_try = pricing.call_cost(price, tokens_in, tokens_out)
     db.add(call)
     if not error and tenant.slug != HQ_SLUG:
         await credits.record_usage(db, tenant.id, cost, call.id, f"{ctx.purpose} · {model.model_code}")

@@ -64,6 +64,7 @@ import CatalogAdmin from './catalog/CatalogAdmin';
 import EmailTemplateBuilder from './email/EmailTemplateBuilder';
 import { compileBlocksToHtml, htmlToBlocks } from './email/emailBlocks';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
+import LlmPricing from './ai/LlmPricing';
 
 const TAB_SLUG_MAP = {
   DASHBOARD: 'dashboard',
@@ -79,7 +80,8 @@ const TAB_SLUG_MAP = {
   SCHEDULES: 'schedules',
   AI_MODEL_SETTINGS: 'ai-models',
   AI_ASSISTANT: 'ai-assistant',
-  MODELS: 'models'
+  MODELS: 'models',
+  LLM_PRICES: 'llm-prices'
 };
 
 const SLUG_TAB_MAP = {
@@ -96,7 +98,8 @@ const SLUG_TAB_MAP = {
   'schedules': 'SCHEDULES',
   'ai-models': 'AI_MODEL_SETTINGS',
   'ai-assistant': 'AI_ASSISTANT',
-  'models': 'MODELS'
+  'models': 'MODELS',
+  'llm-prices': 'LLM_PRICES'
 };
 
 function getTabFromHash() {
@@ -2244,6 +2247,18 @@ export default function SuperAdminConsole({
                 <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{models.length}</span>
               )}
             </button>
+
+            {/* LLM TL FİYATLARI (Adım 7.5.1) */}
+            <button
+              onClick={() => { switchTab('LLM_PRICES'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'LLM_PRICES' ? 'active' : ''}`}
+              title="LLM TL Fiyatları"
+            >
+              <div className="super-admin-nav-item-left">
+                <Coins style={{ width: 17, height: 17, color: '#facc15' }} />
+                {!sidebarCollapsed && <span>LLM TL Fiyatları</span>}
+              </div>
+            </button>
             </>
           )}
         </nav>
@@ -2335,6 +2350,7 @@ export default function SuperAdminConsole({
               {activeTab === 'PERMISSIONS' && 'Sistem Yetki Kataloğu (RBAC)'}
               {activeTab === 'PLANS' && 'Kiralama Paketleri Yönetimi'}
               {activeTab === 'MODELS' && 'EVREN Model Kataloğu'}
+              {activeTab === 'LLM_PRICES' && 'LLM TL Fiyatları'}
               {activeTab === 'AI_MODEL_SETTINGS' && 'Genel AI Modelleri & Yapay Zeka Kullanımı'}
               {activeTab === 'AI_ASSISTANT' && 'Süper Yönetici Asistanı'}
               {activeTab === 'CATALOG' && 'Departman & Unvan Kataloğu'}
@@ -4557,6 +4573,8 @@ export default function SuperAdminConsole({
           )}
 
           {activeTab === 'AI_ASSISTANT' && <PlatformAssistantPanel />}
+
+          {activeTab === 'LLM_PRICES' && <LlmPricing />}
 
           {activeTab === 'CATALOG' && <CatalogAdmin />}
 

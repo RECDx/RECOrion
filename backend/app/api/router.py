@@ -17,6 +17,7 @@ from app.api.v1.catalog import router as catalog_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.workflow import router as workflow_router
 from app.api.v1.approvals import router as approvals_router
+from app.api.v1.pricing import router as pricing_router
 from app.core.access_policy import enforce_access_policy
 
 # Tüm uçlar merkezi erişim politikasından geçer (app/core/access_policy.py)
@@ -40,3 +41,4 @@ api_router.include_router(catalog_router)
 api_router.include_router(documents_router)
 api_router.include_router(workflow_router)
 api_router.include_router(approvals_router)
+api_router.include_router(pricing_router)

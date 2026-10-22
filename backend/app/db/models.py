@@ -89,6 +89,20 @@ class LLMModel(Base):
     provider = relationship("LLMProvider", back_populates="models")
 
 
+class LLMModelPrice(Base):
+    """Model başına 1M girdi/çıktı token TL fiyatı (KDV hariç); değiştirilmez, yeni fiyat yeni satırdır (ADIM 7.5.1)."""
+    __tablename__ = "llm_model_prices"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    model_id = Column(UUID(as_uuid=True), ForeignKey("llm_models.id", ondelete="CASCADE"), nullable=False)
+    price_in_per_1m_try = Column(Numeric(14, 4), nullable=False)
+    price_out_per_1m_try = Column(Numeric(14, 4), nullable=False)
+    valid_from = Column(DateTime(timezone=True), nullable=False)
+    note = Column(Text)
+    created_by_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class Plan(Base):
     __tablename__ = "plans"
 
@@ -657,6 +671,7 @@ class LLMCall(Base):
     error = Column(Text)
     evren_credits = Column(Numeric(18, 6))
     evren_balance_after = Column(Numeric(18, 4))
+    cost_try = Column(Numeric(14, 6))  # çağrı anında geçerli LLM fiyatıyla TL maliyet (ADIM 7.5.1)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 

@@ -102,6 +102,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("DELETE", f"{P}/models/{{model_id}}"): SUPER_ADMIN,
     ("POST", f"{P}/models/sync-evren"): SUPER_ADMIN,
 
+    # LLM TL fiyat listesi (ADIM 7.5.1)
+    ("GET", f"{P}/system/llm-prices"): SUPER_ADMIN,
+    ("POST", f"{P}/system/llm-prices"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/llm-prices/cr-rate"): SUPER_ADMIN,
     ("GET", f"{P}/system/permissions"): AUTH,
     ("GET", f"{P}/system/permissions/{{perm_id}}"): AUTH,
     ("POST", f"{P}/system/permissions"): SUPER_ADMIN,

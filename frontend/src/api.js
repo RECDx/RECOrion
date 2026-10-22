@@ -141,6 +141,10 @@ export const api = {
   getTelegramStatus: () => request('/auth/telegram'),
   linkTelegram: () => request('/auth/telegram/link', { method: 'POST' }),
   unlinkTelegram: () => request('/auth/telegram/link', { method: 'DELETE' }),
+  // LLM TL fiyat listesi (Adım 7.5.1, Süper Admin)
+  getLlmPrices: () => request('/system/llm-prices'),
+  addLlmPrice: (data) => request('/system/llm-prices', { method: 'POST', body: JSON.stringify(data) }),
+  setEvrenCrRate: (rate) => request('/system/llm-prices/cr-rate', { method: 'PUT', body: JSON.stringify({ cr_to_try: rate }) }),
   // Her yerden onay ve bildirim tercihleri (Adım 7.3)
   getApproval: (token) => request(`/approvals/${encodeURIComponent(token)}`),
   decideApproval: (token, approve, note) => request(`/approvals/${encodeURIComponent(token)}`, { method: 'POST', body: JSON.stringify({ approve, note: note || null }) }),
