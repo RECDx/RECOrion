@@ -299,6 +299,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/memory/search"): HANDLER("memory:search"),
     ("POST", f"{P}/memory/promote/{{memory_id}}"): HANDLER("memory:promote"),
     ("POST", f"{P}/memory/{{memory_id}}/reject"): HANDLER("memory:promote"),
+    ("POST", f"{P}/memory/{{memory_id}}/revoke"): HANDLER("memory:promote"),
 }
 
 

@@ -19,25 +19,31 @@ const GATE = {
   WAITING_APPROVAL: ['Onay bekliyor', 'warning'], DONE: ['Onaylandı', 'success'], REVISION: ['Revizyonda', 'danger'],
   QUARANTINED: ['Karantinada', 'danger'], IN_PROGRESS: ['Çalışılıyor', 'info'], CANCELLED: ['İptal', 'neutral'],
 };
+const MEMORY_TABS = [['APPROVED', 'Onaylı'], ['CANDIDATE', 'Onay bekliyor'], ['REVOKED', 'Reddedilen']];
+const EMPTY = { APPROVED: 'Henüz onaylı bilgi yok.', CANDIDATE: 'Onay bekleyen bilgi yok.', REVOKED: 'Reddedilen veya geri alınan bilgi yok.' };
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 export default function RightPane({
   selectedTask,
   flowTask,
   memoryItems,
-  onPromoteMemory,
+  actors,
+  canPromote,
+  onMemoryAction,
   onApproveQualityGate,
   onRejectQualityGate,
   onSubmitTask
 }) {
-  const [activeTab, setActiveTab] = useState('GLOBAL'); // GLOBAL vs AGENT
+  const [memTab, setMemTab] = useState('APPROVED');
   const [viewing, setViewing] = useState(false);
   const closeViewer = useCallback(() => setViewing(false), []);
   const status = selectedTask?.status;
   const [gateLabel, gateTone] = GATE[status] || ['Sırada', 'neutral'];
   const art = flowTask?.artifact;
 
-  const filteredMemories = memoryItems?.filter((m) => m.scope === activeTab) || [];
+  const counts = (memoryItems || []).reduce((c, m) => ({ ...c, [m.status]: (c[m.status] || 0) + 1 }), {});
+  const shown = (memoryItems || []).filter((m) => m.status === memTab).slice(0, 50);
+  const agentName = (id) => actors?.find((a) => a.id === id)?.display_name || 'AI personel';
 
   return (
     <aside className="pane" style={{ borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
@@ -108,97 +114,58 @@ export default function RightPane({
         </div>
         {viewing && art && <ArtifactModal task={{ id: selectedTask.id, title: selectedTask.title }} artifactId={art.id} onClose={closeViewer} />}
 
-        {/* 3. 2 KADEMELİ KOLEKTİF HAFIZA YÖNETİCİSİ */}
+        {/* 3. KURUM HAFIZASI (Adım 8.4): onaylı / onay bekleyen / reddedilen; kararlar yalnızca memory:promote yetkisiyle */}
         <div>
-          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-dim)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Database size={13} color="#a855f7" />
-            2 KADEMELİ KOLEKTİF HAFIZA (QDRANT)
+          <div className="wa-section-title"><Database size={13} />Hafıza</div>
+          <div className="ui-segmented" role="tablist" aria-label="Hafıza durumu" style={{ width: '100%', marginBottom: '10px' }}>
+            {MEMORY_TABS.filter(([k]) => k === 'APPROVED' || canPromote).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={memTab === k} style={{ flex: 1 }}
+                className={`ui-segmented-item ${memTab === k ? 'active' : ''}`} onClick={() => setMemTab(k)}>
+                {l}{k === 'CANDIDATE' && counts.CANDIDATE ? ` (${counts.CANDIDATE})` : ''}
+              </button>
+            ))}
           </div>
-
-          {/* Scope Tabs */}
-          <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '10px' }}>
-            <button 
-              onClick={() => setActiveTab('GLOBAL')}
-              className="btn btn-secondary"
-              style={{
-                fontSize: '0.7rem',
-                padding: '6px',
-                background: activeTab === 'GLOBAL' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
-                borderColor: activeTab === 'GLOBAL' ? '#6366f1' : 'var(--border-subtle)',
-                color: activeTab === 'GLOBAL' ? 'var(--ac-818cf8)' : 'var(--text-muted)'
-              }}
-            >
-              <Building2 size={12} />
-              Kurum Hafızası (Global)
-            </button>
-            <button 
-              onClick={() => setActiveTab('AGENT')}
-              className="btn btn-secondary"
-              style={{
-                fontSize: '0.7rem',
-                padding: '6px',
-                background: activeTab === 'AGENT' ? 'rgba(6, 182, 212, 0.25)' : 'transparent',
-                borderColor: activeTab === 'AGENT' ? '#06b6d4' : 'var(--border-subtle)',
-                color: activeTab === 'AGENT' ? 'var(--ac-22d3ee)' : 'var(--text-muted)'
-              }}
-            >
-              <Bot size={12} />
-              Ajan Hafızası (Agent)
-            </button>
-          </div>
-
-          {/* Memory Items List */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
-            {filteredMemories.length === 0 ? (
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textAlign: 'center', padding: '15px' }}>
-                Bu kategoride kayıt bulunamadı.
-              </div>
-            ) : (
-              filteredMemories.map((m) => (
-                <div 
-                  key={m.id}
-                  style={{
-                    padding: '10px',
-                    borderRadius: '8px',
-                    background: 'rgb(var(--rgb-ov) / 0.02)',
-                    border: '1px solid var(--border-subtle)',
-                    fontSize: '0.75rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontWeight: '600', color: m.scope === 'GLOBAL' ? 'var(--ac-818cf8)' : 'var(--ac-22d3ee)' }}>
-                      {m.scope === 'GLOBAL' ? '🏢 Kurumsal Know-How' : '🤖 Ajan Tecrübesi'}
-                    </span>
-                    <span style={{ fontSize: '0.62rem', color: 'var(--text-dim)' }}>
-                      Skor: {m.confidence_score || '1.0'}
-                    </span>
-                  </div>
-
-                  <p style={{ color: 'var(--text-muted)', lineHeight: 1.4, marginBottom: '6px' }}>
-                    {m.content}
-                  </p>
-
-                  {/* Promote Button (Agent -> Global Corporate Memory) */}
-                  {m.scope === 'AGENT' && (
-                    <button
-                      onClick={() => onPromoteMemory && onPromoteMemory(m.id)}
-                      className="btn btn-secondary"
-                      style={{
-                        fontSize: '0.65rem',
-                        padding: '3px 8px',
-                        width: '100%',
-                        justifyContent: 'center',
-                        borderColor: 'rgba(99, 102, 241, 0.3)',
-                        color: 'var(--ac-a5b4fc)'
-                      }}
-                    >
-                      <ArrowUpRight size={11} />
-                      Şirket Kurum Hafızasına Terfi Et
-                    </button>
-                  )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto' }}>
+            {shown.length === 0 ? (
+              <p className="pj-hint" style={{ textAlign: 'center', padding: '12px' }}>{EMPTY[memTab]}</p>
+            ) : shown.map((m) => (
+              <div key={m.id} className="wa-artifact" style={{ fontSize: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '4px' }}>
+                  {m.scope === 'GLOBAL'
+                    ? <Badge tone="info"><Building2 size={10} /> Kurum hafızası</Badge>
+                    : <Badge tone="neutral"><Bot size={10} /> {agentName(m.agent_id)}</Badge>}
+                  <span className="pj-hint" style={{ fontSize: '0.65rem' }}>{fmtTime(m.created_at)}</span>
                 </div>
-              ))
-            )}
+                <p style={{ color: 'var(--text-muted)', lineHeight: 1.45, margin: '0 0 6px' }}>{m.content}</p>
+                {m.reviewed_by_name && (
+                  <p className="pj-hint" style={{ fontSize: '0.66rem', margin: '0 0 6px' }}>
+                    {m.status === 'REVOKED' ? 'Karar' : 'Onaylayan'}: {m.reviewed_by_name} · {fmtTime(m.reviewed_at)}{m.review_note ? ` · "${m.review_note}"` : ''}
+                  </p>
+                )}
+                {canPromote && m.status === 'CANDIDATE' && (
+                  <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <button type="button" className="btn btn-success" style={{ fontSize: '0.68rem', padding: '4px' }} onClick={() => onMemoryAction?.('promote', m)}>
+                      <CheckCircle2 size={11} /> Onayla
+                    </button>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.68rem', padding: '4px' }} onClick={() => onMemoryAction?.('reject', m)}>
+                      Reddet
+                    </button>
+                  </div>
+                )}
+                {canPromote && m.status === 'APPROVED' && (
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {m.scope === 'AGENT' && (
+                      <button type="button" className="btn btn-secondary" style={{ fontSize: '0.66rem', padding: '3px 8px', flex: 1 }} onClick={() => onMemoryAction?.('promote', m)}>
+                        <ArrowUpRight size={11} /> Kurum hafızasına taşı
+                      </button>
+                    )}
+                    <button type="button" className="btn btn-ghost" style={{ fontSize: '0.66rem', padding: '3px 8px' }} onClick={() => onMemoryAction?.('revoke', m)}>
+                      Geri al
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>

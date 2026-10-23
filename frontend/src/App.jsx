@@ -14,7 +14,7 @@ import ApprovePage from './components/approvals/ApprovePage';
 import ApprovalsInbox from './components/approvals/ApprovalsInbox';
 import { api, session } from './api';
 import { mergeMessages, useProjectLive } from './live';
-import { notify, promptDialog, toast } from './ui/feedback';
+import { confirmDialog, notify, promptDialog, toast } from './ui/feedback';
 
 // Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
 function loadSavedUser() {
@@ -340,16 +340,30 @@ export default function App() {
   };
 
   // 6. Promote Memory to Corporate Memory (NS_GLOBAL)
-  const handlePromoteMemory = async (memoryId) => {
+  // Hafıza kararları (Adım 8.4): Kurum Hafızasına onay/taşıma, ret (gerekçe isteğe bağlı), geri alma (gerekçe zorunlu)
+  const canPromote = !!currentUser?.permissions?.some((p) => p === 'memory:promote' || p === '*');
+  const handleMemoryAction = async (kind, item) => {
     try {
-      await api.promoteMemory(memoryId);
-      if (tenant?.id) {
-        const updatedMem = await api.getMemoryItems(tenant.id);
-        setMemoryItems(updatedMem);
+      if (kind === 'promote') {
+        const ok = await confirmDialog({ title: 'Kurum hafızasına ekle', message: `Bu bilgi şirketin tüm AI personelinin bilgisine eklenecek:\n\n"${item.content.slice(0, 300)}"` });
+        if (!ok) return;
+        await api.promoteMemory(item.id);
+        toast.success('Bilgi Kurum Hafızasına eklendi; tüm AI personel kullanır.');
+      } else if (kind === 'reject') {
+        const note = await promptDialog({ title: 'Bilgiyi reddet', message: 'Gerekçe (isteğe bağlı):' });
+        if (note === null) return;
+        await api.rejectMemory(item.id, note);
+        toast.success('Bilgi reddedildi; öğrenilmeyecek.');
+      } else if (kind === 'revoke') {
+        const note = await promptDialog({ title: 'Bilgiyi geri al', message: 'Geri alma gerekçesi (zorunlu; AI personel bu bilgiyi artık kullanmaz):' });
+        if (note === null) return;
+        if (!note.trim()) { toast.warning('Geri alma gerekçesini yazın.'); return; }
+        await api.revokeMemory(item.id, note.trim());
+        toast.success('Bilgi geri alındı; AI personel artık kullanmayacak.');
       }
-      notify("Bilgi başarıyla Şirket Kurum Hafızasına (NS_GLOBAL) terfi ettirildi!");
+      if (tenant?.id) setMemoryItems(await api.getMemoryItems(tenant.id));
     } catch (err) {
-      notify(`Hafıza terfi hatası: ${err.message}`);
+      toast.error(err.message);
     }
   };
 
@@ -630,7 +644,9 @@ export default function App() {
           selectedTask={selectedTask}
           flowTask={selectedTask ? flowTasks[selectedTask.id] : null}
           memoryItems={memoryItems}
-          onPromoteMemory={handlePromoteMemory}
+          actors={actors}
+          canPromote={canPromote}
+          onMemoryAction={handleMemoryAction}
           onApproveQualityGate={(t) => runTaskAction(() => api.decideTask(t.id, true), 'Onaylandı; iş akışı sonraki adıma geçiyor.')}
           onRejectQualityGate={async (t) => {
             const note = await promptDialog({ message: 'Revizyon gerekçesi (personel buna göre düzeltecek):' });

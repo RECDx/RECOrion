@@ -1504,7 +1504,7 @@ async def add_agent_web_link(
     # 2. Qdrant Vektör Hafızası
     try:
         from app.services.collective_memory import collective_memory
-        await collective_memory.add_memory(
+        point = await collective_memory.add_memory(
             tenant_id=str(tenant_id),
             scope="AGENT",
             agent_id=str(agent_id),
@@ -1518,6 +1518,7 @@ async def add_agent_web_link(
                 "memory_item_id": str(memory_item.id)
             }
         )
+        memory_item.qdrant_point_id = uuid.UUID(str(point["point_id"]))  # geri alma/terfi aynı vektörü kullanır (ADIM 8.4)
     except Exception as e:
         logger.warning(f"Qdrant web hafıza indeksleme uyarısı: {e}")
 
@@ -1617,7 +1618,7 @@ async def add_agent_video_link(
     # 2. Qdrant Vektör Hafızası
     try:
         from app.services.collective_memory import collective_memory
-        await collective_memory.add_memory(
+        point = await collective_memory.add_memory(
             tenant_id=str(tenant_id),
             scope="AGENT",
             agent_id=str(agent_id),
@@ -1633,6 +1634,7 @@ async def add_agent_video_link(
                 "memory_item_id": str(memory_item.id)
             }
         )
+        memory_item.qdrant_point_id = uuid.UUID(str(point["point_id"]))  # geri alma/terfi aynı vektörü kullanır (ADIM 8.4)
     except Exception as e:
         logger.warning(f"Qdrant video hafıza indeksleme uyarısı: {e}")
 

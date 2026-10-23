@@ -196,7 +196,9 @@ export const api = {
   },
   searchMemory: (payload) => request('/memory/search', { method: 'POST', body: JSON.stringify(payload) }),
   promoteMemory: (memoryId) => request(`/memory/promote/${memoryId}`, { method: 'POST' }),
-  rejectMemory: (memoryId) => request(`/memory/${memoryId}/reject`, { method: 'POST' }),
+  rejectMemory: (memoryId, note) => request(`/memory/${memoryId}/reject`, { method: 'POST', body: JSON.stringify({ note: note || null }) }),
+  // Onaylı bilgiyi geri alma (Adım 8.4): gerekçe zorunlu
+  revokeMemory: (memoryId, note) => request(`/memory/${memoryId}/revoke`, { method: 'POST', body: JSON.stringify({ note }) }),
   getMemoryCandidates: (tenantId) => request(`/memory/?tenant_id=${tenantId}&status=CANDIDATE`),
   // Bilgi katmanları (Adım 5.5)
   getAgentKnowledge: (tenantId, agentId) => request(`/company/${tenantId}/ai-agents/${agentId}/knowledge`),

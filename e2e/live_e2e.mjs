@@ -299,6 +299,40 @@ try {
   const reply = await m.page.locator('main.pane .chat-bubble-ai:not(.thinking-pulse)').last().innerText().catch(() => '');
   step(reply.includes(code), 'AI mesaja eklenen dosyayı okuyup doğru yanıtladı', reply.replace(/\s+/g, ' ').slice(0, 90));
   await shot(m.page, '04b-canli-sohbet-uye');
+
+  // 8.4 Kurum Hafızası: yönetici sohbette şirket kuralı söyler; AI aday çıkarırsa yönetici onaylar, iz görünür, gerekçeyle geri alır
+  const memberTabs = await m.page.locator('aside.pane').last().getByRole('tab').allTextContents();
+  step(!memberTabs.some((t) => /Onay bekliyor|Reddedilen/.test(t)), 'Ekip üyesi onay bekleyen/reddedilen hafızayı görmüyor', memberTabs.join(', '));
+  const mBefore = await bubbles();
+  const rule = 'Şirket kuralı: tüm müşteri tekliflerimiz 15 gün geçerlidir ve fiyatlar KDV hariç verilir. Bundan sonraki tüm işlerde bunu dikkate al.';
+  await mgr2.page.locator('main.pane textarea').fill(rule);
+  await mgr2.page.locator('main.pane textarea').press('Enter');
+  const tr0 = Date.now();
+  while (Date.now() - tr0 < 6 * 60000 && (await bubbles()) < mBefore + 2) await m.page.waitForTimeout(2000);
+  await mgr2.page.locator('main.pane textarea:not([disabled])').waitFor({ timeout: 6 * 60000 });  // gönderim (öğrenme dahil) bitti
+  const mright = mgr2.page.locator('aside.pane').last();
+  await mright.getByRole('tab', { name: /Onay bekliyor/ }).click();
+  const cand = mright.locator('.wa-artifact', { hasText: /15 gün/ }).first();
+  if (!(await cand.count())) {
+    step(true, 'Kurum Hafızası adayı', 'AI bu konuşmadan şirket geneli bilgi çıkarmadı; onay senaryosu bu koşuda atlandı');
+  } else {
+    await cand.getByRole('button', { name: 'Onayla' }).click();
+    await dialogOk(mgr2.page);
+    await mright.getByRole('tab', { name: 'Onaylı' }).click();
+    const approved = mright.locator('.wa-artifact', { hasText: /15 gün/ }).first();
+    await approved.waitFor({ timeout: 15000 });
+    const approvedText = await approved.innerText();
+    step(/Onaylayan: Canlı Test Yöneticisi/.test(approvedText) && /Kurum hafızası/.test(approvedText),
+      'Yönetici adayı Kurum Hafızasına onayladı; onaylayan ve zaman görünüyor', approvedText.split('\n').slice(-2).join(' · ').slice(0, 90));
+    await approved.getByRole('button', { name: 'Geri al' }).click();
+    await dialogOk(mgr2.page, 'Canlı test: geri alma denemesi');
+    await mright.getByRole('tab', { name: 'Reddedilen' }).click();
+    const revoked = mright.locator('.wa-artifact', { hasText: /15 gün/ }).first();
+    await revoked.waitFor({ timeout: 15000 });
+    const revokedText = await revoked.innerText();
+    step(/geri alma denemesi/.test(revokedText), 'Onaylı bilgi gerekçeyle geri alındı (AI personel artık kullanmaz)', revokedText.split('\n').slice(-1)[0].slice(0, 90));
+  }
+  await shot(mgr2.page, '04c-hafiza');
   await mgr2.ctx.close();
   await m.ctx.close();
   const o = await session('outsider');

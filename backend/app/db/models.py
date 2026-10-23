@@ -517,6 +517,10 @@ class MemoryItem(Base):
     metadata_json = Column(JSONB, default=dict)
     qdrant_point_id = Column(UUID(as_uuid=True))
     status = Column(String(32), default="APPROVED")  # CANDIDATE, APPROVED, REVOKED
+    # Onay izi (ADIM 8.4): terfi/ret/geri alma kararını veren kişi ve zaman
+    reviewed_by_actor_id = Column(UUID(as_uuid=True))
+    reviewed_at = Column(DateTime(timezone=True))
+    review_note = Column(Text)
     confidence_score = Column(Numeric, default=1.0)
     embedding_model_version = Column(String(64), default="qwen3-embedding-8b")
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

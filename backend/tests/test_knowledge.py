@@ -214,3 +214,46 @@ def test_chat_learning_needs_approval_for_company_memory(client, db, world, env)
     assert any("SOHBET-GLOBAL" in h["content"] for h in other["results"])
     # Tekrar reddedilemez; yeni aday reddedilebilir
     assert client.post(f"/api/v1/memory/{cand['id']}/reject", headers=a["h"]).status_code == 409
+
+
+def test_memory_review_trail_and_revoke(client, db, world, env):
+    """ADIM 8.4: aday/onaylı/reddedilen ayrımı, onay izi, tek vektör, geri alma; adaylar yalnızca onay yetkisi olana görünür."""
+    a = world["a"]
+    email = f"kn_user_{uuid.uuid4().hex[:6]}@kn-test.com.tr"
+    _exec(db, "INSERT INTO actors (tenant_id, actor_type, display_name, email, role, password_hash, status) "
+              "VALUES (%s, 'HUMAN', 'Çalışan', %s, 'USER', %s, 'IDLE')", a["id"], email, hash_password(PASSWORD))
+    user_h = {"Authorization": f"Bearer {client.post('/api/v1/auth/login', json={'email': email, 'password': PASSWORD}).json()['access_token']}"}
+    assert client.post("/api/v1/chat/send", headers=a["h"], json={"task_id": a["task"], "content": "rapor biçimi?"}).status_code == 200
+    items = client.get(f"/api/v1/memory?tenant_id={a['id']}", headers=a["h"]).json()
+    cand = next(i for i in items if i["status"] == "CANDIDATE" and "SOHBET-GLOBAL" in i["content"])
+    agent_item = next(i for i in items if i["status"] == "APPROVED" and i["scope"] == "AGENT" and "SOHBET-AGENT" in i["content"])
+
+    # Onay yetkisi olmayan çalışan adayları görmez ve karar veremez
+    seen = client.get(f"/api/v1/memory?tenant_id={a['id']}", headers=user_h).json()
+    assert seen and all(i["status"] == "APPROVED" for i in seen)
+    assert client.post(f"/api/v1/memory/{cand['id']}/reject", headers=user_h).status_code == 403
+
+    # Ret: gerekçe ve onay izi; reddedilen bilgi terfi ettirilemez
+    assert client.post(f"/api/v1/memory/{cand['id']}/reject", headers=a["h"], json={"note": "Kampanya dönemine özel"}).status_code == 200
+    rej = next(i for i in client.get(f"/api/v1/memory?tenant_id={a['id']}&status=REVOKED", headers=a["h"]).json() if i["id"] == cand["id"])
+    assert rej["reviewed_by_name"] == "Yönetici" and rej["review_note"] == "Kampanya dönemine özel" and rej["reviewed_at"]
+    assert client.post(f"/api/v1/memory/promote/{cand['id']}", headers=a["h"]).status_code == 409
+
+    # Terfi: AI personel bilgisi aynı vektörle Kurum Hafızasına geçer (ikinci kopya yok)
+    before = len(env["q"].points)
+    assert client.post(f"/api/v1/memory/promote/{agent_item['id']}", headers=a["h"]).status_code == 200
+    assert len(env["q"].points) == before
+    point = env["q"].points[str(_exec(db, "SELECT qdrant_point_id FROM memory_items WHERE id = %s", agent_item["id"])[0])]
+    assert point["scope"] == "GLOBAL" and point["agent_id"] is None
+    promoted = next(i for i in client.get(f"/api/v1/memory?tenant_id={a['id']}&scope=GLOBAL", headers=a["h"]).json() if i["id"] == agent_item["id"])
+    assert promoted["reviewed_by_name"] == "Yönetici"
+
+    # Geri alma: gerekçe zorunlu; vektör silinir, bilgi artık bulunmaz; kayıt ve iz kalır
+    revoke = f"/api/v1/memory/{agent_item['id']}/revoke"
+    assert client.post(revoke, headers=a["h"], json={"note": ""}).status_code == 422
+    assert client.post(revoke, headers=user_h, json={"note": "x"}).status_code == 403
+    assert client.post(revoke, headers=a["h"], json={"note": "Eskidi"}).status_code == 200
+    assert len(env["q"].points) == before - 1
+    hits = client.post(f"/api/v1/company/{a['id']}/ai-agents/{a['other']}/knowledge/search", headers=a["h"], json={"query": "rapor"}).json()
+    assert not any("SOHBET-AGENT" in h["content"] and h.get("memory_item_id") == agent_item["id"] for h in hits["results"])
+    assert _exec(db, "SELECT status, review_note FROM memory_items WHERE id = %s", agent_item["id"]) == ("REVOKED", "Eskidi")

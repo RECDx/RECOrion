@@ -228,7 +228,7 @@ class AgentLearningService:
 
             # Qdrant Vektör İndeksi
             try:
-                await collective_memory.add_memory(
+                point = await collective_memory.add_memory(
                     tenant_id=str(tenant_id),
                     scope="AGENT",
                     agent_id=str(agent_id),
@@ -242,6 +242,7 @@ class AgentLearningService:
                         "memory_item_id": str(mem.id)
                     }
                 )
+                mem.qdrant_point_id = uuid.UUID(str(point["point_id"]))  # geri alma/terfi aynı vektörü kullanır (ADIM 8.4)
             except Exception as qe:
                 logger.warning(f"Qdrant deep search indeksleme uyarısı: {qe}")
 
@@ -500,7 +501,7 @@ class AgentLearningService:
                 await db.flush()
 
                 try:
-                    await collective_memory.add_memory(
+                    point = await collective_memory.add_memory(
                         tenant_id=str(tenant_id),
                         scope="AGENT",
                         agent_id=str(agent_id),
@@ -514,6 +515,7 @@ class AgentLearningService:
                             "memory_item_id": str(mem.id)
                         }
                     )
+                    mem.qdrant_point_id = uuid.UUID(str(point["point_id"]))  # geri alma/terfi aynı vektörü kullanır (ADIM 8.4)
                 except Exception as qe:
                     logger.warning(f"Qdrant sektör-ünvan deep search indeksleme uyarısı: {qe}")
 
@@ -612,7 +614,7 @@ class AgentLearningService:
             saved_count += 1
 
             try:
-                await collective_memory.add_memory(
+                point = await collective_memory.add_memory(
                     tenant_id=str(tenant_id),
                     scope="AGENT",
                     agent_id=str(agent_id),
@@ -626,6 +628,7 @@ class AgentLearningService:
                         "memory_item_id": str(mem.id)
                     }
                 )
+                mem.qdrant_point_id = uuid.UUID(str(point["point_id"]))  # geri alma/terfi aynı vektörü kullanır (ADIM 8.4)
             except Exception as qe:
                 logger.warning(f"Qdrant onboarding indeksleme uyarısı: {qe}")
 
@@ -777,9 +780,9 @@ class AgentLearningService:
                                     "confidence": conf, "status": "CANDIDATE"})
                 continue
 
-            # Qdrant Vektör İndeksine Ekle
+            # Qdrant Vektör İndeksine Ekle; nokta kimliği kayda yazılır (geri alma ve terfi aynı vektörü kullanır, ADIM 8.4)
             try:
-                await collective_memory.add_memory(
+                point = await collective_memory.add_memory(
                     tenant_id=str(tenant_id),
                     scope=target_scope,
                     agent_id=str(agent_id) if target_scope == "AGENT" else None,
@@ -792,6 +795,7 @@ class AgentLearningService:
                         "memory_item_id": str(mem.id)
                     }
                 )
+                mem.qdrant_point_id = uuid.UUID(str(point["point_id"]))
             except Exception as qe:
                 logger.warning(f"Qdrant chat öğrenimi indeksleme uyarısı: {qe}")
 
