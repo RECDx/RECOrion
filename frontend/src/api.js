@@ -170,6 +170,9 @@ export const api = {
   setProjectRepository: (projectId, mode) => request(`/projects/${projectId}/repository`, { method: 'PUT', body: JSON.stringify({ mode }) }),
   getRepositoryFile: (projectId, ref, path) => request(`/projects/${projectId}/repository/file?${new URLSearchParams({ ref, path }).toString()}`),
   mergeRepositoryStep: (projectId, taskId) => request(`/projects/${projectId}/repository/steps/${taskId}/merge`, { method: 'POST' }),
+  getMirrorTargets: (projectId) => request(`/projects/${projectId}/repository/mirror-targets`),
+  setRepositoryMirror: (projectId, connectionId, repo) => request(`/projects/${projectId}/repository/mirror`, { method: 'PUT', body: JSON.stringify({ connection_id: connectionId, repo }) }),
+  clearRepositoryMirror: (projectId) => request(`/projects/${projectId}/repository/mirror`, { method: 'DELETE' }),
   downloadProjectCostReport: (projectId) => downloadFile(`/projects/${projectId}/costs/export.xlsx`, 'proje-maliyet.xlsx'),
   // LLM TL fiyat listesi (Adım 7.5.1, Süper Admin)
   getLlmPrices: () => request('/system/llm-prices'),

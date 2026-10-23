@@ -119,3 +119,65 @@ def test_repository_lifecycle(client, world, coder):
             _gitea("DELETE", f"/repos/{owner}/{repo}")
             if not _gitea("GET", f"/orgs/{owner}/repos").json():
                 _gitea("DELETE", f"/orgs/{owner}")
+
+
+def _gitea_json(method, path, body):
+    return httpx.request(method, settings.GITEA_URL.rstrip("/") + "/api/v1" + path, json=body,
+                         headers={"Authorization": f"token {settings.GITEA_TOKEN}"}, timeout=30)
+
+
+def test_repository_mirror_to_company_account(client, world):
+    """ADIM 10.3 (#297): proje deposu şirketin Gitea/GitHub hesabına yansıtılır (gerçek Gitea; hedef aynı sunucuda ayrı depo)."""
+    import time
+    import uuid as _uuid
+
+    w = world
+    admin, member = w["admin"]["h"], w["member"]["h"]
+    pid, _, _ = _ready_project(client, w, "Yansıtma Projesi")
+    base = f"/api/v1/projects/{pid}/repository"
+    org = f"ct-ayna-{_uuid.uuid4().hex[:6]}"
+    ig = f"/api/v1/company/{w['tenant']}/integrations"
+    owner = repo = cid = None
+    try:
+        info = client.put(base, headers=admin, json={"mode": "RECORION"}).json()
+        owner, repo = info["url"].rstrip("/").split("/")[-2:]
+        assert _gitea_json("POST", "/orgs", {"username": org, "visibility": "private"}).status_code == 201
+        assert _gitea_json("POST", f"/orgs/{org}/repos", {"name": "hedef", "private": True}).status_code == 201
+        me = _gitea("GET", "/user").json()["login"]
+        r = client.post(ig, headers=admin, json={"connector": "gitea", "name": "Şirket Gitea",
+                                                 "config": {"base_url": settings.GITEA_URL, "username": me},
+                                                 "secrets": {"token": settings.GITEA_TOKEN}})
+        assert r.status_code == 201, r.text
+        cid = r.json()["id"]
+
+        assert client.get(f"{base}/mirror-targets", headers=member).status_code == 403
+        targets = client.get(f"{base}/mirror-targets", headers=admin).json()
+        assert [t["id"] for t in targets] == [cid] and set(targets[0]) == {"id", "name", "connector"}  # ayar/kimlik yok
+        assert client.put(f"{base}/mirror", headers=member, json={"connection_id": cid, "repo": f"{org}/hedef"}).status_code == 403
+        assert client.put(f"{base}/mirror", headers=admin, json={"connection_id": cid, "repo": "gecersiz"}).status_code == 422
+        r = client.put(f"{base}/mirror", headers=admin, json={"connection_id": cid, "repo": f"{org}/hedef"})
+        assert r.status_code == 200, r.text
+        m = r.json()["mirror"]
+        assert m["repo"] == f"{org}/hedef" and settings.GITEA_TOKEN not in json.dumps(r.json())
+        for _ in range(20):  # ilk gönderim hemen tetiklenir
+            if _gitea("GET", f"/repos/{org}/hedef/branches").json():
+                break
+            time.sleep(1)
+        assert [b["name"] for b in _gitea("GET", f"/repos/{org}/hedef/branches").json()] == ["main"]
+        assert client.get(base, headers=member).json()["mirror"]["repo"] == f"{org}/hedef"  # ekip durumu görür
+
+        # Bağlantı devre dışı bırakılınca yansıtma Gitea'dan kaldırılır (eski token'la gönderim sürmez)
+        assert client.put(f"{ig}/{cid}", headers=admin, json={"status": "DISABLED"}).status_code == 200
+        assert _gitea("GET", f"/repos/{owner}/{repo}/push_mirrors").json() == []
+        assert client.get(base, headers=admin).json()["mirror"] is None
+        assert client.put(f"{base}/mirror", headers=admin, json={"connection_id": cid, "repo": f"{org}/hedef"}).status_code == 404
+    finally:
+        if cid:  # kasadaki gerçek token test kaydında kalmasın
+            client.put(f"{ig}/{cid}", headers=admin, json={"status": "DISABLED", "secrets": {"token": "silindi"}})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        _gitea("DELETE", f"/repos/{org}/hedef")
+        _gitea("DELETE", f"/orgs/{org}")
+        if owner and repo:
+            _gitea("DELETE", f"/repos/{owner}/{repo}")
+            if not _gitea("GET", f"/orgs/{owner}/repos").json():
+                _gitea("DELETE", f"/orgs/{owner}")

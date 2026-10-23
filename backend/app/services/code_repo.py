@@ -238,10 +238,18 @@ async def after_cancel(db: AsyncSession, project: Project, task: Task) -> None:
 
 # ---------------------------------------------------------------- ekran
 async def overview(project: Project, tasks: List[Task]) -> Dict[str, Any]:
-    out = {"mode": project.repo_mode or "NONE", "enabled": enabled(), "url": public_url(project), "base": BASE_BRANCH, "steps": []}
+    out = {"mode": project.repo_mode or "NONE", "enabled": enabled(), "url": public_url(project), "base": BASE_BRANCH, "steps": [],
+           "mirror": None}
     if not active(project):
         return out
     owner, repo = project.repo_owner, project.repo_name
+    if project.mirror_repo:
+        out["mirror"] = {"repo": project.mirror_repo, "connection_id": str(project.mirror_connection_id) if project.mirror_connection_id else None}
+        try:
+            state = await mirrors(project)
+            out["mirror"].update(state[0] if state else {"last_error": "Yansıtma sunucuda bulunamadı; yeniden kurun."})
+        except RepoError as exc:
+            out["mirror"]["last_error"] = exc.message
     for t in tasks:
         step = {"task_id": str(t.id), "title": t.title, "order_index": t.order_index, "status": t.status, "branch": t.repo_branch,
                 "pr": t.repo_pr_number, "merged_at": t.repo_merged_at, "state": None, "files": []}
@@ -268,3 +276,62 @@ async def read_file(project: Project, ref: str, path: str) -> Dict[str, Any]:
     if len(raw) > MAX_FILE_BYTES:
         raise HTTPException(status_code=413, detail="Dosya ekranda gösterilemeyecek kadar büyük.")
     return {"path": path, "ref": ref, "size": len(raw), "content": raw.decode("utf-8", "replace")}
+
+
+# ---------------------------------------------------------------- müşterinin hesabına yansıtma (ADIM 10.3, #297)
+MIRROR_INTERVAL = "8h0m0s"  # her commit'te de gönderilir (sync_on_commit); aralık yedek
+MIRROR_CONNECTORS = ("github", "gitea")
+
+
+def _clean_remote(address: str) -> str:
+    """Yansıtma adresinden kullanıcı/parola kısmını atar (ekranda ve kayıtta kimlik bilgisi görünmez)."""
+    return re.sub(r"//[^/@]+@", "//", address or "")
+
+
+async def mirrors(project: Project) -> List[Dict[str, Any]]:
+    if not active(project):
+        return []
+    _, rows = await _call("GET", f"/repos/{project.repo_owner}/{project.repo_name}/push_mirrors")
+    return [{"remote": _clean_remote(m.get("remote_address")), "last_update": m.get("last_update"),
+             "last_error": (m.get("last_error") or "")[:300] or None, "sync_on_commit": m.get("sync_on_commit")} for m in rows or []]
+
+
+async def _drop_mirrors(project: Project) -> None:
+    _, rows = await _call("GET", f"/repos/{project.repo_owner}/{project.repo_name}/push_mirrors")
+    for m in rows or []:
+        await _call("DELETE", f"/repos/{project.repo_owner}/{project.repo_name}/push_mirrors/{m['remote_name']}")
+
+
+async def set_mirror(project: Project, conn, target: str) -> None:
+    """Gitea push mirror kurar: hedef müşterinin bağlantısındaki hesap; token bağlantının kasasından çözülür.
+    Önceki yansıtmalar kaldırılır (projede tek hedef). Kurulunca hemen bir gönderim tetiklenir."""
+    from app.integrations import git_hosting
+    from app.integrations.base import ToolError
+    from app.services import tool_gateway
+
+    if not active(project):
+        raise RepoError("Önce projenin RECOrion kod deposunu açın.", 409)
+    ctx = tool_gateway.context(conn)
+    try:
+        owner, name = git_hosting.split_repo(target)
+        web = git_hosting.web_base(conn.connector, ctx)
+        username = ctx.config.get("username") or (await git_hosting.call(conn.connector, ctx, "GET", "/user")).get("login")
+    except ToolError as exc:
+        raise RepoError(str(exc), 422)
+    if not web.startswith(("https://", "http://")):
+        raise RepoError("Bağlantının sunucu adresi geçersiz.", 422)
+    await _drop_mirrors(project)
+    await _call("POST", f"/repos/{project.repo_owner}/{project.repo_name}/push_mirrors", {
+        "remote_address": f"{web}/{owner}/{name}.git", "remote_username": username or "oauth2",
+        "remote_password": ctx.secrets.get("token") or "", "interval": MIRROR_INTERVAL, "sync_on_commit": True})
+    try:
+        await _call("POST", f"/repos/{project.repo_owner}/{project.repo_name}/push_mirrors-sync")
+    except RepoError as exc:  # ilk gönderim gecikirse aralıkla/sonraki commit'te yapılır
+        logger.warning("Yansıtma ilk gönderimi tetiklenemedi (%s): %s", project.id, exc.message)
+    project.mirror_connection_id, project.mirror_repo = conn.id, f"{owner}/{name}"
+
+
+async def clear_mirror(project: Project) -> None:
+    if active(project):
+        await _drop_mirrors(project)
+    project.mirror_connection_id, project.mirror_repo = None, None

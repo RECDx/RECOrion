@@ -304,6 +304,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/projects/{{project_id}}/repository"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/repository/file"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/repository/steps/{{task_id}}/merge"): HANDLER(),
+    # Müşterinin GitHub/Gitea hesabına yansıtma (ADIM 10.3, #297): proje yöneticisi (psvc.load manage=True)
+    ("GET", f"{P}/projects/{{project_id}}/repository/mirror-targets"): HANDLER(),
+    ("PUT", f"{P}/projects/{{project_id}}/repository/mirror"): HANDLER(),
+    ("DELETE", f"{P}/projects/{{project_id}}/repository/mirror"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/submit"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/decision"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/release"): HANDLER(),

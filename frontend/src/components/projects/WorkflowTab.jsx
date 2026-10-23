@@ -15,7 +15,8 @@ const EVENT = { PROJECT_STARTED: 'Proje akışı başladı', TASK_STARTED: 'Adı
   CANCELLED: 'İptal edildi', PROJECT_FINISHED: 'Tüm adımlar tamamlandı', AI_OUTPUT: 'AI personel çıktı üretti',
   REVIEW_PASSED: 'Kontrolden geçti', REVIEW_FAILED: 'Kontrol personeli düzeltme istedi', REVIEW_SKIPPED: 'Kontrol yapılamadı (karar onaylayıcıda)',
   BLOCKED: 'Adım durdu', REPO_ENABLED: 'Kod deposu açıldı', REPO_COMMIT: 'Kod deposuna commit edildi',
-  REPO_MERGED: 'Ana dala birleştirildi', REPO_ERROR: 'Kod deposu işlemi yapılamadı' };
+  REPO_MERGED: 'Ana dala birleştirildi', REPO_ERROR: 'Kod deposu işlemi yapılamadı',
+  REPO_MIRROR_SET: 'Kod deposu yansıtması kuruldu', REPO_MIRROR_CLEARED: 'Kod deposu yansıtması kaldırıldı' };
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 /** İş Akışı (ADIM 7.1): adımların canlı akış durumu, teslim/onay/karantina kararları ve olay geçmişi. */

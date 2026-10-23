@@ -3,7 +3,7 @@ from typing import Any, Dict
 
 import httpx
 
-from app.integrations.base import READ, WRITE, Connector, Context, Field, Tool, ToolError, require
+from app.integrations.base import READ, WRITE, Connector, Context, Field, Tool, ToolError, http_client, require
 
 API = "https://api.telegram.org"
 
@@ -13,7 +13,7 @@ async def _call(ctx: Context, method: str, payload: Dict[str, Any] = None) -> Di
     if not token:
         raise ToolError("Bot token tanımlı değil.")
     try:
-        async with httpx.AsyncClient(timeout=15) as c:
+        async with http_client() as c:
             r = await c.post(f"{API}/bot{token}/{method}", json=payload or {})
     except httpx.HTTPError as exc:
         raise ToolError(f"Telegram'a ulaşılamadı ({exc.__class__.__name__}).")  # adres (token içerir) yazılmaz

@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import integrations
 from app.core import vault
 from app.core.security import CurrentUser, ensure_tenant_content, forbidden, get_current_user
-from app.db.models import Actor, AgentToolGrant, IntegrationConnection, ToolCall
+from app.db.models import Actor, AgentToolGrant, IntegrationConnection, Project, ToolCall
 from app.db.session import get_db
 from app.integrations.base import READ, Context, ToolError
-from app.services import tool_gateway
+from app.services import code_repo, tool_gateway
 
 router = APIRouter(tags=["Entegrasyonlar (MCP)"])
 
@@ -69,15 +69,19 @@ class ConnectionUpdate(BaseModel):
 
 
 def _check_fields(connector, config: Dict[str, Any], secrets: Dict[str, Any]) -> None:
-    cfg_keys = {f.key for f in connector.config_fields}
+    cfg_keys = {f.key for f in connector.all_config_fields}
     sec_keys = {f.key for f in connector.secret_fields}
     unknown = (set(config) - cfg_keys) | (set(secrets) - sec_keys)
     if unknown:
         raise HTTPException(status_code=422, detail=f"Bilinmeyen alan: {', '.join(sorted(unknown))}")
-    missing = [f.label for f in connector.config_fields if f.required and not config.get(f.key)] + \
+    missing = [f.label for f in connector.all_config_fields if f.required and not config.get(f.key)] + \
               [f.label for f in connector.secret_fields if f.required and not secrets.get(f.key)]
     if missing:
         raise HTTPException(status_code=422, detail=f"Zorunlu alan: {', '.join(missing)}")
+    bad = [f.label for f in connector.all_config_fields
+           if f.options and config.get(f.key) not in (None, "", *[v for v, _ in f.options])]
+    if bad:
+        raise HTTPException(status_code=422, detail=f"Geçersiz seçim: {', '.join(bad)}")
 
 
 @router.get("/company/{tenant_id}/integrations")
@@ -124,6 +128,16 @@ async def update_connection(tenant_id: uuid.UUID, cid: uuid.UUID, payload: Conne
     conn.config, conn.secret = config, vault.seal(secrets, tool_gateway.binding(conn))
     if payload.status:
         conn.status = payload.status
+    # Bu hesaba yansıtılan proje depoları (#297): Gitea'daki yansıtma eski token'la kalmasın
+    if conn.connector in code_repo.MIRROR_CONNECTORS and (payload.status or payload.secrets or payload.config is not None):
+        for project in (await db.execute(select(Project).where(Project.mirror_connection_id == conn.id))).scalars().all():
+            try:
+                if conn.status != "ACTIVE":
+                    await code_repo.clear_mirror(project)
+                else:
+                    await code_repo.set_mirror(project, conn, project.mirror_repo)
+            except code_repo.RepoError as exc:
+                raise HTTPException(status_code=502, detail=f"'{project.name}' projesinin yansıtması güncellenemedi: {exc.message}")
     await db.commit()
     return conn_out(conn)
 

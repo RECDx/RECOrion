@@ -2,9 +2,10 @@
 from typing import Dict
 
 from app.integrations.base import Connector
-from app.integrations import telegram
+from app.integrations import git_hosting, odoo, telegram, trello
 
-REGISTRY: Dict[str, Connector] = {c.code: c for c in (telegram.CONNECTOR,)}
+REGISTRY: Dict[str, Connector] = {c.code: c for c in (odoo.CONNECTOR, trello.CONNECTOR, git_hosting.GITHUB, git_hosting.GITEA,
+                                                      telegram.CONNECTOR)}
 
 
 def get(code: str) -> Connector:

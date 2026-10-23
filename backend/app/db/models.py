@@ -369,6 +369,9 @@ class Project(Base):
     repo_mode = Column(String(16), nullable=False, default="NONE")
     repo_owner = Column(String(64))
     repo_name = Column(String(100))
+    # Müşterinin GitHub/Gitea hesabına yansıtma (ADIM 10.3, #297): şirket bağlantısı + hedef 'sahip/depo'
+    mirror_connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="SET NULL"))
+    mirror_repo = Column(String(200))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

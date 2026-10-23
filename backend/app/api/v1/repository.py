@@ -10,12 +10,12 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import CurrentUser, get_current_user
-from app.db.models import Task
+from app.db.models import IntegrationConnection, Task
 from app.db.session import get_db
 from app.services import code_repo, task_flow
 from app.services import projects as psvc
@@ -95,3 +95,56 @@ async def merge_step(project_id: uuid.UUID, task_id: uuid.UUID, user: CurrentUse
     await task_flow.log(db, project, task, "REPO_MERGED", user.actor_id, f"#{task.repo_pr_number} yönetici tarafından ana dala birleştirildi.", r)
     await db.commit()
     return r
+
+
+# ---------------------------------------------------------------- müşterinin hesabına yansıtma (ADIM 10.3, #297)
+async def _mirror_conn(db: AsyncSession, project, cid) -> IntegrationConnection:
+    conn = await db.get(IntegrationConnection, cid)
+    if not conn or conn.tenant_id != project.tenant_id or conn.connector not in code_repo.MIRROR_CONNECTORS or conn.status != "ACTIVE":
+        raise HTTPException(status_code=404, detail="Etkin bir GitHub/Gitea bağlantısı bulunamadı.")
+    return conn
+
+
+@router.get("/{project_id}/repository/mirror-targets")
+async def mirror_targets(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Proje yöneticisinin seçebileceği şirket bağlantıları (adı ve türü; ayar ve kimlik bilgisi yok)."""
+    project = await psvc.load(db, user, project_id, manage=True)
+    rows = (await db.execute(select(IntegrationConnection).where(
+        IntegrationConnection.tenant_id == project.tenant_id, IntegrationConnection.status == "ACTIVE",
+        IntegrationConnection.connector.in_(code_repo.MIRROR_CONNECTORS)).order_by(IntegrationConnection.name))).scalars().all()
+    return [{"id": str(c.id), "name": c.name, "connector": c.connector} for c in rows]
+
+
+class MirrorIn(BaseModel):
+    connection_id: uuid.UUID
+    repo: str = Field(..., min_length=3, max_length=200)
+
+
+@router.put("/{project_id}/repository/mirror")
+async def set_mirror(project_id: uuid.UUID, payload: MirrorIn, user: CurrentUser = Depends(get_current_user),
+                     db: AsyncSession = Depends(get_db)):
+    project = await psvc.load(db, user, project_id, manage=True)
+    if project.status in ("COMPLETED", "CANCELLED"):
+        raise HTTPException(status_code=409, detail="Kapanmış projenin depo ayarı değiştirilemez.")
+    conn = await _mirror_conn(db, project, payload.connection_id)
+    try:
+        await code_repo.set_mirror(project, conn, payload.repo)
+    except RepoError as exc:
+        if exc.status in (409, 422):
+            raise HTTPException(status_code=exc.status, detail=exc.message)
+        _fail(exc)
+    await task_flow.log(db, project, None, "REPO_MIRROR_SET", user.actor_id, f"{conn.name}: {project.mirror_repo}")
+    await db.commit()
+    return await code_repo.overview(project, await _tasks(db, project.id))
+
+
+@router.delete("/{project_id}/repository/mirror")
+async def clear_mirror(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    project = await psvc.load(db, user, project_id, manage=True)
+    try:
+        await code_repo.clear_mirror(project)
+    except RepoError as exc:
+        _fail(exc)
+    await task_flow.log(db, project, None, "REPO_MIRROR_CLEARED", user.actor_id, "Yansıtma kaldırıldı.")
+    await db.commit()
+    return await code_repo.overview(project, await _tasks(db, project.id))

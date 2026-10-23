@@ -46,7 +46,7 @@ export default function IntegrationsPanel({ tenantId }) {
           <ul className="pj-list">
             {conns.map((c) => (
               <li key={c.id} style={{ flexWrap: 'wrap' }}>
-                <span><strong>{c.name}</strong> <Badge tone="neutral">{c.connector_title}</Badge><br />
+                <span><strong>{c.name}</strong> <Badge tone="neutral">{c.connector_title}</Badge>{c.config?.access === 'READ_ONLY' && <> <Badge tone="info">Yalnızca okuma</Badge></>}<br />
                   <small className="pj-hint">{c.last_test_at ? `Son deneme ${fmt(c.last_test_at)}: ${c.last_test_ok ? 'başarılı' : c.last_error || 'başarısız'}` : 'Henüz denenmedi'}</small></span>
                 <Badge tone={c.status === 'ACTIVE' ? 'success' : 'neutral'}>{c.status === 'ACTIVE' ? 'Etkin' : 'Devre dışı'}</Badge>
                 <Button size="sm" variant="secondary" icon={RefreshCw} onClick={() => test(c)}>Dene</Button>
@@ -125,8 +125,15 @@ function ConnectionModal({ tenantId, catalog, conn, onClose, onSaved }) {
         {connector?.config_fields.map((f) => (
           <div className="pj-field full" key={f.key}>
             <label htmlFor={`ig-c-${f.key}`}>{f.label}{f.required ? ' *' : ''}</label>
-            <input id={`ig-c-${f.key}`} className="ui-input" value={config[f.key] || ''} placeholder={f.placeholder}
-              onChange={(e) => setConfig((c) => ({ ...c, [f.key]: e.target.value }))} />
+            {f.options?.length ? (
+              <select id={`ig-c-${f.key}`} className="ui-input" value={config[f.key] || f.options[0][0]}
+                onChange={(e) => setConfig((c) => ({ ...c, [f.key]: e.target.value }))}>
+                {f.options.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+              </select>
+            ) : (
+              <input id={`ig-c-${f.key}`} className="ui-input" value={config[f.key] || ''} placeholder={f.placeholder}
+                onChange={(e) => setConfig((c) => ({ ...c, [f.key]: e.target.value }))} />
+            )}
             {f.help && <p className="pj-hint">{f.help}</p>}
           </div>
         ))}

@@ -753,6 +753,88 @@ try {
   step(decided?.status === 'REJECTED' && /ben göndereceğim/.test(decided?.decision_note || '') && !decided?.result,
     'Yönetici araç işlemini Onaylarım ekranından gerekçeyle reddetti; mesaj gönderilmedi ve kayıt günlükte duruyor',
     decided ? `${decided.status} · not: ${decided.decision_note || '-'}` : 'karar yok');
+
+  // 10.3 Odoo (gerçek RECDx Odoo'su, YALNIZCA OKUMA — kullanıcı kararı: gerçek Odoo'ya test kaydı yazılmaz):
+  // şirket yöneticisi bağlantıyı ekrandan ekler, dener; yazma araçları hiç görünmez; Kaan'a okuma yetkisi verir
+  const odooEnv = Object.fromEntries(['ODOO_URL', 'ODOO_DB', 'ODOO_USER', 'ODOO_PASSWORD'].map((k) => [k,
+    execFileSync('docker', ['exec', 'recorion_backend', 'printenv', k], { encoding: 'utf8' }).trim()]));  // bellekte; yazdırılmaz
+  const od = await session('admin');
+  await od.page.getByRole('button', { name: 'Entegrasyonlar' }).click();
+  await od.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
+  const odName = `Odoo ${NAME.slice(-5)}`;
+  const odDlg = od.page.getByRole('dialog');
+  await odDlg.locator('#ig-connector').selectOption('odoo');
+  await odDlg.locator('#ig-name').fill(odName);
+  await odDlg.locator('#ig-c-url').fill(odooEnv.ODOO_URL);
+  await odDlg.locator('#ig-c-db').fill(odooEnv.ODOO_DB);
+  await odDlg.locator('#ig-c-username').fill(odooEnv.ODOO_USER);
+  await odDlg.locator('#ig-c-allowed_models').fill('project.project, project.task');
+  await odDlg.locator('#ig-c-access').selectOption('READ_ONLY');
+  await odDlg.locator('#ig-s-api_key').fill(odooEnv.ODOO_PASSWORD);
+  await odDlg.getByRole('button', { name: 'Kaydet' }).click();
+  const odRow = od.page.locator('.pj-list li', { hasText: odName });
+  await odRow.waitFor({ timeout: 15000 });
+  await odRow.getByRole('button', { name: 'Dene' }).click();
+  await odRow.getByText(/Son deneme/).waitFor({ timeout: 40000 });
+  const odRowText = await odRow.innerText();
+  await odRow.getByRole('button', { name: 'Araçlar ve yetkiler' }).click();
+  await od.page.getByRole('checkbox', { name: 'Kaan: count_records' }).waitFor({ timeout: 20000 });
+  const writeBoxes = await od.page.getByRole('checkbox', { name: /Kaan: (create_record|update_record)/ }).count();
+  await od.page.getByRole('checkbox', { name: 'Kaan: count_records' }).check();
+  await od.page.getByRole('checkbox', { name: 'Kaan: search_records' }).check();
+  await od.page.getByRole('button', { name: 'Yetkileri kaydet' }).click();
+  await od.page.waitForTimeout(1500);
+  const odPage = await od.page.content();
+  step(/Odoo 19/.test(odRowText) && /Yalnızca okuma/.test(odRowText) && writeBoxes === 0 && !odPage.includes(odooEnv.ODOO_PASSWORD),
+    'Odoo yalnızca okuma bağlandı ve denendi; yazma araçları hiç sunulmuyor; anahtar sayfada yok',
+    `${odRowText.split('\n').find((l) => /Son deneme/.test(l)) || odRowText.slice(0, 80)} · yazma kutusu: ${writeBoxes}`);
+  await shot(od.page, '13-odoo-salt-okunur');
+
+  // Proje yöneticisi Kaan'a sohbette Odoo'dan bilgi sorar: okuma aracı anında çalışır, sonuç yanıta yansır
+  const kaan = (await api(tm.page, '/api/v1/actors/')).body.find((a) => a.display_name === 'Kaan');
+  const kTask = await api(tm.page, `/api/v1/projects/${tProj.body.id}/tasks`, { method: 'POST',
+    body: JSON.stringify({ title: 'Odoo durum özeti', assignee_actor_id: kaan.id }) });
+  let odCall = null;
+  let odReply = '';
+  for (const content of ['Odoo\'da 47 numaralı projede (project_id = 47) toplam kaç görev var? Odoo aracını kullanarak bak.',
+    'Lütfen count_records aracını model project.task, domain [["project_id", "=", 47]] ile çağır ve sonucu söyle.']) {
+    const r = await api(tm.page, '/api/v1/chat/send', { method: 'POST', body: JSON.stringify({ task_id: kTask.body.id, content }) });
+    odReply = r.body?.assistant_message?.content || JSON.stringify(r.body || r.status).slice(0, 200);
+    odCall = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/tool-calls`)).body || [])
+      .find((c) => c.task_id === kTask.body.id && c.status === 'EXECUTED');
+    if (odCall) break;
+  }
+  const odCount = odCall?.result?.count ?? (odCall?.result?.records || []).length;
+  step(Boolean(odCall) && odCall.kind === 'READ' && odReply.includes(String(odCount)),
+    'AI personel Odoo okuma aracını sohbette kullandı; gerçek veri yanıta yansıdı (onay beklemeden)',
+    `${odCall ? `${odCall.tool} → ${odCount}` : 'araç çağrılmadı'} · yanıt: ${odReply.replace(/\s+/g, ' ').slice(0, 90)}`);
+
+  // Trello: yönetici yanlış token girer; anlaşılır hata, token sayfada görünmez
+  await od.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
+  const trName = `Trello ${NAME.slice(-5)}`;
+  const trToken = `YANLIS-TRELLO-${Date.now()}`;
+  const trDlg = od.page.getByRole('dialog');
+  await trDlg.locator('#ig-connector').selectOption('trello');
+  await trDlg.locator('#ig-name').fill(trName);
+  await trDlg.locator('#ig-s-api_key').fill('0123456789abcdef0123456789abcdef');
+  await trDlg.locator('#ig-s-token').fill(trToken);
+  await trDlg.getByRole('button', { name: 'Kaydet' }).click();
+  const trRow = od.page.locator('.pj-list li', { hasText: trName });
+  await trRow.waitFor({ timeout: 15000 });
+  await trRow.getByRole('button', { name: 'Dene' }).click();
+  await trRow.getByText(/Son deneme/).waitFor({ timeout: 30000 });
+  const trText = await trRow.innerText();
+  step(/Trello hata|başarısız|401|invalid/i.test(trText) && !(await od.page.content()).includes(trToken),
+    'Trello: yanlış anahtar anlaşılır hatayla reddedildi; token sayfada görünmüyor',
+    trText.split('\n').find((l) => /Son deneme/.test(l)) || trText.slice(0, 90));
+
+  // Temizlik: gerçek Odoo anahtarı test kaydında kalmaz (kasadaki değer değiştirilir, bağlantı devre dışı)
+  const odConn = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/integrations`)).body || []).find((c) => c.name === odName);
+  if (odConn) {
+    await api(od.page, `/api/v1/company/${cfg.tenant_id}/integrations/${odConn.id}`, { method: 'PUT',
+      body: JSON.stringify({ status: 'DISABLED', secrets: { api_key: 'silindi' } }) });
+  }
+  await od.ctx.close();
   await api(tm.page, `/api/v1/projects/${tProj.body.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
   await tm.ctx.close();
 } catch (e) {
