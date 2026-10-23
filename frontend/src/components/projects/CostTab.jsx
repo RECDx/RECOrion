@@ -15,11 +15,14 @@ export default function CostTab({ project, onSummary }) {
   const [c, setC] = useState(null);
   const [budget, setBudget] = useState({ amount: '', note: '' });
   const [editing, setEditing] = useState(null);
+  // Kaydedilmemiş bütçe girişi yeniden yüklemede (kalem ekleme, geç gelen yanıt) sunucudaki değerle ezilmez
+  const budgetDirty = useRef(false);
   const closed = ['COMPLETED', 'CANCELLED'].includes(project.status);
+  const editBudget = (patch) => { budgetDirty.current = true; setBudget((b) => ({ ...b, ...patch })); };
 
   const load = useCallback(() => api.getProjectCosts(project.id).then((d) => {
     setC(d);
-    setBudget({ amount: d.budget.amount ?? '', note: d.budget.note || '' });
+    if (!budgetDirty.current) setBudget({ amount: d.budget.amount ?? '', note: d.budget.note || '' });
     onSummary?.(d.totals);
   }).catch((e) => toast.error(e.message)), [project.id, onSummary]);
   useEffect(() => { load(); }, [load]);
@@ -30,6 +33,7 @@ export default function CostTab({ project, onSummary }) {
     try {
       await api.setProjectBudget(project.id, budget.amount === '' ? null : Number(budget.amount), budget.note);
       toast.success('Bütçe kaydedildi.');
+      budgetDirty.current = false;
       load();
     } catch (e) { toast.error(e.message); }
   };
@@ -62,18 +66,18 @@ export default function CostTab({ project, onSummary }) {
             <div className="pj-field">
               <label htmlFor="cost-budget">Bütçe (₺)</label>
               <input id="cost-budget" className="ui-input" type="number" min="0" step="0.01" value={budget.amount} disabled={closed}
-                onChange={(e) => setBudget((b) => ({ ...b, amount: e.target.value }))} placeholder={c.budget.suggested ? String(c.budget.suggested) : ''} />
+                onChange={(e) => editBudget({ amount: e.target.value })} placeholder={c.budget.suggested ? String(c.budget.suggested) : ''} />
             </div>
             <div className="pj-field">
               <label htmlFor="cost-budget-note">Not</label>
               <input id="cost-budget-note" className="ui-input" value={budget.note} disabled={closed} maxLength={2000}
-                onChange={(e) => setBudget((b) => ({ ...b, note: e.target.value }))} />
+                onChange={(e) => editBudget({ note: e.target.value })} />
             </div>
           </div>
           {!closed && (
             <div className="pj-actions" style={{ marginTop: 10 }}>
               <Button icon={Save} onClick={saveBudget}>Bütçeyi kaydet</Button>
-              {c.budget.suggested > 0 && <Button variant="ghost" onClick={() => setBudget((b) => ({ ...b, amount: c.budget.suggested }))}>Plan önerisini kullan</Button>}
+              {c.budget.suggested > 0 && <Button variant="ghost" onClick={() => editBudget({ amount: c.budget.suggested })}>Plan önerisini kullan</Button>}
             </div>
           )}
           <ul className="pj-check" style={{ marginTop: 12 }}>
