@@ -9,8 +9,8 @@ from app.db.models import ChatMessage, Task, Actor, LLMModel, Project
 from app.services import llm_gateway
 from app.services.llm_gateway import LLMContext, LLMError
 from app.services import knowledge
+from app.services import live
 from app.services import projects as psvc
-from app.services.redis_stream import redis_stream
 from pydantic import BaseModel, Field
 from typing import Literal
 import uuid
@@ -34,6 +34,10 @@ async def _ensure_task_access(db: AsyncSession, user: CurrentUser, task_id: uuid
         raise HTTPException(status_code=404, detail="Görev bulunamadı.")
     await psvc.load(db, user, task.project_id)
     return task
+
+
+def _visible_to(user: CurrentUser):
+    return (ChatMessage.is_private == False) | (ChatMessage.visible_to_actor_id == user.actor_id)  # noqa: E712
 
 
 class SendMessageRequest(BaseModel):
@@ -90,8 +94,8 @@ async def get_chat_history(
         .where(ChatMessage.task_id == task_id)
     )
     if include_private:
-        # Özel mesajları yalnızca gönderen kişi görür
-        stmt = stmt.where((ChatMessage.is_private == False) | (ChatMessage.sender_actor_id == user.actor_id))
+        # Özel yazışma (soru ve AI'ın yanıtı) yalnızca soran kişiye görünür
+        stmt = stmt.where(_visible_to(user))
     else:
         stmt = stmt.where(ChatMessage.is_private == False)
     if actor_id:
@@ -164,13 +168,13 @@ async def send_chat_message(
 
     # Görevli ajan: rol promptu buradan, model LLM Gateway'de çözülür
     # (açık seçim → personelin modeli → platform varsayılanı; paket izni kontrol edilir)
+    # Adım insan personele atanmışsa yanıtı RECAi verir (yanıt insanın adına yazılmaz)
     system_prompt = "Sen RECOrion otonom iş platformunun yetkili AI personelisiniz."
-    agent_id = None
-
-    if task.assignee:
-        agent_id = str(task.assignee.id)
-        if task.assignee.system_prompt:
-            system_prompt = task.assignee.system_prompt
+    agent = task.assignee if task.assignee and task.assignee.actor_type == "AI_AGENT" else None
+    agent_id = str(agent.id) if agent else None
+    if agent and agent.system_prompt:
+        system_prompt = agent.system_prompt
+    visible_to = user.actor_id if payload.is_private else None
 
     # 1. Kullanıcı mesajını kaydet
     user_msg = ChatMessage(
@@ -181,6 +185,7 @@ async def send_chat_message(
         role="user",
         content=payload.content,
         is_private=payload.is_private,
+        visible_to_actor_id=visible_to,
         message_type=payload.message_type
     )
     db.add(user_msg)
@@ -188,14 +193,14 @@ async def send_chat_message(
     await db.refresh(user_msg)
 
     # 2. 4 katmanlı bilgi + proje ekleri (ADIM 5.5): proje, AI personel, şirket unvanı, kurum hafızası, platform unvanı
-    scope = await knowledge.scope_for_agent(db, tenant_id, task.assignee.id if task.assignee else None, project_id)
+    scope = await knowledge.scope_for_agent(db, tenant_id, agent.id if agent else None, project_id)
     citations = await knowledge.retrieve(scope, payload.content, limit=6)
     rag_context = knowledge.format_context(citations)
 
-    # 3. Model Mesaj Geçmişini Derle (Rolling Context)
+    # 3. Model Mesaj Geçmişini Derle (Rolling Context): başkalarının özel yazışması bağlama girmez
     history_res = await db.execute(
         select(ChatMessage)
-        .where(ChatMessage.task_id == task.id)
+        .where(ChatMessage.task_id == task.id, _visible_to(user))
         .order_by(ChatMessage.created_at.desc())
         .limit(10)
     )
@@ -205,15 +210,16 @@ async def send_chat_message(
     for m in prev_messages:
         llm_messages.append({"role": m.role if m.role in ["user", "assistant"] else "user", "content": m.content})
 
-    # Redis'e anlık düşünce adımı fırlat
+    # Canlı düşünce adımı (ADIM 8.2): proje kanalındaki herkes görür
     counts = knowledge.layer_counts(citations)
-    await redis_stream.publish_thought(str(task.id), "ANALYSIS", "Bilgi katmanları tarandı: " + (
+    await live.thought(project_id, task_id, "ANALYSIS", "Bilgi katmanları tarandı: " + (
         ", ".join(f"{knowledge.LABELS[k]} {v}" for k, v in counts.items()) or "ilgili bilgi bulunamadı") + ".")
+    await live.thought(project_id, task_id, "WRITING", f"{agent.display_name if agent else 'RECAi'} yanıt yazıyor…")
 
     # 4. LLM Gateway (ölçüm + kredi düşümü). Hata olursa sahte yanıt üretilmez.
     try:
         ai = await llm_gateway.chat(
-            LLMContext(tenant_id=tenant_id, purpose="AGENT_CHAT", actor_id=task.assignee.id if task.assignee else None,
+            LLMContext(tenant_id=tenant_id, purpose="AGENT_CHAT", actor_id=agent.id if agent else None,
                        task_id=task_id, project_id=project_id),
             llm_messages,
             model_code=payload.override_model_code,
@@ -230,11 +236,13 @@ async def send_chat_message(
         tenant_id=tenant_id,
         project_id=project_id,
         task_id=task_id,
-        sender_actor_id=task.assignee.id if task.assignee else None,
+        sender_actor_id=agent.id if agent else None,
+        sender_name=None if agent else "RECAi",
         role="assistant",
         content=assistant_content,
         thought_process=thought_process,
         is_private=payload.is_private,
+        visible_to_actor_id=visible_to,
         message_type=payload.message_type
     )
     db.add(assistant_msg)
@@ -292,7 +300,7 @@ async def learn_from_task_chat_history(
 
     msgs_stmt = (
         select(ChatMessage)
-        .where(ChatMessage.task_id == task_id)
+        .where(ChatMessage.task_id == task_id, _visible_to(user))
         .order_by(ChatMessage.created_at.asc())
     )
     messages = (await db.execute(msgs_stmt)).scalars().all()

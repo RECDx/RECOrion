@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, CheckCircle2, FileText, RotateCcw, Send, ShieldAlert } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
@@ -6,6 +6,7 @@ import SimpleMarkdown from '../ai/SimpleMarkdown';
 import FlowCanvas from './FlowCanvas';
 import { confirmDialog, promptDialog, toast } from '../../ui/feedback';
 import { fmtDay } from './projectMeta';
+import { useProjectLive } from '../../live';
 
 const TONE = { BACKLOG: 'neutral', READY: 'info', IN_PROGRESS: 'info', WAITING_APPROVAL: 'warning', REVISION: 'danger',
   QUARANTINED: 'danger', DONE: 'success', CANCELLED: 'neutral' };
@@ -25,13 +26,25 @@ export default function WorkflowTab({ project }) {
   const closeViewer = useCallback(() => setViewing(null), []);
   const live = ['ACTIVE', 'PAUSED'].includes(project.status);
 
+  const [thought, setThought] = useState(null);
   const load = useCallback(() => api.getProjectWorkflow(project.id).then(setFlow).catch((e) => toast.error(e.message)), [project.id]);
   useEffect(() => { load(); }, [load]);
+  // Canlı akış (Adım 8.2): olay gelince yenilenir; bağlantı yoksa eskisi gibi 4 sn'de bir, varsa 30 sn'de bir güvenlik yenilemesi
+  const refresh = useRef(null);
+  const liveStatus = useProjectLive(live ? project.id : null, (e) => {
+    if (e.type === 'thought') { setThought(e); return; }
+    if (e.type === 'task_event' || (e.type === 'message' && e.message.role === 'assistant')) {
+      if (e.type === 'task_event' && e.kind !== 'TASK_STARTED') setThought((t) => (t && t.task_id === e.task_id ? null : t));
+      clearTimeout(refresh.current);
+      refresh.current = setTimeout(load, 500);
+    }
+  });
+  useEffect(() => () => clearTimeout(refresh.current), []);
   useEffect(() => {
     if (!live) return undefined;
-    const t = setInterval(load, 4000);
+    const t = setInterval(load, liveStatus === 'live' ? 30000 : 4000);
     return () => clearInterval(t);
-  }, [live, load]);
+  }, [live, load, liveStatus]);
 
   const run = async (id, fn, message) => {
     setBusy(id);
@@ -76,6 +89,12 @@ export default function WorkflowTab({ project }) {
           <div className="pj-stat"><span>Karantina</span><strong>{count(['QUARANTINED'])}</strong></div>
           <div className="pj-stat"><span>Tamamlandı</span><strong>{count(['DONE'])} / {flow.tasks.length}</strong></div>
         </div>
+        {live && (
+          <div className="pj-note info" role="status" aria-live="polite">
+            <span className={`live-dot live-${liveStatus}`}>{liveStatus === 'live' ? 'Canlı' : 'Bağlanıyor…'}</span>{' '}
+            {thought ? <><strong>{titles[thought.task_id] || 'Proje'}:</strong> {thought.text}</> : 'Adımlar ilerledikçe bu ekran kendiliğinden güncellenir.'}
+          </div>
+        )}
         <div className="ui-segmented" role="tablist" aria-label="Görünüm" style={{ alignSelf: 'flex-start' }}>
           {[['list', 'Liste'], ['flow', 'Akış şeması']].map(([k, l]) => (
             <button key={k} type="button" className={`ui-segmented-item ${view === k ? 'active' : ''}`} onClick={() => setView(k)}>{l}</button>

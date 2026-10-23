@@ -13,6 +13,7 @@ import ProjectPlanner from './components/projects/ProjectPlanner';
 import ApprovePage from './components/approvals/ApprovePage';
 import ApprovalsInbox from './components/approvals/ApprovalsInbox';
 import { api, session } from './api';
+import { mergeMessages, useProjectLive } from './live';
 import { notify, promptDialog, toast } from './ui/feedback';
 
 // Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
@@ -76,6 +77,8 @@ export default function App() {
   const [chatFilter, setChatFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Canlı akış (Adım 8.2): AI'ın o an ne yaptığı (görev kimliği + metin)
+  const [liveThought, setLiveThought] = useState(null);
   // KVKK modu: RECDx yöneticisi başka bir şirketin Work Space'ini içerik olmadan görüntüler
   const [kvkkRestricted, setKvkkRestricted] = useState(false);
   // Tablet/telefonda aynı anda tek bölme gösterilir
@@ -220,6 +223,37 @@ export default function App() {
     loadTasks();
   }, [activeProject]);
 
+  // Canlı akış (Adım 8.2): yeni mesajlar, iş akışı olayları ve AI düşünce adımları sayfa yenilemeden gelir
+  const liveRefresh = React.useRef(null);
+  const liveStatus = useProjectLive(workspaceMode === 'WORK' && !kvkkRestricted ? activeProject?.id : null, (e) => {
+    if (e.type === 'thought') {
+      setLiveThought({ taskId: e.task_id, text: e.text, at: Date.now() });
+      return;
+    }
+    if (e.type === 'message') {
+      const m = e.message;
+      if (m.role === 'assistant') setLiveThought((t) => (t && t.taskId === m.task_id ? null : t));
+      const shown = selectedTask && m.task_id === selectedTask.id
+        && (chatFilter === 'ALL' || (chatFilter === 'MY' && m.sender_actor_id === currentUser?.actor_id));
+      if (shown) setMessages((prev) => mergeMessages(prev, [m]));
+      return;
+    }
+    if (e.type === 'task_event') {
+      // Adım ilerledi/durdu: eski "yazıyor" göstergesi kalmaz (sonraki iş varsa yeni düşünce adımı gelir)
+      if (e.kind !== 'TASK_STARTED') setLiveThought((t) => (t && t.taskId === e.task_id ? null : t));
+      // Aynı anda gelen olaylar tek yenilemede toplanır
+      clearTimeout(liveRefresh.current);
+      liveRefresh.current = setTimeout(async () => {
+        if (!activeProject) return;
+        try {
+          const tList = await api.getTasks(activeProject.id);
+          setTasks(tList);
+          setSelectedTask((cur) => tList.find((x) => x.id === cur?.id) || cur);
+        } catch { /* bir sonraki olayda yeniden denenir */ }
+      }, 600);
+    }
+  });
+
   // 3. Load Chat History when Selected Task or Chat Filter Changes
   useEffect(() => {
     if (!selectedTask) return;
@@ -258,15 +292,8 @@ export default function App() {
         message_type: 'CHAT'
       });
 
-      // Append messages
-      setMessages((prev) => [
-        ...prev,
-        response.user_message,
-        {
-          ...response.assistant_message,
-          citations: response.citations
-        }
-      ]);
+      // Mesajlar canlı akıştan da gelebilir: kimliğe göre birleştirilir (kaynak kartları yanıta eklenir)
+      setMessages((prev) => mergeMessages(prev, [response.user_message, { ...response.assistant_message, citations: response.citations }]));
 
       // Refresh memory items if citations or updates occurred
       if (tenant?.id) {
@@ -575,6 +602,8 @@ export default function App() {
           messages={messages}
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
+          liveThought={liveThought && selectedTask && liveThought.taskId === selectedTask.id ? liveThought.text : null}
+          liveStatus={liveStatus}
           actors={actors}
         />
 

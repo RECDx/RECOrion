@@ -184,6 +184,8 @@ export const api = {
     return request(`/chat/project/${projectId}?${params.toString()}`);
   },
   sendMessage: (payload) => request('/chat/send', { method: 'POST', body: JSON.stringify(payload) }),
+  // Canlı akış bileti (Adım 8.2): 60 sn geçerli, tek kullanımlık
+  getLiveTicket: (projectId) => request('/live/ticket', { method: 'POST', body: JSON.stringify({ project_id: projectId }) }),
   learnFromTaskChat: (taskId) => request(`/chat/learn/${taskId}`, { method: 'POST' }),
 
   // 2 Kademeli Kolektif Hafıza

@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, Artifact, ChatMessage, Project, Task, Tenant
-from app.services import knowledge, llm_gateway, storage, task_flow
+from app.services import knowledge, live, llm_gateway, storage, task_flow
 from app.services.llm_gateway import LLMContext, LLMError
 
 logger = logging.getLogger("recorion.agent_work")
@@ -53,6 +53,7 @@ async def _generate(ctx: LLMContext, messages: List[Dict[str, str]]):
         credits += float(result.credits)
         if not _truncated(result):
             break
+        await live.thought(ctx.project_id, ctx.task_id, "CONTINUE", f"Çıktı uzun; kaldığı yerden devam ediyor (parça {len(pieces) + 1}).")
         messages = messages + [{"role": "assistant", "content": result.content},
                                {"role": "user", "content": "Çıktın token sınırında kesildi. Tekrar etmeden, tam kaldığın yerden devam et."}]
     return "".join(pieces).strip(), result, len(pieces), round(credits, 4), fallback_from
@@ -108,6 +109,9 @@ async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> 
     own = await artifact_text(previous, MAX_OWN_CHARS)
     scope = await knowledge.scope_for_agent(db, tenant.id, agent.id, project.id)
     hits = await knowledge.retrieve(scope, f"{task.title}\n{task.description or ''}"[:2000], limit=6)
+    await live.thought(project.id, task.id, "ANALYSIS", f"{agent.display_name}: bilgi katmanlarında {len(hits)} kaynak, "
+                       f"{len(dep_blocks)} önceki adım çıktısı bulundu" + ("; düzeltme isteği okunuyor." if feedback else "."))
+    await live.thought(project.id, task.id, "WRITING", f"{agent.display_name} {'düzeltilmiş ' if feedback else ''}çıktıyı yazıyor…")
     prompt = f"""# Proje
 {project.name}
 İsterler:
@@ -203,6 +207,7 @@ Sadece şu JSON'u döndür (en fazla 8 madde, her biri en fazla 200 karakter; ba
     ctx = LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=reviewer.id, task_id=task.id, project_id=project.id)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
     verdict, result, last_error = None, None, None
+    await live.thought(project.id, task.id, "REVIEW", f"{reviewer.display_name} sürüm {art.version} çıktısını kabul ölçütüne göre değerlendiriyor…")
     try:
         # Uzun çıktıda bulgu listesi uzayıp yanıt kesilebilir: okunamazsa bir kez kısa ve geçerli JSON istenir
         for attempt in range(2):

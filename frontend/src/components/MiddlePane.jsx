@@ -26,8 +26,10 @@ export default function MiddlePane({
   selectedTask, 
   messages, 
   onSendMessage, 
-  isLoading, 
-  actors, 
+  isLoading,
+  actors,
+  liveThought,
+  liveStatus,
 }) {
   const assignee = actors?.find((a) => a.id === selectedTask?.assignee_actor_id);
   const [inputText, setInputText] = useState('');
@@ -61,7 +63,7 @@ export default function MiddlePane({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, liveThought]);
 
   const toggleThought = (msgId) => {
     setExpandedThoughts((prev) => ({
@@ -112,6 +114,12 @@ export default function MiddlePane({
               <span className="badge badge-ai" style={{ fontSize: '0.65rem' }}>
                 {assignee?.display_name || 'Atanmadı'}
               </span>
+              {liveStatus && (
+                <span className={`live-dot live-${liveStatus}`} role="status"
+                  title={liveStatus === 'live' ? 'Canlı: yeni mesajlar ve AI adımları anında görünür' : 'Canlı bağlantı kuruluyor…'}>
+                  {liveStatus === 'live' ? 'Canlı' : 'Bağlanıyor…'}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
               Öncelik: <b style={{ color: '#f43f5e' }}>{selectedTask?.priority || 'HIGH'}</b> • 
@@ -239,12 +247,12 @@ export default function MiddlePane({
           })
         )}
 
-        {/* Live Thinking Pulse */}
-        {isLoading && (
-          <div className="chat-bubble chat-bubble-ai thinking-pulse" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Canlı düşünce adımı (Adım 8.2): AI'ın o an ne yaptığı; arka plandaki iş adımı çalışmaları da görünür */}
+        {(isLoading || liveThought) && (
+          <div className="chat-bubble chat-bubble-ai thinking-pulse" role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Brain size={18} color="var(--ac-818cf8)" />
             <span style={{ fontSize: '0.85rem', color: 'var(--ac-c084fc)', fontWeight: '600' }}>
-              AI Personeli düşünüyor, kolektif hafıza ve EVREN modeli taranıyor...
+              {liveThought || 'Mesaj gönderiliyor…'}
             </span>
           </div>
         )}

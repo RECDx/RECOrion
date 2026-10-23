@@ -606,6 +606,7 @@ class ChatMessage(Base):
     attachments = Column(JSONB, default=list)
     tokens = Column(Integer, default=0)
     is_private = Column(Boolean, default=False)
+    visible_to_actor_id = Column(UUID(as_uuid=True))  # özel mesaj yalnızca bu kişiye görünür (soran kişi)
     message_type = Column(String(32), default="CHAT")  # CHAT, AGENT_TO_AGENT, HANDOFF
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 

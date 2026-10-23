@@ -168,10 +168,16 @@ try {
   await page.getByRole('button', { name: 'Liste', exact: true }).click();
   const versionOf = async (title) => Number(((await stepCard(page, title).getByRole('button', { name: /Çıktıyı gör/ }).textContent()) || '').match(/sürüm (\d+)/)?.[1] || 0);
   // Onaya gelene kadar bekle; kontrol personeli 3 kez reddederse karantina olur (raporlanır, bir kez yeniden denenir)
+  // 8.2: İş Akışı ekranında AI'ın o anki adımı (canlı akış) sayfa yenilemeden görünüyor mu
+  const liveSeen = new Set();
   const untilApproval = async (title, minutes) => {
     const start = Date.now();
     let retried = 0;
     while (Date.now() - start < minutes * 60000) {
+      const note = await page.locator('.pj-note[role="status"]').first().innerText().catch(() => '');
+      if (/Canlı/.test(note)) liveSeen.add('canlı');
+      const m2 = note.match(/(yazıyor|değerlendiriyor|devam ediyor|kaynak)/);
+      if (m2) liveSeen.add(m2[1]);
       const st = await statusOf(page, title);
       if (st === 'Onay bekliyor') return retried;
       if (st === 'Karantinada' && retried < 1) {
@@ -189,6 +195,7 @@ try {
   const reviewNotes = await page.locator('.pj-list li', { hasText: 'Kontrol' }).count();
   step(v1 >= 1, 'AI personel ilk adımı kendisi yürüttü, kontrolden geçip onaya geldi',
     `sürüm ${v1}, ${Math.round((Date.now() - tw) / 1000)} sn, kontrol kaydı: ${reviewNotes}`);
+  step(liveSeen.has('canlı') && liveSeen.size > 1, "İş Akışı canlı: AI'ın o anki adımı sayfa yenilemeden göründü", [...liveSeen].join(', '));
   const noSubmit = await stepCard(page, first).getByRole('button', { name: /teslim et/ }).count();
   step(noSubmit === 0, 'AI adımında elle teslim butonu yok (AI kendi teslim eder)');
   await stepCard(page, first).getByRole('button', { name: /Çıktıyı gör/ }).click();
@@ -219,6 +226,39 @@ try {
   const memberApprove = await m.page.getByRole('button', { name: 'Onayla', exact: true }).count();
   const memberView = await m.page.getByRole('button', { name: /Çıktıyı gör/ }).count();
   step(memberApprove === 0 && memberView > 0, 'Ekip üyesi çıktıyı görüyor ama onaylayamıyor', `Onayla: ${memberApprove}, Çıktıyı gör: ${memberView}`);
+
+  // 8.2 İki kişi aynı anda: yönetici Çalışma Alanında soru yazar, açık duran ekip üyesi ekranında sayfa yenilemeden görür
+  const openWork = async (pg) => {
+    await pg.getByRole('button', { name: 'Çalışma alanında aç' }).click();
+    await pg.locator('main.pane textarea').waitFor({ timeout: 15000 });
+    await pg.locator('main.pane .live-dot.live-live').waitFor({ timeout: 20000 });
+  };
+  await openWork(m.page);
+  const mgr2 = await session('manager');
+  await mgr2.page.locator('.pj-card', { hasText: NAME }).click();
+  await openWork(mgr2.page);
+  const taskTitle = (await mgr2.page.locator('main.pane .pane-header span').first().innerText()).trim();
+  const memberTask = (await m.page.locator('main.pane .pane-header span').first().innerText()).trim();
+  const bubbles = () => m.page.locator('main.pane .chat-bubble:not(.thinking-pulse)').count();
+  const before = await bubbles();
+  const question = `Canlı test sorusu ${Date.now() % 100000}: bu adımın en önemli riski nedir? Tek cümleyle yanıtla.`;
+  await mgr2.page.locator('main.pane textarea').fill(question);
+  await mgr2.page.locator('main.pane textarea').press('Enter');
+  const tq = Date.now();
+  const seenQuestion = await m.page.locator('main.pane', { hasText: question }).waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+  step(seenQuestion && taskTitle === memberTask, 'Ekip üyesi, yöneticinin mesajını sayfa yenilemeden anında gördü',
+    `${((Date.now() - tq) / 1000).toFixed(1)} sn · görev: ${taskTitle}`);
+  const thinking = await m.page.locator('main.pane .thinking-pulse').waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
+  let answered = false;
+  const ta = Date.now();
+  while (Date.now() - ta < 6 * 60000 && !answered) {
+    answered = (await bubbles()) >= before + 2;
+    if (!answered) await m.page.waitForTimeout(2000);
+  }
+  step(answered, "AI'ın yanıtı da ekip üyesinin ekranına kendiliğinden düştü",
+    `${Math.round((Date.now() - tq) / 1000)} sn · "yazıyor" göstergesi ekip üyesinde: ${thinking ? 'göründü' : 'görünmedi'}`);
+  await shot(m.page, '04b-canli-sohbet-uye');
+  await mgr2.ctx.close();
   await m.ctx.close();
   const o = await session('outsider');
   await o.page.getByText('Henüz proje yok').waitFor({ timeout: 15000 }).then(() => step(true, 'Ekip dışı kullanıcı projeyi göremiyor'))

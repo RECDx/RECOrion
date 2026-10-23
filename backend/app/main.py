@@ -77,6 +77,11 @@ async def llm_error_handler(request: _Request, exc: LLMError):
 # API Rotaları
 app.include_router(api_router)
 
+# Canlı akış (ADIM 8.2): WebSocket, erişimi bilet + proje üyeliğiyle denetlenir (app/api/v1/live.py)
+from app.api.v1.live import ws_router  # noqa: E402
+
+app.include_router(ws_router)
+
 
 @app.get("/", tags=["Root"])
 async def root():

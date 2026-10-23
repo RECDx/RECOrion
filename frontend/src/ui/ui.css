@@ -71,6 +71,12 @@
 .ui-badge-warning { background: rgba(245, 158, 11, 0.14); color: var(--ac-fbbf24, #fbbf24); border-color: rgba(245, 158, 11, 0.3); }
 .ui-badge-info { background: rgba(56, 189, 248, 0.14); color: var(--ac-38bdf8, #38bdf8); border-color: rgba(56, 189, 248, 0.3); }
 
+/* Canlı akış göstergesi (Adım 8.2) */
+.live-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 0.65rem; font-weight: 700; color: var(--text-dim); }
+.live-dot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+.live-dot.live-live { color: var(--ac-34d399, #34d399); }
+.live-dot.live-live::before { background: var(--ac-34d399, #34d399); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+
 .ui-empty { text-align: center; padding: 40px 16px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .ui-empty h4 { color: var(--text-main); font-size: 1rem; }
 .ui-empty p { font-size: 0.85rem; max-width: 420px; }
