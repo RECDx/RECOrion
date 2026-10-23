@@ -41,7 +41,7 @@ ROLE_BASE_PERMISSIONS = {
         "agent:custom_title", "agent:quarantine", "project:create", "project:manage",
         "task:create", "task:approve", "task:reject", "chat:participate",
         "chat:view_a2a", "chat:export", "memory:search", "memory:promote", "memory:revoke",
-        "billing:view", "department:dashboard",
+        "billing:view", "department:dashboard", "integration:manage",
     },
     "PROJECT_MANAGER": {
         "tenant:view", "agent:hire", "project:create", "project:manage", "task:create",

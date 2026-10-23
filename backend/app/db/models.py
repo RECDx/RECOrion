@@ -734,3 +734,62 @@ class CreditLedgerEntry(Base):
     note = Column(Text)
     created_by_actor_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class IntegrationConnection(Base):
+    """Şirketin dış sistem bağlantısı (ADIM 10.1). secret kimlik kasasında şifreli; API'de asla dönmez."""
+    __tablename__ = "integration_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    connector = Column(String(32), nullable=False)  # odoo, telegram, trello, gitea, github, mcp, edge
+    name = Column(String(120), nullable=False)
+    config = Column(JSONB, nullable=False, default=dict)
+    secret = Column(Text)
+    status = Column(String(16), nullable=False, default="ACTIVE")
+    last_test_at = Column(DateTime(timezone=True))
+    last_test_ok = Column(Boolean)
+    last_error = Column(Text)
+    created_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AgentToolGrant(Base):
+    """AI personel bazında araç yetkisi (ADIM 10.1). tool = araç adı veya "*" (bağlantının tüm araçları)."""
+    __tablename__ = "agent_tool_grants"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=False)
+    tool = Column(String(120), nullable=False)
+    created_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ToolCall(Base):
+    """Her araç çağrısının silinemez kaydı (ADIM 10.1). Yazma çağrıları insan onayı bekler (PENDING_APPROVAL)."""
+    __tablename__ = "tool_calls"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    connection_id = Column(UUID(as_uuid=True))
+    connection_name = Column(String(120))
+    actor_id = Column(UUID(as_uuid=True))
+    actor_name = Column(String(255))
+    project_id = Column(UUID(as_uuid=True))
+    task_id = Column(UUID(as_uuid=True))
+    tool = Column(String(160), nullable=False)
+    kind = Column(String(8), nullable=False)  # READ, WRITE
+    arguments = Column(JSONB, nullable=False, default=dict)
+    status = Column(String(24), nullable=False)  # PENDING_APPROVAL, REJECTED, EXECUTED, FAILED, DENIED
+    result = Column(JSONB)
+    error = Column(Text)
+    approver_actor_id = Column(UUID(as_uuid=True))
+    decided_by_actor_id = Column(UUID(as_uuid=True))
+    decided_at = Column(DateTime(timezone=True))
+    decision_note = Column(Text)
+    latency_ms = Column(Integer)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    executed_at = Column(DateTime(timezone=True))

@@ -678,8 +678,43 @@ try {
   step(services === 8 && modelRows > 0 && !saText.includes(NAME),
     'Süper Admin panosu gerçek sistem durumunu ve LLM sağlığını gösteriyor; müşteri içeriği yok',
     `${services} bileşen (${[...new Set(states)].join(', ')}) · ${modelRows} model · proje adı görünüyor: ${saText.includes(NAME) ? 'EVET' : 'hayır'}`);
+  // 10.1 KVKK: Süper Admin müşterinin entegrasyon bağlantılarını göremez
+  const saConns = await api(sa.page, `/api/v1/company/${cfg.tenant_id}/integrations`);
+  step(saConns.status === 403, 'Süper Admin müşterinin entegrasyon bağlantılarını göremiyor (KVKK)', String(saConns.status));
   await shot(sa.page, '10-super-admin-pano');
   await sa.ctx.close();
+
+  // 10.1 Entegrasyonlar: şirket yöneticisi yanlış token'la Telegram bağlantısı ekler, dener, AI personele yetki verir
+  const ig = await session('admin');
+  await ig.page.getByRole('button', { name: 'Entegrasyonlar' }).click();
+  await ig.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
+  const igName = `Telegram ${NAME.slice(-5)}`;
+  const badToken = `999999:YANLIS-${Date.now()}`;
+  const igDlg = ig.page.getByRole('dialog');
+  await igDlg.locator('#ig-connector').selectOption('telegram');
+  await igDlg.locator('#ig-name').fill(igName);
+  await igDlg.locator('#ig-s-bot_token').fill(badToken);
+  await igDlg.getByRole('button', { name: 'Kaydet' }).click();
+  const igRow = ig.page.locator('.pj-list li', { hasText: igName });
+  await igRow.waitFor({ timeout: 15000 });
+  await igRow.getByRole('button', { name: 'Dene' }).click();
+  await igRow.getByText(/Son deneme/).waitFor({ timeout: 30000 });
+  const igRowText = await igRow.innerText();
+  await igRow.getByRole('button', { name: 'Araçlar ve yetkiler' }).click();
+  const grantBox = ig.page.getByRole('checkbox', { name: 'Deniz: send_message' });
+  await grantBox.waitFor({ timeout: 15000 });
+  await grantBox.check();
+  await ig.page.getByRole('button', { name: 'Yetkileri kaydet' }).click();
+  await ig.page.waitForTimeout(1500);
+  const igPage = await ig.page.content();
+  const conns = await api(ig.page, `/api/v1/company/${cfg.tenant_id}/integrations`);
+  const igConn = (conns.body || []).find((c) => c.name === igName);
+  const grants = igConn ? await api(ig.page, `/api/v1/company/${cfg.tenant_id}/integrations/${igConn.id}/grants`) : { body: [] };
+  step(/başarısız|hata|Unauthorized|Not Found/i.test(igRowText) && !igPage.includes(badToken) && igConn?.secrets_set?.bot_token && grants.body.length === 1,
+    'Entegrasyon: bağlantı eklendi, yanlış token anlaşılır hatayla reddedildi, AI personele yetki verildi; token hiçbir yerde görünmüyor',
+    `${igRowText.split('\n').find((l) => /Son deneme/.test(l)) || ''} · yetki: ${grants.body.map((g) => g.tool).join(', ')} · token sayfada: ${igPage.includes(badToken) ? 'EVET' : 'yok'}`);
+  await shot(ig.page, '11-entegrasyonlar');
+  await ig.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

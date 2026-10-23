@@ -149,6 +149,18 @@ export const api = {
   deleteCostItem: (projectId, itemId) => request(`/projects/${projectId}/cost-items/${itemId}`, { method: 'DELETE' }),
   uploadCostAttachment: (projectId, itemId, formData) => request(`/projects/${projectId}/cost-items/${itemId}/attachment`, { method: 'POST', body: formData }),
   downloadCostAttachment: (projectId, itemId, name) => downloadFile(`/projects/${projectId}/cost-items/${itemId}/attachment`, name),
+  // Entegrasyonlar / MCP (Adım 10)
+  getConnectors: () => request('/integrations/connectors'),
+  getIntegrations: (tenantId) => request(`/company/${tenantId}/integrations`),
+  createIntegration: (tenantId, data) => request(`/company/${tenantId}/integrations`, { method: 'POST', body: JSON.stringify(data) }),
+  updateIntegration: (tenantId, id, data) => request(`/company/${tenantId}/integrations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  testIntegration: (tenantId, id) => request(`/company/${tenantId}/integrations/${id}/test`, { method: 'POST' }),
+  getIntegrationTools: (tenantId, id) => request(`/company/${tenantId}/integrations/${id}/tools`),
+  getIntegrationGrants: (tenantId, id) => request(`/company/${tenantId}/integrations/${id}/grants`),
+  setIntegrationGrants: (tenantId, id, grants) => request(`/company/${tenantId}/integrations/${id}/grants`, { method: 'PUT', body: JSON.stringify({ grants }) }),
+  getToolCalls: (tenantId, status) => request(`/company/${tenantId}/tool-calls${status ? `?status=${status}` : ''}`),
+  getMyToolApprovals: () => request('/me/tool-approvals'),
+  decideToolCall: (id, approve, note) => request(`/tool-calls/${id}/decision`, { method: 'POST', body: JSON.stringify({ approve, note: note || null }) }),
   // Dashboard (Adım 9)
   getPlatformDashboard: (days = 7) => request(`/system/dashboard?days=${days}`),
   getPlatformHealth: (refresh = false) => request(`/system/health${refresh ? '?refresh=true' : ''}`),

@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     GITEA_PUBLIC_URL: str = "http://localhost:3000"
     GITEA_TOKEN: str = ""  # .env üzerinden verilir; boşsa kod deposu özelliği kapalıdır
 
+    # Entegrasyon kimlik kasası (ADIM 10.1): base64 32 bayt AES-256-GCM anahtarı. Boşsa bağlantı eklenemez.
+    RECORION_VAULT_KEY: str = ""
+
     # EVREN LLM Gateway (TÜBİTAK BİLGEM & SSB SAYZEK EVREN)
     EVREN_API_BASE_URL: str = "https://evren-llmapi.ssyz.org.tr/v1"
     EVREN_API_KEY: str = ""  # .env üzerinden verilir

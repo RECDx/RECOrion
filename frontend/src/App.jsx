@@ -198,7 +198,9 @@ export default function App() {
   // Onaylarım sayacı: Work Space açıkken periyodik yenilenir
   useEffect(() => {
     if (currentView !== 'WORKSPACE' || kvkkRestricted || !currentUser) return undefined;
-    const load = () => api.getMyApprovals().then((r) => setApprovalCount(r.length)).catch(() => {});
+    // İş adımı onayları + AI personelin onay bekleyen araç (yazma) işlemleri (Adım 10)
+    const load = () => Promise.all([api.getMyApprovals(), api.getMyToolApprovals().catch(() => [])])
+      .then(([r, t]) => setApprovalCount(r.length + t.length)).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);

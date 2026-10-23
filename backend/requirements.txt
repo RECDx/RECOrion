@@ -18,6 +18,8 @@ openpyxl>=3.1.0
 python-pptx>=1.0.0
 xlrd>=2.0.1
 pypdfium2>=4.30.0
+# Entegrasyon kimlik kasası (ADIM 10.1): AES-256-GCM
+cryptography>=43.0.0,<47.0.0
 pillow>=10.0.0
 minio>=7.2.0
 beautifulsoup4>=4.12.0
