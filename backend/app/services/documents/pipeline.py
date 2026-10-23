@@ -213,6 +213,9 @@ async def process_document(doc_id: uuid.UUID) -> None:
                 doc.status = "QUARANTINED"
                 doc.error = "İçerik güvenliği kontrolü bu dokümanı riskli buldu (" + (", ".join(guard.get("categories") or []) or guard.get("level")) + "). Doküman öğrenilmeyecek."
             else:
+                # Maskeli metin ve güvenlik sonucu öğrenme kartından önce kaydedilir: sohbete eklenen dosya,
+                # kart (yavaş olabilen LLM çağrısı) beklenmeden okunabilir (ADIM 8.3). Durum kart bitene kadar PROCESSING.
+                await db.commit()
                 try:
                     doc.learning_card = await build_card(doc, masked)
                     doc.summary = doc.learning_card.get("summary") or masked[:300]

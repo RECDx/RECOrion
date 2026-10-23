@@ -55,6 +55,7 @@ class ProjectResponse(BaseModel):
     field_package: str
     status: str
     repo_url: Optional[str] = None
+    repo_mode: str = "NONE"
     manager_actor_id: Optional[uuid.UUID] = None
     department_id: Optional[uuid.UUID] = None
     start_date: Optional[date] = None

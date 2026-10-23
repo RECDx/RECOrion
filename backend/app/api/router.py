@@ -20,6 +20,7 @@ from app.api.v1.approvals import router as approvals_router
 from app.api.v1.pricing import router as pricing_router
 from app.api.v1.cost_items import router as cost_items_router
 from app.api.v1.live import router as live_router
+from app.api.v1.repository import router as repository_router
 from app.core.access_policy import enforce_access_policy
 
 # Tüm uçlar merkezi erişim politikasından geçer (app/core/access_policy.py)
@@ -46,3 +47,4 @@ api_router.include_router(approvals_router)
 api_router.include_router(pricing_router)
 api_router.include_router(cost_items_router)
 api_router.include_router(live_router)
+api_router.include_router(repository_router)

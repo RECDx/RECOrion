@@ -7,6 +7,7 @@ import DocumentLibrary from '../docs/DocumentLibrary';
 import PlanTab from './PlanTab';
 import WorkflowTab from './WorkflowTab';
 import CostTab from './CostTab';
+import CodeRepoTab from './CodeRepoTab';
 import { CloseTab, ReadinessTab, TeamSimTab } from './ProjectTabs';
 import { ProjectFields } from './ProjectHub';
 import { KIND, fmtDay, isEditable, statusOf } from './projectMeta';
@@ -20,6 +21,7 @@ const TABS = [
   ['ready', 'Hazırlık & Bildirim'],
   ['flow', 'İş Akışı'],
   ['cost', 'Maliyet'],
+  ['repo', 'Kod Deposu'],
   ['close', 'Kapanış'],
 ];
 const CONFIRM = {
@@ -158,6 +160,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       {tab === 'ready' && <ReadinessTab project={project} onAction={action} busy={busy} />}
       {tab === 'flow' && <WorkflowTab project={project} />}
       {tab === 'cost' && project.can_manage && <CostTab project={project} />}
+      {tab === 'repo' && <CodeRepoTab project={project} />}
       {tab === 'close' && <CloseTab project={project} currentUser={currentUser} onAction={action} busy={busy} />}
     </div>
   );

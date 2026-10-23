@@ -112,10 +112,15 @@ async def project_started(db: AsyncSession, project_id, actor_id=None) -> None:
 async def cancel_remaining(db: AsyncSession, project_id, payload: Optional[Dict[str, Any]] = None) -> None:
     """Proje kapatılınca henüz başlamamış adımlar da iptal edilir."""
     project = await db.get(Project, _uuid(project_id))
+    cancelled = []
     for t in (await db.execute(select(Task).where(Task.project_id == project.id, Task.status.notin_(CLOSED)))).scalars():
         t.status = "CANCELLED"
         await log(db, project, t, "CANCELLED", (payload or {}).get("actor_id"), (payload or {}).get("note"))
+        cancelled.append(t)
     await db.commit()
+    from app.services import code_repo
+    for t in cancelled:  # birleştirilmemiş dalların istekleri kapatılır (ADIM 8.5)
+        await code_repo.after_cancel(db, project, t)
 
 
 async def project_finished(db: AsyncSession, project_id) -> None:
@@ -166,6 +171,11 @@ async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
     await log(db, project, task, "APPROVED", payload.get("actor_id"), payload.get("note"), {"channel": payload.get("channel") or "WEB"})
     await log(db, project, task, "DONE")
     await db.commit()
+    # Kod deposu (ADIM 8.5): insan onayı ana dala birleştirmedir
+    from app.services import code_repo
+    approver = await db.get(Actor, _uuid(payload.get("actor_id"))) if payload.get("actor_id") else None
+    await code_repo.after_approval(db, project, task, payload.get("actor_id"), approver.display_name if approver else "onaylayıcı")
+    await db.commit()
     if task.assignee_actor_id:
         await notify(db, task.assignee_actor_id, f"RECOrion: '{task.title}' iş adımınız onaylandı.")
     return {"status": task.status}
@@ -201,6 +211,8 @@ async def release(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
     if payload.get("action") == "cancel":
         task.status = "CANCELLED"
         await log(db, project, task, "CANCELLED", payload.get("actor_id"), payload.get("note"))
+        from app.services import code_repo
+        await code_repo.after_cancel(db, project, task)
     else:
         task.status, task.rejection_count = "IN_PROGRESS", 0
         if payload.get("assignee_actor_id"):
@@ -229,4 +241,6 @@ async def cancel(db: AsyncSession, task_id, payload: Optional[Dict[str, Any]] = 
         task.status = "CANCELLED"
         await log(db, project, task, "CANCELLED", (payload or {}).get("actor_id"), (payload or {}).get("note"))
         await db.commit()
+        from app.services import code_repo
+        await code_repo.after_cancel(db, project, task)
     return {"status": task.status}

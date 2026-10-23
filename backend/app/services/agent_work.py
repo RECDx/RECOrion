@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, Artifact, ChatMessage, Project, Task, Tenant
-from app.services import knowledge, live, llm_gateway, storage, task_flow
+from app.services import code_repo, knowledge, live, llm_gateway, storage, task_flow
 from app.services.llm_gateway import LLMContext, LLMError
 
 logger = logging.getLogger("recorion.agent_work")
@@ -84,12 +84,15 @@ async def _load(db: AsyncSession, task_id):
     return task, project, tenant
 
 
-def _system(actor: Actor, tenant: Tenant) -> str:
+def _system(actor: Actor, tenant: Tenant, has_repo: bool = False) -> str:
     base = actor.system_prompt or f"Sen {tenant.name} şirketinin {actor.role} unvanlı AI personelisin."
+    repo = ("\n\nBu projenin kod deposu var (ADIM 8.5): yazdığın her kaynak kod veya yapılandırma dosyasını ayrı bir kod "
+            "bloğunda ver ve bloğun açılış satırına dili ve depodaki dosya yolunu yaz (ör. ```python src/app/main.py). "
+            "Bu dosyalar adımın dalına commit edilir; yol belirtmediğin kod blokları yalnızca dokümanda kalır.") if has_repo else ""
     return (f"{base}\n\nRECOrion iş akışında sana atanan bir iş adımını yürütüyorsun. Çıktın doğrudan teslim edilecek iş "
             "ürünüdür (doküman, analiz, kod, plan vb.): eksiksiz, uygulanabilir ve Markdown biçiminde yaz. Odaklı ol: gereksiz "
             "tekrar ve dolgu yazma; çoğu iş adımı için 600-1500 kelime yeterlidir. Bilmediğin bilgiyi "
-            "uydurma; varsayımlarını ve açık soruları çıktının sonunda 'Varsayımlar ve açık sorular' başlığıyla belirt.")
+            "uydurma; varsayımlarını ve açık soruları çıktının sonunda 'Varsayımlar ve açık sorular' başlığıyla belirt." + repo)
 
 
 async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> Dict[str, Any]:
@@ -135,7 +138,7 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
     try:
         content, result, parts, credits, fallback_from = await _generate(
             LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id),
-            [{"role": "system", "content": _system(agent, tenant)}, {"role": "user", "content": prompt}])
+            [{"role": "system", "content": _system(agent, tenant, code_repo.active(project))}, {"role": "user", "content": prompt}])
     except LLMError as exc:
         return {"ok": False, "error": exc.message}
     except Exception as exc:
@@ -158,6 +161,7 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
     await task_flow.log(db, project, task, "AI_OUTPUT", agent.id, note,
                         {"artifact_id": str(art.id), "version": version, "model": result.model_code, "credits": credits, "parts": parts,
                          "fallback_from": fallback_from})
+    await code_repo.after_output(db, project, task, version, content, agent.display_name)  # depo varsa adımın dalına commit
     await db.commit()
     return {"ok": True, "artifact_id": str(art.id), "version": version, "actor_id": str(agent.id)}
 

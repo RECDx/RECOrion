@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     MINIO_USE_SSL: bool = False
     MINIO_DOCUMENTS_BUCKET: str = "recorion-documents"  # öğrenme dokümanları (ADIM 5.4)
 
+    # Gitea: proje kod depoları (ADIM 8.5). GITEA_URL backend'in eriştiği iç adres, GITEA_PUBLIC_URL kullanıcıya gösterilen
+    GITEA_URL: str = "http://gitea:3000"
+    GITEA_PUBLIC_URL: str = "http://localhost:3000"
+    GITEA_TOKEN: str = ""  # .env üzerinden verilir; boşsa kod deposu özelliği kapalıdır
+
     # EVREN LLM Gateway (TÜBİTAK BİLGEM & SSB SAYZEK EVREN)
     EVREN_API_BASE_URL: str = "https://evren-llmapi.ssyz.org.tr/v1"
     EVREN_API_KEY: str = ""  # .env üzerinden verilir

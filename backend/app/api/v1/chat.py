@@ -52,6 +52,7 @@ class SendMessageRequest(BaseModel):
     attachments: List[uuid.UUID] = Field(default_factory=list, max_length=5)
 
 
+CHAT_TIMEOUT = 150  # sohbet yanıtı; süre dolarsa yedek model denenir
 ATTACHMENT_EXCERPT = 4000
 ATTACHMENT_WAIT_SECONDS = 90  # yeni yüklenen ekin metin çıkarma + güvenlik kontrolü için en fazla bekleme
 PROCESSING = ("UPLOADED", "PROCESSING")
@@ -75,9 +76,13 @@ async def _attachment_text(db: AsyncSession, docs: List[AgentDocument], project_
     import asyncio
     import time
 
+    def readable(d: AgentDocument) -> bool:
+        # Belge hattı maskeli metni ve güvenlik sonucunu öğrenme kartından önce kaydeder: kart beklenmez
+        return bool((d.masked_text or "").strip()) and d.guard_result is not None and d.status != "QUARANTINED"
+
     deadline = time.monotonic() + ATTACHMENT_WAIT_SECONDS
     announced = False
-    while any(d.status in PROCESSING for d in docs) and time.monotonic() < deadline:
+    while any(d.status in PROCESSING and not readable(d) for d in docs) and time.monotonic() < deadline:
         if not announced:
             await live.thought(project_id, task_id, "ATTACHMENT", "Ekler okunuyor (metin çıkarma ve güvenlik kontrolü)…")
             announced = True
@@ -86,9 +91,9 @@ async def _attachment_text(db: AsyncSession, docs: List[AgentDocument], project_
             await db.refresh(d)
     text = ""
     for d in docs:
-        if d.status == "QUARANTINED":
+        if d.status == "QUARANTINED" or (d.guard_result or {}).get("safe") is False:
             body = "(güvenlik kontrolü bu dosyayı riskli buldu; içeriği kullanılmadı)"
-        elif d.status in PROCESSING:
+        elif d.status in PROCESSING and not readable(d):
             body = "(dosya hâlâ işleniyor; içeriği bu yanıtta okunamadı)"
         elif d.status == "FAILED" or not (d.masked_text or "").strip():
             body = "(dosyadan okunabilir metin çıkarılamadı)"
@@ -278,6 +283,8 @@ async def send_chat_message(
                        task_id=task_id, project_id=project_id),
             llm_messages,
             model_code=payload.override_model_code,
+            # Personelin modeli meşgul/yanıtsızsa paketteki yedek modelle sürer (kullanıcı kararı 22.10.2026; sohbet de dahil)
+            timeout=CHAT_TIMEOUT, fallback=True,
         )
     except LLMError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)

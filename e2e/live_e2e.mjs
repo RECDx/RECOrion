@@ -147,6 +147,13 @@ try {
   if (await apply.count()) { await apply.click(); await page.waitForTimeout(1500); step(true, 'Simülasyon tarihleri projeye uygulandı'); }
   await shot(page, '02-simulasyon');
 
+  // 8.5 Kod deposu: yönetici projeyi başlatmadan önce RECOrion (Gitea) deposunu açar
+  await page.getByRole('tab', { name: 'Kod Deposu' }).click();
+  await page.getByRole('button', { name: 'RECOrion deposunu aç' }).click();
+  const repoOn = await page.getByText('RECOrion deposu açık').waitFor({ timeout: 30000 }).then(() => true).catch(() => false);
+  const repoUrl = repoOn ? await page.locator('.pj-hint[title^="Depo özeldir"]').first().innerText() : '';
+  step(repoOn && /rx-.+\/.+/.test(repoUrl), 'Proje kod deposu açıldı (özel Gitea deposu)', repoUrl);
+
   // 4. Hazırlık ve başlatma (Temporal akışı başlar)
   await page.getByRole('tab', { name: /Hazırlık & Bildirim/ }).click();
   await page.getByRole('button', { name: 'Başlamaya hazır yap' }).click();
@@ -254,7 +261,7 @@ try {
 
   // 8.3 Ekip üyesinin ekranında sahte içerik yok; karar düğmesi yok ama gerçek çıktı açılıyor
   const memberWork = await m.page.locator('.tri-pane-container').innerText();
-  const fakes = ['Analist', 'MİMARİ_PLAN_V1', 'REC-001', 'NS_GLOBAL', 'Cüneyt (Yönetici)', 'Temporal Engine'].filter((t) => memberWork.includes(t));
+  const fakes = ['OTONOM İŞ AKIŞI ZİNCİRİ', 'Mimar➔Coder', 'MİMARİ_PLAN_V1', 'REC-001', 'NS_GLOBAL', 'Cüneyt (Yönetici)', 'Temporal Engine'].filter((t) => memberWork.includes(t));
   step(fakes.length === 0, 'Çalışma Alanında sahte/sabit içerik yok', fakes.length ? `kalan: ${fakes.join(', ')}` : 'proje ekibi, gerçek ilerleme ve durumlar');
   const right = m.page.locator('aside.pane').last();
   const memberDecide = await right.getByRole('button', { name: /Onayla & İlerlet/ }).count();
@@ -438,6 +445,31 @@ try {
   const fallbacks = outs.filter((e) => e.data?.fallback_from).map((e) => `${e.data.fallback_from} > ${e.data.model}`);
   step(true, 'Kullanılan modeller ve yedek model geçişleri', `${models}${fallbacks.length ? ` · yedek: ${fallbacks.join('; ')}` : ' · yedek gerekmedi'}`);
   step(credits > 0, 'AI çalışmaları ölçüldü ve krediden düştü', `${credits.toFixed(2)} kredi (${cnt('AI_OUTPUT')} çıktı)`);
+
+  // 8.5 Kod deposu: onaylanan adımlar ana dala birleşti; onay gerektirmeyen son adımı yönetici birleştirir; dosya görüntülenir
+  await page.getByRole('tab', { name: 'Kod Deposu' }).click();
+  await page.locator('.pj-steps .ui-badge', { hasText: /Ana dala birleşti|Onay bekliyor/ }).first().waitFor({ timeout: 30000 });
+  const lastCard = page.locator('.ui-card', { hasText: lastTitle }).filter({ has: page.getByRole('button', { name: 'Ana dala birleştir' }) });
+  let manualMerge = 'gerekmedi';
+  if (await lastCard.count()) {
+    await lastCard.getByRole('button', { name: 'Ana dala birleştir' }).click();
+    await dialogOk(page);
+    manualMerge = await page.locator('.ui-card', { hasText: lastTitle }).locator('.ui-badge', { hasText: 'Ana dala birleşti' })
+      .waitFor({ timeout: 60000 }).then(() => 'birleştirildi').catch(() => 'birleştirilemedi');
+  }
+  const merged = await page.locator('.ui-badge', { hasText: 'Ana dala birleşti' }).count();
+  const paths = await page.locator('.pj-list li span[style*="mono"]').allTextContents();
+  const codeFiles = paths.filter((x) => !x.startsWith('docs/'));
+  step(merged >= titles.length && paths.some((x) => x.startsWith('docs/adimlar/')) && manualMerge !== 'birleştirilemedi',
+    'Onaylanan adımlar ana dala birleşti; onay gerektirmeyen adım yönetici tarafından birleştirildi',
+    `${merged}/${titles.length} birleşti · son adım: ${manualMerge} · ${paths.length} dosya (${codeFiles.length} kod/yapılandırma: ${codeFiles.slice(0, 4).join(', ') || '—'})`);
+  await page.locator('.pj-list li').filter({ hasText: codeFiles[0] || 'docs/adimlar/' }).first().getByRole('button').click();
+  const fileModal = page.getByRole('dialog');
+  await fileModal.locator('pre').waitFor({ timeout: 20000 });
+  const fileText = await fileModal.locator('pre').innerText();
+  step(fileText.length > 50, 'Depodaki dosya RECOrion içinden görüntülendi', `${codeFiles[0] || 'doküman'} · ${fileText.length} karakter`);
+  await shot(page, '06b-kod-deposu');
+  await fileModal.getByRole('button', { name: 'Kapat' }).click();
 
   // 7.5 Maliyet: rapor, bütçe, belgeli kalem, Excel, kapanış özeti ve kapanış kilidi
   await page.getByRole('tab', { name: /^Maliyet/ }).click();

@@ -365,6 +365,10 @@ class Project(Base):
     workflow_id = Column(String(128))  # Temporal proje akışı (ADIM 7)
     budget_try = Column(Numeric(16, 2))  # proje bütçesi (TL, KDV hariç; ADIM 7.5.3)
     budget_note = Column(Text)
+    # Kod deposu (ADIM 8.5): NONE | RECORION (Gitea); repo_url kullanıcıya gösterilen adres
+    repo_mode = Column(String(16), nullable=False, default="NONE")
+    repo_owner = Column(String(64))
+    repo_name = Column(String(100))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -415,6 +419,10 @@ class Task(Base):
     started_at = Column(DateTime(timezone=True))
     submitted_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
+    # Kod deposu (ADIM 8.5): adımın dalı, ana dala birleştirme isteği ve birleştirme zamanı
+    repo_branch = Column(String(120))
+    repo_pr_number = Column(Integer)
+    repo_merged_at = Column(DateTime(timezone=True))
     # Tamamlanınca kayda geçen personel maliyeti (ADIM 7.5.2)
     labor_rate_try = Column(Numeric(12, 2))
     labor_days = Column(Numeric(6, 1))

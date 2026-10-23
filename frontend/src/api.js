@@ -149,6 +149,11 @@ export const api = {
   deleteCostItem: (projectId, itemId) => request(`/projects/${projectId}/cost-items/${itemId}`, { method: 'DELETE' }),
   uploadCostAttachment: (projectId, itemId, formData) => request(`/projects/${projectId}/cost-items/${itemId}/attachment`, { method: 'POST', body: formData }),
   downloadCostAttachment: (projectId, itemId, name) => downloadFile(`/projects/${projectId}/cost-items/${itemId}/attachment`, name),
+  // Proje kod deposu (Adım 8.5)
+  getProjectRepository: (projectId) => request(`/projects/${projectId}/repository`),
+  setProjectRepository: (projectId, mode) => request(`/projects/${projectId}/repository`, { method: 'PUT', body: JSON.stringify({ mode }) }),
+  getRepositoryFile: (projectId, ref, path) => request(`/projects/${projectId}/repository/file?${new URLSearchParams({ ref, path }).toString()}`),
+  mergeRepositoryStep: (projectId, taskId) => request(`/projects/${projectId}/repository/steps/${taskId}/merge`, { method: 'POST' }),
   downloadProjectCostReport: (projectId) => downloadFile(`/projects/${projectId}/costs/export.xlsx`, 'proje-maliyet.xlsx'),
   // LLM TL fiyat listesi (Adım 7.5.1, Süper Admin)
   getLlmPrices: () => request('/system/llm-prices'),
