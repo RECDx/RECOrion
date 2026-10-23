@@ -16,10 +16,10 @@ import json
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.security import hash_password
-from app.db.models import Actor, Department, LLMModel, Plan, Tenant
+from app.db.models import Actor, Department, IntegrationConnection, LLMModel, Plan, Tenant, ToolCall
 from app.db.session import AsyncSessionLocal
 
 SLUG = "recorion_canli_test"
@@ -42,6 +42,13 @@ async def main():
             dept = Department(tenant_id=tenant.id, name="Bilgi Teknolojileri", description="Canlı test departmanı")
             db.add(dept)
             await db.flush()
+        # Önceki koşulardan kalan entegrasyon bağlantıları yeni koşuyu etkilemesin (AI personel eski bağlantının aracını
+        # seçebiliyor): silinmez, devre dışı bırakılır; bekleyen eski araç çağrıları gerekçeyle reddedilir (kayıt kalır)
+        now = datetime.now(timezone.utc)
+        await db.execute(update(IntegrationConnection).where(IntegrationConnection.tenant_id == tenant.id,
+                                                             IntegrationConnection.status == "ACTIVE").values(status="DISABLED"))
+        await db.execute(update(ToolCall).where(ToolCall.tenant_id == tenant.id, ToolCall.status == "PENDING_APPROVAL")
+                         .values(status="REJECTED", decided_at=now, decision_note="Yeni canlı test başladı"))
         out = {"tenant_id": str(tenant.id), "users": {}}
         # admin: şirket yöneticisi (şirket panosu, ADIM 9); deptmgr: departman panosu yetkili kullanıcı (ADIM 9.3)
         for key, name, role in (("manager", "Canlı Test Yöneticisi", "PROJECT_MANAGER"), ("member", "Canlı Test Uzmanı", "USER"),

@@ -715,6 +715,46 @@ try {
     `${igRowText.split('\n').find((l) => /Son deneme/.test(l)) || ''} · yetki: ${grants.body.map((g) => g.tool).join(', ')} · token sayfada: ${igPage.includes(badToken) ? 'EVET' : 'yok'}`);
   await shot(ig.page, '11-entegrasyonlar');
   await ig.ctx.close();
+
+  // 10.2 Araç kullanımı: yönetici yeni bir işte Deniz'den Telegram'a duyuru göndermesini ister; yazma işlemi
+  // gönderilmeden yöneticinin onayına düşer; yönetici Onaylarım'dan gerekçeyle reddeder, kayıt değişmez
+  const tm = await session('manager');
+  const tProj = await api(tm.page, '/api/v1/projects/', { method: 'POST',
+    body: JSON.stringify({ tenant_id: cfg.tenant_id, name: `${NAME} duyuru`, description: 'Araç kullanımı canlı testi' }) });
+  const deniz = (await api(tm.page, '/api/v1/actors/')).body.find((a) => a.display_name === 'Deniz');
+  const tTask = await api(tm.page, `/api/v1/projects/${tProj.body.id}/tasks`, { method: 'POST',
+    body: JSON.stringify({ title: 'Ekibe duyuru', assignee_actor_id: deniz.id }) });
+  const asks = ['Telegram aracını kullanarak 12345 numaralı sohbete "Toplantı yarın saat 10:00" mesajını gönderir misin?',
+    'Lütfen send_message aracını çağır: chat_id 12345, metin "Toplantı yarın saat 10:00".'];
+  let pending = [];
+  let toolReply = '';
+  for (const content of asks) {
+    const r = await api(tm.page, '/api/v1/chat/send', { method: 'POST', body: JSON.stringify({ task_id: tTask.body.id, content }) });
+    toolReply = r.body?.assistant_message?.content || JSON.stringify(r.body || r.status).slice(0, 200);
+    pending = ((await api(tm.page, '/api/v1/me/tool-approvals')).body || []).filter((c) => c.task_id === tTask.body.id);
+    if (pending.length) break;
+  }
+  step(pending.length === 1 && pending[0].tool === 'send_message' && pending[0].actor_name === 'Deniz',
+    'AI personel yazma aracını kullanmak istedi; işlem gönderilmeden yöneticinin onayına düştü',
+    `${pending.map((c) => `${c.tool} ${JSON.stringify(c.arguments)}`).join('; ') || 'araç çağrılmadı'} · yanıt: ${toolReply.replace(/\s+/g, ' ').slice(0, 90)}`);
+  await tm.page.getByRole('button', { name: /Onaylarım/ }).click();
+  const toolRow = tm.page.locator('[aria-label="Onay bekleyen araç işlemleri"] li', { hasText: 'send_message' });
+  let decided = null;
+  if (pending.length) {
+    await toolRow.first().waitFor({ timeout: 30000 });
+    await shot(tm.page, '12-arac-onayi');
+    await toolRow.first().getByRole('button', { name: 'Reddet' }).click();
+    await dialogOk(tm.page, 'Duyuruyu ben göndereceğim');
+    await toolRow.first().waitFor({ state: 'detached', timeout: 20000 });
+    const adm2 = await session('admin');
+    decided = ((await api(adm2.page, `/api/v1/company/${cfg.tenant_id}/tool-calls`)).body || []).find((c) => c.id === pending[0].id);
+    await adm2.ctx.close();
+  }
+  step(decided?.status === 'REJECTED' && /ben göndereceğim/.test(decided?.decision_note || '') && !decided?.result,
+    'Yönetici araç işlemini Onaylarım ekranından gerekçeyle reddetti; mesaj gönderilmedi ve kayıt günlükte duruyor',
+    decided ? `${decided.status} · not: ${decided.decision_note || '-'}` : 'karar yok');
+  await api(tm.page, `/api/v1/projects/${tProj.body.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+  await tm.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);
