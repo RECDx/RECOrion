@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 import httpx
 
-from app.integrations.base import READ, WRITE, Connector, Context, Field, Tool, ToolError, http_client, require
+from app.integrations.base import READ, WRITE, Connector, Context, Field, Tool, ToolError, guard_url, http_client, require
 
 MAX_LIMIT = 100
 
@@ -21,9 +21,10 @@ def _url(ctx: Context) -> str:
 
 async def _rpc(ctx: Context, service: str, method: str, *args) -> Any:
     body = {"jsonrpc": "2.0", "method": "call", "params": {"service": service, "method": method, "args": list(args)}, "id": 1}
+    url = await guard_url(_url(ctx))
     try:
         async with http_client(timeout=20) as c:
-            r = await c.post(f"{_url(ctx)}/jsonrpc", json=body)
+            r = await c.post(f"{url}/jsonrpc", json=body)
     except httpx.HTTPError as exc:
         raise ToolError(f"Odoo'ya ulaşılamadı ({exc.__class__.__name__}).")
     if r.status_code != 200:

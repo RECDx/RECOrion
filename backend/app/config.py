@@ -82,6 +82,9 @@ class Settings(BaseSettings):
 
     # Entegrasyon kimlik kasası (ADIM 10.1): base64 32 bayt AES-256-GCM anahtarı. Boşsa bağlantı eklenemez.
     RECORION_VAULT_KEY: str = ""
+    # Müşterinin girdiği dış adresler (Odoo, Gitea, MCP sunucusu) özel/yerel ağa gidemez (SSRF koruması, ADIM 10.4).
+    # Yalnızca geliştirme/canlı testte açılır.
+    INTEGRATIONS_ALLOW_PRIVATE_NETWORK: bool = False
 
     # EVREN LLM Gateway (TÜBİTAK BİLGEM & SSB SAYZEK EVREN)
     EVREN_API_BASE_URL: str = "https://evren-llmapi.ssyz.org.tr/v1"

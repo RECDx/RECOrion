@@ -829,6 +829,62 @@ try {
     'Trello: yanlış anahtar anlaşılır hatayla reddedildi; token sayfada görünmüyor',
     trText.split('\n').find((l) => /Son deneme/.test(l)) || trText.slice(0, 90));
 
+  // 10.4 Dış MCP sunucusu (gerçek, herkese açık DeepWiki MCP; kimlik gerektirmez): yönetici ekrandan bağlar, işaretsiz bir
+  // aracı "okuma" diye tanımlar, dener, Kaan'a yetki verir; Kaan sohbette aracı kullanır
+  const addConn = async (code, name, fill) => {
+    await od.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
+    const dlg = od.page.getByRole('dialog');
+    await dlg.locator('#ig-connector').selectOption(code);
+    await dlg.locator('#ig-name').fill(name);
+    await fill(dlg);
+    await dlg.getByRole('button', { name: 'Kaydet' }).click();
+    const row = od.page.locator('.pj-list li', { hasText: name });
+    await row.waitFor({ timeout: 15000 });
+    await row.getByRole('button', { name: 'Dene' }).click();
+    await row.getByText(/Son deneme/).waitFor({ timeout: 60000 });
+    return row;
+  };
+  const mcpName = `DeepWiki ${NAME.slice(-5)}`;
+  const mcpRow = await addConn('mcp', mcpName, async (dlg) => {
+    await dlg.locator('#ig-c-url').fill('https://mcp.deepwiki.com/mcp');
+    await dlg.locator('#ig-c-read_tools').fill('read_wiki_structure');
+  });
+  const mcpRowText = await mcpRow.innerText();
+  await mcpRow.getByRole('button', { name: 'Araçlar ve yetkiler' }).click();
+  const mcpBox = od.page.getByRole('checkbox', { name: 'Kaan: read_wiki_structure' });
+  await mcpBox.waitFor({ timeout: 30000 });
+  const mcpTools = await od.page.getByRole('checkbox', { name: /^Kaan: (?!tüm)/ }).count();
+  await mcpBox.check();
+  await od.page.getByRole('button', { name: 'Yetkileri kaydet' }).click();
+  await od.page.waitForTimeout(1500);
+  step(/başarılı/.test(mcpRowText) && mcpTools >= 2, 'Dış MCP sunucusu bağlandı; araçları otomatik keşfedildi ve AI personele yetkiyle açıldı',
+    `${mcpRowText.split('\n').find((l) => /Son deneme/.test(l)) || mcpRowText.slice(0, 80)} · keşfedilen araç: ${mcpTools}`);
+  await shot(od.page, '14-mcp-sunucusu');
+
+  const mTask = await api(tm.page, `/api/v1/projects/${tProj.body.id}/tasks`, { method: 'POST',
+    body: JSON.stringify({ title: 'Kütüphane araştırması', assignee_actor_id: kaan.id }) });
+  let mCall = null;
+  let mReply = '';
+  for (const content of ['encode/httpx GitHub deposunun dokümantasyonunda hangi ana başlıklar var? DeepWiki aracıyla bakıp listele.',
+    'Lütfen read_wiki_structure aracını repoName "encode/httpx" ile çağır ve başlıkları yaz.']) {
+    const r = await api(tm.page, '/api/v1/chat/send', { method: 'POST', body: JSON.stringify({ task_id: mTask.body.id, content }) });
+    mReply = r.body?.assistant_message?.content || JSON.stringify(r.body || r.status).slice(0, 200);
+    mCall = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/tool-calls`)).body || [])
+      .find((c) => c.task_id === mTask.body.id && c.tool === 'read_wiki_structure' && c.status === 'EXECUTED');
+    if (mCall) break;
+  }
+  step(Boolean(mCall) && /Overview|Genel Bakış|Installation|Kurulum/i.test(mReply),
+    'AI personel dış MCP aracını sohbette kullandı; sunucudan gelen gerçek bilgi yanıta yansıdı',
+    `${mCall ? `${mCall.tool} ${mCall.latency_ms} ms` : 'araç çağrılmadı'} · yanıt: ${mReply.replace(/\s+/g, ' ').slice(0, 90)}`);
+
+  // Yönetici (yanlışlıkla veya kötü niyetle) iç ağdaki bir adresi MCP sunucusu diye girer: bağlanma reddedilir (SSRF koruması)
+  const ssrfRow = await addConn('mcp', `İç ağ ${NAME.slice(-5)}`, async (dlg) => {
+    await dlg.locator('#ig-c-url').fill('http://backend:8000/api/v1/health');
+  });
+  const ssrfText = await ssrfRow.innerText();
+  step(/özel\/yerel ağ/.test(ssrfText), 'İç ağdaki bir adres MCP sunucusu olarak bağlanamıyor (SSRF koruması)',
+    ssrfText.split('\n').find((l) => /Son deneme/.test(l)) || ssrfText.slice(0, 90));
+
   // Temizlik: gerçek Odoo anahtarı test kaydında kalmaz (kasadaki değer değiştirilir, bağlantı devre dışı)
   const odConn = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/integrations`)).body || []).find((c) => c.name === odName);
   if (odConn) {

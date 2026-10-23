@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.integrations.base import READ, WRITE, Connector, Context, Field, Tool, ToolError, http_client, require
+from app.integrations.base import READ, WRITE, Connector, Context, Field, Tool, ToolError, guard_url, http_client, require
 
 
 def api_base(code: str, ctx: Context) -> str:
@@ -37,9 +37,10 @@ def _headers(code: str, ctx: Context) -> Dict[str, str]:
 async def call(code: str, ctx: Context, method: str, path: str, json: Optional[Dict[str, Any]] = None,
                params: Optional[Dict[str, Any]] = None) -> Any:
     title = "GitHub" if code == "github" else "Gitea"
+    base = await guard_url(api_base(code, ctx))
     try:
         async with http_client(headers=_headers(code, ctx)) as c:
-            r = await c.request(method, f"{api_base(code, ctx)}{path}", json=json, params=params)
+            r = await c.request(method, f"{base}{path}", json=json, params=params)
     except httpx.HTTPError as exc:
         raise ToolError(f"{title}'a ulaşılamadı ({exc.__class__.__name__}).")
     if r.status_code >= 400:

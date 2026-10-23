@@ -8,9 +8,13 @@ Bir bağlayıcı (Connector) bir dış sistem türüdür (Odoo, Telegram, Trello
 - test(): bağlantıyı dener (yalnızca okuma).
 Araç sonuçları kısa ve JSON olarak döner; büyük sonuçlar kırpılır (LLM bağlamı ve kayıt şişmesin).
 """
+import asyncio
+import ipaddress
 import json
+import socket
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -21,7 +25,31 @@ TRANSPORT: Optional[httpx.AsyncBaseTransport] = None
 
 
 def http_client(timeout: float = 15, **kw) -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=timeout, transport=TRANSPORT, **kw)
+    # Yönlendirme izlenmez (follow_redirects=False): dış sunucu isteği iç ağa yönlendiremez
+    return httpx.AsyncClient(timeout=timeout, transport=TRANSPORT, follow_redirects=False, **kw)
+
+
+async def guard_url(url: str) -> str:
+    """Müşterinin girdiği adres: yalnızca http(s), kimlik bilgisi gömülmemiş ve özel/yerel ağa çözülmeyen ana bilgisayar
+    (SSRF koruması: veritabanı, backend, bulut meta veri adresi vb. hedeflenemez). Geliştirmede ayarla açılır."""
+    from app.config import settings
+
+    parts = urlsplit((url or "").strip())
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ToolError("Adres http(s):// ile başlamalı.")
+    if parts.username or parts.password:
+        raise ToolError("Adrese kullanıcı adı/parola yazmayın; kimlik bilgisi ayrı alana girilir.")
+    if settings.INTEGRATIONS_ALLOW_PRIVATE_NETWORK:
+        return url
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80))
+    except socket.gaierror:
+        return url  # çözülemeyen ad: istek zaten başarısız olur
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global or ip.is_multicast:
+            raise ToolError("Bu adres özel/yerel ağa çıkıyor; yalnızca internetten erişilebilen sunucular bağlanabilir.")
+    return url
 
 
 class ToolError(Exception):
