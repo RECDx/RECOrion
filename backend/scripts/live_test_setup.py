@@ -59,6 +59,17 @@ async def main():
             a.notification_prefs = {"email": False, "telegram": True}
             await db.flush()
             out["users"][key] = {"id": str(a.id), "email": email, "password": pwd}
+        # super: Süper Admin panosu testi (ADIM 9.4, kullanıcı onayı 23.10.2026). RECDx şirketinde ayrı test hesabı;
+        # gerçek süper adminlere dokunulmaz, şifre her çalıştırmada yenilenir, e-posta bildirimi kapalı
+        hq = (await db.execute(select(Tenant).where(Tenant.slug == "recdx_hq"))).scalar_one()
+        email, pwd = f"super@{DOMAIN}", "Ct-" + secrets.token_urlsafe(12)
+        a = (await db.execute(select(Actor).where(Actor.email == email))).scalar_one_or_none()
+        if not a:
+            a = Actor(tenant_id=hq.id, actor_type="HUMAN", display_name="Canlı Test Süper Admin", email=email, role="SUPER_ADMIN", status="IDLE")
+            db.add(a)
+        a.password_hash, a.status, a.notification_prefs = hash_password(pwd), "IDLE", {"email": False, "telegram": False}
+        await db.flush()
+        out["users"]["super"] = {"id": str(a.id), "email": email, "password": pwd}
         # Deniz: mimo-v2.6-pro (EVREN'de yoğun; yedek model mekanizmasını gerçek ortamda sınar)
         # Kaan: AI personel varsayılan modeli deepseek-v4-flash
         for name, title, code in (("Deniz", "İş Analisti", "mimo-v2.6-pro"), ("Kaan", "Yazılım Geliştirici", "deepseek-v4-flash")):

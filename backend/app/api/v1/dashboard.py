@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import CurrentUser, ensure_tenant_content, forbidden, get_current_user
 from app.db.models import Department, Tenant
 from app.db.session import get_db
-from app.services import dashboards
+from app.services import dashboards, platform_health
 
 router = APIRouter(tags=["Dashboard ve Raporlar"])
 
@@ -42,6 +42,20 @@ async def dashboard_scope(db: AsyncSession, user: CurrentUser, tenant_id: uuid.U
         if not dept or dept.tenant_id != tenant_id:
             raise HTTPException(status_code=404, detail="Departman bulunamadı.")
     return tenant, department_id, dept.name if dept else None, user.has("billing:view") or user.has("tenant:manage")
+
+
+@router.get("/system/dashboard")
+async def platform_dashboard(days: int = Query(7), user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Süper Admin panosu (ADIM 9.4): yalnızca platform düzeyinde sayılar; müşteri içeriği yok (KVKK)."""
+    if days not in dashboards.PERIODS:
+        raise HTTPException(status_code=422, detail="Dönem 7, 30, 90 veya 365 gün olabilir.")
+    return await dashboards.platform_overview(db, days)
+
+
+@router.get("/system/health")
+async def platform_health_check(refresh: bool = False, user: CurrentUser = Depends(get_current_user)):
+    """Bileşenlerin gerçek durumu (30 sn önbellek; refresh=true yeniden ölçer)."""
+    return await platform_health.check_all(force=refresh)
 
 
 @router.get("/company/{tenant_id}/dashboard")

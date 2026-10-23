@@ -150,6 +150,8 @@ export const api = {
   uploadCostAttachment: (projectId, itemId, formData) => request(`/projects/${projectId}/cost-items/${itemId}/attachment`, { method: 'POST', body: formData }),
   downloadCostAttachment: (projectId, itemId, name) => downloadFile(`/projects/${projectId}/cost-items/${itemId}/attachment`, name),
   // Dashboard (Adım 9)
+  getPlatformDashboard: (days = 7) => request(`/system/dashboard?days=${days}`),
+  getPlatformHealth: (refresh = false) => request(`/system/health${refresh ? '?refresh=true' : ''}`),
   getCompanyDashboard: (tenantId, days = 30, departmentId = null) => request(`/company/${tenantId}/dashboard?${new URLSearchParams({ days, ...(departmentId ? { department_id: departmentId } : {}) }).toString()}`),
   // Proje kod deposu (Adım 8.5)
   getProjectRepository: (projectId) => request(`/projects/${projectId}/repository`),

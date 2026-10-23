@@ -64,6 +64,7 @@ import CatalogAdmin from './catalog/CatalogAdmin';
 import EmailTemplateBuilder from './email/EmailTemplateBuilder';
 import { compileBlocksToHtml, htmlToBlocks } from './email/emailBlocks';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
+import PlatformDashboard, { HealthBadge, SystemHealthPanel, usePlatformHealth } from './dashboard/PlatformDashboard';
 import LlmPricing from './ai/LlmPricing';
 
 const TAB_SLUG_MAP = {
@@ -136,7 +137,9 @@ export default function SuperAdminConsole({
   const isSavingTenantRef = useRef(false);
 
   // Aktif Menü Sekmesi (URL Hash Senkronize)
-  const [activeTab, setActiveTab] = useState(getTabFromHash); 
+  const [activeTab, setActiveTab] = useState(getTabFromHash);
+  // ADIM 9.4: gerçek sistem durumu (başlık rozeti ve altyapı paneli)
+  const platformHealth = usePlatformHealth(); 
   // 'DASHBOARD' | 'LEADS' | 'TENANTS' | 'EMAIL_TEMPLATES' | 'SCHEDULES' | 'PERMISSIONS' | 'MODELS' | 'PLANS' | 'NACE' | 'TITLES' | 'AI_MODEL_SETTINGS'
 
   const switchTab = (newTab, options = {}) => {
@@ -2412,21 +2415,7 @@ export default function SuperAdminConsole({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ 
-                    padding: '6px 14px', 
-                    borderRadius: 999, 
-                    background: 'rgba(16, 185, 129, 0.12)', 
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    color: 'var(--ac-6ee7b7)',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }}></span>
-                    <span>Sistem Çevrimiçi</span>
-                  </div>
+                  <HealthBadge health={platformHealth.health} />
                 </div>
               </div>
 
@@ -2749,113 +2738,13 @@ export default function SuperAdminConsole({
                   )}
                 </div>
 
-                {/* SAĞ: Sistem Entegrasyonları ve Altyapı Özeti */}
-                <div style={{ 
-                  background: 'linear-gradient(180deg, var(--sf-101628) 0%, var(--sf-0d1222) 100%)',
-                  borderRadius: 18,
-                  border: '1px solid rgb(var(--rgb-ov) / 0.08)',
-                  padding: 20,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 16
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <ShieldCheck style={{ width: 18, height: 18, color: 'var(--ac-818cf8)' }} />
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)' }}>
-                      Altyapı & Entegrasyon Durumu
-                    </h3>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    
-                    <div style={{ 
-                      padding: '10px 12px', 
-                      borderRadius: 10, 
-                      background: 'rgb(var(--rgb-ov) / 0.03)',
-                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Sparkles style={{ width: 15, height: 15, color: 'var(--ac-c084fc)' }} />
-                        <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>EVREN LLM Gateway</div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', fontFamily: 'monospace' }}>https://evren-llmapi.ssyz.org.tr/v1</div>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-34d399)', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 999 }}>
-                        Aktif
-                      </span>
-                    </div>
-
-                    <div style={{ 
-                      padding: '10px 12px', 
-                      borderRadius: 10, 
-                      background: 'rgb(var(--rgb-ov) / 0.03)',
-                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Cpu style={{ width: 15, height: 15, color: 'var(--ac-38bdf8)' }} />
-                        <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>Çekirdek Manifesto Modeli</div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>Ajan rolleri ve şirket manifestosu</div>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fff', background: '#7134e2', padding: '2px 8px', borderRadius: 6, fontFamily: 'monospace' }}>
-                        {systemSettings?.default_manifesto_model || 'deepseek-v3'}
-                      </span>
-                    </div>
-
-                    <div style={{ 
-                      padding: '10px 12px', 
-                      borderRadius: 10, 
-                      background: 'rgb(var(--rgb-ov) / 0.03)',
-                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Layers style={{ width: 15, height: 15, color: 'var(--ac-fbbf24)' }} />
-                        <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>Odoo 19 ERP Modülleri</div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>sale.order & res.partner senkronizasyonu</div>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ac-34d399)', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 999 }}>
-                        Bağlı
-                      </span>
-                    </div>
-
-                    <div style={{ 
-                      padding: '10px 12px', 
-                      borderRadius: 10, 
-                      background: 'rgb(var(--rgb-ov) / 0.03)',
-                      border: '1px solid rgb(var(--rgb-ov) / 0.06)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <KeyRound style={{ width: 15, height: 15, color: '#10b981' }} />
-                        <div>
-                          <div style={{ fontSize: '0.775rem', fontWeight: 700, color: 'var(--nt-ffffff)' }}>Yetki & Rol Tanımları</div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)' }}>RBAC kataloğu ve personel ünvanları</div>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--nt-cbd5e1)', fontFamily: 'monospace' }}>
-                        {permissions.length} İzin / {roles.length} Rol
-                      </span>
-                    </div>
-
-                  </div>
-                </div>
+                {/* SAĞ: Altyapı ve entegrasyon durumu (ADIM 9.4: gerçek ölçüm) */}
+                <SystemHealthPanel health={platformHealth.health} busy={platformHealth.busy} onRefresh={platformHealth.load} />
 
               </div>
+
+              {/* Platform kullanımı ve LLM sağlığı (ADIM 9.4) */}
+              <PlatformDashboard />
 
             </div>
           )}

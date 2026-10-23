@@ -141,3 +141,47 @@ def test_department_dashboard(client, db, world):
         assert d["department_locked"] is False and {p["name"] for p in d["costs"]["projects"]} == {"Üretim Projesi"}
     finally:
         _exec(db, "UPDATE actors SET extra_permissions = '[]'::jsonb, department_id = NULL WHERE id = %s", member["id"])
+
+
+def _super(client, db):
+    tag = uuid.uuid4().hex[:6]
+    hq = _exec(db, "SELECT id FROM tenants WHERE slug = 'recdx_hq'")[0]
+    email = f"plat_super_{tag}@recdx.com"
+    _exec(db, "INSERT INTO actors (tenant_id, actor_type, display_name, email, role, password_hash, status) "
+              "VALUES (%s, 'HUMAN', 'Süper', %s, 'SUPER_ADMIN', %s, 'IDLE')", hq, email, hash_password(PASSWORD))
+    return _login(client, email)
+
+
+def test_platform_dashboard_and_health(client, db, world, monkeypatch):
+    """ADIM 9.4: Süper Admin panosu (platform sayıları, LLM sağlığı) ve gerçek sağlık kontrolü; şirket yöneticisine kapalı."""
+    from app.config import settings
+    from app.services import platform_health
+    from app.services.evren_client import evren_client
+    w = world
+    sa = _super(client, db)
+    for status, latency, out in (("SUCCESS", 1000, 100), ("SUCCESS", 3000, 300), ("FAILED", 5000, 0)):
+        _exec(db, "INSERT INTO llm_calls (id, tenant_id, purpose, model_code, tokens_in, tokens_out, credits_cost, latency_ms, status, created_at) "
+                  "VALUES (gen_random_uuid(), %s, 'AGENT_CHAT', 'saglik-model', 100, %s, 1, %s, %s, now())", w["tenant"], out, latency, status)
+    r = client.get("/api/v1/system/dashboard?days=7", headers=sa)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    m = next(x for x in d["llm"]["models"] if x["model_code"] == "saglik-model")
+    assert m["calls"] == 3 and m["failed"] == 1 and abs(m["fail_rate"] - 0.333) < 0.01
+    assert m["p50_ms"] == 2000 and m["tokens_per_sec"] == 100.0
+    assert len(d["llm"]["series"]) == 7 and d["tenants"]["total"] >= 1
+    assert any(u["tenant_id"] == w["tenant"] for u in d["usage_by_tenant"])
+    assert client.get("/api/v1/system/dashboard", headers=w["admin"]["h"]).status_code == 403  # yalnızca Süper Admin
+
+    async def models():
+        return [{"id": "x"}]
+    monkeypatch.setattr(evren_client, "list_models", models)
+    h = client.get("/api/v1/system/health?refresh=true", headers=sa)
+    assert h.status_code == 200
+    services = {s["key"]: s for s in h.json()["services"]}
+    assert services["postgres"]["status"] in ("OK", "SLOW") and services["redis"]["status"] in ("OK", "SLOW")
+    assert services["odoo"]["status"] == "OFF"  # testlerde Odoo eşitlemesi kapalı
+    text = h.text
+    for secret in (settings.SECRET_KEY, settings.GITEA_TOKEN, settings.EVREN_API_KEY, settings.MINIO_ROOT_PASSWORD):
+        assert not secret or secret not in text
+    assert client.get("/api/v1/system/health", headers=w["admin"]["h"]).status_code == 403
+    platform_health._cache.update(at=0.0, data=None)

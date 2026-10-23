@@ -14,7 +14,7 @@ from sqlalchemy import and_, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import Date
 
-from app.db.models import Actor, LLMCall, Project, Task, TaskEvent, Tenant
+from app.db.models import Actor, LLMCall, Plan, Project, Task, TaskEvent, Tenant, TenantLead
 from app.services import costs, credits
 from app.services import projects as psvc
 
@@ -146,6 +146,69 @@ async def team_status(db: AsyncSession, tenant: Tenant, since: datetime, departm
 
 
 MONEY_FIELDS = ("cost", "ai_cost", "saving", "human_equivalent")
+
+
+async def platform_overview(db: AsyncSession, days: int = 7) -> Dict[str, Any]:
+    """Süper Admin panosu (ADIM 9.4). KVKK: müşteri içeriği yok; şirket adı, paket ve kullanım sayıları (fatura bilgisi).
+
+    LLM sağlığı model bazında: çağrı, hata oranı, gecikme p50/p95, çıktı hızı (token/sn, medyan). EVREN kapasite (GPU)
+    talebi için girdi: hızlar tek istek başınadır; eşzamanlı yük ayrıca değerlendirilmelidir.
+    """
+    days = days if days in PERIODS else 7
+    since = datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days - 1)
+    now = datetime.now(TZ)
+    tenants = (await db.execute(select(Tenant, Plan).outerjoin(Plan, Plan.id == Tenant.plan_id))).all()
+    customers = [(t, p) for t, p in tenants if t.slug != "recdx_hq"]
+    by_plan: Dict[str, int] = {}
+    for t, p in customers:
+        if t.is_active:
+            key = p.name if p else "Paketsiz"
+            by_plan[key] = by_plan.get(key, 0) + 1
+    expiring = sum(1 for t, _ in customers if t.is_active and t.package_expiry_date and now <= t.package_expiry_date <= now + timedelta(days=30))
+    pending_leads = (await db.execute(select(func.count()).select_from(TenantLead).where(TenantLead.status == "PENDING"))).scalar() or 0
+
+    ok = LLMCall.status == "SUCCESS"
+    speed = func.percentile_cont(0.5).within_group((LLMCall.tokens_out * 1000.0 / func.nullif(LLMCall.latency_ms, 0)))
+    models = []
+    for m, calls, failed, p50, p95, tps, t_out in (await db.execute(
+            select(LLMCall.model_code, func.count(), func.count().filter(LLMCall.status != "SUCCESS"),
+                   func.percentile_cont(0.5).within_group(LLMCall.latency_ms).filter(ok),
+                   func.percentile_cont(0.95).within_group(LLMCall.latency_ms).filter(ok),
+                   speed.filter(ok, LLMCall.tokens_out > 50, LLMCall.purpose.notin_(("EMBEDDING", "RERANK", "GUARD", "OCR"))),
+                   func.sum(LLMCall.tokens_out).filter(ok))
+            .where(LLMCall.created_at >= since).group_by(LLMCall.model_code).order_by(func.count().desc()))).all():
+        models.append({"model_code": m, "calls": calls, "failed": failed, "fail_rate": round(failed / calls, 3) if calls else 0,
+                       "p50_ms": int(p50) if p50 is not None else None, "p95_ms": int(p95) if p95 is not None else None,
+                       "tokens_per_sec": round(float(tps), 1) if tps is not None else None, "tokens_out": int(t_out or 0)})
+
+    day = cast(func.timezone("Europe/Istanbul", LLMCall.created_at), Date)
+    rows = {d: (c, f) for d, c, f in (await db.execute(
+        select(day, func.count(), func.count().filter(LLMCall.status != "SUCCESS")).where(LLMCall.created_at >= since)
+        .group_by(day))).all()}
+    series = []
+    for i in range(days):
+        d = (since + timedelta(days=i)).date()
+        c, f = rows.get(d, (0, 0))
+        series.append({"date": d.isoformat(), "calls": c, "failed": f})
+
+    names = {t.id: (t.name, p.name if p else None) for t, p in tenants}
+    usage = [{"tenant_id": str(tid), "name": names.get(tid, ("?", None))[0], "plan": names.get(tid, ("?", None))[1],
+              "calls": c, "credits": round(_f(cr), 2)}
+             for tid, c, cr in (await db.execute(
+                 select(LLMCall.tenant_id, func.count(), func.sum(LLMCall.credits_cost)).where(LLMCall.created_at >= since, ok)
+                 .group_by(LLMCall.tenant_id).order_by(func.sum(LLMCall.credits_cost).desc()).limit(10))).all()]
+    balance = (await db.execute(select(LLMCall.evren_balance_after).where(LLMCall.evren_balance_after.isnot(None))
+                                .order_by(LLMCall.created_at.desc()).limit(1))).scalar()
+    return {
+        "days": days, "since": since.date().isoformat(),
+        "tenants": {"total": len(customers), "active": sum(1 for t, _ in customers if t.is_active),
+                    "inactive": sum(1 for t, _ in customers if not t.is_active), "by_plan": by_plan, "expiring_30d": expiring,
+                    "new_in_period": sum(1 for t, _ in customers if t.created_at and t.created_at >= since)},
+        "leads_pending": pending_leads,
+        "llm": {"calls": sum(m["calls"] for m in models), "failed": sum(m["failed"] for m in models), "models": models, "series": series,
+                "evren_balance": _f(balance) if balance is not None else None},
+        "usage_by_tenant": usage,
+    }
 
 
 def without_money(d: Dict[str, Any]) -> Dict[str, Any]:

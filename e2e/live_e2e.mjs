@@ -32,7 +32,7 @@ async function session(userKey, viewport = { width: 1440, height: 1000 }) {
   await page.locator('input[type="password"]').last().fill(u.password);
   await page.getByRole('button', { name: /Giriş Yap →/ }).click();
   // Şirket yöneticisi doğrudan Şirket Yönetimi'ne, diğerleri Work Space'e yönlenir
-  await page.waitForURL(/#\/(workspace|company-admin)/, { timeout: 20000 });
+  await page.waitForURL(/#\/(workspace|company-admin|super-admin)/, { timeout: 20000 });
   return { ctx, page };
 }
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
@@ -641,6 +641,21 @@ try {
   const memberApi = await api(mb.page, `/api/v1/company/${cfg.tenant_id}/dashboard`);
   step(memberPano === 0 && memberApi.status === 403, 'Sıradan ekip üyesi panoyu göremiyor', `sekme: ${memberPano} · API: ${memberApi.status}`);
   await mb.ctx.close();
+
+  // 9.4 Süper Admin panosu: gerçek sistem durumu, LLM sağlığı; müşteri içeriği (proje adı) görünmez (KVKK)
+  const sa = await session('super');
+  await sa.page.getByRole('heading', { name: 'Model sağlığı' }).waitFor({ timeout: 40000 });
+  await sa.page.getByText(/^(Tüm sistemler çalışıyor|Bazı bileşenlerde sorun var|Çekirdek bileşen erişilemiyor)$/).first().waitFor({ timeout: 20000 });
+  const healthCard = sa.page.locator('.ui-card', { has: sa.page.getByRole('heading', { name: 'Altyapı ve entegrasyon durumu' }) });
+  const services = await healthCard.locator('.pj-list li').count();
+  const states = (await healthCard.locator('.ui-badge').allTextContents()).map((x) => x.replace(/^[●▲✕○]\s*/, ''));
+  const modelRows = await sa.page.locator('.dash-table tbody tr').count();
+  const saText = await sa.page.locator('main, .super-admin-main, body').first().innerText();
+  step(services === 8 && modelRows > 0 && !saText.includes(NAME),
+    'Süper Admin panosu gerçek sistem durumunu ve LLM sağlığını gösteriyor; müşteri içeriği yok',
+    `${services} bileşen (${[...new Set(states)].join(', ')}) · ${modelRows} model · proje adı görünüyor: ${saText.includes(NAME) ? 'EVET' : 'hayır'}`);
+  await shot(sa.page, '10-super-admin-pano');
+  await sa.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);
