@@ -106,6 +106,53 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
         </Card>
       </div>
 
+      <div className="pj-split">
+        <Card title="Tahmini tasarruf (ROI)" subtitle={`Son ${d.days} gün · AI personelin tamamladığı adımlar`}>
+          {d.roi.available ? (
+            <>
+              <div className="dash-hero" title={tl(d.roi.saving)}>{tlShort(d.roi.saving)}</div>
+              <div className="pj-stats dash-stats-2">
+                <div className="pj-stat"><span>İnsanla yapılsaydı</span><strong title={tl(d.roi.human_equivalent)}>{tlShort(d.roi.human_equivalent)}</strong></div>
+                <div className="pj-stat"><span>AI maliyeti</span><strong title={tl(d.roi.ai_cost)}>{tlShort(d.roi.ai_cost)}</strong></div>
+              </div>
+              <p className="pj-hint" style={{ marginTop: 8 }}>{d.roi.assumption} {compact(d.roi.work_days)} iş günü · {d.roi.rated_humans} kişinin ortalaması.
+                {d.roi.unpriced_calls ? ` ${d.roi.unpriced_calls} çağrının TL fiyatı tanımsız; AI maliyeti eksik olabilir.` : ''}</p>
+            </>
+          ) : (
+            <p className="pj-hint">{d.roi.reason} AI personel bu dönemde {compact(d.roi.work_days)} iş günü çalıştı.</p>
+          )}
+        </Card>
+        <Card title="İlk seferde onay" subtitle="Revizyon istenmeden tamamlanan adımların payı (AI personel)">
+          <BarList caption="AI personel ilk seferde onay oranı" format={(v) => `%${Math.round(v * 100)}`} empty="Bu dönemde tamamlanan AI adımı yok."
+            data={d.agents.filter((a) => a.completed).map((a) => ({ key: a.actor_id, label: a.name, value: a.first_pass_rate,
+              note: `${a.completed} adım · ${a.revisions} revizyon` }))} />
+        </Card>
+      </div>
+
+      <Card title="AI personel karnesi" subtitle={`Son ${d.days} gün. Otonomi: insan revizyonu istenmeden tamamlanan adımların payı.`}>
+        {d.agents.length === 0 ? <p className="pj-hint">Bu kapsamda iş almış AI personel yok.</p> : (
+          <div className="ui-table-scroll">
+            <table className="ui-table dash-table">
+              <thead><tr><th>AI personel</th><th>Tamamlanan</th><th>İlk seferde onay</th><th>Otonomi</th><th>Revizyon</th><th>Karantina</th>
+                <th>Ort. süre</th><th>Kredi</th><th>Maliyet</th></tr></thead>
+              <tbody>{d.agents.map((a) => (
+                <tr key={a.actor_id}>
+                  <td data-label="AI personel"><strong>{a.name}</strong><br /><small className="pj-hint">{a.title}</small></td>
+                  <td data-label="Tamamlanan">{a.completed} / {a.assigned}</td>
+                  <td data-label="İlk seferde onay">{a.first_pass_rate == null ? '—' : `%${Math.round(a.first_pass_rate * 100)}`}</td>
+                  <td data-label="Otonomi">{a.autonomy_rate == null ? '—' : `%${Math.round(a.autonomy_rate * 100)}`}</td>
+                  <td data-label="Revizyon">{a.revisions}</td>
+                  <td data-label="Karantina" className={a.quarantined ? 'ui-text-danger' : undefined}>{a.quarantined}</td>
+                  <td data-label="Ort. süre">{a.avg_hours == null ? '—' : a.avg_hours < 1 ? `${Math.round(a.avg_hours * 60)} dk` : `${compact(a.avg_hours)} sa`}</td>
+                  <td data-label="Kredi">{compact(a.credits)}</td>
+                  <td data-label="Maliyet" title={a.unpriced_calls ? `${a.unpriced_calls} çağrının TL fiyatı tanımsız` : undefined}>{tl(a.cost)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
       <Card title="Projeler: bütçe ve gerçekleşen" subtitle="Gerçekleşen = personel + token + diğer kalemler">
         <BudgetBars caption="Proje bütçe ve gerçekleşen"
           data={d.costs.projects.filter((p) => p.actual > 0 || p.budget != null).map((p) => ({

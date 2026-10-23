@@ -608,6 +608,16 @@ try {
   const creditCard = await adm.page.getByRole('heading', { name: 'Kredi', exact: true }).count();
   step(week > 0 && week % 7 === 0 && (deptNote === 'departman yok' || creditCard === 0),
     'Pano filtreleri (dönem, departman) tüm görünümü yeniliyor', `7 günlük seri: ${week} sütun · ${deptNote} · kredi kartı: ${creditCard ? 'var' : 'yok'}`);
+  // 9.2 AI personel karnesi ve tahmini tasarruf: bu koşuda çalışan AI personel karnede; ROI ya hesaplanır ya KVKK gerekçesi yazar
+  await adm.page.getByRole('tab', { name: '30 gün' }).click();
+  if (await deptSel.count()) await deptSel.selectOption({ index: 0 });
+  await adm.page.getByRole('heading', { name: 'AI personel karnesi' }).waitFor({ timeout: 20000 });
+  await adm.page.waitForTimeout(1500);
+  const karne = await adm.page.locator('.dash-table tbody').innerText();
+  const roiText = await adm.page.locator('.ui-card', { has: adm.page.getByRole('heading', { name: 'Tahmini tasarruf (ROI)' }) }).innerText();
+  const rows = karne.split('\n').filter((l) => /^(Deniz|Kaan)$/.test(l.trim()));
+  step(rows.length >= 2 && /%\d+/.test(karne) && (/₺/.test(roiText) || /KVKK/.test(roiText)),
+    'AI personel karnesi ve tahmini tasarruf gösteriliyor', `${rows.join(', ')} · ROI: ${/KVKK/.test(roiText) ? 'KVKK gerekçesiyle gizli (ücret tanımlı kişi < 3)' : 'hesaplandı'}`);
   await shot(adm.page, '08-sirket-panosu');
   await adm.ctx.close();
 } catch (e) {

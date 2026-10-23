@@ -8,7 +8,7 @@ ADIM 9.1: Şirket dashboard'u.
 import json
 import uuid
 
-from tests.test_workflow import PASSWORD, _exec, _login, _ready_project, world  # noqa: F401  (fikstür)
+from tests.test_workflow import PASSWORD, _exec, _login, _ready_project, ai, world  # noqa: F401  (fikstür)
 from app.core.security import hash_password
 
 
@@ -42,9 +42,9 @@ def test_company_dashboard(client, db, world):
     assert row["budget"] == 10000 and row["other"] == 750 and row["token"] >= 4.25 and row["tasks_total"] == 3
     assert any(c["category"] == "LISANS" and c["amount"] >= 750 for c in d["costs"]["by_category"])
     assert d["credits"] and "monthly_grant" in d["credits"]
-    # KVKK: kişi adı ve kişi başı günlük ücret yok
+    # KVKK: insan personelin kimliği ve kişi başı günlük ücreti yok (AI personel karnede görünür; kişi değildir)
     text = json.dumps(d, ensure_ascii=False)
-    assert "Uzman" not in text and "4321" not in text
+    assert w["member"]["id"] not in text and "4321" not in text
 
     r90 = client.get(f"/api/v1/company/{w['tenant']}/dashboard?days=90", headers=admin).json()
     assert len(r90["series"]) == 90 and any(m["model_code"] == "pano-model-b" for m in r90["by_model"])
@@ -63,3 +63,40 @@ def test_company_dashboard_access(client, db, world):
     assert client.get(url, headers=_login(client, email)).status_code == 403  # KVKK: platform personeli müşteri içeriğini görmez
     other_dept = _exec(db, "INSERT INTO departments (id, tenant_id, name) VALUES (gen_random_uuid(), %s, 'Başka') RETURNING id", hq)[0]
     assert client.get(f"{url}?department_id={other_dept}", headers=w["admin"]["h"]).status_code == 404
+
+
+def test_agent_scorecard_and_roi(client, db, world, ai):
+    """ADIM 9.2: kontrol personeli bir kez reddeder, yönetici onaylar: karne ve tahmini tasarruf."""
+    from tests.test_workflow import _wait
+    w = world
+    admin = w["admin"]["h"]
+    ai.fail_reviews = 1
+    pid, _, _ = _ready_project(client, w, "Karne Projesi", reviewer=True)
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "start"})
+    tasks, _ = _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "AI adımı onaya gelmeli", 60)
+    assert client.post(f"/api/v1/tasks/{tasks['AI adımı']['id']}/decision", headers=admin, json={"approve": True}).status_code == 200
+    _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "DONE", "AI adımı tamamlanmalı", 30)
+
+    url = f"/api/v1/company/{w['tenant']}/dashboard?days=30"
+    d = client.get(url, headers=admin).json()
+    card = next(a for a in d["agents"] if a["name"] == "Kodcu")
+    assert card["completed"] >= 1 and card["revisions"] >= 1 and card["first_pass_rate"] < 1
+    assert card["autonomy_rate"] == 1.0  # insan revizyon istemedi (yalnızca kontrol personeli)
+    assert card["credits"] > 0 and card["avg_hours"] is not None
+    assert not any(a["name"] == "Kontrolcu" and a["completed"] for a in d["agents"])  # kontrol personelinin kendi adımı yok
+
+    # ROI: en az 3 insanın günlük maliyeti tanımlı değilse gösterilmez (KVKK)
+    _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE tenant_id = %s", w["tenant"])
+    _exec(db, "UPDATE actors SET daily_cost_try = 3000 WHERE id = %s", w["admin"]["id"])
+    roi = client.get(url, headers=admin).json()["roi"]
+    assert roi["available"] is False and "KVKK" in roi["reason"]
+    _exec(db, "UPDATE actors SET daily_cost_try = 2000 WHERE id IN (%s, %s)", w["member"]["id"], w["outsider"]["id"])
+    d = client.get(url, headers=admin).json()
+    roi = d["roi"]
+    expected = round(roi["work_days"] * (7000 / 3) - roi["ai_cost"], 2)
+    assert roi["available"] is True and abs(roi["saving"] - expected) < 0.05 and roi["rated_humans"] == 3
+    text = json.dumps(d)
+    # Kişi başı ücret alanı dönmez; ortalama yalnızca en az 3 kişiden hesaplanır (tutarlar toplam/proje/adım düzeyinde)
+    assert "daily_cost" not in text and "labor_rate" not in text and "avg_rate" not in text
+    _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE tenant_id = %s", w["tenant"])
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})

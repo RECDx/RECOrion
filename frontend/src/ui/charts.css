@@ -43,6 +43,8 @@
 .viz-table { margin-top: 8px; font-size: 0.75rem; }
 .viz-table summary { cursor: pointer; color: var(--text-dim); }
 /* Pano kartlarındaki tutarlar tek satırda kalır */
+.dash-hero { font-size: 2.6rem; font-weight: 700; color: var(--text-main); line-height: 1.1; margin: 4px 0 12px; }
+.dash-table td, .dash-table th { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dash-root .dash-stats-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dash-root .pj-stat strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dash-root .pj-split { align-items: start; grid-template-columns: repeat(2, minmax(0, 1fr)); }
