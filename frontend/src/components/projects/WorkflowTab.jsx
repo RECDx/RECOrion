@@ -182,7 +182,7 @@ export default function WorkflowTab({ project }) {
   );
 }
 
-function ArtifactModal({ task, artifactId, onClose }) {
+export function ArtifactModal({ task, artifactId, onClose }) {
   const [id, setId] = useState(artifactId);
   const [art, setArt] = useState(null);
   useEffect(() => {

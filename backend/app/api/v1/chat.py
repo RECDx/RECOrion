@@ -5,7 +5,7 @@ from sqlalchemy import select
 from typing import List, Optional, Dict, Any
 from app.db.session import get_db
 from app.core.security import CurrentUser, ensure_tenant_content, get_current_user
-from app.db.models import ChatMessage, Task, Actor, LLMModel, Project
+from app.db.models import AgentDocument, ChatMessage, Task, Actor, LLMModel, Project
 from app.services import llm_gateway
 from app.services.llm_gateway import LLMContext, LLMError
 from app.services import knowledge
@@ -48,6 +48,55 @@ class SendMessageRequest(BaseModel):
     is_private: bool = False
     # Kullanıcı yalnızca sohbet mesajı yazar; AI-AI ve devir mesajlarını sistem üretir
     message_type: Literal["CHAT"] = "CHAT"
+    # Mesaja eklenen dosyalar (ADIM 8.3): önce Proje Eklerine yüklenir, kimlikleri burada verilir
+    attachments: List[uuid.UUID] = Field(default_factory=list, max_length=5)
+
+
+ATTACHMENT_EXCERPT = 4000
+ATTACHMENT_WAIT_SECONDS = 90  # yeni yüklenen ekin metin çıkarma + güvenlik kontrolü için en fazla bekleme
+PROCESSING = ("UPLOADED", "PROCESSING")
+
+
+async def _attachments(db: AsyncSession, project_id: uuid.UUID, ids: List[uuid.UUID]):
+    """Ekler bu projenin Proje Ekleri olmalı."""
+    if not ids:
+        return [], []
+    docs = {d.id: d for d in (await db.execute(select(AgentDocument).where(
+        AgentDocument.id.in_(ids), AgentDocument.project_id == project_id, AgentDocument.layer == "PROJECT"))).scalars()}
+    if len(docs) != len(set(ids)):
+        raise HTTPException(status_code=422, detail="Ek bulunamadı veya bu projenin eki değil.")
+    ordered = [docs[i] for i in dict.fromkeys(ids)]
+    return [{"document_id": str(d.id), "name": d.original_name or d.file_name, "file_type": d.file_type} for d in ordered], ordered
+
+
+async def _attachment_text(db: AsyncSession, docs: List[AgentDocument], project_id, task_id) -> str:
+    """Eklerin AI'a verilecek metni. Yeni yüklenen ek işleniyorsa kısa süre beklenir (kullanıcı ekleyip hemen sorar).
+    Yalnızca KVKK maskeli metin verilir; güvenlik kontrolünde riskli bulunan ekin içeriği kullanılmaz."""
+    import asyncio
+    import time
+
+    deadline = time.monotonic() + ATTACHMENT_WAIT_SECONDS
+    announced = False
+    while any(d.status in PROCESSING for d in docs) and time.monotonic() < deadline:
+        if not announced:
+            await live.thought(project_id, task_id, "ATTACHMENT", "Ekler okunuyor (metin çıkarma ve güvenlik kontrolü)…")
+            announced = True
+        await asyncio.sleep(3)
+        for d in docs:
+            await db.refresh(d)
+    text = ""
+    for d in docs:
+        if d.status == "QUARANTINED":
+            body = "(güvenlik kontrolü bu dosyayı riskli buldu; içeriği kullanılmadı)"
+        elif d.status in PROCESSING:
+            body = "(dosya hâlâ işleniyor; içeriği bu yanıtta okunamadı)"
+        elif d.status == "FAILED" or not (d.masked_text or "").strip():
+            body = "(dosyadan okunabilir metin çıkarılamadı)"
+        else:
+            body = d.masked_text.strip()
+            body = body[:ATTACHMENT_EXCERPT] + ("…" if len(body) > ATTACHMENT_EXCERPT else "")
+        text += f"\n\n[Ek: {d.original_name or d.file_name}]\n{body}"
+    return text
 
 
 class ChatMessageResponse(BaseModel):
@@ -175,6 +224,7 @@ async def send_chat_message(
     if agent and agent.system_prompt:
         system_prompt = agent.system_prompt
     visible_to = user.actor_id if payload.is_private else None
+    attachment_info, attachment_docs = await _attachments(db, project.id, payload.attachments)
 
     # 1. Kullanıcı mesajını kaydet
     user_msg = ChatMessage(
@@ -186,6 +236,7 @@ async def send_chat_message(
         content=payload.content,
         is_private=payload.is_private,
         visible_to_actor_id=visible_to,
+        attachments=attachment_info,
         message_type=payload.message_type
     )
     db.add(user_msg)
@@ -209,6 +260,10 @@ async def send_chat_message(
     llm_messages = [{"role": "system", "content": system_prompt + rag_context}]
     for m in prev_messages:
         llm_messages.append({"role": m.role if m.role in ["user", "assistant"] else "user", "content": m.content})
+    # Eklerin metni yalnızca bu mesajla birlikte verilir (kullanıcının mesajı ekranda göründükten sonra okunur)
+    attachment_text = await _attachment_text(db, attachment_docs, project_id, task_id) if attachment_docs else ""
+    if attachment_text:
+        llm_messages[-1]["content"] += attachment_text
 
     # Canlı düşünce adımı (ADIM 8.2): proje kanalındaki herkes görür
     counts = knowledge.layer_counts(citations)

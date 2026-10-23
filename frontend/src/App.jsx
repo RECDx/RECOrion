@@ -86,7 +86,14 @@ export default function App() {
   // Bekleyen kararlar (Onaylarım sayacı)
   const [approvalCount, setApprovalCount] = useState(0);
   // Work Space modu: HUB (proje listesi), PLANNER (proje planlama), WORK (görev sohbeti), INBOX (Onaylarım)
-  const [workspaceMode, setWorkspaceMode] = useState(() => (typeof window !== 'undefined' && /^#\/workspace\?project=/.test(window.location.hash) ? 'PLANNER' : 'HUB'));
+  // #/workspace?project=<id>&view=work bağlantısı doğrudan Çalışma Alanını açar (Adım 8.3)
+  const [workspaceMode, setWorkspaceMode] = useState(() => {
+    if (typeof window === 'undefined' || !/^#\/workspace\?project=/.test(window.location.hash)) return 'HUB';
+    return /[?&]view=work(&|$)/.test(window.location.hash) ? 'WORK' : 'PLANNER';
+  });
+  // Çalışma Alanı: adımların akış durumu/yetkileri/son çıktısı ve proje ekibi (Adım 8.3)
+  const [flowTasks, setFlowTasks] = useState({});
+  const [projectInfo, setProjectInfo] = useState({ members: [], can_manage: false });
   // E-posta/Telegram bildirimindeki #/workspace?project=<id> bağlantısı doğrudan projeyi açar
   const [plannerProjectId, setPlannerProjectId] = useState(() => {
     const m = typeof window !== 'undefined' ? window.location.hash.match(/^#\/workspace\?project=([0-9a-f-]{36})/i) : null;
@@ -206,22 +213,26 @@ export default function App() {
     return () => window.removeEventListener('recorion:unauthorized', onUnauthorized);
   }, []);
 
-  // 2. Load Tasks when Active Project Changes
+  // 2. Load Tasks when Active Project Changes: görevler + akış durumu (yetki, son çıktı) birlikte yenilenir
+  const reloadWork = React.useCallback(async (projectId, keepSelection = true) => {
+    const [tList, flow] = await Promise.all([api.getTasks(projectId), api.getProjectWorkflow(projectId).catch(() => null)]);
+    setTasks(tList);
+    setFlowTasks(Object.fromEntries((flow?.tasks || []).map((t) => [t.id, t])));
+    setSelectedTask((cur) => (keepSelection && tList.find((x) => x.id === cur?.id)) || tList[0] || null);
+  }, []);
   useEffect(() => {
     if (!activeProject) return;
-    async function loadTasks() {
-      try {
-        const tList = await api.getTasks(activeProject.id);
-        setTasks(tList);
-        if (tList.length > 0) {
-          setSelectedTask(tList[0]);
-        }
-      } catch (err) {
-        console.error("Görev yükleme hatası:", err);
-      }
+    setFlowTasks({});
+    reloadWork(activeProject.id, false).catch((err) => console.error("Görev yükleme hatası:", err));
+    api.getProject(activeProject.id).then((d) => setProjectInfo({ members: d.members || [], can_manage: !!d.can_manage }))
+      .catch(() => setProjectInfo({ members: [], can_manage: false }));
+  }, [activeProject, reloadWork]);
+  // Çalışma Alanındayken adres çubuğu paylaşılabilir doğrudan bağlantıyı gösterir
+  useEffect(() => {
+    if (workspaceMode === 'WORK' && activeProject && currentView === 'WORKSPACE') {
+      window.history.replaceState(null, '', `#/workspace?project=${activeProject.id}&view=work`);
     }
-    loadTasks();
-  }, [activeProject]);
+  }, [workspaceMode, activeProject, currentView]);
 
   // Canlı akış (Adım 8.2): yeni mesajlar, iş akışı olayları ve AI düşünce adımları sayfa yenilemeden gelir
   const liveRefresh = React.useRef(null);
@@ -243,13 +254,8 @@ export default function App() {
       if (e.kind !== 'TASK_STARTED') setLiveThought((t) => (t && t.taskId === e.task_id ? null : t));
       // Aynı anda gelen olaylar tek yenilemede toplanır
       clearTimeout(liveRefresh.current);
-      liveRefresh.current = setTimeout(async () => {
-        if (!activeProject) return;
-        try {
-          const tList = await api.getTasks(activeProject.id);
-          setTasks(tList);
-          setSelectedTask((cur) => tList.find((x) => x.id === cur?.id) || cur);
-        } catch { /* bir sonraki olayda yeniden denenir */ }
+      liveRefresh.current = setTimeout(() => {
+        if (activeProject) reloadWork(activeProject.id).catch(() => { /* bir sonraki olayda yeniden denenir */ });
       }, 600);
     }
   });
@@ -279,8 +285,8 @@ export default function App() {
   }, [selectedTask, chatFilter, actors]);
 
   // 4. Send Message (Gemini Web Persistent Flow)
-  const handleSendMessage = async ({ content, isPrivate }) => {
-    if (!selectedTask || !content.trim()) return;
+  const handleSendMessage = async ({ content, isPrivate, attachments = [] }) => {
+    if (!selectedTask || !content.trim()) return false;
 
     setIsLoading(true);
 
@@ -289,7 +295,8 @@ export default function App() {
         task_id: selectedTask.id,
         content: content,
         is_private: isPrivate,
-        message_type: 'CHAT'
+        message_type: 'CHAT',
+        attachments: attachments.map((a) => a.id),
       });
 
       // Mesajlar canlı akıştan da gelebilir: kimliğe göre birleştirilir (kaynak kartları yanıta eklenir)
@@ -300,8 +307,10 @@ export default function App() {
         const updatedMem = await api.getMemoryItems(tenant.id);
         setMemoryItems(updatedMem);
       }
+      return true;
     } catch (err) {
       notify(`Mesaj gönderilemedi: ${err.message}`);
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -312,12 +321,7 @@ export default function App() {
     try {
       await fn();
       toast.success(message);
-      setTimeout(async () => {
-        if (!activeProject) return;
-        const tList = await api.getTasks(activeProject.id);
-        setTasks(tList);
-        setSelectedTask((cur) => tList.find((x) => x.id === cur?.id) || cur);
-      }, 1500);
+      setTimeout(() => { if (activeProject) reloadWork(activeProject.id).catch(() => {}); }, 1500);
     } catch (err) {
       toast.error(err.message);
     }
@@ -359,8 +363,14 @@ export default function App() {
     setActors(await api.getActors(userTenant.id));
     const prjData = await api.getProjects(userTenant.id);
     setProjects(prjData);
-    if (prjData.length > 0) {
-      setActiveProject(prjData[0]);
+    // Doğrudan bağlantıdaki proje (yoksa ilk proje)
+    const wanted = window.location.hash.match(/^#\/workspace\?project=([0-9a-f-]{36})/i)?.[1];
+    const target = (wanted && prjData.find((p) => p.id === wanted)) || prjData[0];
+    if (wanted && /[?&]view=work(&|$)/.test(window.location.hash) && !prjData.some((p) => p.id === wanted)) {
+      notify('Bağlantıdaki projeyi göremiyorsunuz (ekibinde değilsiniz veya proje kaldırıldı).');
+    }
+    if (target) {
+      setActiveProject(target);
     } else {
       setActiveProject(null);
       setTasks([]);
@@ -587,6 +597,11 @@ export default function App() {
         {/* Left Pane: Project, Workflow & Team */}
         <LeftPane 
           project={activeProject}
+          projects={projects}
+          onSelectProject={(p) => { if (p.id !== activeProject?.id) { setMessages([]); setActiveProject(p); } }}
+          members={projectInfo.members}
+          canManage={projectInfo.can_manage}
+          flowTasks={flowTasks}
           tasks={tasks}
           selectedTask={selectedTask}
           onSelectTask={setSelectedTask}
@@ -599,6 +614,9 @@ export default function App() {
         {/* Middle Pane: Persistent Chat & Live Thought Stream */}
         <MiddlePane 
           selectedTask={selectedTask}
+          project={activeProject}
+          currentUser={currentUser}
+          flowTask={selectedTask ? flowTasks[selectedTask.id] : null}
           messages={messages}
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
@@ -610,6 +628,7 @@ export default function App() {
         {/* Right Pane: Quality Gate & 2-Tier Collective Memory */}
         <RightPane 
           selectedTask={selectedTask}
+          flowTask={selectedTask ? flowTasks[selectedTask.id] : null}
           memoryItems={memoryItems}
           onPromoteMemory={handlePromoteMemory}
           onApproveQualityGate={(t) => runTaskAction(() => api.decideTask(t.id, true), 'Onaylandı; iş akışı sonraki adıma geçiyor.')}

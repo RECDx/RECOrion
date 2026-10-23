@@ -1,47 +1,49 @@
-import React, { useState } from 'react';
-import { 
-  ShieldCheck, 
-  CheckCircle2, 
-  RotateCcw, 
-  BookOpen, 
-  Building2, 
-  Bot, 
-  ArrowUpRight, 
-  FileCode2, 
-  Sparkles,
-  Layers,
+import React, { useCallback, useState } from 'react';
+import {
+  ShieldCheck,
+  CheckCircle2,
+  RotateCcw,
+  Building2,
+  Bot,
+  ArrowUpRight,
+  FileCode2,
   Database,
-  Award
+  Eye
 } from 'lucide-react';
+import { Badge } from '../ui/components';
+import { ArtifactModal } from './projects/WorkflowTab';
+import './workarea.css';
 
-export default function RightPane({ 
-  selectedTask, 
-  memoryItems, 
-  onPromoteMemory, 
-  onApproveQualityGate, 
+// Kalite kapısı iş adımının gerçek akış durumunu gösterir (ADIM 7.1); renkler tema tonlarından
+const GATE = {
+  WAITING_APPROVAL: ['Onay bekliyor', 'warning'], DONE: ['Onaylandı', 'success'], REVISION: ['Revizyonda', 'danger'],
+  QUARANTINED: ['Karantinada', 'danger'], IN_PROGRESS: ['Çalışılıyor', 'info'], CANCELLED: ['İptal', 'neutral'],
+};
+const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+
+export default function RightPane({
+  selectedTask,
+  flowTask,
+  memoryItems,
+  onPromoteMemory,
+  onApproveQualityGate,
   onRejectQualityGate,
   onSubmitTask
 }) {
   const [activeTab, setActiveTab] = useState('GLOBAL'); // GLOBAL vs AGENT
-  // Kalite kapısı iş adımının gerçek akış durumunu gösterir (ADIM 7.1)
+  const [viewing, setViewing] = useState(false);
+  const closeViewer = useCallback(() => setViewing(false), []);
   const status = selectedTask?.status;
-  const gate = {
-    WAITING_APPROVAL: ['⏳ ONAY BEKLİYOR', 'rgba(245, 158, 11, 0.2)', 'var(--ac-fbbf24)'],
-    DONE: ['✓ ONAYLANDI', 'rgba(16, 185, 129, 0.2)', 'var(--ac-34d399)'],
-    REVISION: ['↺ REVİZYONDA', 'rgba(244, 63, 94, 0.2)', '#f43f5e'],
-    QUARANTINED: ['⛔ KARANTİNADA', 'rgba(244, 63, 94, 0.2)', '#f43f5e'],
-    IN_PROGRESS: ['● ÇALIŞILIYOR', 'rgba(56, 189, 248, 0.18)', 'var(--ac-38bdf8)'],
-    CANCELLED: ['İPTAL', 'rgb(var(--rgb-ov) / 0.08)', 'var(--text-dim)'],
-  }[status] || ['SIRADA', 'rgb(var(--rgb-ov) / 0.08)', 'var(--text-dim)'];
+  const [gateLabel, gateTone] = GATE[status] || ['Sırada', 'neutral'];
+  const art = flowTask?.artifact;
 
   const filteredMemories = memoryItems?.filter((m) => m.scope === activeTab) || [];
 
   return (
     <aside className="pane" style={{ borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-      {/* Pane Header: Quality Gate & Memory */}
       <div className="pane-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ShieldCheck size={18} color="#10b981" />
+          <ShieldCheck size={18} className="ui-text-success" />
           <span style={{ fontSize: '0.875rem', fontWeight: '700' }}>
             Kalite Kapısı & Kurum Hafızası
           </span>
@@ -49,87 +51,62 @@ export default function RightPane({
       </div>
 
       <div className="pane-content">
-        {/* 1. DETERMINISTIC QUALITY GATE (KALİTE KAPISI) */}
-        <div style={{
-          padding: '14px',
-          borderRadius: '12px',
-          background: 'var(--gradient-card)',
-          border: '1px solid rgba(16, 185, 129, 0.3)',
-          boxShadow: '0 4px 15px rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))'
-        }}>
+        {/* 1. KALİTE KAPISI: karar düğmeleri yalnızca yetkisi olana (Adım 8.3) */}
+        <div className="wa-artifact">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--ac-34d399)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <ShieldCheck size={14} />
-              GÖREV KALİTE KAPISI
-            </span>
-            <span className="badge" style={{
-              fontSize: '0.62rem',
-              background: gate[1],
-              color: gate[2]
-            }}>
-              {gate[0]}
-            </span>
+            <span className="wa-section-title" style={{ margin: 0 }}><ShieldCheck size={14} />Görev kalite kapısı</span>
+            <Badge tone={gateTone}>{gateLabel}</Badge>
           </div>
-
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '12px' }}>
-            AI Personeli tarafından üretilen kod ve doküman artefaktları deterministik doğrulama kriterlerini karşılamadan iş akışında ilerleyemez.
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '10px' }}>
+            {flowTask?.reviewer ? `Çıktı önce kontrol personeli ${flowTask.reviewer.name} tarafından değerlendirilir. ` : ''}
+            {flowTask?.requires_approval === false ? 'Bu adım insan onayı gerektirmez.'
+              : `Onaylayıcı: ${flowTask?.approver?.name || 'proje yöneticisi'}.`}
           </p>
-
-          {status === 'WAITING_APPROVAL' && (
+          {status === 'WAITING_APPROVAL' && flowTask?.can_decide && (
             <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <button onClick={() => onApproveQualityGate?.(selectedTask)} className="btn btn-success" style={{ fontSize: '0.75rem', padding: '7px' }}>
                 <CheckCircle2 size={13} />
                 Onayla & İlerlet
               </button>
-              <button onClick={() => onRejectQualityGate?.(selectedTask)} className="btn btn-secondary"
-                style={{ fontSize: '0.75rem', padding: '7px', borderColor: 'rgba(244, 63, 94, 0.3)', color: '#f43f5e' }}>
+              <button onClick={() => onRejectQualityGate?.(selectedTask)} className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '7px' }}>
                 <RotateCcw size={13} />
                 Revizyon İste
               </button>
             </div>
           )}
-          {['IN_PROGRESS', 'REVISION'].includes(status) && (
+          {status === 'WAITING_APPROVAL' && flowTask && !flowTask.can_decide && (
+            <p className="pj-hint" style={{ margin: 0 }}>Karar {flowTask.approver?.name || 'onaylayıcı'} tarafından verilecek.</p>
+          )}
+          {flowTask?.can_submit && (
             <button onClick={() => onSubmitTask?.(selectedTask)} className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '7px', width: '100%' }}>
               <CheckCircle2 size={13} />
               Çıktıyı teslim et
             </button>
           )}
           {status === 'QUARANTINED' && (
-            <p style={{ fontSize: '0.72rem', color: '#f43f5e', margin: 0 }}>
+            <p className="ui-text-danger" style={{ fontSize: '0.72rem', margin: 0 }}>
               Bu adım {selectedTask?.rejection_count} kez reddedildi. Kararı proje yöneticisi Projeler &gt; İş Akışı ekranından verir.
             </p>
           )}
         </div>
 
-        {/* 2. ARTIFACT PREVIEW */}
-        <div style={{
-          padding: '12px',
-          borderRadius: '10px',
-          background: 'rgb(var(--rgb-ov) / 0.02)',
-          border: '1px solid var(--border-subtle)'
-        }}>
-          <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-dim)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <FileCode2 size={13} color="var(--ac-38bdf8)" />
-            ÜRETİLEN ARTEFAKT (MINIO S3)
-          </div>
-
-          <div style={{
-            background: 'var(--bg-dark)',
-            borderRadius: '6px',
-            padding: '10px',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.72rem',
-            color: '#a5f3fc',
-            lineHeight: 1.5,
-            border: '1px solid rgb(var(--rgb-ov) / 0.05)'
-          }}>
-            <div style={{ color: 'var(--ac-818cf8)', marginBottom: '4px' }}>// Görev Teslimatı:</div>
-            <div>[MİMARİ_PLAN_V1.md]</div>
-            <div style={{ color: 'var(--text-dim)', fontSize: '0.65rem', marginTop: '4px' }}>
-              Depolama: recorion-artifacts/projects/{selectedTask?.project_id?.slice(0, 8)}/
-            </div>
-          </div>
+        {/* 2. ÇIKTI: adımın gerçek son sürümü ve tüm sürümleri (Adım 8.3) */}
+        <div className="wa-artifact">
+          <div className="wa-section-title"><FileCode2 size={13} />Adımın çıktısı</div>
+          {!selectedTask ? <p className="pj-hint" style={{ margin: 0 }}>Bir iş adımı seçin.</p> : !art ? (
+            <p className="pj-hint" style={{ margin: 0 }}>Henüz çıktı yok. {flowTask?.ai_working ? 'AI personel çalışıyor; çıktı hazır olunca burada görünür.' : ''}</p>
+          ) : (
+            <>
+              <div className="wa-artifact-name">{art.name}</div>
+              <div className="wa-meta" style={{ marginTop: 0, marginBottom: '8px' }}>Sürüm {art.version} · {fmtTime(art.created_at)}</div>
+              <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px', width: '100%' }} onClick={() => setViewing(true)}>
+                <Eye size={13} />
+                Çıktıyı gör{art.version > 1 ? ' (sürümler)' : ''}
+              </button>
+            </>
+          )}
         </div>
+        {viewing && art && <ArtifactModal task={{ id: selectedTask.id, title: selectedTask.title }} artifactId={art.id} onClose={closeViewer} />}
 
         {/* 3. 2 KADEMELİ KOLEKTİF HAFIZA YÖNETİCİSİ */}
         <div>

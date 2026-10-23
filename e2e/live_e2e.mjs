@@ -234,20 +234,59 @@ try {
     await pg.locator('main.pane .live-dot.live-live').waitFor({ timeout: 20000 });
   };
   await openWork(m.page);
+  // 8.3 Paylaşılan doğrudan bağlantıyla giriş: #/workspace?project=ID&view=work
   const mgr2 = await session('manager');
-  await mgr2.page.locator('.pj-card', { hasText: NAME }).click();
-  await openWork(mgr2.page);
+  const projId = await mgr2.page.evaluate(async (name) => {
+    const token = sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token');
+    const ps = await (await fetch('/api/v1/projects/?scope=mine', { headers: { Authorization: `Bearer ${token}` } })).json();
+    return ps.find((x) => x.name === name)?.id;
+  }, NAME);
+  await mgr2.page.goto(`${APP}/#/workspace?project=${projId}&view=work`);
+  await mgr2.page.reload();
+  // Sohbet kutusu proje yüklenmeden görünür; canlı bağlantı kurulduysa proje de yüklenmiştir
+  const deep = await mgr2.page.locator('main.pane .live-dot.live-live').waitFor({ timeout: 25000 }).then(() => true).catch(() => false);
+  const picker = mgr2.page.locator('select[aria-label="Proje seç"]');
+  const pickedName = !deep ? '' : (await picker.count())
+    ? await picker.evaluate((sel) => sel.selectedOptions[0]?.text || '')
+    : await mgr2.page.locator('.tri-pane-container aside.pane').first().locator('.pane-header strong').innerText();
+  step(deep && pickedName.includes(NAME), 'Doğrudan bağlantı Çalışma Alanını doğru projeyle açtı', pickedName.slice(0, 60));
+  await mgr2.page.locator('main.pane .live-dot.live-live').waitFor({ timeout: 20000 });
+
+  // 8.3 Ekip üyesinin ekranında sahte içerik yok; karar düğmesi yok ama gerçek çıktı açılıyor
+  const memberWork = await m.page.locator('.tri-pane-container').innerText();
+  const fakes = ['Analist', 'MİMARİ_PLAN_V1', 'REC-001', 'NS_GLOBAL', 'Cüneyt (Yönetici)', 'Temporal Engine'].filter((t) => memberWork.includes(t));
+  step(fakes.length === 0, 'Çalışma Alanında sahte/sabit içerik yok', fakes.length ? `kalan: ${fakes.join(', ')}` : 'proje ekibi, gerçek ilerleme ve durumlar');
+  const right = m.page.locator('aside.pane').last();
+  const memberDecide = await right.getByRole('button', { name: /Onayla & İlerlet/ }).count();
+  const decider = await right.getByText(/tarafından verilecek/).count();
+  await right.getByRole('button', { name: /Çıktıyı gör/ }).click();
+  const artModal = m.page.getByRole('dialog');
+  await artModal.locator('.ui-modal-body').waitFor({ timeout: 15000 });
+  await m.page.waitForTimeout(1500);
+  const artText = await artModal.locator('.ui-modal-body').innerText();
+  step(memberDecide === 0 && decider === 1 && artText.length > 200, 'Ekip üyesi sağ panelde gerçek çıktıyı açıyor, onay düğmesi görmüyor',
+    `çıktı ${artText.length} karakter · karar düğmesi: ${memberDecide}`);
+  await artModal.getByRole('button', { name: 'Kapat' }).click();
+
+  // 8.2 + 8.3 İki kişi aynı anda; yönetici mesaja dosya ekleyip dosyanın içeriğini sorar
   const taskTitle = (await mgr2.page.locator('main.pane .pane-header span').first().innerText()).trim();
   const memberTask = (await m.page.locator('main.pane .pane-header span').first().innerText()).trim();
   const bubbles = () => m.page.locator('main.pane .chat-bubble:not(.thinking-pulse)').count();
   const before = await bubbles();
-  const question = `Canlı test sorusu ${Date.now() % 100000}: bu adımın en önemli riski nedir? Tek cümleyle yanıtla.`;
+  const code = `ZEYTIN-${Date.now() % 1000}`;
+  await mgr2.page.locator('main.pane input[type="file"]').setInputFiles({ name: 'toplanti-notu.txt', mimeType: 'text/plain',
+    buffer: Buffer.from(`Toplantı notu (canlı test)\nBu projenin iç kod adı ${code} olarak belirlendi.\nTeslim tarihi değişmedi.\n`) });
+  await mgr2.page.locator('main.pane .wa-chip', { hasText: 'toplanti-notu.txt' }).waitFor({ timeout: 30000 });
+  const question = `Ekteki toplantı notuna göre projenin iç kod adı nedir? Sadece kod adını yaz.`;
   await mgr2.page.locator('main.pane textarea').fill(question);
   await mgr2.page.locator('main.pane textarea').press('Enter');
   const tq = Date.now();
   const seenQuestion = await m.page.locator('main.pane', { hasText: question }).waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+  const senderShown = await m.page.locator('main.pane .chat-bubble-user', { hasText: question }).innerText().catch(() => '');
   step(seenQuestion && taskTitle === memberTask, 'Ekip üyesi, yöneticinin mesajını sayfa yenilemeden anında gördü',
     `${((Date.now() - tq) / 1000).toFixed(1)} sn · görev: ${taskTitle}`);
+  step(/Canlı Test Yöneticisi/.test(senderShown) && /toplanti-notu\.txt/.test(senderShown), 'Mesajda gerçek gönderen adı ve dosya eki görünüyor',
+    senderShown.split('\n')[0].slice(0, 60));
   const thinking = await m.page.locator('main.pane .thinking-pulse').waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
   let answered = false;
   const ta = Date.now();
@@ -257,6 +296,8 @@ try {
   }
   step(answered, "AI'ın yanıtı da ekip üyesinin ekranına kendiliğinden düştü",
     `${Math.round((Date.now() - tq) / 1000)} sn · "yazıyor" göstergesi ekip üyesinde: ${thinking ? 'göründü' : 'görünmedi'}`);
+  const reply = await m.page.locator('main.pane .chat-bubble-ai:not(.thinking-pulse)').last().innerText().catch(() => '');
+  step(reply.includes(code), 'AI mesaja eklenen dosyayı okuyup doğru yanıtladı', reply.replace(/\s+/g, ' ').slice(0, 90));
   await shot(m.page, '04b-canli-sohbet-uye');
   await mgr2.ctx.close();
   await m.ctx.close();
@@ -422,7 +463,7 @@ try {
   await page.getByText('Kalite Kapısı').first().waitFor({ timeout: 15000 });
   await page.waitForTimeout(2000);
   const gate = await page.locator('aside.pane').last().innerText();
-  step(/ONAYLANDI/.test(gate), 'Çalışma Alanı Kalite Kapısı gerçek durumu gösteriyor', gate.split('\n').slice(0, 3).join(' | '));
+  step(/Onaylandı/i.test(gate), 'Çalışma Alanı Kalite Kapısı gerçek durumu gösteriyor', gate.split('\n').slice(0, 3).join(' | '));
   const chat = await page.locator('main.pane').innerText();
   step(!/RECOrion Otonom Çalışma Alanı/.test(chat) && chat.length > 300, 'AI çıktısı görev sohbetine düştü', `${chat.length} karakter`);
   await shot(page, '06-calisma-alani');
