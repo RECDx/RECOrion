@@ -36,7 +36,8 @@ def test_reference_data_seeded(db):
     assert _scalar(db, "SELECT count(*) FROM llm_providers WHERE code = 'EVREN'") == 1
     assert _scalar(db, "SELECT count(*) FROM llm_models") == 15
     assert _scalar(db, "SELECT count(*) FROM plans") == 3
-    assert _scalar(db, "SELECT count(*) FROM system_permissions") == 25
+    assert _scalar(db, "SELECT count(*) FROM system_permissions") == 26  # 0024: department:dashboard
+    assert _scalar(db, "SELECT count(*) FROM system_permissions WHERE code = 'department:dashboard'") == 1
     assert _scalar(db, "SELECT count(*) FROM email_templates WHERE code IN ('WELCOME_CUSTOMER', 'PACKAGE_EXPIRATION_REMINDER')") == 2
     assert _scalar(db, "SELECT count(*) FROM notification_schedules") == 2
     assert _scalar(db, "SELECT count(*) FROM tenants WHERE slug = 'recdx_hq'") == 1
