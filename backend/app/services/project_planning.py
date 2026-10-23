@@ -256,6 +256,10 @@ async def approve_plan(db: AsyncSession, project: Project, actor_id: uuid.UUID) 
     for t in (await db.execute(select(Task).where(Task.project_id == project.id))).scalars():
         if t.status not in ("BACKLOG", "READY"):
             raise HTTPException(status_code=409, detail="Başlamış iş adımları olan projede plan yeniden onaylanamaz.")
+        # Mesaj kaydı silinemez (ADIM 8.1): yazışma olan adım yeniden oluşturulmak üzere silinemez
+        if (await db.execute(select(ChatMessage.id).where(ChatMessage.task_id == t.id).limit(1))).first():
+            raise HTTPException(status_code=409, detail=f"'{t.title}' adımında yazışma var; mesaj kaydı silinemediği için plan "
+                                                        "yeniden onaylanamaz. Değişiklikleri onaylanmış adımlar üzerinde yapın.")
         await db.delete(t)
     await db.flush()
     depts = {d.name.lower(): d.id for d in (await db.execute(select(Department).where(Department.tenant_id == project.tenant_id))).scalars()}

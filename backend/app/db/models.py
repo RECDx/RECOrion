@@ -425,7 +425,8 @@ class Task(Base):
     project = relationship("Project", back_populates="tasks")
     assignee = relationship("Actor", foreign_keys=[assignee_actor_id])
     artifacts = relationship("Artifact", back_populates="task", cascade="all, delete-orphan")
-    messages = relationship("ChatMessage", back_populates="task", cascade="all, delete-orphan")
+    # Mesajlar silinemez (ADIM 8.1): ORM silmez, veritabanı tetikleyicisi karar verir
+    messages = relationship("ChatMessage", back_populates="task", passive_deletes="all")
 
 
 class ProjectCostItem(Base):
@@ -596,7 +597,9 @@ class ChatMessage(Base):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"))
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"))
     task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
-    sender_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    # Silinemez kayıt (ADIM 8.1): personel silinse de mesaj kalır; yabancı anahtar yok, ad yazıldığı anda saklanır
+    sender_actor_id = Column(UUID(as_uuid=True))
+    sender_name = Column(String(255))
     role = Column(String(16), nullable=False)  # user, assistant, system, thought, tool
     content = Column(Text, nullable=False)
     thought_process = Column(Text)
@@ -607,7 +610,7 @@ class ChatMessage(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     task = relationship("Task", back_populates="messages")
-    sender = relationship("Actor")
+    sender = relationship("Actor", primaryjoin="foreign(ChatMessage.sender_actor_id) == Actor.id", viewonly=True)
 
     __table_args__ = (
         Index("idx_orm_chat_messages_task_id", "task_id", "created_at"),

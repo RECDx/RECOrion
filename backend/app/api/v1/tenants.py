@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, func, delete
+from sqlalchemy import select, or_, func, delete, text
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import uuid
@@ -764,7 +764,9 @@ async def delete_tenant(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)
     await db.execute(delete(JobTitle).where(JobTitle.tenant_id == tenant_id))
     await db.execute(delete(TenantRole).where(TenantRole.tenant_id == tenant_id))
 
-    # 6. Şirketi sil (Actor kayıtları CASCADE ile temizlenir)
+    # 6. Şirketi sil (Actor kayıtları CASCADE ile temizlenir). Silinemez mesaj kaydı (ADIM 8.1) yalnızca bu
+    # işlemde ve yalnızca bu şirket için silinebilir (KVKK: şirket kaydı tümüyle kaldırılır)
+    await db.execute(text("SELECT set_config('recorion.purge_tenant', :tid, true)"), {"tid": str(tenant_id)})
     company_name = tenant.name
     await db.delete(tenant)
     await db.commit()

@@ -1,4 +1,4 @@
-// Canlı uçtan uca test (Adım 6, 7.1–7.4, 7.5): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
+// Canlı uçtan uca test (Adım 6, 7.1–7.4, 7.5, 8): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
 import { chromium } from 'playwright-core';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -386,6 +386,42 @@ try {
   const chat = await page.locator('main.pane').innerText();
   step(!/RECOrion Otonom Çalışma Alanı/.test(chat) && chat.length > 300, 'AI çıktısı görev sohbetine düştü', `${chat.length} karakter`);
   await shot(page, '06-calisma-alani');
+
+  // 8.1 Silinemez mesaj kaydı: kullanıcı gibi dene (ekip dışı okuma, kapanmış projeye yazma, kaydı değiştirme)
+  // Bilerek reddedilecek istekler tarayıcı dışından (aynı oturum belirteciyle) gider; konsolda sahte hata oluşmaz
+  const api = async (pg, url, opts = {}) => {
+    const token = await pg.evaluate(() => sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token'));
+    const r = await fetch(APP + url, { ...opts, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+    let body = null;
+    try { body = await r.json(); } catch { /* boş yanıt */ }
+    return { status: r.status, body };
+  };
+  const proj = (await api(page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME);
+  const log = await api(page, `/api/v1/chat/project/${proj.id}`);
+  const taskId = log.body.find((x) => x.task_id)?.task_id;
+  step(log.status === 200 && log.body.length > 0 && log.body.every((x) => x.sender_name), 'Proje yazışma kaydı gönderen adlarıyla okunuyor',
+    `${log.body.length} mesaj · ${[...new Set(log.body.map((x) => x.sender_name))].join(', ')}`);
+  const send = await api(page, '/api/v1/chat/send', { method: 'POST', body: JSON.stringify({ task_id: taskId, content: 'Kapanıştan sonra bir not eklemek istiyorum.' }) });
+  step(send.status === 409, 'Kapanmış projeye mesaj yazılamıyor (kayıt salt okunur)', `${send.status} ${send.body?.detail || ''}`);
+  const fake = await api(page, '/api/v1/chat/send', { method: 'POST', body: JSON.stringify({ task_id: taskId, content: 'Ajan gibi yazayım', message_type: 'AGENT_TO_AGENT' }) });
+  step(fake.status === 422, 'Kullanıcı AI-AI mesajı taklit edemiyor', String(fake.status));
+  const o2 = await session('outsider');
+  const peek = await api(o2.page, `/api/v1/chat/project/${proj.id}`);
+  const peekTask = await api(o2.page, `/api/v1/chat/history/${taskId}`);
+  step(peek.status === 403 && peekTask.status === 403, 'Ekip dışı kullanıcı yazışmaları API ile de okuyamıyor', `${peek.status}/${peekTask.status}`);
+  await o2.ctx.close();
+  const tamper = (sql) => {
+    try {
+      execFileSync('docker', ['exec', 'recorion_postgres', 'sh', '-c', `psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "${sql}"`],
+        { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+      return 'değişti';
+    } catch (err) { return /değiştirilemez/.test(String(err.stderr)) ? 'engellendi' : String(err.stderr).slice(0, 120); }
+  };
+  const upd = tamper(`UPDATE chat_messages SET content = 'oynandı' WHERE project_id = '${proj.id}'`);
+  const del = tamper(`DELETE FROM chat_messages WHERE project_id = '${proj.id}'`);
+  const after = await api(page, `/api/v1/chat/project/${proj.id}`);
+  step(upd === 'engellendi' && del === 'engellendi' && after.body.length === log.body.length && !after.body.some((x) => x.content === 'oynandı'),
+    'Mesaj kaydı veritabanında bile değiştirilemiyor/silinemiyor', `güncelleme: ${upd}, silme: ${del}, mesaj: ${after.body.length}`);
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

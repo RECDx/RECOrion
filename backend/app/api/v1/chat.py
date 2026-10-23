@@ -9,8 +9,10 @@ from app.db.models import ChatMessage, Task, Actor, LLMModel, Project
 from app.services import llm_gateway
 from app.services.llm_gateway import LLMContext, LLMError
 from app.services import knowledge
+from app.services import projects as psvc
 from app.services.redis_stream import redis_stream
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Literal
 import uuid
 import json
 
@@ -24,22 +26,24 @@ router = APIRouter(prefix="/chat", tags=["Work Area Chat (Kalıcı Sohbet & Dü�
 
 
 async def _ensure_task_access(db: AsyncSession, user: CurrentUser, task_id: uuid.UUID) -> Task:
+    """Görevin sohbeti yalnızca proje ekibine (veya proje yönetim yetkisi olanlara) açıktır (ADIM 8.1)."""
     task = (await db.execute(
         select(Task).options(selectinload(Task.project)).where(Task.id == task_id)
     )).scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Görev bulunamadı.")
-    ensure_tenant_content(user, task.project.tenant_id)
+    await psvc.load(db, user, task.project_id)
     return task
 
 
 class SendMessageRequest(BaseModel):
     task_id: uuid.UUID
-    content: str
-    sender_actor_id: Optional[uuid.UUID] = None
+    content: str = Field(..., min_length=1, max_length=20000)
+    sender_actor_id: Optional[uuid.UUID] = None  # yok sayılır: gönderen her zaman oturumdaki kullanıcıdır
     override_model_code: Optional[str] = None  # Dinamik Model Değiştirici desteği
     is_private: bool = False
-    message_type: str = "CHAT"  # CHAT, AGENT_TO_AGENT, HANDOFF
+    # Kullanıcı yalnızca sohbet mesajı yazar; AI-AI ve devir mesajlarını sistem üretir
+    message_type: Literal["CHAT"] = "CHAT"
 
 
 class ChatMessageResponse(BaseModel):
@@ -47,6 +51,7 @@ class ChatMessageResponse(BaseModel):
     task_id: Optional[uuid.UUID] = None
     project_id: Optional[uuid.UUID] = None
     sender_actor_id: Optional[uuid.UUID] = None
+    sender_name: Optional[str] = None
     role: str
     content: str
     thought_process: Optional[str] = None
@@ -109,10 +114,7 @@ async def get_project_chat_history(
     Tüm Proje Seviyesinde Şeffaf Sohbet ve Ajanlar Arası Müzakere Akışı:
     Projedeki tüm insan-AI ve AI-AI diyaloglarını kronolojik olarak listeler.
     """
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Proje bulunamadı.")
-    ensure_tenant_content(user, project.tenant_id)
+    await psvc.load(db, user, project_id)
     stmt = select(ChatMessage).where(ChatMessage.project_id == project_id, ChatMessage.is_private == False)
     if actor_id:
         stmt = stmt.where(ChatMessage.sender_actor_id == actor_id)
@@ -154,6 +156,9 @@ async def send_chat_message(
     project = task.project
     tenant_id = project.tenant_id
     ensure_tenant_content(user, tenant_id, "chat:participate")
+    await psvc.load(db, user, project.id)
+    if project.status in ("COMPLETED", "CANCELLED"):
+        raise HTTPException(status_code=409, detail="Kapanmış projeye mesaj yazılamaz; yazışma kaydı salt okunurdur.")
     project_id = project.id
     task_id = task.id
 
@@ -283,6 +288,7 @@ async def learn_from_task_chat_history(
     if not task:
         raise HTTPException(status_code=404, detail="Görev bulunamadı.")
     ensure_tenant_content(user, task.project.tenant_id, "chat:participate")
+    await psvc.load(db, user, task.project_id)
 
     msgs_stmt = (
         select(ChatMessage)
