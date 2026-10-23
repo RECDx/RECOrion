@@ -5,6 +5,8 @@ ADIM 8.3: Work Area gerçek veri — mesaja dosya eki.
 - Eklerin KVKK maskeli metni yalnızca o mesajla AI'a verilir; işlenmemiş dosya için not düşülür.
 - Mesajda ek bilgisi (kimlik, ad) saklanır ve geçmişte görünür.
 """
+import uuid
+
 import pytest
 
 from app.services.evren_client import ChatResult, evren_client
@@ -84,3 +86,22 @@ def test_chat_falls_back_when_model_busy(client, world, monkeypatch):
     r = client.post("/api/v1/chat/send", headers=w["admin"]["h"], json={"task_id": human_id, "content": "Durum?"})
     assert r.status_code == 200, r.text
     assert r.json()["assistant_message"]["content"] == "Yedek modelden yanıt." and len(set(calls[:2])) == 2
+
+
+def test_fallback_order_prefers_configured_backup(client, db, world):
+    """Varsayılanlar deepseek-v4-flash (0025); meşgul modelde önce model.fallback (mimo-v2.6-pro) denenir."""
+    from app.db.models import Tenant
+    from app.db.session import AsyncSessionLocal
+    from app.services import llm_gateway
+
+    # Diğer testler varsayılanları değiştirebilir; yedek ayarı yalnızca 0025 yazar
+    assert _exec(db, "SELECT value::text FROM system_settings WHERE key = 'model.fallback'")[0] == '"mimo-v2.6-pro"'
+
+    async def pick(exclude):
+        async with AsyncSessionLocal() as s:
+            tenant = await s.get(Tenant, uuid.UUID(world["tenant"]))
+            m = await llm_gateway.fallback_model(s, tenant, exclude)
+            return m.model_code if m else None
+    # Veritabanı havuzu uygulamanın olay döngüsüne bağlı: test istemcisinin döngüsünde çalıştırılır
+    assert client.portal.call(pick, "deepseek-v4-flash") == "mimo-v2.6-pro"  # asıl model deepseek meşgulse yedek mimo
+    assert client.portal.call(pick, "mimo-v2.6-pro") == "deepseek-v4-flash"  # mimo meşgulse deepseek

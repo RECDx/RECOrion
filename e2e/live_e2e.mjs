@@ -83,10 +83,25 @@ try {
   // 2. Beyin AI planı (gerçek EVREN çağrısı)
   await page.getByRole('tab', { name: /Beyin AI Planlama/ }).click();
   const t1 = Date.now();
-  await page.getByRole('button', { name: 'Beyin AI plan önersin' }).click();
-  await page.locator('.pj-step').first().waitFor({ timeout: 11 * 60000 });
+  // Kullanıcı gibi: EVREN yoğunluğunda "yapay zeka şu anda yanıt veremiyor" görürse bir dakika bekleyip yeniden dener (en fazla 3 kez)
+  let planTries = 0;
+  let planOk = false;
+  while (!planOk && planTries < 3) {
+    planTries += 1;
+    const resp = page.waitForResponse((r) => r.url().includes('/plan/suggest') && r.request().method() === 'POST', { timeout: 11 * 60000 });
+    await page.getByRole('button', { name: 'Beyin AI plan önersin' }).click();
+    const r = await resp;
+    if (r.status() < 400) {
+      await page.locator('.pj-step').first().waitFor({ timeout: 30000 });
+      planOk = true;
+    } else if (planTries < 3) {
+      await page.waitForTimeout(60000);
+    }
+  }
   const stepCount = await page.locator('.pj-step').count();
-  step(stepCount > 0, 'Beyin AI iş adımı önerdi', `${stepCount} adım, ${Math.round((Date.now() - t1) / 1000)} sn`);
+  step(stepCount > 0, 'Beyin AI iş adımı önerdi',
+    `${stepCount} adım, ${Math.round((Date.now() - t1) / 1000)} sn${planTries > 1 ? ` (EVREN yoğun: ${planTries}. denemede)` : ''}`);
+  if (!planOk) throw new Error(`Beyin AI ${planTries} denemede plan öneremedi (EVREN yanıt vermiyor)`);
   // Personeli atanmamış adımlara havuzdan personel ata
   const selects = page.locator('select[aria-label="AI personel"]');
   let assigned = 0;

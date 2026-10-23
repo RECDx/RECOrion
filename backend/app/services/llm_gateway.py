@@ -50,6 +50,7 @@ OCR_PAGE_TOKENS = 1000  # OCR ucu kullanım bildirmez: sayfa başına tahmini gi
 IMAGE_TOKENS = 1200  # görsel başına tahmini giriş tokenı (kredi ön kontrolü için)
 DEFAULT_CHAT_SETTING = "model.default.chat"
 DEFAULT_AGENT_SETTING = "model.default.agent"
+FALLBACK_SETTING = "model.fallback"  # meşgul/yanıtsız modelde ilk yedek (kullanıcı kararı 23.10.2026)
 CHAT_TYPES = {"CHAT", "VISION", "DECISION"}
 
 
@@ -212,9 +213,11 @@ def _num(value) -> Optional[Decimal]:
 
 
 async def fallback_model(db: AsyncSession, tenant: Tenant, exclude: str) -> Optional[LLMModel]:
-    """Asıl model meşgul/yanıtsızken kullanılacak yedek: AI personel varsayılanı, genel varsayılan, sonra paketteki ilk sohbet modeli."""
+    """Asıl model meşgul/yanıtsızken kullanılacak yedek: önce model.fallback (23.10.2026: mimo-v2.6-pro), AI personel
+    varsayılanı, genel varsayılan, sonra paketteki ilk sohbet modeli."""
     allowed = await allowed_model_codes(db, tenant)
-    codes = [c for c in [await _setting(db, DEFAULT_AGENT_SETTING), await _setting(db, DEFAULT_CHAT_SETTING)] if c]
+    codes = [c for c in [await _setting(db, FALLBACK_SETTING), await _setting(db, DEFAULT_AGENT_SETTING),
+                         await _setting(db, DEFAULT_CHAT_SETTING)] if c]
     stmt = select(LLMModel).where(LLMModel.status == "ACTIVE", LLMModel.model_type.in_(CHAT_TYPES)).order_by(LLMModel.model_code)
     codes += [m.model_code for m in (await db.execute(stmt)).scalars()]
     for code in codes:
