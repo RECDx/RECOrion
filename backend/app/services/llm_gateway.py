@@ -98,6 +98,7 @@ class GatewayChatResult:
     credits: float
     raw: Dict[str, Any] = field(default_factory=dict)
     fallback_from: Optional[str] = None  # asıl model yanıt vermediyse onun kodu (yedek modelle üretildi)
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)  # ADIM 10.2
 
 
 async def _setting(db: AsyncSession, key: str) -> Optional[str]:
@@ -232,10 +233,10 @@ async def fallback_model(db: AsyncSession, tenant: Tenant, exclude: str) -> Opti
 # ---------------------------------------------------------------- genel arayüz
 async def chat(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Optional[str] = None,
                temperature: float = 0.7, max_tokens: int = 4096, timeout: Optional[float] = None,
-               fallback: bool = False) -> GatewayChatResult:
+               fallback: bool = False, tools: Optional[List[Dict[str, Any]]] = None) -> GatewayChatResult:
     """fallback=True: model meşgul/yanıtsız (EVREN hatası veya boş yanıt) ise paketteki yedek modelle bir kez daha dener."""
     try:
-        return await _chat_once(ctx, messages, model_code, temperature, max_tokens, timeout)
+        return await _chat_once(ctx, messages, model_code, temperature, max_tokens, timeout, tools)
     except LLMUnavailable as exc:
         if not fallback:
             raise
@@ -246,13 +247,14 @@ async def chat(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Opti
         if not backup or not failed:
             raise
         logger.warning("%s yanıt vermedi; yedek model %s ile deneniyor (%s).", failed, backup.model_code, ctx.purpose)
-        result = await _chat_once(ctx, messages, backup.model_code, temperature, max_tokens, timeout)
+        result = await _chat_once(ctx, messages, backup.model_code, temperature, max_tokens, timeout, tools)
         result.fallback_from = failed
         return result
 
 
 async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Optional[str],
-                     temperature: float, max_tokens: int, timeout: Optional[float]) -> GatewayChatResult:
+                     temperature: float, max_tokens: int, timeout: Optional[float],
+                     tools: Optional[List[Dict[str, Any]]] = None) -> GatewayChatResult:
     async with AsyncSessionLocal() as db:
         tenant = await _tenant(db, ctx.tenant_id)
         model = await resolve_model(db, tenant, ctx.purpose, model_code, ctx.actor_id)
@@ -262,19 +264,23 @@ async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code
         await _preflight(db, tenant, model, est_in, min(max_tokens, 512))
         started = time.monotonic()
         try:
-            result = await evren_client.chat(model.model_code, messages, temperature=temperature, max_tokens=max_tokens, timeout=timeout)
+            extra = {"tools": tools} if tools else {}
+            result = await evren_client.chat(model.model_code, messages, temperature=temperature, max_tokens=max_tokens,
+                                             timeout=timeout, **extra)
         except EvrenError as exc:
             await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
             logger.error("LLM çağrısı başarısız (%s, %s): %s", ctx.purpose, model.model_code, exc)
             raise LLMUnavailable(f"Yapay zeka servisi şu anda yanıt veremiyor ({model.model_code}). Lütfen biraz sonra tekrar deneyin.",
                                  model_code=model.model_code) from exc
-        if not result.content.strip():
+        tool_calls = list(getattr(result, "tool_calls", None) or [])
+        if not result.content.strip() and not tool_calls:  # yalnızca araç çağrısı içeren yanıt boş sayılmaz
             await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
             raise LLMUnavailable("Model bir yanıt üretemedi (düşünme bütçesi doldu). Lütfen isteği kısaltıp tekrar deneyin.",
                                  model_code=model.model_code)
         cost = await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
         return GatewayChatResult(content=result.content, thought=result.thought, model_code=model.model_code,
-                                 tokens_in=result.tokens_in, tokens_out=result.tokens_out, credits=float(cost), raw=result.raw)
+                                 tokens_in=result.tokens_in, tokens_out=result.tokens_out, credits=float(cost), raw=result.raw,
+                                 tool_calls=tool_calls)
 
 
 async def embed(ctx: LLMContext, text: str) -> List[float]:

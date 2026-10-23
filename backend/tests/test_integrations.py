@@ -133,3 +133,51 @@ def test_agent_tools_approval_and_log(client, db, world, fake_telegram):
         _exec(db, "UPDATE tool_calls SET arguments = '{}'::jsonb WHERE id = %s", write["id"])
     with pytest.raises(psycopg2.Error, match="silinemez"):
         _exec(db, "DELETE FROM tool_calls WHERE id = %s", write["id"])
+
+
+def test_agent_uses_tools_in_chat(client, db, world, fake_telegram, monkeypatch):
+    """ADIM 10.2: AI personel sohbette aracı kendisi çağırır; okuma sonucu yanıta girer, yazma onaya düşer."""
+    from app.services.evren_client import ChatResult, evren_client
+
+    w = world
+    base = f"/api/v1/company/{w['tenant']}/integrations"
+    conn = client.post(base, headers=w["admin"]["h"], json={"connector": "telegram", "name": f"Sohbet {uuid.uuid4().hex[:4]}",
+                                                             "config": {"default_chat_id": "-100"}, "secrets": {"bot_token": TOKEN}}).json()
+    client.put(f"{base}/{conn['id']}/grants", headers=w["admin"]["h"], json={"grants": [{"actor_id": w["agent"], "tool": "*"}]})
+    pid, _, _ = _ready_project(client, w, "Araçlı Sohbet")
+    ai_task = str(_exec(db, "SELECT id FROM tasks WHERE project_id = %s AND title = 'AI adımı'", pid)[0])
+    seen = {"tools": [], "system": []}
+    plan = {"want": "get_bot"}
+
+    async def chat(model_code, messages, **kw):
+        tools = kw.get("tools") or []
+        seen["tools"].append([t["function"]["name"] for t in tools])
+        seen["system"].append(messages[0]["content"])
+        tool_msgs = [m for m in messages if m.get("role") == "tool"]
+        if tools and not tool_msgs:
+            name = next(t["function"]["name"] for t in tools if t["function"]["name"].endswith(plan["want"]))
+            args = '{"text": "Merhaba ekip"}' if plan["want"] == "send_message" else "{}"
+            return ChatResult("", None, 50, 5, {}, tool_calls=[{"id": "t1", "type": "function", "function": {"name": name, "arguments": args}}])
+        return ChatResult(f"Araç sonucu: {tool_msgs[-1]['content'] if tool_msgs else 'yok'}", None, 80, 20, {})
+    monkeypatch.setattr(evren_client, "chat", chat)
+
+    r = client.post("/api/v1/chat/send", headers=w["admin"]["h"], json={"task_id": ai_task, "content": "Botumuzun adı ne?"})
+    assert r.status_code == 200, r.text
+    assert "sahte_bot" in r.json()["assistant_message"]["content"]
+    assert any(n.endswith("get_bot") for n in seen["tools"][0]) and "Yazma işlemleri insan onayına düşer" in seen["system"][0]
+    log = client.get(f"/api/v1/company/{w['tenant']}/tool-calls", headers=w["admin"]["h"]).json()
+    assert any(c["tool"] == "get_bot" and c["status"] == "EXECUTED" and c["actor_id"] == w["agent"] and c["project_id"] == pid for c in log)
+
+    plan["want"] = "send_message"
+    r = client.post("/api/v1/chat/send", headers=w["admin"]["h"], json={"task_id": ai_task, "content": "Ekibe merhaba de"})
+    assert r.status_code == 200 and "pending_approval" in r.json()["assistant_message"]["content"]
+    assert not fake_telegram  # onaysız gönderilmedi
+    pending = [c for c in client.get(f"/api/v1/company/{w['tenant']}/tool-calls?status=PENDING_APPROVAL", headers=w["admin"]["h"]).json()
+               if c["tool"] == "send_message" and c["arguments"] == {"text": "Merhaba ekip"}]
+    assert pending
+
+    # Yetkisi olmayan insan adımında (RECAi) araç verilmez
+    human = str(_exec(db, "SELECT id FROM tasks WHERE project_id = %s AND title = 'İnsan adımı'", pid)[0])
+    seen["tools"].clear()
+    client.post("/api/v1/chat/send", headers=w["admin"]["h"], json={"task_id": human, "content": "Durum?"})
+    assert seen["tools"] and seen["tools"][0] == []

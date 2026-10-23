@@ -32,6 +32,7 @@ class ChatResult:
     tokens_in: int
     tokens_out: int
     raw: Dict[str, Any] = field(default_factory=dict)
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)  # ADIM 10.2: OpenAI uyumlu araç çağrıları
 
 
 @dataclass
@@ -74,11 +75,12 @@ class EvrenClient:
         return resp.json()
 
     async def chat(self, model_code: str, messages: List[Dict[str, str]], temperature: float = 0.7,
-                   max_tokens: int = 4096, timeout: Optional[float] = None) -> ChatResult:
-        data = await self._post("/chat/completions", {
-            "model": model_code, "messages": messages, "temperature": temperature,
-            "max_tokens": max_tokens, "stream": False,
-        }, timeout)
+                   max_tokens: int = 4096, timeout: Optional[float] = None,
+                   tools: Optional[List[Dict[str, Any]]] = None) -> ChatResult:
+        body = {"model": model_code, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": False}
+        if tools:  # ADIM 10.2: EVREN OpenAI uyumlu function calling destekler (23.10.2026 denendi)
+            body.update(tools=tools, tool_choice="auto")
+        data = await self._post("/chat/completions", body, timeout)
         choices = data.get("choices") or []
         if not choices:
             raise EvrenError("EVREN boş yanıt döndürdü.")
@@ -93,6 +95,7 @@ class EvrenClient:
             tokens_in=int(usage.get("prompt_tokens") or estimate_tokens(prompt_text)),
             tokens_out=int(usage.get("completion_tokens") or estimate_tokens(content)),
             raw=data,
+            tool_calls=list(msg.get("tool_calls") or []),
         )
 
     async def embed(self, text: str, model_code: str) -> EmbeddingResult:

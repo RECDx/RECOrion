@@ -138,6 +138,51 @@ async def invoke(db: AsyncSession, agent: Actor, name: str, args: Dict[str, Any]
     return call
 
 
+MAX_TOOL_ROUNDS = 4
+TOOL_GUIDE = ("\n\nAraçlar: şirketin dış sistemlerine (ERP, mesajlaşma, iş takibi vb.) yetkili araçların var. Yalnızca iş için gerçekten "
+              "gerekiyorsa kullan; sonuçları uydurma, araçtan gelen veriye dayan. Yazma işlemleri insan onayına düşer: onaylanmadan "
+              "yapılmış sayma, çıktında 'onay bekliyor' diye belirt ve aynı işlemi tekrar isteme.")
+
+
+async def chat_with_tools(db: AsyncSession, ctx, messages: List[Dict[str, Any]], agent: Optional[Actor],
+                          project: Optional[Project] = None, task: Optional[Task] = None, **llm_kw):
+    """LLM çağrısı + araç döngüsü (ADIM 10.2). AI personelin yetkili aracı yoksa düz LLM çağrısıdır.
+
+    Model araç isterse çağrı yetki/onay kuralından geçer, sonucu modele 'tool' mesajıyla verilir, model sürer
+    (en fazla MAX_TOOL_ROUNDS tur). Dönüş: (son yanıt, araç çağrısı kayıtları).
+    """
+    import json
+
+    from app.services import live, llm_gateway
+
+    defs = openai_tools(await available(db, agent)) if agent else []
+    calls: List[ToolCall] = []
+    msgs = list(messages)
+    if defs and msgs and msgs[0].get("role") == "system":
+        msgs[0] = {**msgs[0], "content": msgs[0]["content"] + TOOL_GUIDE}
+    for round_no in range(MAX_TOOL_ROUNDS + 1):
+        result = await llm_gateway.chat(ctx, msgs, tools=defs if (defs and round_no < MAX_TOOL_ROUNDS) else None, **llm_kw)
+        if not result.tool_calls or not defs or round_no == MAX_TOOL_ROUNDS:
+            return result, calls
+        msgs.append({"role": "assistant", "content": result.content or "", "tool_calls": result.tool_calls})
+        for tc in result.tool_calls:
+            fn = (tc.get("function") or {})
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+                if not isinstance(args, dict):
+                    raise ValueError
+            except ValueError:
+                args = {"_ham": str(fn.get("arguments"))[:500]}
+            name = str(fn.get("name") or "")
+            if project:
+                await live.thought(project.id, task.id if task else None, "TOOL", f"{agent.display_name} '{name.split('__')[-1]}' aracını kullanıyor…")
+            call = await invoke(db, agent, name, args, project=project, task=task)
+            await db.commit()  # her çağrı hemen kayda geçer (sonraki tur başarısız olsa da)
+            calls.append(call)
+            msgs.append({"role": "tool", "tool_call_id": tc.get("id") or str(call.id), "content": json.dumps(for_llm(call), ensure_ascii=False, default=str)})
+    return result, calls
+
+
 async def _notify(db: AsyncSession, call: ToolCall, conn: IntegrationConnection) -> None:
     from app.services import notify
 

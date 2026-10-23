@@ -39,14 +39,21 @@ def _truncated(result) -> bool:
         return False
 
 
-async def _generate(ctx: LLMContext, messages: List[Dict[str, str]]):
-    """Çıktıyı üretir; token sınırında kesilirse en fazla MAX_CONTINUATIONS kez devam ettirip parçaları birleştirir."""
-    pieces, credits, result, fallback_from, fallback_model = [], 0.0, None, None, None
-    for _ in range(MAX_CONTINUATIONS + 1):
+async def _generate(ctx: LLMContext, messages: List[Dict[str, str]], tooling: Optional[tuple] = None):
+    """Çıktıyı üretir; token sınırında kesilirse en fazla MAX_CONTINUATIONS kez devam ettirip parçaları birleştirir.
+    tooling = (db, agent, project, task): ilk parça araç döngüsüyle (ADIM 10.2); devam parçaları araçsız."""
+    from app.services import tool_gateway
+
+    pieces, credits, result, fallback_from, fallback_model, calls = [], 0.0, None, None, None, []
+    for i in range(MAX_CONTINUATIONS + 1):
         # Personelin modeli meşgul/yanıtsızsa paketteki yedek modelle sürer (kullanıcı kararı, 22.10.2026)
         # Yedek modele geçildiyse kesilen çıktının devamı da aynı (yedek) modelle üretilir
-        result = await llm_gateway.chat(ctx, messages, model_code=fallback_model, temperature=0.4, max_tokens=WORK_MAX_TOKENS,
-                                        timeout=WORK_TIMEOUT, fallback=True)
+        kw = dict(model_code=fallback_model, temperature=0.4, max_tokens=WORK_MAX_TOKENS, timeout=WORK_TIMEOUT, fallback=True)
+        if tooling and i == 0:
+            db, agent, project, task = tooling
+            result, calls = await tool_gateway.chat_with_tools(db, ctx, messages, agent, project, task, **kw)
+        else:
+            result = await llm_gateway.chat(ctx, messages, **kw)
         if result.fallback_from:
             fallback_from, fallback_model = result.fallback_from, result.model_code
         pieces.append(result.content)
@@ -56,7 +63,7 @@ async def _generate(ctx: LLMContext, messages: List[Dict[str, str]]):
         await live.thought(ctx.project_id, ctx.task_id, "CONTINUE", f"Çıktı uzun; kaldığı yerden devam ediyor (parça {len(pieces) + 1}).")
         messages = messages + [{"role": "assistant", "content": result.content},
                                {"role": "user", "content": "Çıktın token sınırında kesildi. Tekrar etmeden, tam kaldığın yerden devam et."}]
-    return "".join(pieces).strip(), result, len(pieces), round(credits, 4), fallback_from
+    return "".join(pieces).strip(), result, len(pieces), round(credits, 4), fallback_from, calls
 
 
 def artifact_key(task: Task, version: int) -> str:
@@ -136,9 +143,10 @@ Kabul ölçütü: {task.acceptance_criteria or '-'}
 
 Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi tam olarak yaz."""
     try:
-        content, result, parts, credits, fallback_from = await _generate(
+        content, result, parts, credits, fallback_from, tool_calls = await _generate(
             LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id),
-            [{"role": "system", "content": _system(agent, tenant, code_repo.active(project))}, {"role": "user", "content": prompt}])
+            [{"role": "system", "content": _system(agent, tenant, code_repo.active(project))}, {"role": "user", "content": prompt}],
+            tooling=(db, agent, project, task))
     except LLMError as exc:
         return {"ok": False, "error": exc.message}
     except Exception as exc:
@@ -160,7 +168,8 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
     note = f"Sürüm {version} üretildi." + (f" {fallback_from} yanıt vermediği için yedek model {result.model_code} kullanıldı." if fallback_from else "")
     await task_flow.log(db, project, task, "AI_OUTPUT", agent.id, note,
                         {"artifact_id": str(art.id), "version": version, "model": result.model_code, "credits": credits, "parts": parts,
-                         "fallback_from": fallback_from})
+                         "fallback_from": fallback_from,
+                         "tool_calls": [{"id": str(c.id), "tool": c.tool, "status": c.status} for c in tool_calls]})
     await code_repo.after_output(db, project, task, version, content, agent.display_name)  # depo varsa adımın dalına commit
     await db.commit()
     return {"ok": True, "artifact_id": str(art.id), "version": version, "actor_id": str(agent.id)}
