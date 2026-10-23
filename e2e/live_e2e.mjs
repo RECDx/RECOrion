@@ -31,7 +31,8 @@ async function session(userKey, viewport = { width: 1440, height: 1000 }) {
   await page.locator('input[type="email"]').last().fill(u.email);
   await page.locator('input[type="password"]').last().fill(u.password);
   await page.getByRole('button', { name: /Giriş Yap →/ }).click();
-  await page.waitForURL(/#\/workspace/, { timeout: 20000 });
+  // Şirket yöneticisi doğrudan Şirket Yönetimi'ne, diğerleri Work Space'e yönlenir
+  await page.waitForURL(/#\/(workspace|company-admin)/, { timeout: 20000 });
   return { ctx, page };
 }
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
@@ -582,6 +583,33 @@ try {
   const after = await api(page, `/api/v1/chat/project/${proj.id}`);
   step(upd === 'engellendi' && del === 'engellendi' && after.body.length === log.body.length && !after.body.some((x) => x.content === 'oynandı'),
     'Mesaj kaydı veritabanında bile değiştirilemiyor/silinemiyor', `güncelleme: ${upd}, silme: ${del}, mesaj: ${after.body.length}`);
+
+  // 9.1 Şirket panosu: şirket yöneticisi girişte genel bakışı görür; bu koşunun projesi panoya yansır
+  const adm = await session('admin');
+  await adm.page.getByRole('heading', { name: 'Günlük kredi tüketimi' }).waitFor({ timeout: 30000 });
+  const dash = await adm.page.locator('.dash-root').innerText();
+  const completed = Number((dash.match(/TAMAMLANAN\s*\n\s*(\d+)/i) || [])[1] || 0);
+  const budgetRow = adm.page.locator('.viz-bars li', { hasText: NAME });
+  const budgetText = (await budgetRow.count()) ? await budgetRow.first().innerText() : '';
+  step(completed >= 1 && /mimo|deepseek/.test(dash) && /3\.500|15\.000/.test(budgetText + dash),
+    'Şirket panosu proje durumlarını, LLM kırılımını ve bu koşunun bütçesini gösteriyor',
+    `tamamlanan proje ${completed} · ${budgetText.replace(/\s+/g, ' ').slice(0, 70) || 'proje satırı yok'}`);
+  await adm.page.getByRole('tab', { name: '7 gün' }).click();
+  await adm.page.waitForTimeout(1500);
+  const week = (await adm.page.locator('.viz-root svg g.viz-hit').count());
+  const deptSel = adm.page.locator('select[aria-label="Departman"]');
+  let deptNote = 'departman yok';
+  if (await deptSel.count()) {
+    await deptSel.selectOption({ index: 1 });
+    await adm.page.waitForTimeout(1500);
+    deptNote = `departman: ${await deptSel.evaluate((x) => x.selectedOptions[0]?.text)}`;
+  }
+  // Departman seçilince şirket düzeyindeki kredi kartı kalkar (kredi hakkı şirkete aittir)
+  const creditCard = await adm.page.getByRole('heading', { name: 'Kredi', exact: true }).count();
+  step(week > 0 && week % 7 === 0 && (deptNote === 'departman yok' || creditCard === 0),
+    'Pano filtreleri (dönem, departman) tüm görünümü yeniliyor', `7 günlük seri: ${week} sütun · ${deptNote} · kredi kartı: ${creditCard ? 'var' : 'yok'}`);
+  await shot(adm.page, '08-sirket-panosu');
+  await adm.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

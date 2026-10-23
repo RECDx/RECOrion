@@ -1,0 +1,56 @@
+/* Dashboard grafikleri (ADIM 9). Seri rengi doğrulandı (dataviz validate_palette): açık #2a78d6 / #ffffff yüzey,
+   koyu #3987e5 / #121828 yüzey — bant, kroma ve 3:1 kontrast geçti. Koyu tema varsayılandır. */
+.viz-root {
+  --viz-series-1: #3987e5;
+  --viz-critical: #d03b3b;
+  position: relative;
+}
+:root[data-theme="light"] .viz-root { --viz-series-1: #2a78d6; }
+
+.viz-svg { display: block; overflow: visible; max-width: 100%; }
+.viz-grid { stroke: var(--border-subtle); stroke-width: 1; }
+.viz-axis { stroke: var(--border-highlight, var(--border-subtle)); stroke-width: 1; }
+.viz-tick { fill: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.viz-mark { fill: var(--viz-series-1); }
+.viz-hit { outline: none; cursor: default; }
+.viz-hit:hover .viz-mark, .viz-hit:focus .viz-mark { filter: brightness(1.15); }
+.viz-hit:focus-visible rect { stroke: var(--text-muted); stroke-width: 1; }
+
+.viz-tip {
+  position: absolute; transform: translate(-50%, calc(-100% - 8px)); pointer-events: none; z-index: 5;
+  background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 6px 9px;
+  box-shadow: var(--shadow-sm); font-size: 0.75rem; white-space: nowrap; color: var(--text-main);
+}
+.viz-tip span { color: var(--text-muted); }
+
+.viz-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.viz-bars li { display: grid; grid-template-columns: minmax(90px, 34%) 1fr auto; align-items: center; gap: 10px; outline: none; border-radius: 6px; }
+.viz-bars li:focus-visible { box-shadow: var(--focus-ring); }
+.viz-bar-label { font-size: 0.78rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viz-bar-track { position: relative; height: 14px; }
+.viz-bar { display: block; height: 100%; background: var(--viz-series-1); border-radius: 0 4px 4px 0; }
+.viz-bars li:hover .viz-bar, .viz-bars li:focus .viz-bar { filter: brightness(1.15); }
+.viz-bar-value { font-size: 0.75rem; color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.viz-tick-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text-main); border-radius: 1px; }
+.viz-status { margin-left: 6px; font-size: 0.68rem; font-weight: 700; color: var(--text-main); }
+.viz-status-critical::first-letter { color: var(--viz-critical); }
+
+.viz-legend { display: flex; gap: 14px; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px; }
+.viz-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.viz-key-bar { width: 12px; height: 8px; border-radius: 2px; background: var(--viz-series-1); display: inline-block; }
+.viz-key-tick { width: 2px; height: 12px; background: var(--text-main); display: inline-block; }
+
+.viz-table { margin-top: 8px; font-size: 0.75rem; }
+.viz-table summary { cursor: pointer; color: var(--text-dim); }
+/* Pano kartlarındaki tutarlar tek satırda kalır */
+.dash-root .dash-stats-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dash-root .pj-stat strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-root .pj-split { align-items: start; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1024px) { .dash-root .pj-split { grid-template-columns: 1fr; } }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .viz-bars li { grid-template-columns: 1fr auto; }
+  .viz-bar-track { grid-column: 1 / -1; grid-row: 2; }
+}

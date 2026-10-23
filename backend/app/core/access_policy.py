@@ -285,6 +285,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/projects/{{project_id}}/budget"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/costs/export.xlsx"): HANDLER(),
     ("POST", f"{P}/live/ticket"): HANDLER(),
+    ("GET", f"{P}/company/{{tenant_id}}/dashboard"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/repository"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}/repository"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/repository/file"): HANDLER(),

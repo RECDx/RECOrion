@@ -43,8 +43,9 @@ async def main():
             db.add(dept)
             await db.flush()
         out = {"tenant_id": str(tenant.id), "users": {}}
+        # admin: şirket yöneticisi (şirket panosu, ADIM 9)
         for key, name, role in (("manager", "Canlı Test Yöneticisi", "PROJECT_MANAGER"), ("member", "Canlı Test Uzmanı", "USER"),
-                                ("outsider", "Canlı Test Dışarıdan", "USER")):
+                                ("outsider", "Canlı Test Dışarıdan", "USER"), ("admin", "Canlı Test Şirket Yöneticisi", "COMPANY_ADMIN")):
             email = f"{key}@{DOMAIN}"
             pwd = "Ct-" + secrets.token_urlsafe(12)
             a = (await db.execute(select(Actor).where(Actor.email == email))).scalar_one_or_none()

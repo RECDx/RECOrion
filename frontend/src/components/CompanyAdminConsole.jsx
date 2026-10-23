@@ -55,6 +55,7 @@ import ThemeToggle from '../ui/ThemeToggle';
 import { notify, toast } from '../ui/feedback';
 import { Badge, Modal } from '../ui/components';
 import CreditsPanel from './ai/CreditsPanel';
+import CompanyDashboard from './dashboard/CompanyDashboard';
 import BrainPanel from './ai/BrainPanel';
 import CatalogImportModal from './catalog/CatalogImportModal';
 import HireWizard from './catalog/HireWizard';
@@ -62,10 +63,13 @@ import DocumentReviewModal from './docs/DocumentReviewModal';
 import DocumentLibrary from './docs/DocumentLibrary';
 import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
-import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard } from 'lucide-react';
 
 // Şirket Yönetimi sol menüsü (Ana Kontrol Merkezi düzeni); gruplar açılıp kapanabilir
 const COMPANY_NAV = [
+  { key: 'GENEL', label: 'Genel', items: [
+    { tab: 'DASHBOARD', label: 'Genel Bakış', icon: LayoutDashboard, color: 'var(--ac-38bdf8)' },
+  ] },
   { key: 'PERSONEL', label: 'Personel', items: [
     { tab: 'USERS', label: 'Kullanıcı Yönetimi', icon: Users, color: 'var(--ac-818cf8)' },
     { tab: 'AI_AGENTS', label: 'AI Ajan İşe Alım', icon: Bot, color: '#10b981' },
@@ -99,7 +103,7 @@ export default function CompanyAdminConsole({
     return currentTenant?.id || currentUser?.tenant_id || null;
   };
 
-  const [activeTab, setActiveTab] = useState('DEPARTMENTS');
+  const [activeTab, setActiveTab] = useState('DASHBOARD');  // ADIM 9: açılışta genel bakış
   // Sol menü: daraltılabilir, gruplar açılıp kapanabilir (tercih bu tarayıcıda hatırlanır); tablet/telefonda çekmece
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -5094,6 +5098,7 @@ export default function CompanyAdminConsole({
             />
           )}
 
+          {activeTab === 'DASHBOARD' && <CompanyDashboard tenantId={tenantId} departments={departments} />}
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
 
           <HireWizard
