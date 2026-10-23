@@ -785,7 +785,7 @@ try {
   await od.page.getByRole('button', { name: 'Yetkileri kaydet' }).click();
   await od.page.waitForTimeout(1500);
   const odPage = await od.page.content();
-  step(/Odoo 19/.test(odRowText) && /Yalnızca okuma/.test(odRowText) && writeBoxes === 0 && !odPage.includes(odooEnv.ODOO_PASSWORD),
+  step(/Son deneme[^\n]*başarılı/.test(odRowText) && /Yalnızca okuma/.test(odRowText) && writeBoxes === 0 && !odPage.includes(odooEnv.ODOO_PASSWORD),
     'Odoo yalnızca okuma bağlandı ve denendi; yazma araçları hiç sunulmuyor; anahtar sayfada yok',
     `${odRowText.split('\n').find((l) => /Son deneme/.test(l)) || odRowText.slice(0, 80)} · yazma kutusu: ${writeBoxes}`);
   await shot(od.page, '13-odoo-salt-okunur');
@@ -800,12 +800,13 @@ try {
     'Lütfen count_records aracını model project.task, domain [["project_id", "=", 47]] ile çağır ve sonucu söyle.']) {
     const r = await api(tm.page, '/api/v1/chat/send', { method: 'POST', body: JSON.stringify({ task_id: kTask.body.id, content }) });
     odReply = r.body?.assistant_message?.content || JSON.stringify(r.body || r.status).slice(0, 200);
-    odCall = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/tool-calls`)).body || [])
-      .find((c) => c.task_id === kTask.body.id && c.status === 'EXECUTED');
+    const done = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/tool-calls`)).body || [])
+      .filter((c) => c.task_id === kTask.body.id && c.status === 'EXECUTED');
+    odCall = done.find((c) => c.tool === 'count_records') || done[0];
     if (odCall) break;
   }
   const odCount = odCall?.result?.count ?? (odCall?.result?.records || []).length;
-  step(Boolean(odCall) && odCall.kind === 'READ' && odReply.includes(String(odCount)),
+  step(Boolean(odCall) && odCall.kind === 'READ' && new RegExp(`(^|\\D)${odCount}(\\D|$)`).test(odReply),
     'AI personel Odoo okuma aracını sohbette kullandı; gerçek veri yanıta yansıdı (onay beklemeden)',
     `${odCall ? `${odCall.tool} → ${odCount}` : 'araç çağrılmadı'} · yanıt: ${odReply.replace(/\s+/g, ' ').slice(0, 90)}`);
 
