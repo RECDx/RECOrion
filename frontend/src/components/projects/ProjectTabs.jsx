@@ -6,6 +6,7 @@ import { confirmDialog, toast } from '../../ui/feedback';
 import { fmtDay, isEditable } from './projectMeta';
 
 const ROLE = { MANAGER: 'Proje yöneticisi', MEMBER: 'Ekip üyesi', AGENT: 'AI personel' };
+const fmtTl = (n) => (n == null ? '—' : `${Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`);
 const fmtNum = (n) => Number(n || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
 
 /** Ekip & Simülasyon (ADIM 6.4): insan/AI ekip, tarih, süre, kredi ve risk simülasyonu. */
@@ -230,6 +231,10 @@ function TelegramCard() {
 
 /** Kapanış: projeyi tamamlama/iptal ve onaylı proje eklerini Kurum Hafızasına aktarma. */
 export function CloseTab({ project, currentUser, onAction, busy }) {
+  const [cost, setCost] = useState(null);
+  useEffect(() => {
+    if (project.can_manage) api.getProjectCosts(project.id).then(setCost).catch(() => setCost(null));
+  }, [project.id, project.can_manage]);
   const [summary, setSummary] = useState(project.close_summary || '');
   const [docs, setDocs] = useState(null);
   const [picked, setPicked] = useState([]);
@@ -264,6 +269,19 @@ export function CloseTab({ project, currentUser, onAction, busy }) {
           </div>
         )}
       </Card>
+      {cost && (
+        <Card title="Maliyet özeti" subtitle="TL, KDV hariç. Ayrıntılar Maliyet sekmesinde."
+          actions={<Button size="sm" variant="secondary" onClick={() => api.downloadProjectCostReport(project.id).catch((e) => toast.error(e.message))}>Excel raporu</Button>}>
+          <div className="pj-stats">
+            <div className="pj-stat"><span>Gerçekleşen</span><strong>{fmtTl(cost.totals.actual)}</strong></div>
+            <div className="pj-stat"><span>Bütçe</span><strong>{fmtTl(cost.budget.amount)}</strong></div>
+            <div className="pj-stat"><span>Fark</span><strong>{fmtTl(cost.totals.budget_variance)}</strong></div>
+            <div className="pj-stat"><span>Kredi</span><strong>{Number(cost.totals.credits || 0).toLocaleString('tr-TR')}</strong></div>
+          </div>
+          <p className="pj-hint" style={{ marginTop: 8 }}>Personel {fmtTl(cost.totals.labor)} · Token (LLM) {fmtTl(cost.totals.token)} · Diğer {fmtTl(cost.totals.other)}
+            {cost.totals.unpriced_calls ? ` · ${cost.totals.unpriced_calls} çağrının TL fiyatı tanımsız` : ''}</p>
+        </Card>
+      )}
       <Card title="Kurum Hafızasına aktar" subtitle="Seçilen onaylı proje ekleri şirketin tüm AI personelinin bilgisine eklenir." actions={<Library size={18} />}>
         {!docs ? <p className="pj-hint">Yükleniyor…</p> : docs.length === 0 ? (
           <p className="pj-hint">Aktarılabilecek onaylı proje eki yok.</p>

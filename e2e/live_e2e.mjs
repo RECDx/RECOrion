@@ -1,4 +1,4 @@
-// Canlı uçtan uca test (Adım 6, 7.1, 7.2, 7.3, 7.4): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
+// Canlı uçtan uca test (Adım 6, 7.1–7.4, 7.5): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
 import { chromium } from 'playwright-core';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -323,6 +323,59 @@ try {
   const fallbacks = outs.filter((e) => e.data?.fallback_from).map((e) => `${e.data.fallback_from} > ${e.data.model}`);
   step(true, 'Kullanılan modeller ve yedek model geçişleri', `${models}${fallbacks.length ? ` · yedek: ${fallbacks.join('; ')}` : ' · yedek gerekmedi'}`);
   step(credits > 0, 'AI çalışmaları ölçüldü ve krediden düştü', `${credits.toFixed(2)} kredi (${cnt('AI_OUTPUT')} çıktı)`);
+
+  // 7.5 Maliyet: rapor, bütçe, belgeli kalem, Excel, kapanış özeti ve kapanış kilidi
+  await page.getByRole('tab', { name: /^Maliyet/ }).click();
+  await page.locator('.pj-stat', { hasText: 'Gerçekleşen' }).first().waitFor({ timeout: 20000 });
+  const unpricedNote = await page.getByText(/LLM çağrısının TL fiyatı tanımlı değil/).count();
+  const stepRows = await page.locator('.ui-table').first().locator('tbody tr').count();
+  step(stepRows >= titles.length, 'Maliyet sekmesi adım bazında maliyeti gösteriyor',
+    `${stepRows} satır (proje geneli dahil), fiyatsız çağrı uyarısı: ${unpricedNote ? 'var (LLM fiyatı henüz girilmedi)' : 'yok'}`);
+  await page.locator('#cost-budget').fill('15000');
+  await page.locator('#cost-budget-note').fill('Canlı test bütçesi');
+  await page.getByRole('button', { name: 'Bütçeyi kaydet' }).click();
+  await page.waitForTimeout(1500);
+  await page.getByRole('button', { name: 'Kalem ekle' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.locator('#ci-cat').selectOption('DANISMANLIK');
+  await dlg.locator('#ci-desc').fill('Güvenlik danışmanlığı (canlı test)');
+  await dlg.locator('#ci-qty').fill('2');
+  await dlg.locator('#ci-unit').fill('gün');
+  await dlg.locator('#ci-price').fill('1750');
+  await dlg.locator('#ci-task').selectOption({ index: 1 });
+  await dlg.locator('input[type="file"]').setInputFiles({ name: 'fatura-canli-test.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n% canlı test faturası\n%%EOF') });
+  await dlg.getByRole('button', { name: 'Kaydet' }).click();
+  await page.locator('.pj-list li', { hasText: 'Güvenlik danışmanlığı (canlı test)' }).waitFor({ timeout: 20000 });
+  const itemRow = await page.locator('.pj-list li', { hasText: 'Güvenlik danışmanlığı (canlı test)' }).innerText();
+  const hasDoc = await page.locator('.pj-list li', { hasText: 'Güvenlik danışmanlığı (canlı test)' }).getByRole('button', { name: 'Belgeyi indir' }).count();
+  step(/3\.500,00 ₺/.test(itemRow) && hasDoc === 1, 'Arayüzden belgeli maliyet kalemi eklendi (2 gün × 1.750 ₺)', itemRow.replace(/\s+/g, ' ').slice(0, 90));
+  const stats = await page.locator('.pj-stats').first().innerText();
+  const costApi = await page.evaluate(async (name) => {
+    const token = sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token');
+    const h = { Authorization: `Bearer ${token}` };
+    const p = (await (await fetch('/api/v1/projects/?scope=mine', { headers: h })).json()).find((x) => x.name === name);
+    return (await (await fetch(`/api/v1/projects/${p.id}/costs`, { headers: h })).json());
+  }, NAME);
+  step(costApi.budget.amount === 15000 && costApi.totals.other === 3500 && Math.abs(costApi.totals.budget_variance - (15000 - costApi.totals.actual)) < 0.01,
+    'Bütçe ve fark doğru', `${stats.replace(/\s+/g, ' ')}`);
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByRole('button', { name: 'Excel', exact: true }).click()]);
+  const xlsxPath = path.join(OUT, download.suggestedFilename());
+  await download.saveAs(xlsxPath);
+  const xlsx = fs.readFileSync(xlsxPath);
+  step(xlsx.length > 3000 && xlsx.slice(0, 2).toString() === 'PK' && download.suggestedFilename().endsWith('.xlsx'), 'Excel maliyet raporu indirildi',
+    `${download.suggestedFilename()} · ${Math.round(xlsx.length / 1024)} KB`);
+  await shot(page, '07-maliyet');
+  await page.getByRole('tab', { name: /Kapanış/ }).click();
+  await page.getByText('Maliyet özeti').waitFor({ timeout: 15000 });
+  step(true, 'Kapanış sekmesinde maliyet özeti var');
+  await page.locator('#pj-close').fill('Canlı test kapanışı: maliyet raporu Excel olarak indirildi.');
+  await page.getByRole('button', { name: 'Projeyi tamamla' }).click();
+  await dialogOk(page);
+  await page.locator('.ui-badge', { hasText: 'Tamamlandı' }).first().waitFor({ timeout: 20000 });
+  await page.getByRole('tab', { name: /^Maliyet/ }).click();
+  await page.locator('.pj-stat', { hasText: 'Gerçekleşen' }).first().waitFor({ timeout: 20000 });
+  step(await page.getByRole('button', { name: 'Kalem ekle' }).count() === 0 && await page.locator('#cost-budget').isDisabled(),
+    'Proje kapanınca maliyet kalemleri ve bütçe kilitlendi');
 
   // 7. Çalışma Alanı Kalite Kapısı gerçek durumu gösteriyor mu
   await page.getByRole('button', { name: 'Çalışma alanında aç' }).click();

@@ -6,6 +6,7 @@ import { confirmDialog, toast } from '../../ui/feedback';
 import DocumentLibrary from '../docs/DocumentLibrary';
 import PlanTab from './PlanTab';
 import WorkflowTab from './WorkflowTab';
+import CostTab from './CostTab';
 import { CloseTab, ReadinessTab, TeamSimTab } from './ProjectTabs';
 import { ProjectFields } from './ProjectHub';
 import { KIND, fmtDay, isEditable, statusOf } from './projectMeta';
@@ -18,6 +19,7 @@ const TABS = [
   ['team', 'Ekip & Simülasyon'],
   ['ready', 'Hazırlık & Bildirim'],
   ['flow', 'İş Akışı'],
+  ['cost', 'Maliyet'],
   ['close', 'Kapanış'],
 ];
 const CONFIRM = {
@@ -129,7 +131,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       </div>
 
       <div className="pj-tabs" role="tablist">
-        {TABS.map(([k, l]) => (
+        {TABS.filter(([k]) => k !== 'cost' || project.can_manage).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`pj-tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
             {l}{counts[k] ? <small>{counts[k]}</small> : null}
           </button>
@@ -155,6 +157,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       {tab === 'team' && <TeamSimTab project={project} actors={actors} onChanged={reload} />}
       {tab === 'ready' && <ReadinessTab project={project} onAction={action} busy={busy} />}
       {tab === 'flow' && <WorkflowTab project={project} />}
+      {tab === 'cost' && project.can_manage && <CostTab project={project} />}
       {tab === 'close' && <CloseTab project={project} currentUser={currentUser} onAction={action} busy={busy} />}
     </div>
   );

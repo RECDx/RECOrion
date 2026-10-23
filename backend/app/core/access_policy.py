@@ -283,6 +283,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/projects/{{project_id}}/cost-items/{{item_id}}/attachment"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/cost-items/{{item_id}}/attachment"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}/budget"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/costs/export.xlsx"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/submit"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/decision"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/release"): HANDLER(),

@@ -158,6 +158,16 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
     return {"ok": True, "artifact_id": str(art.id), "version": version, "actor_id": str(agent.id)}
 
 
+REVIEW_MAX_TOKENS = 3000
+
+
+async def _review_skipped(db: AsyncSession, project, task, reviewer, reason: str) -> Dict[str, Any]:
+    """Değerlendirme yapılamadı: adım sessizce geçmez, geçmişe kaydedilir ve karar insan onaylayıcıya kalır."""
+    await task_flow.log(db, project, task, "REVIEW_SKIPPED", reviewer.id, reason[:1000])
+    await db.commit()
+    return {"ok": False, "error": reason}
+
+
 def _parse(text: str) -> Dict[str, Any]:
     text = text.strip()
     if "```" in text:
@@ -188,18 +198,27 @@ Kabul ölçütü: {task.acceptance_criteria or '-'}
 # Teslim edilen çıktı (sürüm {art.version})
 {text}
 
-Sadece şu JSON'u döndür:
+Sadece şu JSON'u döndür (en fazla 8 madde, her biri en fazla 200 karakter; başka metin yazma):
 {{"passed": true|false, "score": 0-100, "issues": ["düzeltilmesi gereken somut eksik/hata"], "summary": "1-2 cümle değerlendirme"}}"""
+    ctx = LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=reviewer.id, task_id=task.id, project_id=project.id)
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+    verdict, result, last_error = None, None, None
     try:
-        result = await llm_gateway.chat(LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=reviewer.id, task_id=task.id,
-                                                   project_id=project.id),
-                                        [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                                        temperature=0.2, max_tokens=1500, timeout=180, fallback=True)
-        verdict = _parse(result.content)
+        # Uzun çıktıda bulgu listesi uzayıp yanıt kesilebilir: okunamazsa bir kez kısa ve geçerli JSON istenir
+        for attempt in range(2):
+            result = await llm_gateway.chat(ctx, messages, temperature=0.2, max_tokens=REVIEW_MAX_TOKENS, timeout=180, fallback=True)
+            try:
+                verdict = _parse(result.content)
+                break
+            except (ValueError, KeyError) as exc:
+                last_error = exc
+                messages = messages + [{"role": "assistant", "content": result.content[:4000]},
+                                       {"role": "user", "content": "Yanıtın geçerli JSON değildi veya kesildi. Yalnızca istenen JSON'u, "
+                                                                   "en fazla 5 kısa maddeyle tekrar yaz."}]
     except LLMError as exc:
-        return {"ok": False, "error": exc.message}
-    except (ValueError, KeyError) as exc:
-        return {"ok": False, "error": f"Kontrol personelinin değerlendirmesi okunamadı ({exc})."}
+        return await _review_skipped(db, project, task, reviewer, exc.message)
+    if verdict is None:
+        return await _review_skipped(db, project, task, reviewer, f"Kontrol personelinin değerlendirmesi okunamadı ({last_error}).")
     issues = [str(i)[:500] for i in (verdict.get("issues") or [])][:10]
     passed = verdict.get("passed") is True
     try:

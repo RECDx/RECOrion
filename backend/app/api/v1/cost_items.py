@@ -159,3 +159,83 @@ async def set_budget(project_id: uuid.UUID, payload: BudgetIn, user: CurrentUser
     project.budget_try, project.budget_note = payload.budget_try, (payload.budget_note or None)
     await db.commit()
     return {"budget_try": float(project.budget_try) if project.budget_try is not None else None, "budget_note": project.budget_note}
+
+
+# ---------------------------------------------------------------- kapanış raporu (ADIM 7.5.4)
+@router.get("/{project_id}/costs/export.xlsx")
+async def export_costs(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Proje maliyet raporu (Excel): Özet, İş adımları, Maliyet kalemleri, LLM kırılımı. TL, KDV hariç."""
+    import io
+    from datetime import datetime, timezone
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    project = await _project(db, user, project_id, editable=False)
+    c = await costs.project_costs(db, project)
+    titles = {t["task_id"]: t["title"] for t in c["tasks"]}
+    money, head = '#,##0.00 "₺"', PatternFill("solid", fgColor="E9E3FB")
+    basis = {"ACTUAL": "Gerçekleşen", "RUNNING": "Sürüyor", "PLANNED": "Plan (tahmin)"}
+
+    wb = Workbook()
+
+    def sheet(ws, header, rows, money_cols=(), widths=None):
+        ws.append(header)
+        for cell in ws[1]:
+            cell.font, cell.fill, cell.alignment = Font(bold=True), head, Alignment(vertical="center", wrap_text=True)
+        for r in rows:
+            ws.append(r)
+        for col in money_cols:
+            for (cell,) in ws.iter_rows(min_row=2, min_col=col, max_col=col):
+                cell.number_format = money
+        for i, w in enumerate(widths or [], 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+        ws.freeze_panes = "A2"
+
+    t = c["totals"]
+    ws = wb.active
+    ws.title = "Özet"
+    summary = [
+        ("Proje", project.name), ("Durum", svc_status(project.status)),
+        ("Tarih aralığı", f"{project.start_date or '-'} - {project.end_date or '-'}"),
+        ("Bütçe", c["budget"]["amount"]), ("Bütçe notu", c["budget"]["note"] or ""),
+        ("Gerçekleşen: personel", t["labor"]), ("Gerçekleşen: token (LLM)", t["token"]), ("Gerçekleşen: diğer kalemler", t["other"]),
+        ("Gerçekleşen toplam", t["actual"]), ("Bütçe farkı (bütçe - gerçekleşen)", t["budget_variance"]),
+        ("Planlanan maliyet (bütçe önerisi)", c["budget"]["suggested"]), ("Başlamamış adımların tahmini personel maliyeti", t["labor_planned"]),
+        ("Fiyatı tanımsız LLM çağrısı", t["unpriced_calls"]), ("Harcanan RECOrion kredisi", t["credits"]),
+        ("Para birimi", "TL, KDV hariç"), ("Rapor zamanı", datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")),
+    ]
+    sheet(ws, ["Kalem", "Değer"], summary, widths=[46, 40])
+    for row in ws.iter_rows(min_row=2):
+        if isinstance(row[1].value, float) and row[0].value not in ("Harcanan RECOrion kredisi",):
+            row[1].number_format = money
+    sheet(wb.create_sheet("İş adımları"),
+          ["#", "İş adımı", "Personel", "Tür", "Durum", "Gün", "Dayanak", "Personel maliyeti", "Token (LLM)", "Çağrı", "Fiyatsız çağrı",
+           "Kredi", "Diğer kalemler", "Toplam"],
+          [[x["order_index"], x["title"], x["assignee"] or "-", "AI" if x["assignee_type"] == "AI_AGENT" else "İnsan" if x["assignee"] else "-",
+            x["status"], x["labor"]["days"], basis.get(x["labor"]["basis"], x["labor"]["basis"]), x["labor"]["cost"], x["tokens"]["cost"],
+            x["tokens"]["calls"], x["tokens"]["unpriced_calls"], x["tokens"]["credits"], x["other"],
+            (0 if x["labor"]["basis"] == "PLANNED" else x["labor"]["cost"]) + x["tokens"]["cost"] + x["other"]] for x in c["tasks"]]
+          + ([["", "Proje geneli (planlama, adıma bağlı olmayan)", "", "", "", "", "", 0, c["project_level_tokens"]["cost"],
+               c["project_level_tokens"]["calls"], c["project_level_tokens"]["unpriced_calls"], c["project_level_tokens"]["credits"], 0,
+               c["project_level_tokens"]["cost"]]] if c["project_level_tokens"] else []),
+          money_cols=(8, 9, 13, 14), widths=[5, 40, 24, 8, 16, 7, 14, 16, 14, 8, 12, 10, 14, 14])
+    sheet(wb.create_sheet("Maliyet kalemleri"),
+          ["Tarih", "Kategori", "Açıklama", "İş adımı", "Miktar", "Birim", "Birim fiyat", "Tutar", "Belge"],
+          [[str(i["incurred_on"]), i["category_label"], i["description"], titles.get(i["task_id"], "-") if i["task_id"] else "-",
+            i["quantity"], i["unit"] or "", i["unit_price_try"], i["amount_try"], i["attachment_name"] or ""] for i in c["items"]],
+          money_cols=(7, 8), widths=[12, 16, 44, 30, 9, 9, 14, 14, 26])
+    sheet(wb.create_sheet("LLM kırılımı"),
+          ["Model", "Çağrı", "Girdi token", "Çıktı token", "Token (LLM) TL", "Fiyatsız çağrı", "Kredi"],
+          [[m["model_code"], m["calls"], m["tokens_in"], m["tokens_out"], m["cost"], m["unpriced_calls"], m["credits"]] for m in c["by_model"]],
+          money_cols=(5,), widths=[26, 8, 14, 14, 16, 14, 10])
+    buf = io.BytesIO()
+    wb.save(buf)
+    name = f"{project.slug or 'proje'}-maliyet-{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return Response(content=buf.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+
+def svc_status(status: str) -> str:
+    return psvc.STATUS_LABELS.get(status, status)

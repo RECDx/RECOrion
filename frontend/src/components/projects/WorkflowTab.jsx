@@ -12,7 +12,8 @@ const TONE = { BACKLOG: 'neutral', READY: 'info', IN_PROGRESS: 'info', WAITING_A
 const EVENT = { PROJECT_STARTED: 'Proje akışı başladı', TASK_STARTED: 'Adım başladı', SUBMITTED: 'Teslim edildi', APPROVED: 'Onaylandı',
   REJECTED: 'Revizyon istendi', QUARANTINED: 'Karantinaya alındı', RELEASED: 'Yeniden denemeye açıldı', DONE: 'Tamamlandı',
   CANCELLED: 'İptal edildi', PROJECT_FINISHED: 'Tüm adımlar tamamlandı', AI_OUTPUT: 'AI personel çıktı üretti',
-  REVIEW_PASSED: 'Kontrolden geçti', REVIEW_FAILED: 'Kontrol personeli düzeltme istedi', BLOCKED: 'Adım durdu' };
+  REVIEW_PASSED: 'Kontrolden geçti', REVIEW_FAILED: 'Kontrol personeli düzeltme istedi', REVIEW_SKIPPED: 'Kontrol yapılamadı (karar onaylayıcıda)',
+  BLOCKED: 'Adım durdu' };
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 /** İş Akışı (ADIM 7.1): adımların canlı akış durumu, teslim/onay/karantina kararları ve olay geçmişi. */

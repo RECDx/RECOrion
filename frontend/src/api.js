@@ -141,6 +141,15 @@ export const api = {
   getTelegramStatus: () => request('/auth/telegram'),
   linkTelegram: () => request('/auth/telegram/link', { method: 'POST' }),
   unlinkTelegram: () => request('/auth/telegram/link', { method: 'DELETE' }),
+  // Proje maliyeti (Adım 7.5)
+  getProjectCosts: (projectId) => request(`/projects/${projectId}/costs`),
+  setProjectBudget: (projectId, amount, note) => request(`/projects/${projectId}/budget`, { method: 'PUT', body: JSON.stringify({ budget_try: amount, budget_note: note || null }) }),
+  addCostItem: (projectId, data) => request(`/projects/${projectId}/cost-items`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCostItem: (projectId, itemId, data) => request(`/projects/${projectId}/cost-items/${itemId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCostItem: (projectId, itemId) => request(`/projects/${projectId}/cost-items/${itemId}`, { method: 'DELETE' }),
+  uploadCostAttachment: (projectId, itemId, formData) => request(`/projects/${projectId}/cost-items/${itemId}/attachment`, { method: 'POST', body: formData }),
+  downloadCostAttachment: (projectId, itemId, name) => downloadFile(`/projects/${projectId}/cost-items/${itemId}/attachment`, name),
+  downloadProjectCostReport: (projectId) => downloadFile(`/projects/${projectId}/costs/export.xlsx`, 'proje-maliyet.xlsx'),
   // LLM TL fiyat listesi (Adım 7.5.1, Süper Admin)
   getLlmPrices: () => request('/system/llm-prices'),
   addLlmPrice: (data) => request('/system/llm-prices', { method: 'POST', body: JSON.stringify(data) }),

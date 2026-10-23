@@ -59,10 +59,14 @@ class FakeAI:
 
     def __init__(self):
         self.work_prompts, self.reviews, self.fail_reviews, self.broken, self.truncate, self.flaky = [], 0, 0, False, 0, 0
+        self.bad_reviews = 0  # kontrol yanıtı kesik/okunamaz JSON
 
     async def chat(self, model_code, messages, **kw):
         system, prompt = messages[0]["content"], messages[-1]["content"]
         if "kontrol personelisin" in system:
+            if self.bad_reviews:
+                self.bad_reviews -= 1
+                return ChatResult('{"passed": false, "score": 40, "issues": ["Uzun bulgu listesi kesil', None, 500, 3000, {})
             self.reviews += 1
             passed = self.reviews > self.fail_reviews
             return ChatResult(json.dumps({"passed": passed, "score": 90 if passed else 40, "summary": "Değerlendirme",
@@ -249,3 +253,24 @@ def test_workflow_pause_and_cancel(client, world, db, ai):
     # Olay geçmişi değiştirilemez
     with pytest.raises(psycopg2.Error):
         _exec(db, "UPDATE task_events SET note = 'değişti' WHERE project_id = %s", pid)
+
+
+def test_unreadable_review_is_retried_or_recorded(client, world, ai):
+    """Kontrol yanıtı kesik/okunamaz gelirse bir kez yeniden istenir; yine okunamazsa sessizce geçilmez, kayda düşer."""
+    w = world
+    admin = w["admin"]["h"]
+    ai.bad_reviews = 1  # ilk yanıt bozuk, ikinci yanıt geçerli
+    pid, _, _ = _ready_project(client, w, "Okunamayan Kontrol 1", reviewer=True)
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "start"})
+    tasks, flow = _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "yeniden istenen kontrolle onaya gelmeli", 45)
+    kinds = [e["kind"] for e in flow["events"] if e["task_id"] == tasks["AI adımı"]["id"]]
+    assert "REVIEW_PASSED" in kinds and "REVIEW_SKIPPED" not in kinds
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+
+    ai.bad_reviews = 2  # iki yanıt da bozuk: kayda düşer, karar onaylayıcıya kalır
+    pid, _, _ = _ready_project(client, w, "Okunamayan Kontrol 2", reviewer=True)
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "start"})
+    tasks, flow = _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "kontrol yapılamadan onaya gelmeli", 45)
+    skipped = [e for e in flow["events"] if e["task_id"] == tasks["AI adımı"]["id"] and e["kind"] == "REVIEW_SKIPPED"]
+    assert len(skipped) == 1 and "okunamadı" in skipped[0]["note"] and skipped[0]["actor"]["id"] == w["reviewer"]
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})

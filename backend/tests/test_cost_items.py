@@ -86,6 +86,23 @@ def test_cost_items_attachment_budget(client, db, world, store):
         assert c["planned"]["labor"] == 1000.0 and c["planned"]["token"] == 1.6 and c["budget"]["suggested"] == 1001.6
         assert c["budget"]["amount"] == 5000.0 and c["budget"]["note"] == "Yönetim onaylı"
         assert c["totals"]["actual"] == 2350.0 and c["totals"]["budget_variance"] == 2650.0  # henüz başlamadı: yalnızca kalemler
+
+        # Kapanış raporu (Excel, ADIM 7.5.4): 4 sayfa, özet tutarları raporla aynı; ekip üyesine kapalı
+        import io
+
+        from openpyxl import load_workbook
+
+        assert client.get(f"/api/v1/projects/{pid}/costs/export.xlsx", headers=member).status_code == 403
+        x = client.get(f"/api/v1/projects/{pid}/costs/export.xlsx", headers=admin)
+        assert x.status_code == 200 and "maliyet" in x.headers["content-disposition"]
+        wb = load_workbook(io.BytesIO(x.content))
+        assert wb.sheetnames == ["Özet", "İş adımları", "Maliyet kalemleri", "LLM kırılımı"]
+        summary = {r[0]: r[1] for r in wb["Özet"].iter_rows(min_row=2, values_only=True)}
+        assert summary["Bütçe"] == 5000 and summary["Gerçekleşen: diğer kalemler"] == 2350 and summary["Bütçe farkı (bütçe - gerçekleşen)"] == 2650
+        assert summary["Para birimi"] == "TL, KDV hariç"
+        items = list(wb["Maliyet kalemleri"].iter_rows(min_row=2, values_only=True))
+        assert len(items) == 2 and any(r[3] == "İnsan adımı" and r[7] == 2000 and r[8] == "fatura-001.pdf" for r in items)
+        assert len(list(wb["İş adımları"].iter_rows(min_row=2, values_only=True))) == 3
     finally:
         _exec(db, "DELETE FROM llm_model_prices WHERE model_id = %s", model_id)
         _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE id = %s", w["member"]["id"])

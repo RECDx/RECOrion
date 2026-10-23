@@ -45,6 +45,8 @@
 .pj-stat { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: rgb(var(--rgb-ov) / 0.03); }
 .pj-stat span { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .pj-stat strong { display: block; font-size: 1.2rem; color: var(--text-main); margin-top: 2px; }
+.pj-stat strong.ui-text-danger { color: var(--ac-f87171, #f87171); }
+.pj-stat strong.ui-text-success { color: var(--ac-34d399, #34d399); }
 .pj-gantt { display: flex; flex-direction: column; gap: 6px; }
 .pj-gantt-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr); gap: 10px; align-items: center; font-size: 0.78rem; color: var(--text-main); }
 .pj-gantt-track { position: relative; height: 22px; border-radius: 6px; background: rgb(var(--rgb-ov) / 0.05); }
