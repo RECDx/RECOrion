@@ -704,12 +704,16 @@ class AgentLearningService:
             "1. Selamlaşma, geçici teyitler ('tamam', 'teşekkürler'), genel geçer sözler ASLA öğrenilmemelidir.\n"
             "2. Yalnızca kalıcı değer taşıyan somut iş kuralları ve operasyonel bilgiler çıkarılmalıdır.\n"
             "3. Eğer konuşmada kalıcı öğrenilecek bir bilgi yoksa, 'learnings': [] döndür.\n"
-            "4. Çıktıyı MUTLAKA geçerli JSON formatında üret:\n"
+            "4. KAPSAM: AGENT = bu personelin projeden bağımsız genel çalışma tercihi veya uzmanlığı; GLOBAL = şirketin "
+            "tüm işlerinde geçerli kural; PROJECT = yalnızca bu projeye/bu işe özgü bilgi (proje kod adı, bu projenin "
+            "tarihleri, tutarları, kararları, eklenen dosyaların içeriği, kişi ve müşteri adları). Emin değilsen PROJECT seç; "
+            "PROJECT bilgisi başka projelere taşınmaz.\n"
+            "5. Çıktıyı MUTLAKA geçerli JSON formatında üret:\n"
             "{\n"
             '  "learnings": [\n'
             '    {\n'
             '      "fact": "Öğrenilen net kural veya tecrübe ifadesi.",\n'
-            '      "scope": "AGENT veya GLOBAL",\n'
+            '      "scope": "AGENT, GLOBAL veya PROJECT",\n'
             '      "category": "MUSTERI_TERCIHI | TEKNIK_KURAL | IS_PROSESI | MEVZUAT",\n'
             '      "confidence": 0.95\n'
             '    }\n'
@@ -744,9 +748,11 @@ class AgentLearningService:
             if not fact or len(fact) < 10:
                 continue
 
-            target_scope = item.get("scope", "AGENT").upper()
+            target_scope = (item.get("scope") or "PROJECT").upper()
+            # Projeye özgü bilgi personel veya şirket hafızasına yazılmaz: başka projeye (ve başka müşteriye) taşınmasın.
+            # Bu bilgi projenin kendi kaydında (sohbet, ekler) zaten durur. Belirsiz kapsam da proje sayılır.
             if target_scope not in ["GLOBAL", "AGENT"]:
-                target_scope = "AGENT"
+                continue
             if target_scope == "AGENT" and not agent_id:
                 target_scope = "GLOBAL"
 

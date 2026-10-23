@@ -336,6 +336,10 @@ try {
   };
   const memBefore = new Set((await memory()).map((i) => i.id));
   const rule = 'Şirket kuralı: tüm müşteri tekliflerimiz 15 gün geçerlidir ve fiyatlar KDV hariç verilir. Bundan sonraki tüm işlerde bunu dikkate al.';
+  // Yanıt gelince yazma kutusu hemen açılır (öğrenme arka planda); en fazla 30 sn beklenir
+  const tUnlock = Date.now();
+  await mgr2.page.locator('main.pane textarea:not([disabled])').waitFor({ timeout: 30000 });
+  const unlockSec = Math.round((Date.now() - tUnlock) / 1000);
   await mgr2.page.locator('main.pane textarea').fill(rule);
   await mgr2.page.locator('main.pane textarea').press('Enter');
   const tr0 = Date.now();
@@ -368,6 +372,11 @@ try {
     step(/geri alma denemesi/.test(revokedText) && after?.status === 'REVOKED' && after?.review_note === 'Canlı test: geri alma denemesi',
       'Onaylı bilgi gerekçeyle geri alındı (AI personel artık kullanmaz)', revokedText.split('\n').slice(-1)[0].slice(0, 90));
   }
+  // Güvenlik: dosyadaki projeye özgü kod adı personel/şirket hafızasına taşınmamalı (başka projeye sızmasın)
+  await mgr2.page.waitForTimeout(20000);  // arka plandaki öğrenme bitsin
+  const leaked = (await memory()).filter((i) => i.content.includes(code) && i.status !== 'REVOKED');
+  step(leaked.length === 0, 'Projeye özgü bilgi (dosyadaki kod adı) AI personelin ve şirketin hafızasına taşınmadı',
+    `${code}: ${leaked.length ? leaked.map((i) => `${i.scope}/${i.status}`).join(', ') : 'hafızada yok'} · yanıttan sonra yazma kutusu ${unlockSec} sn içinde açıldı`);
   await shot(mgr2.page, '04c-hafiza');
   await mgr2.ctx.close();
   await m.ctx.close();

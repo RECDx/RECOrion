@@ -66,6 +66,18 @@ class FakeQdrant:
         return r
 
 
+def _learning_done(timeout=15):
+    """Arka plandaki sohbetten öğrenme görevlerinin bitmesini bekler."""
+    import time
+    from app.api.v1 import chat as chat_api
+
+    deadline = time.time() + timeout
+    time.sleep(0.2)
+    while chat_api._learning_tasks and time.time() < deadline:
+        time.sleep(0.1)
+    assert not chat_api._learning_tasks, "sohbetten öğrenme bitmedi"
+
+
 @pytest.fixture
 def env(monkeypatch):
     objects, prompts, q = {}, [], FakeQdrant()
@@ -83,6 +95,8 @@ def env(monkeypatch):
             return ChatResult(json.dumps({"learnings": [
                 {"fact": "SOHBET-GLOBAL: tüm teklifler 15 gün geçerlidir.", "scope": "GLOBAL", "category": "IS_PROSESI", "confidence": 0.9},
                 {"fact": "SOHBET-AGENT: bu personel raporları tablo halinde verir.", "scope": "AGENT", "category": "TERCIH", "confidence": 0.9},
+                {"fact": "SOHBET-PROJE: projenin iç kod adı ZEYTIN-1.", "scope": "PROJECT", "category": "IS_PROSESI", "confidence": 0.9},
+                {"fact": "SOHBET-BELIRSIZ: kapsamı yazılmamış bilgi.", "category": "IS_PROSESI", "confidence": 0.9},
             ]}), None, 100, 50, {})
         prompts.append(messages[0]["content"])
         return ChatResult("Bilgilere göre cevap.", None, 300, 20, {})
@@ -202,9 +216,14 @@ def test_chat_learning_needs_approval_for_company_memory(client, db, world, env)
     a = world["a"]
     r = client.post("/api/v1/chat/send", headers=a["h"], json={"task_id": a["task"], "content": "teklif süresi nedir?"})
     assert r.status_code == 200, r.text
+    _learning_done()  # sohbetten öğrenme yanıttan sonra arka planda yapılır
     texts = {p.get("content") for p in env["q"].points.values()}
     assert any("SOHBET-AGENT" in (t or "") for t in texts)  # kişisel bilgi doğrudan öğrenilir
     assert not any("SOHBET-GLOBAL" in (t or "") for t in texts)  # şirket geneli bilgi onaysız öğrenilmez
+    # Projeye özgü (veya kapsamı belirsiz) bilgi hiçbir hafızaya yazılmaz: başka projeye taşınmasın
+    assert not any("SOHBET-PROJE" in (t or "") or "SOHBET-BELIRSIZ" in (t or "") for t in texts)
+    every = client.get(f"/api/v1/memory?tenant_id={a['id']}", headers=a["h"]).json()
+    assert not any("SOHBET-PROJE" in i["content"] or "SOHBET-BELIRSIZ" in i["content"] for i in every)
     cands = client.get(f"/api/v1/memory?tenant_id={a['id']}&status=CANDIDATE", headers=a["h"]).json()
     cand = next(c for c in cands if "SOHBET-GLOBAL" in c["content"])
     assert client.post(f"/api/v1/memory/{cand['id']}/reject", headers=world["b"]["h"]).status_code == 403
@@ -224,6 +243,7 @@ def test_memory_review_trail_and_revoke(client, db, world, env):
               "VALUES (%s, 'HUMAN', 'Çalışan', %s, 'USER', %s, 'IDLE')", a["id"], email, hash_password(PASSWORD))
     user_h = {"Authorization": f"Bearer {client.post('/api/v1/auth/login', json={'email': email, 'password': PASSWORD}).json()['access_token']}"}
     assert client.post("/api/v1/chat/send", headers=a["h"], json={"task_id": a["task"], "content": "rapor biçimi?"}).status_code == 200
+    _learning_done()
     items = client.get(f"/api/v1/memory?tenant_id={a['id']}", headers=a["h"]).json()
     cand = next(i for i in items if i["status"] == "CANDIDATE" and "SOHBET-GLOBAL" in i["content"])
     agent_item = next(i for i in items if i["status"] == "APPROVED" and i["scope"] == "AGENT" and "SOHBET-AGENT" in i["content"])

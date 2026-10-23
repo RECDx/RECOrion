@@ -13,6 +13,7 @@ from app.services import live
 from app.services import projects as psvc
 from pydantic import BaseModel, Field
 from typing import Literal
+import asyncio
 import uuid
 import json
 
@@ -311,31 +312,36 @@ async def send_chat_message(
     await db.commit()
     await db.refresh(assistant_msg)
 
-    # 6. Yazışmadan Öğrenme (Learn from Chat / Dialogue):
-    # Mesajlaşma sonrası arka planda kritik iş kurallarını ve kararları hafızaya indeksle
-    learned_items = []
-    try:
-        dialogue_to_learn = [
-            {"role": "user", "content": payload.content},
-            {"role": "assistant", "content": assistant_content}
-        ]
-        target_agent_uuid = uuid.UUID(agent_id) if agent_id else None
-        learned_items = await agent_learning_service.learn_from_chat_dialogue(
-            tenant_id=tenant_id,
-            agent_id=target_agent_uuid,
-            messages=dialogue_to_learn,
-            task_id=task_id,
-            db=db,
-            model_code=model_code
-        )
-    except Exception as learn_err:
-        logger.warning(f"Sohbetten öğrenme adımı hatası: {learn_err}")
+    # 6. Yazışmadan öğrenme arka planda (yanıt beklemeden döner; kullanıcı hemen yazmaya devam eder). Projeye özgü
+    # bilgi personel/şirket hafızasına yazılmaz (agent_learning_service, PROJECT kapsamı).
+    dialogue_to_learn = [{"role": "user", "content": payload.content}, {"role": "assistant", "content": assistant_content}]
+    _spawn_learning(tenant_id, uuid.UUID(agent_id) if agent_id else None, dialogue_to_learn, task_id, model_code)
 
     return {
         "user_message": user_msg,
         "assistant_message": assistant_msg,
         "citations": citations
     }
+
+
+_learning_tasks: set = set()
+
+
+async def _learn_later(tenant_id, agent_id, dialogue, task_id, model_code) -> None:
+    from app.db.session import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as s:
+            await agent_learning_service.learn_from_chat_dialogue(
+                tenant_id=tenant_id, agent_id=agent_id, messages=dialogue, task_id=task_id, db=s, model_code=model_code)
+    except Exception as learn_err:  # öğrenme yardımcıdır; sohbeti etkilemez
+        logger.warning(f"Sohbetten öğrenme adımı hatası: {learn_err}")
+
+
+def _spawn_learning(*args) -> None:
+    task = asyncio.get_running_loop().create_task(_learn_later(*args))
+    _learning_tasks.add(task)  # referans tutulur, yoksa bitmeden çöpe gidebilir
+    task.add_done_callback(_learning_tasks.discard)
 
 
 @router.post("/learn/{task_id}")
