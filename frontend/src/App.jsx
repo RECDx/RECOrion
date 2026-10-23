@@ -14,6 +14,7 @@ import ApprovePage from './components/approvals/ApprovePage';
 import ApprovalsInbox from './components/approvals/ApprovalsInbox';
 import { api, session } from './api';
 import { mergeMessages, useProjectLive } from './live';
+import CompanyDashboard from './components/dashboard/CompanyDashboard';
 import { confirmDialog, notify, promptDialog, toast } from './ui/feedback';
 
 // Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
@@ -342,6 +343,8 @@ export default function App() {
   // 6. Promote Memory to Corporate Memory (NS_GLOBAL)
   // Hafıza kararları (Adım 8.4): Kurum Hafızasına onay/taşıma, ret (gerekçe isteğe bağlı), geri alma (gerekçe zorunlu)
   const canPromote = !!currentUser?.permissions?.some((p) => p === 'memory:promote' || p === '*');
+  // Pano (ADIM 9.3): şirket yöneticisi veya departman panosu yetkisi olan kendi departmanını görür
+  const canDashboard = !!currentUser?.permissions?.some((p) => p === 'department:dashboard' || p === 'tenant:manage');
   const handleMemoryAction = async (kind, item) => {
     try {
       if (kind === 'promote') {
@@ -565,7 +568,8 @@ export default function App() {
       />
 
       <nav className="ws-mode" aria-label="Work Space">
-        {[['HUB', 'Projeler'], ['INBOX', approvalCount ? `Onaylarım (${approvalCount})` : 'Onaylarım'], ['WORK', 'Çalışma Alanı']].map(([key, label]) => (
+        {[['HUB', 'Projeler'], ['INBOX', approvalCount ? `Onaylarım (${approvalCount})` : 'Onaylarım'], ['WORK', 'Çalışma Alanı'],
+          ...(canDashboard ? [['PANO', 'Pano']] : [])].map(([key, label]) => (
           <button key={key} type="button" className={(workspaceMode === key || (key === 'HUB' && workspaceMode === 'PLANNER')) ? 'active' : ''}
             onClick={() => setWorkspaceMode(key)} disabled={kvkkRestricted && key !== 'WORK'}>
             {label}{key === 'WORK' && activeProject ? ` · ${activeProject.name}` : ''}
@@ -580,6 +584,9 @@ export default function App() {
           actors={actors}
           onOpen={(p) => { setPlannerProjectId(p.id); setWorkspaceMode('PLANNER'); }}
         />
+      )}
+      {workspaceMode === 'PANO' && !kvkkRestricted && tenant && canDashboard && (
+        <div className="pj-page"><CompanyDashboard tenantId={tenant.id} title="Pano" /></div>
       )}
       {workspaceMode === 'INBOX' && !kvkkRestricted && (
         <ApprovalsInbox

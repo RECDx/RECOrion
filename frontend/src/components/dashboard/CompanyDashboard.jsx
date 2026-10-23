@@ -25,10 +25,11 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
   if (!d) return <p className="pj-hint">Yükleniyor…</p>;
   const s = d.projects.by_status;
   const t = d.tasks.by_status;
-  const c = d.costs.totals;
+  const c = d.costs?.totals || {};  // parasal yetkisi olmayana costs gelmez (ADIM 9.3)
   const series = (key) => d.series.map((x) => ({ key: x.date, label: fmtDay(x.date), short: fmtDay(x.date), value: x[key] }));
-  const anyCost = d.by_model.some((m) => m.cost > 0);
-  const unpriced = d.by_model.reduce((n, m) => n + m.unpriced_calls, 0);
+  const money = d.can_view_costs !== false;  // parasal bilgiler billing:view ister (ADIM 9.3)
+  const anyCost = money && d.by_model.some((m) => m.cost > 0);
+  const unpriced = d.by_model.reduce((n, m) => n + (m.unpriced_calls || 0), 0);
 
   return (
     <div className="pj-steps dash-root" style={{ opacity: loading ? 0.6 : 1, transition: 'opacity .2s' }}>
@@ -41,7 +42,8 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
               onClick={() => setDays(k)}>{l}</button>
           ))}
         </div>
-        {!fixedDepartment && departments.length > 0 && (
+        {d.department_locked && <span className="ui-badge ui-badge-info">Departman: {d.department_name}</span>}
+        {!d.department_locked && !fixedDepartment && departments.length > 0 && (
           <select className="ui-input" style={{ width: 'auto', minWidth: 180 }} aria-label="Departman" value={dept} onChange={(e) => setDept(e.target.value)}>
             <option value="">Tüm şirket</option>
             {departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -79,10 +81,10 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
         <Card title="Günlük kredi tüketimi" subtitle="RECOrion kredisi">
           <ColumnChart data={series('credits')} caption="Günlük kredi tüketimi" unit=" kredi" empty="Bu dönemde kredi tüketimi yok." />
         </Card>
-        <Card title="Günlük token maliyeti" subtitle={unpriced ? `${unpriced} çağrının TL fiyatı tanımsız (0 sayıldı)` : 'LLM çağrılarının TL karşılığı'}>
+        {money && <Card title="Günlük token maliyeti" subtitle={unpriced ? `${unpriced} çağrının TL fiyatı tanımsız (0 sayıldı)` : 'LLM çağrılarının TL karşılığı'}>
           <ColumnChart data={series('cost')} caption="Günlük token maliyeti (TL)" format={(v) => tl(v)}
             empty="Bu dönemde TL maliyeti oluşmadı. LLM TL fiyatları RECDx tarafından girildiğinde burada görünür." />
-        </Card>
+        </Card>}
       </div>
 
       <div className="pj-split">
@@ -91,7 +93,7 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
             data={d.by_model.map((m) => ({ key: m.model_code, label: m.model_code, value: anyCost ? m.cost : m.credits,
               note: `${m.calls} çağrı · ${compact(m.credits)} kredi` }))} empty="Bu dönemde LLM çağrısı yok." />
         </Card>
-        <Card title="Maliyet dağılımı" subtitle="Tüm projeler (taslaklar hariç). Personel maliyeti yalnızca toplam olarak gösterilir.">
+        {money && <Card title="Maliyet dağılımı" subtitle="Tüm projeler (taslaklar hariç). Personel maliyeti yalnızca toplam olarak gösterilir.">
           <div className="pj-stats dash-stats-2">
             <div className="pj-stat"><span>Personel</span><strong title={tl(c.labor)}>{tlShort(c.labor)}</strong></div>
             <div className="pj-stat"><span>Token (LLM)</span><strong title={tl(c.token)}>{tlShort(c.token)}</strong></div>
@@ -103,11 +105,11 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
             <BarList caption="Diğer maliyet kalemleri" format={tl} empty="Henüz maliyet kalemi yok."
               data={d.costs.by_category.map((x) => ({ key: x.category, label: x.label, value: x.amount }))} />
           </div>
-        </Card>
+        </Card>}
       </div>
 
       <div className="pj-split">
-        <Card title="Tahmini tasarruf (ROI)" subtitle={`Son ${d.days} gün · AI personelin tamamladığı adımlar`}>
+        {money && <Card title="Tahmini tasarruf (ROI)" subtitle={`Son ${d.days} gün · AI personelin tamamladığı adımlar`}>
           {d.roi.available ? (
             <>
               <div className="dash-hero" title={tl(d.roi.saving)}>{tlShort(d.roi.saving)}</div>
@@ -121,7 +123,7 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
           ) : (
             <p className="pj-hint">{d.roi.reason} AI personel bu dönemde {compact(d.roi.work_days)} iş günü çalıştı.</p>
           )}
-        </Card>
+        </Card>}
         <Card title="İlk seferde onay" subtitle="Revizyon istenmeden tamamlanan adımların payı (AI personel)">
           <BarList caption="AI personel ilk seferde onay oranı" format={(v) => `%${Math.round(v * 100)}`} empty="Bu dönemde tamamlanan AI adımı yok."
             data={d.agents.filter((a) => a.completed).map((a) => ({ key: a.actor_id, label: a.name, value: a.first_pass_rate,
@@ -134,7 +136,7 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
           <div className="ui-table-scroll">
             <table className="ui-table dash-table">
               <thead><tr><th>AI personel</th><th>Tamamlanan</th><th>İlk seferde onay</th><th>Otonomi</th><th>Revizyon</th><th>Karantina</th>
-                <th>Ort. süre</th><th>Kredi</th><th>Maliyet</th></tr></thead>
+                <th>Ort. süre</th><th>Kredi</th>{money && <th>Maliyet</th>}</tr></thead>
               <tbody>{d.agents.map((a) => (
                 <tr key={a.actor_id}>
                   <td data-label="AI personel"><strong>{a.name}</strong><br /><small className="pj-hint">{a.title}</small></td>
@@ -145,7 +147,7 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
                   <td data-label="Karantina" className={a.quarantined ? 'ui-text-danger' : undefined}>{a.quarantined}</td>
                   <td data-label="Ort. süre">{a.avg_hours == null ? '—' : a.avg_hours < 1 ? `${Math.round(a.avg_hours * 60)} dk` : `${compact(a.avg_hours)} sa`}</td>
                   <td data-label="Kredi">{compact(a.credits)}</td>
-                  <td data-label="Maliyet" title={a.unpriced_calls ? `${a.unpriced_calls} çağrının TL fiyatı tanımsız` : undefined}>{tl(a.cost)}</td>
+                  {money && <td data-label="Maliyet" title={a.unpriced_calls ? `${a.unpriced_calls} çağrının TL fiyatı tanımsız` : undefined}>{tl(a.cost)}</td>}
                 </tr>
               ))}</tbody>
             </table>
@@ -153,11 +155,29 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
         )}
       </Card>
 
-      <Card title="Projeler: bütçe ve gerçekleşen" subtitle="Gerçekleşen = personel + token + diğer kalemler">
+      <Card title="Ekip iş durumu" subtitle="İnsan personel · açık adımlar ve dönemde tamamlananlar (ücret bilgisi içermez)">
+        {d.people.length === 0 ? <p className="pj-hint">Bu kapsamda iş atanmış insan personel yok.</p> : (
+          <div className="ui-table-scroll">
+            <table className="ui-table dash-table">
+              <thead><tr><th>Personel</th><th>Açık</th><th>Çalışılıyor</th><th>Onay bekliyor</th><th>Tamamlanan</th><th>Geciken</th></tr></thead>
+              <tbody>{d.people.map((p) => (
+                <tr key={p.actor_id}>
+                  <td data-label="Personel"><strong>{p.name}</strong><br /><small className="pj-hint">{p.title}</small></td>
+                  <td data-label="Açık">{p.open}</td><td data-label="Çalışılıyor">{p.working}</td>
+                  <td data-label="Onay bekliyor">{p.waiting_approval}</td><td data-label="Tamamlanan">{p.done}</td>
+                  <td data-label="Geciken" className={p.overdue ? 'ui-text-danger' : undefined}>{p.overdue}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {money && <Card title="Projeler: bütçe ve gerçekleşen" subtitle="Gerçekleşen = personel + token + diğer kalemler">
         <BudgetBars caption="Proje bütçe ve gerçekleşen"
           data={d.costs.projects.filter((p) => p.actual > 0 || p.budget != null).map((p) => ({
             key: p.project_id, label: p.name, actual: p.actual, budget: p.budget, status: `${p.status_label} · ${p.tasks_done}/${p.tasks_total} adım` }))} />
-      </Card>
+      </Card>}
     </div>
   );
 }

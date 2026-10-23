@@ -620,6 +620,27 @@ try {
     'AI personel karnesi ve tahmini tasarruf gösteriliyor', `${rows.join(', ')} · ROI: ${/KVKK/.test(roiText) ? 'KVKK gerekçesiyle gizli (ücret tanımlı kişi < 3)' : 'hesaplandı'}`);
   await shot(adm.page, '08-sirket-panosu');
   await adm.ctx.close();
+
+  // 9.3 Departman müdürü: Work Space'te Pano sekmesi, yalnızca kendi departmanı, parasal bilgi yok; sıradan üye Pano'yu görmez
+  const dm = await session('deptmgr');
+  await dm.page.getByRole('button', { name: 'Pano', exact: true }).click();
+  await dm.page.getByRole('heading', { name: 'Ekip iş durumu' }).waitFor({ timeout: 30000 });
+  await dm.page.waitForTimeout(1500);
+  const dmText = await dm.page.locator('.dash-root').innerText();
+  const deptOk = /Departman: Bilgi Teknolojileri/.test(dmText) && !(await dm.page.locator('select[aria-label="Departman"]').count());
+  const noMoney = !/Maliyet dağılımı|Tahmini tasarruf|bütçe ve gerçekleşen|Günlük token maliyeti/.test(dmText);
+  // Departmanın AI personeli karnede; insan personel bölümü var (canlı testte adımlar AI'a atandığı için boş olabilir)
+  const team = /Ekip iş durumu/.test(dmText) && /Deniz/.test(dmText) && /Kaan/.test(dmText);
+  const otherDept = await api(dm.page, `/api/v1/company/${cfg.tenant_id}/dashboard?department_id=${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}`);
+  step(deptOk && noMoney && team && otherDept.status === 403, 'Departman müdürü yalnızca kendi departmanını görüyor; parasal bilgi yok',
+    `departman kilidi: ${deptOk ? 'var' : 'yok'} · parasal kart: ${noMoney ? 'yok' : 'VAR'} · ekip: ${team ? 'görünüyor' : 'yok'} · başka departman: ${otherDept.status}`);
+  await shot(dm.page, '09-departman-panosu');
+  await dm.ctx.close();
+  const mb = await session('member');
+  const memberPano = await mb.page.getByRole('button', { name: 'Pano', exact: true }).count();
+  const memberApi = await api(mb.page, `/api/v1/company/${cfg.tenant_id}/dashboard`);
+  step(memberPano === 0 && memberApi.status === 403, 'Sıradan ekip üyesi panoyu göremiyor', `sekme: ${memberPano} · API: ${memberApi.status}`);
+  await mb.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

@@ -42,9 +42,10 @@ def test_company_dashboard(client, db, world):
     assert row["budget"] == 10000 and row["other"] == 750 and row["token"] >= 4.25 and row["tasks_total"] == 3
     assert any(c["category"] == "LISANS" and c["amount"] >= 750 for c in d["costs"]["by_category"])
     assert d["credits"] and "monthly_grant" in d["credits"]
-    # KVKK: insan personelin kimliği ve kişi başı günlük ücreti yok (AI personel karnede görünür; kişi değildir)
+    # KVKK: kişi başı günlük ücret hiçbir yerde yok; ekip iş durumu yalnızca iş sayıları içerir
     text = json.dumps(d, ensure_ascii=False)
-    assert w["member"]["id"] not in text and "4321" not in text
+    assert "4321" not in text and "daily_cost" not in text
+    assert all(set(p) <= {"actor_id", "name", "title", "open", "working", "waiting_approval", "done", "overdue"} for p in d["people"])
 
     r90 = client.get(f"/api/v1/company/{w['tenant']}/dashboard?days=90", headers=admin).json()
     assert len(r90["series"]) == 90 and any(m["model_code"] == "pano-model-b" for m in r90["by_model"])
@@ -100,3 +101,43 @@ def test_agent_scorecard_and_roi(client, db, world, ai):
     assert "daily_cost" not in text and "labor_rate" not in text and "avg_rate" not in text
     _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE tenant_id = %s", w["tenant"])
     client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+
+
+def test_department_dashboard(client, db, world):
+    """ADIM 9.3: departman panosu yetkisi kendi departmanıyla sınırlı; parasal bilgi ayrıca billing:view ister."""
+    w = world
+    tid = w["tenant"]
+    url = f"/api/v1/company/{tid}/dashboard"
+    dept_a = str(_exec(db, "INSERT INTO departments (id, tenant_id, name) VALUES (gen_random_uuid(), %s, 'Satış') RETURNING id", tid)[0])
+    dept_b = str(_exec(db, "INSERT INTO departments (id, tenant_id, name) VALUES (gen_random_uuid(), %s, 'Üretim') RETURNING id", tid)[0])
+    pid, human_id, _ = _ready_project(client, w, "Satış Projesi")
+    other, _, _ = _ready_project(client, w, "Üretim Projesi")
+    _exec(db, "UPDATE projects SET department_id = %s WHERE id = %s", dept_a, pid)
+    _exec(db, "UPDATE projects SET department_id = %s WHERE id = %s", dept_b, other)
+    member = w["member"]
+    try:
+        assert client.get(url, headers=member["h"]).status_code == 403  # yetki yok
+        _exec(db, "UPDATE actors SET extra_permissions = '[\"department:dashboard\"]'::jsonb, department_id = NULL WHERE id = %s", member["id"])
+        r = client.get(url, headers=member["h"])
+        assert r.status_code == 403 and "Departmanınız tanımlı değil" in r.json()["detail"]
+        _exec(db, "UPDATE actors SET department_id = %s WHERE id = %s", dept_a, member["id"])
+        r = client.get(url, headers=member["h"])
+        assert r.status_code == 200, r.text
+        d = r.json()
+        names = {p["name"] for p in (d.get("costs") or {}).get("projects", [])}
+        assert d["department_locked"] is True and d["department_name"] == "Satış" and d["can_view_costs"] is False
+        assert d["costs"] is None and d["roi"] is None and d["credits"] is None and not names
+        assert all("cost" not in x for x in d["series"]) and all("cost" not in a for a in d["agents"])
+        assert d["projects"]["total"] == 1  # yalnızca Satış projesi
+        me = next(p for p in d["people"] if p["actor_id"] == member["id"])
+        assert me["open"] >= 1  # Satış projesindeki insan adımı
+        assert client.get(f"{url}?department_id={dept_b}", headers=member["h"]).status_code == 403
+        # billing:view ile parasal bilgi de görünür
+        _exec(db, "UPDATE actors SET extra_permissions = '[\"department:dashboard\", \"billing:view\"]'::jsonb WHERE id = %s", member["id"])
+        d = client.get(url, headers=member["h"]).json()
+        assert d["can_view_costs"] is True and {p["name"] for p in d["costs"]["projects"]} == {"Satış Projesi"}
+        # Şirket yöneticisi istediği departmanı seçer
+        d = client.get(f"{url}?department_id={dept_b}", headers=w["admin"]["h"]).json()
+        assert d["department_locked"] is False and {p["name"] for p in d["costs"]["projects"]} == {"Üretim Projesi"}
+    finally:
+        _exec(db, "UPDATE actors SET extra_permissions = '[]'::jsonb, department_id = NULL WHERE id = %s", member["id"])

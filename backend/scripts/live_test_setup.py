@@ -43,9 +43,10 @@ async def main():
             db.add(dept)
             await db.flush()
         out = {"tenant_id": str(tenant.id), "users": {}}
-        # admin: şirket yöneticisi (şirket panosu, ADIM 9)
+        # admin: şirket yöneticisi (şirket panosu, ADIM 9); deptmgr: departman panosu yetkili kullanıcı (ADIM 9.3)
         for key, name, role in (("manager", "Canlı Test Yöneticisi", "PROJECT_MANAGER"), ("member", "Canlı Test Uzmanı", "USER"),
-                                ("outsider", "Canlı Test Dışarıdan", "USER"), ("admin", "Canlı Test Şirket Yöneticisi", "COMPANY_ADMIN")):
+                                ("outsider", "Canlı Test Dışarıdan", "USER"), ("admin", "Canlı Test Şirket Yöneticisi", "COMPANY_ADMIN"),
+                                ("deptmgr", "Canlı Test Departman Müdürü", "USER")):
             email = f"{key}@{DOMAIN}"
             pwd = "Ct-" + secrets.token_urlsafe(12)
             a = (await db.execute(select(Actor).where(Actor.email == email))).scalar_one_or_none()
@@ -53,6 +54,7 @@ async def main():
                 a = Actor(tenant_id=tenant.id, actor_type="HUMAN", display_name=name, email=email, role=role, status="IDLE")
                 db.add(a)
             a.password_hash, a.status, a.department_id = hash_password(pwd), "IDLE", dept.id
+            a.extra_permissions = ["department:dashboard"] if key == "deptmgr" else []
             # Test adresleri gerçek değil (.example): e-posta bildirimi kapalı, geri dönen e-posta oluşmasın
             a.notification_prefs = {"email": False, "telegram": True}
             await db.flush()

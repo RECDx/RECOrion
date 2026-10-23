@@ -95,6 +95,7 @@ async def company_overview(db: AsyncSession, tenant: Tenant, days: int = 30, dep
                       "budget": c["budget"]["amount"], "actual": t["actual"], "labor": t["labor"], "token": t["token"], "other": t["other"],
                       "variance": t["budget_variance"], "credits": t["credits"], "tasks_done": done, "tasks_total": len(c["tasks"])})
     agents, roi = await agent_scorecards(db, tenant, since, department_id)
+    people = await team_status(db, tenant, since, department_id)
     credit_summary = None
     if not department_id:  # kredi hakkı şirket düzeyindedir
         unlimited = tenant.slug == "recdx_hq"
@@ -114,7 +115,47 @@ async def company_overview(db: AsyncSession, tenant: Tenant, days: int = 30, dep
                   "projects": table},
         "agents": agents,
         "roi": roi,
+        "people": people,
     }
+
+
+async def team_status(db: AsyncSession, tenant: Tenant, since: datetime, department_id: Optional[uuid.UUID] = None):
+    """İnsan personelin iş durumu (ADIM 9.3): açık, çalışılan, onay bekleyen, dönemde tamamlanan, geciken adımlar.
+    Ücret bilgisi içermez."""
+    stmt = select(Actor).where(Actor.tenant_id == tenant.id, Actor.actor_type == "HUMAN", Actor.status != "DISABLED")
+    if department_id:
+        stmt = stmt.where(Actor.department_id == department_id)
+    humans = (await db.execute(stmt.order_by(Actor.display_name))).scalars().all()
+    if not humans:
+        return []
+    tasks = (await db.execute(select(Task).where(Task.assignee_actor_id.in_([h.id for h in humans])))).scalars().all()
+    today = datetime.now(TZ).date()
+    out = []
+    for h in humans:
+        mine = [t for t in tasks if t.assignee_actor_id == h.id]
+        open_ = [t for t in mine if t.status not in ("DONE", "CANCELLED")]
+        row = {"actor_id": str(h.id), "name": h.display_name, "title": h.role,
+               "open": len(open_),
+               "working": sum(1 for t in mine if t.status in ("IN_PROGRESS", "REVISION")),
+               "waiting_approval": sum(1 for t in mine if t.status == "WAITING_APPROVAL"),
+               "done": sum(1 for t in mine if t.status == "DONE" and t.completed_at and t.completed_at >= since),
+               "overdue": sum(1 for t in open_ if t.due_date and t.due_date < today)}
+        if any(row[k] for k in ("open", "done")):
+            out.append(row)
+    return out
+
+
+MONEY_FIELDS = ("cost", "ai_cost", "saving", "human_equivalent")
+
+
+def without_money(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Parasal bilgi yetkisi (billing:view) olmayana: TL tutarlar, bütçe ve tahmini tasarruf çıkarılır; iş durumu kalır."""
+    d = dict(d)
+    d["costs"], d["roi"] = None, None
+    d["series"] = [{k: v for k, v in x.items() if k != "cost"} for x in d["series"]]
+    d["by_model"] = [{k: v for k, v in x.items() if k not in MONEY_FIELDS} for x in d["by_model"]]
+    d["agents"] = [{k: v for k, v in x.items() if k not in MONEY_FIELDS} for x in d["agents"]]
+    return d
 
 
 async def agent_scorecards(db: AsyncSession, tenant: Tenant, since: datetime, department_id: Optional[uuid.UUID] = None):
