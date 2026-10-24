@@ -9,6 +9,7 @@ Ham ses SAKLANMAZ: geçici dosya işlem bitince (başarılı/başarısız) silin
 import asyncio
 import json
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -50,10 +51,20 @@ def _run(cmd: List[str], timeout: int = 900) -> subprocess.CompletedProcess:
 
 
 def probe_seconds(path: Path) -> Optional[float]:
-    """ffprobe ile süre; ses/video değilse None."""
+    """ffprobe ile süre; ses/video değilse None. Tarayıcı kaydı (MediaRecorder webm) başlığında süre yoktur ("N/A"):
+    o zaman dosya ses akışı çözülerek ölçülür."""
     try:
         r = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)], 60)
-        return float(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() not in ("", "N/A") else None
+        if r.returncode != 0:
+            return None
+        if r.stdout.strip() not in ("", "N/A"):
+            return float(r.stdout.strip())
+        r = _run(["ffmpeg", "-nostdin", "-i", str(path), "-vn", "-f", "null", "-"], 300)
+        times = re.findall(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)", r.stderr) if r.returncode == 0 else []
+        if not times:
+            return None
+        h, m, s = times[-1]
+        return int(h) * 3600 + int(m) * 60 + float(s)
     except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
         return None
 

@@ -965,6 +965,7 @@ try {
   await gallery.getByRole('listitem').filter({ hasText: 'Müşteri şikâyeti vakası' }).click();
   const tplProject = `${NAME} şikâyet`;
   await gallery.locator('#tpl-name').fill(tplProject);
+  await gallery.getByRole('list', { name: 'Şablon adımları' }).locator('li').first().waitFor({ timeout: 15000 });
   const tplSteps = await gallery.getByRole('list', { name: 'Şablon adımları' }).locator('li').count();
   await gallery.getByRole('button', { name: 'Projeyi oluştur' }).click();
   await tp.page.getByRole('heading', { name: tplProject }).waitFor({ timeout: 20000 });

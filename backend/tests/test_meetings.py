@@ -122,3 +122,20 @@ def test_meeting_without_speech_and_bad_audio(client, db, world, fake_evren):
     r = client.post(base, headers=admin, files={"file": ("bozuk.mp3", b"ID3 bu bir ses degil" * 50, "audio/mpeg")})
     rec = _wait(client, admin, f"{base}/{r.json()['id']}")
     assert rec["status"] == "FAILED" and ("okunamadı" in rec["error"] or "çözülemedi" in rec["error"])
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg yok")
+def test_probe_seconds_browser_webm_without_duration(tmp_path):
+    """Tarayıcı kaydı (MediaRecorder webm) başlığında süre yoktur; süre ses çözülerek bulunur."""
+    import subprocess
+
+    from app.services import meetings
+
+    out = tmp_path / "kayit.webm"
+    with out.open("wb") as f:  # boruya yazılan webm'de süre başlığı olmaz (MediaRecorder gibi)
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=f=440:d=5", "-c:a", "libopus", "-f", "webm", "pipe:1"],
+                       stdout=f, check=True)
+    assert abs(meetings.probe_seconds(out) - 5.0) < 0.3
+    bad = tmp_path / "bozuk.webm"
+    bad.write_bytes(b"ses degil")
+    assert meetings.probe_seconds(bad) is None
