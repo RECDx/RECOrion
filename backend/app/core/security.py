@@ -181,6 +181,8 @@ async def get_optional_user(request: Request, db: AsyncSession = Depends(get_db)
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
         return None
+    if header[7:].strip().startswith("rxp_"):  # kişisel erişim anahtarı (ADIM 12.6): yalnızca MCP ucu kendisi doğrular
+        return None
     try:
         claims = jwt.decode(header[7:].strip(), _secret(), algorithms=[JWT_ALGORITHM])
         actor_id = uuid.UUID(claims["sub"])

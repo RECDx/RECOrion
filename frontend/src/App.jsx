@@ -12,6 +12,7 @@ import ProjectHub from './components/projects/ProjectHub';
 import ProjectPlanner from './components/projects/ProjectPlanner';
 import ApprovePage from './components/approvals/ApprovePage';
 import ApprovalsInbox from './components/approvals/ApprovalsInbox';
+import PersonalTokens from './components/integrations/PersonalTokens';
 import { api, session } from './api';
 import { mergeMessages, useProjectLive } from './live';
 import CompanyDashboard from './components/dashboard/CompanyDashboard';
@@ -571,7 +572,7 @@ export default function App() {
 
       <nav className="ws-mode" aria-label="Work Space">
         {[['HUB', 'Projeler'], ['INBOX', approvalCount ? `Onaylarım (${approvalCount})` : 'Onaylarım'], ['WORK', 'Çalışma Alanı'],
-          ...(canDashboard ? [['PANO', 'Pano']] : [])].map(([key, label]) => (
+          ...(canDashboard ? [['PANO', 'Pano']] : []), ['LINKS', 'Bağlantılarım']].map(([key, label]) => (
           <button key={key} type="button" className={(workspaceMode === key || (key === 'HUB' && workspaceMode === 'PLANNER')) ? 'active' : ''}
             onClick={() => setWorkspaceMode(key)} disabled={kvkkRestricted && key !== 'WORK'}>
             {label}{key === 'WORK' && activeProject ? ` · ${activeProject.name}` : ''}
@@ -590,6 +591,7 @@ export default function App() {
       {workspaceMode === 'PANO' && !kvkkRestricted && tenant && canDashboard && (
         <div className="pj-page"><CompanyDashboard tenantId={tenant.id} title="Pano" /></div>
       )}
+      {workspaceMode === 'LINKS' && !kvkkRestricted && <PersonalTokens />}
       {workspaceMode === 'INBOX' && !kvkkRestricted && (
         <ApprovalsInbox
           onCount={setApprovalCount}

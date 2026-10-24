@@ -1000,6 +1000,24 @@ class IntegrationTransfer(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PersonalToken(Base):
+    """Kişisel erişim anahtarı (ADIM 12.6): RECOrion MCP sunucusu için; yalnızca özeti saklanır."""
+    __tablename__ = "personal_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(80), nullable=False)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    prefix = Column(String(16), nullable=False)
+    scopes = Column(JSONB, nullable=False, default=lambda: ["READ"])
+    expires_at = Column(DateTime(timezone=True))
+    last_used_at = Column(DateTime(timezone=True))
+    use_count = Column(Integer, nullable=False, default=0)
+    revoked_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class ExternalLink(Base):
     """Dış kayıt bağı (ADIM 12.4): bağlantı + hedef + eşleştirme değeri → dış kayıt kimliği."""
     __tablename__ = "external_links"

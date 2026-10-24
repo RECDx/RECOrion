@@ -29,6 +29,7 @@ from app.api.v1.regulations import router as regulations_router
 from app.api.v1.integration_catalog import router as integration_catalog_router
 from app.api.v1.mappings import router as mappings_router
 from app.api.v1.transfers import router as transfers_router
+from app.api.v1.mcp_server import router as mcp_server_router
 from app.api.v1.meetings import router as meetings_router
 from app.api.v1.model_router import router as model_router_router
 from app.core.access_policy import enforce_access_policy
@@ -66,5 +67,6 @@ api_router.include_router(regulations_router)
 api_router.include_router(integration_catalog_router)
 api_router.include_router(mappings_router)
 api_router.include_router(transfers_router)
+api_router.include_router(mcp_server_router)
 api_router.include_router(meetings_router)
 api_router.include_router(model_router_router)

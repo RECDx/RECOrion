@@ -360,6 +360,12 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/company/{{tenant_id}}/transfer-policy"): HANDLER(),
     ("PUT", f"{P}/company/{{tenant_id}}/transfer-policy"): HANDLER(),
     ("GET", f"{P}/me/transfer-approvals"): AUTH,
+    # RECOrion MCP sunucusu (ADIM 12.6): kimlik kişisel erişim anahtarıyla uç içinde (rxp_; özetle eşleşir, kapsam denetlenir)
+    ("POST", f"{P}/mcp"): PUBLIC,
+    ("GET", f"{P}/mcp"): PUBLIC,
+    ("GET", f"{P}/me/personal-tokens"): AUTH,
+    ("POST", f"{P}/me/personal-tokens"): AUTH,
+    ("DELETE", f"{P}/me/personal-tokens/{{token_id}}"): AUTH,
     ("POST", f"{P}/system/integration-catalog"): SUPER_ADMIN,
     ("PUT", f"{P}/system/integration-catalog/{{entry_id}}"): SUPER_ADMIN,
     ("GET", f"{P}/company/{{tenant_id}}/tool-calls"): HANDLER(),

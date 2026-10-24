@@ -193,6 +193,10 @@ export const api = {
   getCompanyTransfers: (tenantId) => request(`/company/${tenantId}/transfers`),
   getTransferPolicy: (tenantId) => request(`/company/${tenantId}/transfer-policy`),
   setTransferPolicy: (tenantId, data) => request(`/company/${tenantId}/transfer-policy`, { method: 'PUT', body: JSON.stringify(data) }),
+  // RECOrion MCP sunucusu: kişisel erişim anahtarları (ADIM 12.6)
+  getPersonalTokens: () => request('/me/personal-tokens'),
+  createPersonalToken: (data) => request('/me/personal-tokens', { method: 'POST', body: JSON.stringify(data) }),
+  revokePersonalToken: (id) => request(`/me/personal-tokens/${id}`, { method: 'DELETE' }),
   getCatalogAdmin: () => request('/system/integration-catalog'),
   createCatalogEntry: (data) => request('/system/integration-catalog', { method: 'POST', body: JSON.stringify(data) }),
   updateCatalogEntry: (id, data) => request(`/system/integration-catalog/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
