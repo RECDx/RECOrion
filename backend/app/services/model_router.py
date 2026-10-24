@@ -132,6 +132,22 @@ def _check(c: Dict[str, Any], out: str) -> bool:
             d = _json(out)
             got = {str(x.get(c["key"])): str(x.get(c["field"])).upper() for x in d if isinstance(x, dict)}
             return all(got.get(k) == val for k, val in v.items())
+        if t == "json_list_min":
+            items = _json(out).get(c["path"])
+            return isinstance(items, list) and len(items) >= v
+        if t == "json_items_keys":
+            items = _json(out).get(c["path"])
+            return isinstance(items, list) and bool(items) and all(isinstance(x, dict) and all(k in x for k in v) for x in items)
+        if t == "json_bool":
+            return _json(out).get(c["path"]) is v
+        if t == "json_in":
+            return str(_json(out).get(c["path"])).upper() in [str(x).upper() for x in v]
+        if t == "json_contains":  # alan (metin/liste) içinde ifade geçer
+            return v.lower() in json.dumps(_json(out).get(c["path"]), ensure_ascii=False).lower()
+        if t == "json_deps_valid":  # adım bağımlılıkları var olan anahtarlara işaret eder, kendine bağlı değil
+            steps = _json(out).get(c["path"]) or []
+            keys = {str(s.get("key")) for s in steps}
+            return bool(steps) and all(str(d) in keys and str(d) != str(s.get("key")) for s in steps for d in (s.get("depends_on") or []))
     except (ValueError, SyntaxError, TypeError, AttributeError, json.JSONDecodeError):
         return False
     return False

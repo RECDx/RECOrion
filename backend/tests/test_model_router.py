@@ -33,6 +33,44 @@ GOOD = {
     "yazim-duzelt": "Yarınki toplantıya herkesin katılması gerekiyor, saat onda başlayacak.",
     "json-fatura": '{"fatura_no": "FTR-2026-0042", "tarih": "2026-10-12", "tutar": 15750.0, "para_birimi": "TRY"}',
     "json-siniflandir": '[{"id": 1, "kategori": "KARGO"}, {"id": 2, "kategori": "FATURA"}, {"id": 3, "kategori": "URUN"}]',
+    # 2026.10.2 ek vakalar
+    "kod-isgunu": "```python\nfrom datetime import date, timedelta\n\ndef is_gunu_ekle(baslangic: date, gun_sayisi: int, tatiller: set) -> date:\n"
+                  "    d = baslangic\n    eklenen = 0\n    while eklenen < gun_sayisi:\n        d += timedelta(days=1)\n"
+                  "        if d.weekday() < 5 and d not in tatiller:\n            eklenen += 1\n    return d\n```",
+    "kod-fastapi": "```python\nfrom fastapi import FastAPI, HTTPException\n\napp = FastAPI()\nPROJELER = {}\n\n@app.get(\"/projeler/{proje_id}\")\n"
+                   "def proje_getir(proje_id: int):\n    if proje_id not in PROJELER:\n        raise HTTPException(status_code=404, detail=\"Proje bulunamadı\")\n"
+                   "    return PROJELER[proje_id]\n```",
+    "kod-sql-join": "SELECT p.ad, COUNT(g.id) AS adet FROM personel p LEFT JOIN gorevler g ON g.atanan_id = p.id AND g.durum <> 'DONE' "
+                    "WHERE p.tur = 'AI' GROUP BY p.ad;",
+    "kod-hata": "```python\ndef ortalama(liste):\n    if not liste:\n        return None\n    return sum(liste) / len(liste)\n```\n"
+                "Boş listede len() sıfır olduğu için sıfıra bölme (ZeroDivisionError) oluşuyordu.",
+    "analiz-risk-oncelik": "D, A",
+    "analiz-celiski": "1. ve 2. madde çelişiyor: uygulama internet olmadan çevrimdışı çalışacaksa her okutmanın anında merkez sunucuya yazılması mümkün değildir.",
+    "analiz-kaynak": "İade süresi teslimden itibaren 14 gündür. Kusurlu ürünün değişim süresi şirket bilgisinde belirtilmemiş.",
+    "analiz-kritik-yol": "12 gün: S1-S2-S4",
+    "ozet-adim-ciktisi": "Bayi portalı için 12 ekran, kabul ölçütleri ve üç rollü yetkilendirme tanımlandı; Logo senkronizasyonu saatlik. "
+                         "Açık konular sanal POS seçimi ve ihracat bayileri için KDV muafiyetinin gösterimi. Destek ekranı ertelenirse teslim bir hafta öne çekilebilir.",
+    "ozet-sohbet-kararlar": "- Destek talebi ekranı ikinci sürüme bırakıldı.\n- Stok senkronizasyonu 15 dakikaya çekildi, cari saatlik kalacak.\n"
+                            "- Sanal POS kararı teklifler gelince verilecek; şimdilik havale ile başlanacak.",
+    "ozet-eposta-isler": "- Elif – fark raporu şablonunu gönderecek – cuma\n- Mert – el terminali Wi-Fi testi – pazartesi\n"
+                         "- Ahmet – sayım ekibine eğitim – 3 Kasım\n- Mert – salon rezervasyonu ve onay – 30 Ekim",
+    "ozet-ingilizce": "Yeni sürüm, envanter servisinin önüne yazma geçişli bir önbellek ekliyor; okumalar 30 saniyelik önbellekten, yazmalar doğrudan "
+                      "veritabanına gidiyor. Yük testinde p95 gecikme 480 ms'den 120 ms'ye indi, veritabanı CPU kullanımı %40 azaldı.",
+    "yazim-aydinlatma": "Aydınlatma Metni\nVeri sorumlusu [ŞİRKET UNVANI] olarak, iletişim formuyla paylaştığınız ad, e-posta, telefon ve mesaj "
+                        "bilgilerinizi talebinizi yanıtlamak amacıyla, 6698 sayılı KVKK md. 5 kapsamındaki meşru menfaat hukuki sebebine dayanarak işliyoruz. "
+                        "Verileriniz yalnızca bu amaçla kullanılır ve gerekli süre kadar saklanır. KVKK 11. madde kapsamındaki haklarınız için bize başvurabilirsiniz.",
+    "yazim-ret": "Teşekkürler, ancak çıktıyı şu haliyle onaylayamıyorum. Lütfen şunları tamamla:\n- Her ekran için kabul ölçütlerini yaz.\n"
+                 "- Logo entegrasyonunun hangi verileri hangi sıklıkla aktaracağını netleştir.\n- Eksik ekranları listeye ekle.",
+    "yazim-sade": "Başvurunuz incelendi, ancak mevzuat buna izin vermediği için talebiniz kabul edilmedi.",
+    "yazim-duyuru": "Sistem Bakımı Duyurusu\n[TARİH] tarihinde 22:00-02:00 arasında bakım çalışması yapılacaktır. Bu sürede Work Space ve Onaylarım ekranı "
+                    "kullanılamayacaktır. Acil durumlarda destek@sirket.com adresine yazabilirsiniz.",
+    "json-plan": '{"summary": "Kargo takip ekranı", "steps": [{"key": "S1", "title": "API analizi", "job_title": "İş Analisti", "estimated_days": 2, "depends_on": []}, '
+                 '{"key": "S2", "title": "Ekran geliştirme", "job_title": "Yazılım Geliştirici", "estimated_days": 4, "depends_on": ["S1"]}, '
+                 '{"key": "S3", "title": "Test ve canlıya alma", "job_title": "Test Uzmanı", "estimated_days": 2, "depends_on": ["S2"]}]}',
+    "json-degerlendirme": '{"passed": false, "score": 55, "issues": ["Ekranların kabul ölçütleri yazılmamış"], "summary": "Ekran sayısı ve Logo sıklığı tamam, kabul ölçütleri eksik."}',
+    "json-toplanti": '{"name": "Deniz Gıda hasarlı ürün", "kind": "CASE", "requirements": "40 kolinin 6\'sı hasarlı; yeniden gönderim yapılmalı", '
+                     '"open_questions": ["Kargo firmasıyla tutanak tutuldu mu?"]}',
+    "json-odoo-arama": '{"model": "res.partner", "domain": [["is_company", "=", true], ["city", "=", "İzmir"]], "fields": ["name", "phone"], "limit": 10}',
 }
 BAD = "Bu konuda yardımcı olamıyorum. import os; os.system('echo kotu')"
 
@@ -93,7 +131,7 @@ def test_quality_run_recommend_approve_and_route(client, db, world, monkeypatch)
         if run["status"] != "RUNNING":
             break
         time.sleep(0.5)
-    assert run["status"] == "DONE" and len(run["results"]) == 20, run
+    assert run["status"] == "DONE" and len(run["results"]) == 2 * len(rsvc.load_suite()["cases"]), run
     rec = run["recommendation"]
     for tt in rsvc.TASK_TYPES:
         assert rec[tt]["recommended"] == "deepseek-v4-flash", (tt, rec[tt])
