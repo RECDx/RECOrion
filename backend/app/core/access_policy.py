@@ -326,6 +326,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/company/{{tenant_id}}/integrations/{{cid}}/try"): HANDLER(),
     # Bağlantı kataloğu ve tek tık giriş (ADIM 12.1). OAuth dönüşü herkese açık: yetki tek kullanımlık state ile (uç içinde)
     ("GET", f"{P}/integrations/catalog"): AUTH,
+    ("GET", f"{P}/integrations/objects"): AUTH,
+    ("POST", f"{P}/integrations/objects/{{object_type}}/validate"): AUTH,
     ("POST", f"{P}/company/{{tenant_id}}/integrations/advise"): HANDLER(),
     ("POST", f"{P}/company/{{tenant_id}}/integrations/{{cid}}/oauth/start"): HANDLER(),
     ("POST", f"{P}/company/{{tenant_id}}/integrations/{{cid}}/oauth/disconnect"): HANDLER(),

@@ -3,6 +3,8 @@ Bağlantı kataloğu uçları (ADIM 12.1).
 
 Herkes (giriş yapmış):
 - GET  /integrations/catalog                       etkin kartlar (kimlik bilgisi yok)
+- GET  /integrations/objects                       ortak iş nesneleri ve alanları (ADIM 12.2)
+- POST /integrations/objects/{type}/validate       nesneyi doğrular (hatalar Türkçe, alan etiketli)
 Şirket (integration:manage):
 - POST /company/{tid}/integrations/advise          RECAi bağlanma rehberi (şirketin kredisinden)
 Süper Admin (RECDx):
@@ -22,6 +24,7 @@ from app.core.security import CurrentUser, ensure_tenant_content, forbidden, get
 from app.db.models import IntegrationCatalogEntry
 from app.db.session import get_db
 from app.integrations import oauth
+from app.services import business_objects
 from app.services import integration_catalog as cat
 from app.services.llm_gateway import LLMError
 
@@ -37,6 +40,19 @@ def _super(user: CurrentUser) -> None:
 async def catalog(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return {"entries": [cat.out(e) for e in await cat.active(db)], "categories": list(cat.CATEGORIES),
             "methods": cat.METHOD_LABEL, "redirect_uri": oauth.redirect_uri()}
+
+
+@router.get("/integrations/objects")
+async def objects(user: CurrentUser = Depends(get_current_user)):
+    return {"version": business_objects.VERSION, "objects": business_objects.catalog()}
+
+
+@router.post("/integrations/objects/{object_type}/validate")
+async def validate_object(object_type: str, payload: Dict[str, Any], user: CurrentUser = Depends(get_current_user)):
+    if object_type not in business_objects.OBJECTS:
+        raise HTTPException(status_code=404, detail="Bilinmeyen nesne türü.")
+    clean, errors = business_objects.validate(object_type, payload)
+    return {"ok": not errors, "object": clean, "errors": errors}
 
 
 class AdviseIn(BaseModel):

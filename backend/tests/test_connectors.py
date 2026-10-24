@@ -2,6 +2,7 @@
 ADIM 10.3: ilk bağlayıcılar (Odoo, Trello, GitHub/Gitea) — sahte dış sunucularla (httpx.MockTransport; gerçek ağa çıkılmaz).
 
 - Odoo: giriş, arama/sayma/model bulma, oluşturma/güncelleme; izinli modeller dışı reddedilir; hatalı anahtar anlaşılır hata.
+- Odoo JSON-2 (ADIM 12.2): Odoo 19+ sunucuda /json/2 (Bearer anahtar, kullanıcı adı gerekmez); eski sunucuda JSON-RPC'ye düşülür.
 - Trello: pano/kart okuma, kart açma; anahtar/token hata mesajında görünmez.
 - GitHub/Gitea: depo/issue/dosya okuma, issue açma; doğru yetki başlığı.
 - Ortak "yalnızca okuma" erişimi: yazma araçları listelenmez (API'de de); geçersiz seçim 422.
@@ -30,6 +31,25 @@ def fake_http(monkeypatch):
     def handler(req: httpx.Request) -> httpx.Response:
         seen.append(req)
         host = req.url.host
+        if host == "odoo.example" and req.url.path.startswith("/json/2/"):
+            return httpx.Response(404, headers={"content-type": "text/html"}, text="<h1>Not Found</h1>")  # Odoo 18: JSON-2 yok
+        if host == "odoo20.example":
+            if req.headers.get("authorization") != f"bearer {ODOO_KEY}":
+                return httpx.Response(401, json={"name": "werkzeug.exceptions.Unauthorized", "message": "Invalid apikey"})
+            assert req.headers.get("x-odoo-database") == "sirket" and req.url.path.startswith("/json/2/")
+            _, _, _, model, method = req.url.path.split("/")
+            body = json.loads(req.content)
+            if model == "yok.model":
+                return httpx.Response(404, json={"name": "NotFound", "message": "the model 'yok.model' does not exist"})
+            res = {"search_read": [{"id": 5, "display_name": "Yeni Nesil"}], "search_count": 9, "create": [77], "write": True,
+                   "context_get": {"uid": 2, "lang": "tr_TR"},
+                   "fields_get": {"name": {"string": "Ad", "type": "char", "required": True},
+                                  "uom_id": {"string": "Birim", "type": "many2one", "relation": "uom.uom", "required": True},
+                                  "type": {"string": "Tür", "type": "selection", "selection": [["consu", "Mal"], ["service", "Hizmet"]]},
+                                  "create_date": {"string": "Oluşturma", "type": "datetime", "readonly": True},
+                                  "message_ids": {"string": "Mesajlar", "type": "one2many"}}}[method]
+            seen.append(("json2", method, body))
+            return httpx.Response(200, headers={"content-type": "application/json"}, json=res)
         if host == "odoo.example":
             body = json.loads(req.content)
             p = body["params"]
@@ -90,7 +110,7 @@ ODOO_CFG = {"url": "https://odoo.example", "db": "sirket", "username": "bot@sirk
 
 def test_odoo_connector(fake_http):
     sec = {"api_key": ODOO_KEY}
-    assert asyncio.run(get("odoo").test(Context(ODOO_CFG, sec))).startswith("Odoo 19.0 · kullanıcı #7")
+    assert asyncio.run(get("odoo").test(Context(ODOO_CFG, sec))).startswith("Odoo 19.0 · JSON-RPC · kullanıcı #7")
     r = _run("odoo", "search_records", {"model": "res.partner", "domain": [["is_company", "=", True]], "limit": 999}, ODOO_CFG, sec)
     assert r["records"][0]["display_name"] == "ACME"
     kw = json.loads(fake_http[-1].content)["params"]["args"][6]
@@ -108,6 +128,37 @@ def test_odoo_connector(fake_http):
     assert "yanlis-anahtar" not in str(e.value)
     with pytest.raises(ToolError, match="tam sayı"):
         _run("odoo", "update_record", {"model": "res.partner", "ids": ["1 or 1=1"], "values": {"a": 1}}, ODOO_CFG, sec)
+    with pytest.raises(ToolError, match="kullanıcı \\(e-posta\\)"):  # eski sürümde kullanıcı adı zorunlu
+        _run("odoo", "count_records", {"model": "res.partner"}, {**ODOO_CFG, "username": ""}, sec)
+
+
+def test_odoo_json2_api(fake_http):
+    from app.integrations import odoo
+
+    cfg = {"url": "https://odoo20.example", "db": "sirket"}  # kullanıcı adı yok: JSON-2'de gerekmez
+    sec = {"api_key": ODOO_KEY}
+    odoo._styles.clear()
+    info = asyncio.run(get("odoo").test(Context(cfg, sec)))
+    assert "JSON-2 API · kullanıcı #2" in info
+    r = _run("odoo", "search_records", {"model": "res.partner", "domain": [["is_company", "=", True]], "limit": 999, "order": "name"}, cfg, sec)
+    assert r["records"][0]["display_name"] == "Yeni Nesil"
+    assert fake_http[-1] == ("json2", "search_read", {"domain": [["is_company", "=", True]], "fields": ["display_name"], "limit": 100, "order": "name"})
+    assert _run("odoo", "count_records", {"model": "res.partner"}, cfg, sec)["count"] == 9
+    assert _run("odoo", "create_record", {"model": "product.template", "values": {"name": "Vida"}}, cfg, sec) == {"model": "product.template", "id": 77}
+    assert fake_http[-1] == ("json2", "create", {"vals_list": [{"name": "Vida"}]})
+    _run("odoo", "update_record", {"model": "res.partner", "ids": [5], "values": {"name": "X"}}, cfg, sec)
+    assert fake_http[-1] == ("json2", "write", {"ids": [5], "vals": {"name": "X"}})
+    d = _run("odoo", "describe_model", {"model": "product.template"}, cfg, sec)
+    names = {f["name"]: f for f in d["fields"]}
+    assert set(names) == {"name", "type", "uom_id"}  # salt okunur ve çoklu ilişki alanları gizlenir
+    assert names["uom_id"]["relation"] == "uom.uom" and names["type"]["selection"][1] == ["service", "Hizmet"]
+    with pytest.raises(ToolError, match="does not exist"):
+        _run("odoo", "count_records", {"model": "yok.model"}, cfg, sec)
+    with pytest.raises(ToolError, match="anahtarı geçersiz") as e:
+        _run("odoo", "count_records", {"model": "res.partner"}, cfg, {"api_key": "yanlis-anahtar"})
+    assert "yanlis-anahtar" not in str(e.value)
+    with pytest.raises(ToolError, match="JSON-2 API'si yok"):  # eski sunucuda JSON-2 zorlanırsa anlaşılır hata
+        _run("odoo", "count_records", {"model": "res.partner"}, {**ODOO_CFG, "api_style": "json2"}, sec)
 
 
 def test_trello_connector(fake_http):
@@ -149,7 +200,7 @@ def test_read_only_access_hides_write_tools(client, db, world, fake_http):
     assert r.status_code == 201, r.text
     cid = r.json()["id"]
     tools = client.get(f"{base_url}/{cid}/tools", headers=w["admin"]["h"]).json()
-    assert {t["name"] for t in tools} == {"find_models", "search_records", "count_records"}
+    assert {t["name"] for t in tools} == {"find_models", "search_records", "count_records", "describe_model"}
     assert all(t["kind"] == "READ" for t in tools)
     t = client.post(f"{base_url}/{cid}/test", headers=w["admin"]["h"]).json()
     assert t["ok"] is True and ODOO_KEY not in json.dumps(t)
