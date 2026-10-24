@@ -21,3 +21,9 @@
 .ig-steps { margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; background: rgb(var(--rgb-ov) / 0.05); font-size: 0.85rem; color: var(--text-main); }
 .ig-steps p { margin: 0 0 6px; }
 .ig-inline { font-family: var(--font-mono); font-size: 0.78rem; word-break: break-all; }
+
+/* Aktarımlar (ADIM 12.4) */
+.ig-transfer { display: flex; flex-direction: column; align-items: stretch !important; gap: 6px; }
+.ig-transfer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.ig-transfer p { margin: 0; font-size: 0.8rem; }
+.ig-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--text-main); text-decoration: underline; margin-right: 10px; }

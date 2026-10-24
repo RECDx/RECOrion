@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { Badge, Button, EmptyState } from '../../ui/components';
 import { promptDialog, toast } from '../../ui/feedback';
 import '../projects/projects.css';
+import { TransferCard } from '../integrations/Transfers';
 
 const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
@@ -11,8 +12,9 @@ const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', mo
 export default function ApprovalsInbox({ onOpenProject, onCount }) {
   const [items, setItems] = useState(null);
   const [tools, setTools] = useState([]);  // Adım 10: AI personelin onay bekleyen yazma işlemleri
-  const load = useCallback(() => Promise.all([api.getMyApprovals(), api.getMyToolApprovals().catch(() => [])])
-    .then(([r, t]) => { setItems(r); setTools(t); onCount?.(r.length + t.length); })
+  const [transfers, setTransfers] = useState([]);  // Adım 12.4: dış sisteme aktarım önizlemeleri
+  const load = useCallback(() => Promise.all([api.getMyApprovals(), api.getMyToolApprovals().catch(() => []), api.getMyTransferApprovals().catch(() => [])])
+    .then(([r, t, x]) => { setItems(r); setTools(t); setTransfers(x); onCount?.(r.length + t.length + x.length); })
     .catch((e) => { setItems([]); toast.error(e.message); }), [onCount]);
   const decideTool = async (c, approve) => {
     const note = approve ? '' : await promptDialog({ title: 'Reddet', message: 'Ret gerekçesi (isteğe bağlı):' });
@@ -37,6 +39,14 @@ export default function ApprovalsInbox({ onOpenProject, onCount }) {
           <span className="pj-sub">Kararınızı bekleyen iş adımları. E-postadaki bağlantıdan veya Telegram butonlarından da karar verebilirsiniz.</span>
         </div>
       </div>
+      {transfers.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: '0.95rem', margin: '0 0 8px' }}>Dış sisteme aktarımlar</h3>
+          <ul className="pj-list" aria-label="Onay bekleyen aktarımlar">
+            {transfers.map((x) => <TransferCard key={x.id} tr={x} decide onChange={load} />)}
+          </ul>
+        </div>
+      )}
       {tools.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: '0.95rem', margin: '0 0 8px' }}>Araç işlemleri (yazma)</h3>

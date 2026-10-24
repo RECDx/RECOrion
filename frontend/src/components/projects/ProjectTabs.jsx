@@ -3,6 +3,7 @@ import { BellRing, CalendarRange, CheckCircle2, Circle, Library, Play, Send, Tra
 import { api } from '../../api';
 import { Badge, Button, Card, EmptyState } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
+import { ProjectTransfers } from '../integrations/Transfers';
 import { fmtDay, isEditable } from './projectMeta';
 
 const ROLE = { MANAGER: 'Proje yöneticisi', MEMBER: 'Ekip üyesi', AGENT: 'AI personel' };
@@ -256,6 +257,7 @@ export function CloseTab({ project, currentUser, onAction, busy }) {
 
   return (
     <div className="pj-split">
+      {['ACTIVE', 'PAUSED', 'COMPLETED'].includes(project.status) && <ProjectTransfers project={project} />}
       <Card title="Projeyi kapat" subtitle={closed ? `Kapanış: ${fmtDay(project.closed_at)}` : 'Proje tamamlandığında ya da vazgeçildiğinde kapatın.'}>
         <div className="pj-field">
           <label htmlFor="pj-close">Kapanış özeti</label>

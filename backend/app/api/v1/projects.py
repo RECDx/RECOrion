@@ -169,7 +169,7 @@ async def get_project(project_id: uuid.UUID, user: CurrentUser = Depends(get_cur
     docs = (await db.execute(select(func.count()).select_from(AgentDocument).where(
         AgentDocument.project_id == project.id, AgentDocument.status.notin_(("DELETED",))))).scalar() or 0
     can_manage = user.has("project:manage") or project.manager_actor_id == user.actor_id
-    return {**_out(project), "plan": project.plan, "simulation": project.simulation, "close_summary": project.close_summary,
+    return {**_out(project), "plan": project.plan, "simulation": project.simulation, "close_summary": project.close_summary, "transfer_on_close": project.transfer_on_close or [],
             "members": await svc.members_out(db, project.id), "tasks": [TaskResponse.model_validate(t).model_dump() for t in tasks],
             "document_count": docs, "can_manage": can_manage}
 
@@ -222,6 +222,9 @@ async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentU
         await db.commit()
         raise
     await db.commit()
+    if payload.action == "complete":  # ADIM 12.4: kapanışta tanımlı aktarım önerileri (onaya düşer)
+        from app.services import transfers
+        await transfers.after_project_closed(project)
     return _out(project)
 
 

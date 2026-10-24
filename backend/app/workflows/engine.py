@@ -17,7 +17,8 @@ from temporalio.worker import Worker
 
 from app.config import settings
 from app.workflows import activities
-from app.workflows.definitions import ProjectWorkflow, TaskWorkflow, project_workflow_id, task_workflow_id
+from app.workflows.definitions import (ProjectWorkflow, TaskWorkflow, TransferWorkflow, project_workflow_id, task_workflow_id,
+                                       transfer_workflow_id)
 
 logger = logging.getLogger("recorion.workflow")
 
@@ -42,7 +43,7 @@ async def run_worker() -> None:
         try:
             c = await client()
             logger.info("İş akışı worker'ı başladı (kuyruk: %s).", settings.TEMPORAL_TASK_QUEUE)
-            await Worker(c, task_queue=settings.TEMPORAL_TASK_QUEUE, workflows=[ProjectWorkflow, TaskWorkflow],
+            await Worker(c, task_queue=settings.TEMPORAL_TASK_QUEUE, workflows=[ProjectWorkflow, TaskWorkflow, TransferWorkflow],
                          activities=activities.ALL).run()
             return
         except asyncio.CancelledError:
@@ -52,6 +53,18 @@ async def run_worker() -> None:
             logger.warning("İş akışı motoruna bağlanılamadı (%s); %s sn sonra tekrar denenecek.", exc, delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, 60)
+
+
+async def start_transfer(transfer_id: str) -> str:
+    """Onaylı aktarımı yazma akışını başlatır (ADIM 12.4). Motor yoksa hata yükselir; çağıran yerel çalıştırmaya düşer."""
+    wid = transfer_workflow_id(transfer_id)
+    c = await client()
+    try:
+        await c.start_workflow(TransferWorkflow.run, args=[transfer_id], id=wid, task_queue=settings.TEMPORAL_TASK_QUEUE,
+                               id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY)
+    except WorkflowAlreadyStartedError:
+        pass
+    return wid
 
 
 async def start_project(project_id: str, actor_id: str) -> str:

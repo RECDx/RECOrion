@@ -17,7 +17,8 @@ MAX_FIELDS = 400
 _styles: Dict[str, str] = {}  # adres → "json2" / "jsonrpc" (otomatik algılama sonucu)
 # JSON-2'de konumsal argümanlar adlandırılır
 JSON2_ARGS = {"search_read": ["domain"], "search_count": ["domain"], "create": ["vals_list"], "write": ["ids", "vals"],
-              "read": ["ids"], "fields_get": [], "name_search": ["name"], "context_get": [], "default_get": ["fields"]}
+              "read": ["ids"], "fields_get": [], "name_search": ["name"], "context_get": [], "default_get": ["fields"],
+              "action_cancel": ["ids"], "button_cancel": ["ids"]}
 
 
 class _NoJson2(Exception):
@@ -73,7 +74,9 @@ async def _json2(ctx: Context, model: str, method: str, body: Dict[str, Any]) ->
         raise _NoJson2()  # uç yok: Odoo 18 veya öncesi
     if r.status_code == 401:
         raise ToolError("Odoo API anahtarı geçersiz veya süresi dolmuş.")
-    if r.status_code != 200:
+    if r.status_code in (502, 503, 504):  # geçici (bakım, aşırı yük): aktarımda yeniden denenir
+        raise ToolError(f"Odoo geçici olarak yanıt veremiyor (HTTP {r.status_code}).")
+    if r.status_code != 200:  # Odoo iş mantığı hataları 4xx/500 ile ve iletiyle döner
         msg = (r.json().get("message") if is_json else None) or f"HTTP {r.status_code}"
         raise ToolError(f"Odoo: {str(msg)[:300]}")
     return r.json()

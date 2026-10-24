@@ -74,6 +74,9 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
             "can_submit": t.status in task_flow.WORKING and (assignee is None or assignee.actor_type == "HUMAN") and (is_assignee or manages),
             "can_decide": t.status == "WAITING_APPROVAL" and (approver_id == user.actor_id or user.has("project:manage")),
             "can_release": t.status == "QUARANTINED" and manages,
+            # ADIM 12.4: çıktıyı dış sisteme aktarma (proje yöneticisi) ve adım bitince önerilecek eşlemeler
+            "can_transfer": manages and t.status in ("DONE", "WAITING_APPROVAL") and bool(art),
+            "transfer_mapping_ids": t.transfer_mapping_ids or [],
         })
     return {"project_id": str(project.id), "status": project.status, "workflow_id": project.workflow_id, "tasks": out,
             "events": [{"id": str(e.id), "task_id": str(e.task_id) if e.task_id else None, "kind": e.kind, "actor": who(e.actor_id),

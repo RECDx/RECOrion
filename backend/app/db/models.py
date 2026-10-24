@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Text, Boolean, Integer, Numeric, DateTime, Date, ForeignKey, Index
+    Column, String, Text, Boolean, Integer, Numeric, DateTime, Date, ForeignKey, Index, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -279,6 +279,7 @@ class Tenant(Base):
     sectors = Column(JSONB, default=list)
     professions = Column(JSONB, default=list)
     nace_codes = Column(JSONB, default=list)
+    settings = Column(JSONB, nullable=False, default=dict)  # şirket tercihleri (ADIM 12.4: aktarım onay kuralları)
     sector_manifesto = Column(Text)
     package_start_date = Column(DateTime(timezone=True), default=datetime.utcnow)
     package_expiry_date = Column(DateTime(timezone=True))
@@ -361,6 +362,7 @@ class Project(Base):
     started_at = Column(DateTime(timezone=True))
     closed_at = Column(DateTime(timezone=True))
     close_summary = Column(Text)
+    transfer_on_close = Column(JSONB, nullable=False, default=list)  # ADIM 12.4: proje kapanınca önerilecek aktarımlar (eşleme kimlikleri)
     start_notified_at = Column(DateTime(timezone=True))
     workflow_id = Column(String(128))  # Temporal proje akışı (ADIM 7)
     budget_try = Column(Numeric(16, 2))  # proje bütçesi (TL, KDV hariç; ADIM 7.5.3)
@@ -411,6 +413,7 @@ class Task(Base):
     department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"))
     job_title_id = Column(UUID(as_uuid=True), ForeignKey("job_titles.id", ondelete="SET NULL"))  # gereken unvan
     depends_on = Column(JSONB, default=list)  # önce bitmesi gereken görevlerin kimlikleri
+    transfer_mapping_ids = Column(JSONB, nullable=False, default=list)  # ADIM 12.4: adım bitince önerilecek aktarımlar
     start_date = Column(Date)
     due_date = Column(Date)
     estimated_credits = Column(Numeric(14, 2))
@@ -955,6 +958,62 @@ class AgentToolGrant(Base):
     tool = Column(String(120), nullable=False)
     created_by_actor_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class IntegrationTransfer(Base):
+    """Çıktıdan kayda aktarım (ADIM 12.4): iş çıktısındaki ortak nesne → onaylı eşlemeyle dış sistem. Silinemez."""
+    __tablename__ = "integration_transfers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"))
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"))
+    mapping_id = Column(UUID(as_uuid=True), ForeignKey("integration_mappings.id", ondelete="SET NULL"))
+    mapping_version = Column(Integer)
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="SET NULL"))
+    connection_name = Column(String(120))
+    object_type = Column(String(16), nullable=False)
+    trigger = Column(String(16), nullable=False)  # MANUAL, STEP_DONE, PROJECT_CLOSED
+    object = Column(JSONB)
+    values = Column(JSONB)
+    preview = Column(JSONB)
+    problems = Column(JSONB)  # {"errors": [...], "warnings": [...]}
+    action = Column(String(8))  # CREATE, UPDATE
+    amount = Column(Numeric(18, 2))
+    status = Column(String(20), nullable=False, default="EXTRACTING")
+    required_approvals = Column(Integer, nullable=False, default=1)
+    approvals = Column(JSONB, nullable=False, default=list)
+    decision_note = Column(Text)
+    external_id = Column(String(64))
+    external_ref = Column(String(255))
+    external_url = Column(Text)
+    before = Column(JSONB)
+    result = Column(JSONB)
+    error = Column(Text)
+    attempts = Column(Integer, nullable=False, default=0)
+    created_by_actor_id = Column(UUID(as_uuid=True))
+    created_by_name = Column(String(160))
+    done_at = Column(DateTime(timezone=True))
+    rolled_back_at = Column(DateTime(timezone=True))
+    rolled_back_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ExternalLink(Base):
+    """Dış kayıt bağı (ADIM 12.4): bağlantı + hedef + eşleştirme değeri → dış kayıt kimliği."""
+    __tablename__ = "external_links"
+    __table_args__ = (UniqueConstraint("connection_id", "target_key", "match_value", name="uq_external_link"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="CASCADE"), nullable=False)
+    target_key = Column(String(120), nullable=False)
+    match_value = Column(String(255), nullable=False)
+    external_id = Column(String(64), nullable=False)
+    last_transfer_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ToolCall(Base):

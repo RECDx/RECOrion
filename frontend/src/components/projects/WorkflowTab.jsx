@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bot, CheckCircle2, FileText, RotateCcw, Send, ShieldAlert } from 'lucide-react';
+import { Bot, CheckCircle2, FileText, RotateCcw, Send, ShieldAlert, Upload } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import SimpleMarkdown from '../ai/SimpleMarkdown';
@@ -7,6 +7,7 @@ import FlowCanvas from './FlowCanvas';
 import { confirmDialog, promptDialog, toast } from '../../ui/feedback';
 import { fmtDay } from './projectMeta';
 import { useProjectLive } from '../../live';
+import { TaskTransferModal } from '../integrations/Transfers';
 
 const TONE = { BACKLOG: 'neutral', READY: 'info', IN_PROGRESS: 'info', WAITING_APPROVAL: 'warning', REVISION: 'danger',
   QUARANTINED: 'danger', DONE: 'success', CANCELLED: 'neutral' };
@@ -25,6 +26,7 @@ export default function WorkflowTab({ project }) {
   const [busy, setBusy] = useState('');
   const [viewing, setViewing] = useState(null);
   const [view, setView] = useState('list');
+  const [transfer, setTransfer] = useState(null);  // ADIM 12.4
   const closeViewer = useCallback(() => setViewing(null), []);
   const live = ['ACTIVE', 'PAUSED'].includes(project.status);
 
@@ -136,6 +138,7 @@ export default function WorkflowTab({ project }) {
                   <Button size="sm" variant="ghost" icon={FileText} onClick={() => setViewing({ task: t, id: t.artifact.id })}>
                     Çıktıyı gör (sürüm {t.artifact.version})
                   </Button>
+                  {t.can_transfer && <Button size="sm" variant="secondary" icon={Upload} onClick={() => setTransfer(t)}>Sisteme aktar</Button>}
                 </div>
               )}
               {(t.can_submit || t.can_decide || t.can_release) && (
@@ -167,6 +170,7 @@ export default function WorkflowTab({ project }) {
         ))}
       </div>
       {viewing && <ArtifactModal task={viewing.task} artifactId={viewing.id} onClose={closeViewer} />}
+      {transfer && <TaskTransferModal project={project} task={transfer} onClose={() => setTransfer(null)} />}
       <Card title="Akış geçmişi" subtitle="Silinemez kayıt: her teslim, onay, ret ve karar.">
         <ul className="pj-list">
           {flow.events.map((e) => (

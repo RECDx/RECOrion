@@ -161,6 +161,8 @@ async def submit(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
         await costs.snapshot_labor(db, task)
         await log(db, project, task, "DONE")
         await db.commit()
+        from app.services import transfers
+        await transfers.after_step_done(db, task, project)
     return {"status": task.status}
 
 
@@ -176,6 +178,9 @@ async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
     approver = await db.get(Actor, _uuid(payload.get("actor_id"))) if payload.get("actor_id") else None
     await code_repo.after_approval(db, project, task, payload.get("actor_id"), approver.display_name if approver else "onaylayıcı")
     await db.commit()
+    # Dış sisteme aktarım (ADIM 12.4): adımda tanımlı eşlemelerle öneri (onaya düşer; onaysız yazma yok)
+    from app.services import transfers
+    await transfers.after_step_done(db, task, project)
     if task.assignee_actor_id:
         await notify(db, task.assignee_actor_id, f"RECOrion: '{task.title}' iş adımınız onaylandı.")
     return {"status": task.status}

@@ -7,6 +7,7 @@ import '../projects/projects.css';
 import './integrations.css';
 import { CatalogGallery, SetupSteps } from './Catalog';
 import MappingStudio from './MappingStudio';
+import { TransferAdmin } from './Transfers';
 
 const STATUS = { EXECUTED: ['Çalıştı', 'success'], PENDING_APPROVAL: ['Onay bekliyor', 'warning'], REJECTED: ['Reddedildi', 'neutral'],
   FAILED: ['Hata', 'danger'], DENIED: ['Yetkisiz', 'danger'] };
@@ -109,6 +110,7 @@ export default function IntegrationsPanel({ tenantId }) {
         )}
       </Card>
 
+      <TransferAdmin tenantId={tenantId} />
       <Card title="Araç çağrı kaydı" subtitle="Silinemez kayıt: kim, hangi araç, hangi argümanla, sonuç ve onay.">
         {calls.length === 0 ? <p className="pj-hint">Henüz araç çağrısı yok.</p> : (
           <div className="ui-table-scroll">

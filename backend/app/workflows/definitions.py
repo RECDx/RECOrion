@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional, Set
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ActivityError
 
 with workflow.unsafe.imports_passed_through():
     from app.workflows import activities as act
@@ -23,6 +24,31 @@ OPTS = {"start_to_close_timeout": timedelta(minutes=2),
 # LLM çağıran aktiviteler: hatalarını kendileri sonuç olarak döner; yalnızca beklenmeyen çökmelerde 2 kez yeniden denenir
 AI_OPTS = {"start_to_close_timeout": timedelta(minutes=45),  # devamlar ve bir yeniden deneme dahil
            "retry_policy": RetryPolicy(initial_interval=timedelta(seconds=10), maximum_attempts=2)}
+
+
+# Dış sisteme yazma (ADIM 12.4): geçici hatada (ağ, 5xx) artan aralıkla yeniden denenir; iş mantığı hatası denenmez
+TRANSFER_OPTS = {"start_to_close_timeout": timedelta(minutes=3),
+                 "retry_policy": RetryPolicy(initial_interval=timedelta(seconds=5), backoff_coefficient=2.0, maximum_interval=timedelta(minutes=5),
+                                             maximum_attempts=6, non_retryable_error_types=["TransferFailed"])}
+
+
+def transfer_workflow_id(transfer_id: str) -> str:
+    return f"transfer-{transfer_id}"
+
+
+@workflow.defn(name="TransferWorkflow")
+class TransferWorkflow:
+    """Onaylı aktarımı yazar (ADIM 12.4). Denemeler tükenirse aktarım FAILED olur ve kişiler bilgilendirilir."""
+
+    @workflow.run
+    async def run(self, transfer_id: str) -> str:
+        try:
+            res = await workflow.execute_activity(act.run_transfer, args=[transfer_id], **TRANSFER_OPTS)
+            return res.get("status", "DONE")
+        except ActivityError as exc:
+            reason = str(exc.cause) if exc.cause else str(exc)
+            await workflow.execute_activity(act.fail_transfer, args=[transfer_id, reason[:500]], **OPTS)
+            return "FAILED"
 
 
 def task_workflow_id(task_id: str) -> str:

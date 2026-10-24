@@ -104,5 +104,25 @@ async def ai_review(task_id: str) -> Dict[str, Any]:
         return await agent_work.review(db, task_id)
 
 
-ALL = [ai_work, ai_review, block_task, next_ready_tasks, project_started, project_finished, cancel_remaining, start_task, submit_task, approve_task, reject_task,
+@activity.defn
+async def run_transfer(transfer_id: str) -> Dict[str, Any]:
+    """Onaylı aktarımı dış sisteme yazar (ADIM 12.4). İş mantığı hatası TransferFailed (yeniden denenmez)."""
+    from temporalio.exceptions import ApplicationError
+
+    from app.services import transfers
+
+    try:
+        return await transfers.execute(transfer_id)
+    except transfers.TransferFailed as exc:
+        raise ApplicationError(str(exc), type="TransferFailed", non_retryable=True)
+
+
+@activity.defn
+async def fail_transfer(transfer_id: str, reason: str) -> None:
+    from app.services import transfers
+
+    await transfers.mark_failed(transfer_id, reason)
+
+
+ALL = [run_transfer, fail_transfer, ai_work, ai_review, block_task, next_ready_tasks, project_started, project_finished, cancel_remaining, start_task, submit_task, approve_task, reject_task,
        release_task, cancel_task]
