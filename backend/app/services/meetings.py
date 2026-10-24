@@ -137,7 +137,8 @@ async def process(rec_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: Optional[uu
         parts = []
         for i, chunk in enumerate(chunks, 1):
             await _update(rec_id, stage=f"Yazıya çevriliyor ({i}/{len(chunks)})…")
-            parts.append((await llm_gateway.transcribe(ctx, chunk.read_bytes(), chunk.name, "audio/wav", CHUNK_SECONDS)).strip())
+            chunk_seconds = max(1.0, min(CHUNK_SECONDS, seconds - (i - 1) * CHUNK_SECONDS))
+            parts.append((await llm_gateway.transcribe(ctx, chunk.read_bytes(), chunk.name, "audio/wav", chunk_seconds)).strip())
             chunk.unlink(missing_ok=True)
         transcript = "\n".join(p for p in parts if p)
         masked, found = pii.mask(transcript)

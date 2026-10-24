@@ -1043,7 +1043,7 @@ try {
   await mt.page.waitForTimeout(4000);
   await mtDlg.getByRole('button', { name: 'Kaydı bitir' }).click();
   const recAlert = mtDlg.getByRole('alert');
-  await recAlert.waitFor({ timeout: 120000 });
+  await recAlert.waitFor({ timeout: 240000 });  // ses-yazı: kısa kayıtta ~1 dk bekleme + bir yeniden deneme
   const recMsg = await recAlert.innerText();
   step(/anlaşılır konuşma/.test(recMsg), 'Tarayıcıda kayıt alındı; konuşma olmayan kayıt anlaşılır uyarıyla reddedildi', recMsg.slice(0, 90));
   await mtDlg.getByRole('button', { name: 'Yeniden dene' }).click();
@@ -1182,6 +1182,306 @@ try {
   step(csRows >= 25 && /mcp\.linear\.app/.test(csPreset) && csDenied === 403,
     'Bağlantı kataloğu Süper Admin\'de yönetiliyor (kart ön ayarı görünüyor); şirket yöneticisi erişemiyor',
     `kart: ${csRows} · Linear ön ayarı: ${csPreset.replace(/\s+/g, ' ').slice(0, 60)} · şirket yöneticisi: ${csDenied}`);
+
+  // 12.2–12.3 Test Odoo'su (Odoo.sh, recdx-recorion-test — gerçek RECDx Odoo DEĞİL): yönetici katalogdan Odoo ekler (JSON-2,
+  // kullanıcı adı gerekmez), Eşlemeler'de RECDx hazır "Odoo ürün kartı"yla başlar, hedefin alan tanımlarıyla denetler, YAZMADAN
+  // dener ve onaylar; ayrıca boş bir "görev" eşlemesini RECAi'ye önerdirir (gerçek EVREN, gerçek Odoo alanları)
+  const envFile = fs.readFileSync(path.resolve('..', '.env'), 'utf8');
+  const otest = Object.fromEntries(envFile.split(/\r?\n/).filter((l) => l.startsWith('ODOO_TEST_')).map((l) => [l.split('=')[0], l.slice(l.indexOf('=') + 1)]));
+  const ot = await session('admin');
+  await ot.page.getByRole('button', { name: 'Entegrasyonlar' }).click();
+  await ot.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
+  const otDlg = ot.page.getByRole('dialog');
+  await pickCard(otDlg, 'Odoo');
+  const otName = `Test Odoo ${NAME.slice(-5)}`;
+  await otDlg.locator('#ig-name').fill(otName);
+  await otDlg.locator('#ig-c-url').fill(otest.ODOO_TEST_URL);
+  await otDlg.locator('#ig-c-db').fill(otest.ODOO_TEST_DB);
+  await otDlg.locator('#ig-s-api_key').fill(otest.ODOO_TEST_API_KEY);
+  await otDlg.getByRole('button', { name: 'Kaydet' }).click();
+  const otRow = ot.page.locator('.pj-list li', { hasText: otName });
+  await otRow.waitFor({ timeout: 15000 });
+  await otRow.getByRole('button', { name: 'Dene' }).click();
+  await otRow.getByText(/Son deneme/).waitFor({ timeout: 60000 });
+  const otText = await otRow.innerText();
+  step(/başarılı/.test(otText) && !(await ot.page.content()).includes(otest.ODOO_TEST_API_KEY),
+    'Test Odoo\'su (Odoo 20) katalogdan bağlandı; JSON-2 API ile kullanıcı adı gerekmeden denendi; anahtar sayfada yok',
+    otText.split('\n').find((l) => /Son deneme/.test(l)) || '');
+
+  await otRow.getByRole('button', { name: 'Eşlemeler' }).click();
+  let studio = ot.page.getByRole('dialog');
+  await studio.getByRole('button', { name: 'Yeni eşleme' }).click();
+  await studio.getByRole('list', { name: 'Hazır eşlemeler' }).getByRole('listitem').filter({ hasText: 'Odoo ürün kartı' }).getByRole('button', { name: 'Bununla başla' }).click();
+  const rulesTable = studio.getByRole('table', { name: 'Eşleme kuralları' });
+  await rulesTable.waitFor({ timeout: 60000 });
+  const ruleCount = await rulesTable.locator('tbody tr').count();
+  await studio.getByRole('button', { name: 'Denetle' }).click();
+  const checkBox = studio.getByLabel('Denetim sonucu');
+  await checkBox.waitFor({ timeout: 60000 });
+  const checkText = await checkBox.innerText();
+  await studio.getByRole('button', { name: 'Dene (yazmadan)' }).click();
+  const dryBox = studio.getByLabel('Deneme sonucu');
+  await dryBox.waitFor({ timeout: 90000 });
+  const dryText = await dryBox.innerText();
+  const dryRows = await studio.getByRole('table', { name: 'Hedefe gidecek değerler' }).locator('tbody tr').count();
+  await shot(ot.page, '24-esleme-studyosu-deneme');
+  const approveBtn = studio.getByRole('button', { name: 'Onayla', exact: true });
+  const canApprove = await approveBtn.isEnabled();
+  if (canApprove) await approveBtn.click();
+  await studio.locator('.ui-badge', { hasText: 'Onaylı' }).first().waitFor({ timeout: 15000 }).catch(() => {});
+  const approvedBadge = await studio.locator('.ui-badge', { hasText: 'Onaylı' }).count();
+  step(ruleCount >= 10 && /hata yok/.test(checkText) && /yeni kayıt açılacak|güncellenecek/.test(dryText) && dryRows >= 8 && approvedBadge > 0,
+    'Eşleme stüdyosu: hazır "Odoo ürün kartı" gerçek Odoo alanlarıyla hatasız denetlendi, yazmadan denendi (birim/vergi arandı) ve onaylandı',
+    `${ruleCount} kural · ${checkText.replace(/\s+/g, ' ').slice(0, 50)} · ${dryText.split('\n')[0].slice(0, 70)} · ${dryRows} değer`);
+  await studio.getByRole('button', { name: 'Kapat' }).click();
+
+  // Görev eşlemesi RECAi önerisiyle (gerçek EVREN + gerçek Odoo project.task alanları)
+  studio = ot.page.getByRole('dialog');
+  await studio.getByRole('button', { name: 'Yeni eşleme' }).click();
+  await studio.locator('#mp-object').selectOption('TASK');
+  await studio.getByRole('button', { name: 'Boş eşleme oluştur' }).click();
+  await studio.getByRole('table', { name: 'Eşleme kuralları' }).waitFor({ timeout: 60000 });
+  const sugStart = Date.now();
+  await studio.getByRole('button', { name: 'RECAi önersin' }).click();
+  await ot.page.getByRole('status').filter({ hasText: 'RECAi eşleme önerdi' }).first().waitFor({ timeout: 240000 }).catch(() => {});
+  const sugRows = await studio.getByRole('table', { name: 'Eşleme kuralları' }).locator('tbody tr').count();
+  const sugTargets = await studio.getByRole('table', { name: 'Eşleme kuralları' }).locator('tbody tr select').first().inputValue().catch(() => '');
+  await studio.getByRole('button', { name: 'Kaydet' }).click();
+  await ot.page.waitForTimeout(1500);
+  await studio.getByRole('button', { name: 'Denetle' }).click();
+  await studio.getByLabel('Denetim sonucu').waitFor({ timeout: 60000 });
+  const sugCheck = await studio.getByLabel('Denetim sonucu').innerText();
+  await shot(ot.page, '25-recai-esleme-onerisi');
+  step(sugRows >= 2 && !/hedefte yok/.test(await studio.innerText()),
+    'RECAi görev eşlemesi önerdi: yalnızca Odoo\'da gerçekten olan alanlar (uydurma alan yok), denetim sonucu görünüyor',
+    `${((Date.now() - sugStart) / 1000).toFixed(0)} sn · ${sugRows} kural (ilk: ${sugTargets}) · ${sugCheck.replace(/\s+/g, ' ').slice(0, 70)}`);
+  await studio.getByRole('button', { name: 'Kapat' }).click();
+  await studio.getByRole('button', { name: 'Kapat' }).click().catch(() => {});
+
+  // 12.4 Hazır "Odoo proje görevi" eşlemesi: görev adına "[RECOrion Test]" öneki (test verisi ayırt edilsin) — stüdyoda kural
+  // düzenleme gibi, API ile; denenir ve onaylanır
+  const otConn = ((await api(ot.page, `/api/v1/company/${cfg.tenant_id}/integrations`)).body || []).find((c) => c.name === otName);
+  const tplTask = ((await api(ot.page, `/api/v1/company/${cfg.tenant_id}/mappings/templates?connector=odoo`)).body || []).find((t) => t.code === 'odoo_task');
+  const taskMap = (await api(ot.page, `/api/v1/company/${cfg.tenant_id}/mappings`, { method: 'POST', body: JSON.stringify({
+    connection_id: otConn.id, object_type: 'TASK', name: `Görev → Test Odoo ${NAME.slice(-5)}`, template_id: tplTask.id }) })).body;
+  const taskRules = taskMap.rules.map((r) => (r.target === 'name' ? { target: 'name', transform: 'template', params: { text: '[RECOrion Test] {title}' } } : r));
+  await api(ot.page, `/api/v1/company/${cfg.tenant_id}/mappings/${taskMap.id}`, { method: 'PUT', body: JSON.stringify({ rules: taskRules }) });
+  const taskDry = (await api(ot.page, `/api/v1/company/${cfg.tenant_id}/mappings/${taskMap.id}/dry-run`, { method: 'POST', body: '{}' })).body;
+  const taskAppr = await api(ot.page, `/api/v1/company/${cfg.tenant_id}/mappings/${taskMap.id}/approve`, { method: 'POST' });
+  await ot.ctx.close();
+
+  // 12.4 Proje yöneticisi biten projenin analiz adımı çıktısındaki yapılacak işleri "Sisteme aktar" ile test Odoo'suna görev
+  // olarak gönderir: RECAi çıkarır, önizleme Onaylarım'a düşer; biri onaylanır (Temporal kuyruğuyla yazılır), biri reddedilir;
+  // yazılan görev Odoo'da doğrulanır, sonra "Geri al" ile arşivlenir
+  const tx = await session('manager');
+  const trProj = (await api(tx.page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME);
+  await tx.page.goto(`${APP}/#/workspace?project=${trProj.id}`);
+  await tx.page.getByRole('tab', { name: /İş Akışı/ }).click();
+  const transferBtn = tx.page.getByRole('button', { name: 'Sisteme aktar' }).first();
+  await transferBtn.waitFor({ timeout: 20000 });
+  await transferBtn.click();
+  const trDlg2 = tx.page.getByRole('dialog');
+  await trDlg2.locator('#tt-map').selectOption({ label: new RegExp(`Görev → Test Odoo ${NAME.slice(-5)}`) }).catch(async () => {
+    const opt = await trDlg2.locator('#tt-map option', { hasText: `Görev → Test Odoo ${NAME.slice(-5)}` }).getAttribute('value');
+    await trDlg2.locator('#tt-map').selectOption(opt);
+  });
+  const exStart = Date.now();
+  await trDlg2.getByRole('button', { name: 'RECAi ile hazırla' }).click();
+  const trList = trDlg2.getByRole('list', { name: 'Bu adımın aktarımları' });
+  await trList.waitFor({ timeout: 20000 });
+  let trRows = [];
+  for (let i = 0; i < 90; i++) {
+    trRows = ((await api(tx.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).filter((x) => x.connection_name === otName);
+    if (trRows.length && trRows.every((x) => x.status !== 'EXTRACTING')) break;
+    await tx.page.waitForTimeout(2000);
+  }
+  const pendingT = trRows.filter((x) => x.status === 'PENDING_APPROVAL');
+  await shot(tx.page, '26-sisteme-aktar-onizleme');
+  step(pendingT.length >= 1 && pendingT.every((x) => x.preview.some((p) => p.target === 'name' && p.value.startsWith('[RECOrion Test]'))),
+    'Sisteme aktar: RECAi adım çıktısından görevleri çıkardı; önizlemeler onaya düştü, hiçbiri onaysız yazılmadı',
+    `${((Date.now() - exStart) / 1000).toFixed(0)} sn · ${trRows.length} öneri (${pendingT.length} onay bekliyor) · ilk: ${pendingT[0]?.preview.find((p) => p.target === 'name')?.value.slice(0, 60) || '-'}`
+    + ` · eşleme denemesi: ${taskDry?.ok ? 'hatasız' : 'hatalı'}, onay ${taskAppr.status}`);
+  await trDlg2.getByRole('button', { name: 'Kapat' }).click();
+
+  await tx.page.getByRole('button', { name: /Onaylarım/ }).click();
+  const inbox = tx.page.getByRole('list', { name: 'Onay bekleyen aktarımlar' });
+  await inbox.waitFor({ timeout: 30000 });
+  const trFirst = pendingT[0];
+  const firstCard = inbox.getByRole('listitem', { name: `Aktarım: ${trFirst.object.title}` });
+  await firstCard.getByRole('button', { name: 'Onayla ve aktar' }).click();
+  if (pendingT[1]) {
+    await inbox.getByRole('listitem', { name: `Aktarım: ${pendingT[1].object.title}` }).getByRole('button', { name: 'Reddet' }).click();
+    await dialogOk(tx.page, 'Bu işi Odoo\'da biz açacağız');
+  }
+  let doneT = null;
+  for (let i = 0; i < 60; i++) {
+    doneT = ((await api(tx.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).find((x) => x.id === trFirst.id);
+    if (['DONE', 'FAILED'].includes(doneT.status)) break;
+    await tx.page.waitForTimeout(2000);
+  }
+  const otCall = async (model, method, body) => (await fetch(`${otest.ODOO_TEST_URL}/json/2/${model}/${method}`, { method: 'POST',
+    headers: { Authorization: `bearer ${otest.ODOO_TEST_API_KEY}`, 'X-Odoo-Database': otest.ODOO_TEST_DB, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body) })).json();
+  const odooTask = doneT.external_id ? (await otCall('project.task', 'read', { ids: [Number(doneT.external_id)], fields: ['name', 'active', 'priority'] }))[0] : null;
+  const rejected = pendingT[1] ? ((await api(tx.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).find((x) => x.id === pendingT[1].id) : null;
+  step(doneT.status === 'DONE' && odooTask?.name?.startsWith('[RECOrion Test]') && (!rejected || rejected.status === 'REJECTED'),
+    'Onaylanan aktarım Temporal kuyruğuyla test Odoo\'suna yazıldı (görev Odoo\'da doğrulandı); reddedilen yazılmadı',
+    `${doneT.status} · ${doneT.external_ref || doneT.error || ''} · Odoo: ${odooTask?.name?.slice(0, 50) || '-'} · ret: ${rejected?.status || '—'}`);
+
+  await tx.page.goto(`${APP}/#/workspace?project=${trProj.id}`);
+  await tx.page.getByRole('tab', { name: /Kapanış/ }).click();
+  const extCard = tx.page.getByRole('list', { name: 'Proje aktarımları' });
+  await extCard.waitFor({ timeout: 20000 });
+  const extLink = await tx.page.locator('a.ig-link', { hasText: otName }).first().getAttribute('href').catch(() => null);
+  await extCard.getByRole('listitem', { name: `Aktarım: ${trFirst.object.title}` }).getByRole('button', { name: 'Geri al' }).click();
+  await dialogOk(tx.page);
+  await tx.page.waitForTimeout(2500);
+  const afterRb = (await otCall('project.task', 'read', { ids: [Number(doneT.external_id)], fields: ['active'] }))[0];
+  await shot(tx.page, '27-dis-sistem-kayitlari');
+  step(!!extLink && extLink.includes(`/odoo/project.task/${doneT.external_id}`) && afterRb?.active === false,
+    'Proje kapanışında dış sistem kaydı bağlantısıyla görünüyor; "Geri al" ile Odoo\'daki görev arşivlendi',
+    `bağlantı: ${extLink ? extLink.replace(otest.ODOO_TEST_URL, '…') : '-'} · Odoo active: ${afterRb?.active}`);
+  await tx.ctx.close();
+
+  // 12.5 Logo (sahte Logo REST servisi — GERÇEK LOGO DEĞİL) Edge ajanının REST şablonlarıyla: yazma açık ajan bağlanır, hazır
+  // "Logo malzeme kartı" eşlemesi ajanın şablonlarıyla denetlenir ve onaylanır; RECAi ürün bulamadığı öneriyi yönetici "Düzelt"
+  // ile doldurur, onaylar; malzeme kartı sahte Logo'da açılır; aynı kodla ikinci aktarım güncelleme olarak gider
+  const lgDir = '/tmp/edge_logo_e2e';
+  execFileSync('docker', ['exec', 'recorion_backend', 'sh', '-c', `rm -rf ${lgDir} && mkdir -p ${lgDir} && `
+    + `printf '%s' '{"hostname":"LOGO-REST","templates_file":"/edge_agent/templates.logo_rest.example.json","allow_write":true,"audit_log":"${lgDir}/audit.log",`
+    + `"http_api":{"base_url":"http://127.0.0.1:32991","auth":{"type":"oauth_password","token_path":"/api/v1/token","username_env":"LOGO_USER","password_env":"LOGO_PASSWORD",`
+    + `"client_id_env":"LOGO_CLIENT_ID","client_secret_env":"LOGO_CLIENT_SECRET","form":{"firmno":"1"}}}}' > ${lgDir}/cfg.json`], { env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  const lgRest = spawn('docker', ['exec', 'recorion_backend', 'timeout', '1200', 'python', '/edge_agent/fake_logo_rest.py', '32991'], { stdio: 'ignore', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  const lg = await session('admin');
+  await lg.page.getByRole('button', { name: 'Entegrasyonlar' }).click();
+  await lg.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
+  const lgDlg = lg.page.getByRole('dialog');
+  await pickCard(lgDlg, 'Logo (Tiger, GO');
+  const lgName = `Logo REST ${NAME.slice(-5)}`;
+  await lgDlg.locator('#ig-name').fill(lgName);
+  await lgDlg.getByRole('button', { name: 'Kaydet' }).click();
+  const lgRow = lg.page.locator('.pj-list li', { hasText: lgName });
+  await lgRow.waitFor({ timeout: 15000 });
+  await lgRow.getByRole('button', { name: 'Ajan anahtarı' }).click();
+  const lgToken = (await lg.page.getByLabel('Ajan anahtarı').innerText()).trim();
+  await lg.page.getByRole('button', { name: 'Kaydettim, kapat' }).click();
+  const lgAgent = spawn('docker', ['exec', '-e', 'RECORION_URL=http://localhost:8000', '-e', `RECORION_EDGE_TOKEN=${lgToken}`, '-e', 'LOGO_USER=LOGO',
+    '-e', 'LOGO_PASSWORD=sahte-parola', '-e', 'LOGO_CLIENT_ID=recorion', '-e', 'LOGO_CLIENT_SECRET=sahte-istemci', 'recorion_backend',
+    'timeout', '1200', 'python', '/edge_agent/recorion_edge.py', '--config', `${lgDir}/cfg.json`], { stdio: 'ignore', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  let lgConn = null;
+  for (let i = 0; i < 30; i++) {
+    lgConn = ((await api(lg.page, `/api/v1/company/${cfg.tenant_id}/integrations`)).body || []).find((c) => c.name === lgName);
+    if (lgConn?.agent?.online) break;
+    await lg.page.waitForTimeout(1000);
+  }
+  const lgTpl = ((await api(lg.page, `/api/v1/company/${cfg.tenant_id}/mappings/templates?connector=edge`)).body || []).find((t) => t.code === 'logo_material');
+  const lgMap = (await api(lg.page, `/api/v1/company/${cfg.tenant_id}/mappings`, { method: 'POST', body: JSON.stringify({
+    connection_id: lgConn.id, object_type: 'PRODUCT', name: `Ürün → Logo ${NAME.slice(-5)}`, template_id: lgTpl.id }) })).body;
+  const lgCheck = (await api(lg.page, `/api/v1/company/${cfg.tenant_id}/mappings/${lgMap.id}/check`, { method: 'POST' })).body;
+  const lgDry = (await api(lg.page, `/api/v1/company/${cfg.tenant_id}/mappings/${lgMap.id}/dry-run`, { method: 'POST', body: '{}' })).body;
+  const lgAppr = await api(lg.page, `/api/v1/company/${cfg.tenant_id}/mappings/${lgMap.id}/approve`, { method: 'POST' });
+  step(lgConn?.agent?.online && lgConn.agent.templates === 5 && lgCheck?.ok && lgDry?.ok && lgDry.action === 'CREATE' && lgAppr.status === 200,
+    'Logo (Edge + Logo REST şablonları): ajan yazma açık bağlandı (5 şablon); hazır "Logo malzeme kartı" ajanın şablonlarıyla denetlendi, yazmadan denendi, onaylandı',
+    `şablon: ${lgConn?.agent?.templates} · denetim: ${lgCheck?.ok ? 'hatasız' : JSON.stringify(lgCheck?.errors)} · deneme: ${lgDry?.action} · birim seti: ${lgDry?.values?.birim_seti}`);
+  await lg.ctx.close();
+
+  const lm = await session('manager');
+  const firstTask = ((await api(lm.page, `/api/v1/projects/${trProj.id}/workflow`)).body.tasks || []).find((t) => t.can_transfer);
+  await api(lm.page, `/api/v1/tasks/${firstTask.id}/transfers`, { method: 'POST', body: JSON.stringify({ mapping_id: lgMap.id }) });
+  let lgRows = [];
+  for (let i = 0; i < 90; i++) {
+    lgRows = ((await api(lm.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).filter((x) => x.connection_name === lgName);
+    if (lgRows.length && lgRows.every((x) => x.status !== 'EXTRACTING')) break;
+    await lm.page.waitForTimeout(2000);
+  }
+  const lgFirst = lgRows[0];
+  await lm.page.goto(`${APP}/#/workspace?project=${trProj.id}`);
+  await lm.page.getByRole('tab', { name: /Kapanış/ }).click();
+  const lgCard = lm.page.getByRole('list', { name: 'Proje aktarımları' }).getByRole('listitem').filter({ hasText: lgName }).first();
+  await lgCard.waitFor({ timeout: 20000 });
+  await lgCard.getByRole('button', { name: 'Düzelt' }).click();
+  const fixDlg = lm.page.getByRole('dialog');
+  await fixDlg.locator('#tf-code').fill(`RECT-${NAME.slice(-5).replace(':', '')}`);
+  await fixDlg.locator('#tf-name').fill('RECOrion Test Bayi Portalı Tablet');
+  await fixDlg.locator('#tf-type').selectOption('STOCK');
+  await fixDlg.locator('#tf-unit').selectOption('Adet');
+  await fixDlg.locator('#tf-vat_rate').fill('20');
+  await fixDlg.locator('#tf-sale_price').fill('18500');
+  await fixDlg.getByRole('button', { name: 'Kaydet ve önizle' }).click();
+  await lm.page.waitForTimeout(2500);
+  const fixed = ((await api(lm.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).find((x) => x.id === lgFirst.id);
+  await lm.page.getByRole('button', { name: /Onaylarım/ }).click();
+  const lgInbox = lm.page.getByRole('list', { name: 'Onay bekleyen aktarımlar' });
+  await lgInbox.waitFor({ timeout: 30000 });
+  await lgInbox.getByRole('listitem', { name: 'Aktarım: RECOrion Test Bayi Portalı Tablet' }).getByRole('button', { name: 'Onayla ve aktar' }).click();
+  let lgDone = null;
+  for (let i = 0; i < 60; i++) {
+    lgDone = ((await api(lm.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).find((x) => x.id === lgFirst.id);
+    if (['DONE', 'FAILED'].includes(lgDone.status)) break;
+    await lm.page.waitForTimeout(2000);
+  }
+  const logoState = JSON.parse(execFileSync('docker', ['exec', 'recorion_backend', 'python', '-c',
+    "import urllib.request,json;print(urllib.request.urlopen('http://127.0.0.1:32991/__state').read().decode())"], { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } }));
+  const logoCard = (logoState.items || []).find((x) => x.NAME === 'RECOrion Test Bayi Portalı Tablet');
+  await shot(lm.page, '28-logo-aktarim');
+  step(fixed?.status === 'PENDING_APPROVAL' && lgDone.status === 'DONE' && logoCard?.UNITSET_CODE === 'ADET' && logoCard?.VAT === 20,
+    'Düzeltilen ürün kartı onaydan sonra Edge ajanı + Logo REST ile Logo\'da açıldı (sahte Logo servisi; Logo tablolarına doğrudan yazılmadı)',
+    `düzeltme: ${fixed?.status} · aktarım: ${lgDone.status} ${lgDone.external_ref || lgDone.error || ''} · Logo kartı: ${logoCard ? `${logoCard.CODE} / ${logoCard.UNITSET_CODE} / KDV ${logoCard.VAT}` : 'yok'}`);
+  await lm.ctx.close();
+  lgAgent.kill();
+  lgRest.kill();
+
+  // 12.6 RECOrion'un kendi MCP sunucusu: proje yöneticisi "Bağlantılarım"da yazma kapsamlı anahtar oluşturur (bir kez gösterilir);
+  // dış istemci gibi MCP ile bağlanılır: araçlar keşfedilir, Case açılır (RECAi plan taslağı hazırlar, onay bekler), taslağa adım
+  // eklenir; onay aracı yoktur; anahtar iptal edilince bağlantı reddedilir
+  const mc = await session('manager');
+  await mc.page.getByRole('button', { name: 'Bağlantılarım' }).click();
+  await mc.page.getByRole('button', { name: 'Anahtar oluştur' }).click();
+  const mcDlg = mc.page.getByRole('dialog');
+  await mcDlg.locator('#pt-name').fill(`Claude ${NAME.slice(-5)}`);
+  await mcDlg.locator('#pt-write').check();
+  await mcDlg.getByRole('button', { name: 'Oluştur' }).click();
+  const pat = (await mc.page.getByLabel('Erişim anahtarı').innerText()).trim();
+  const claudeCmd = await mc.page.getByLabel('Claude Code komutu').innerText();
+  await shot(mc.page, '29-baglantilarim-anahtar');
+  await mc.page.getByRole('button', { name: 'Kaydettim, kapat' }).click();
+  const mcpCall = async (method, params, id = 1) => {
+    const r = await fetch('http://localhost:8000/api/v1/mcp', { method: 'POST', headers: { Authorization: `Bearer ${pat}`, 'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id, method, params }) });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+  const init = await mcpCall('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
+  const mtools = (await mcpCall('tools/list', {})).body?.result?.tools || [];
+  const caseName = `Canlı Test MCP Case ${NAME.slice(-5)}`;
+  const created = (await mcpCall('tools/call', { name: 'create_project', arguments: { name: caseName, kind: 'CASE',
+    requirements: 'Bir bayi sipariş portalında yavaşlık şikâyeti geldi. Şikâyeti incele, kök nedeni bul, çözüm önerisi ve müşteriye yanıt taslağı hazırla.' } })).body?.result?.structuredContent;
+  let planned = null;
+  const planStart = Date.now();
+  for (let i = 0; i < 60; i++) {
+    planned = (await mcpCall('tools/call', { name: 'get_project', arguments: { project_id: created?.id } })).body?.result?.structuredContent;
+    if (planned?.plan_draft_steps?.length) break;
+    await mc.page.waitForTimeout(4000);
+  }
+  const added = (await mcpCall('tools/call', { name: 'add_step', arguments: { project_id: created?.id, title: 'Müşteriye yanıt gönderimi', job_title: 'Müşteri Temsilcisi', estimated_days: 1 } })).body?.result;
+  step(init.body?.result?.serverInfo?.name === 'RECOrion' && mtools.length === 6 && !mtools.some((t) => /approve|decide/.test(t.name))
+      && planned?.status === 'PLANNING' && planned?.plan_approved === false && planned.plan_draft_steps.length >= 1 && added?.isError === false && /claude mcp add/.test(claudeCmd),
+    'MCP sunucusu: anahtar bir kez gösterildi; dış istemci 6 aracı keşfetti (onay aracı yok), Case açtı; RECAi plan taslağı hazırladı (onay bekliyor); taslağa adım eklendi',
+    `plan ${((Date.now() - planStart) / 1000).toFixed(0)} sn · ${planned?.plan_draft_steps?.length || 0} adım + 1 · durum ${planned?.status}`);
+
+  await mc.page.getByRole('button', { name: 'Projeler' }).click();
+  await mc.page.getByText(caseName).first().waitFor({ timeout: 20000 }).catch(() => {});
+  const inHub = await mc.page.getByText(caseName).count();
+  await mc.page.getByRole('button', { name: 'Bağlantılarım' }).click();
+  const patRow = mc.page.getByRole('list', { name: 'Erişim anahtarları' }).getByRole('listitem').filter({ hasText: `Claude ${NAME.slice(-5)}` });
+  await patRow.getByRole('button', { name: 'İptal et' }).click();
+  await dialogOk(mc.page);
+  await mc.page.waitForTimeout(1500);
+  const afterRevoke = await mcpCall('tools/list', {});
+  step(inHub > 0 && afterRevoke.status === 401,
+    'MCP ile açılan Case RECOrion\'da proje listesinde görünüyor; anahtar iptal edilince dış istemci reddedildi',
+    `listede: ${inHub > 0 ? 'var' : 'yok'} · iptal sonrası: ${afterRevoke.status}`);
+  await api(mc.page, `/api/v1/projects/${created?.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel', summary: 'Canlı test bitti' }) });
+  await mc.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

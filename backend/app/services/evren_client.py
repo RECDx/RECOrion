@@ -116,12 +116,12 @@ class EvrenClient:
         }, timeout=120)
         return str(data.get("text") or "")
 
-    async def transcribe(self, audio: bytes, filename: str, mime: str, model_code: str, language: str = "tr") -> str:
+    async def transcribe(self, audio: bytes, filename: str, mime: str, model_code: str, language: str = "tr", timeout: float = 300) -> str:
         """EVREN /audio/transcriptions (OpenAI uyumlu, çok parçalı form). Dosya boyutu sınırı ~25 MB (24.10.2026 ölçüldü)."""
         if not settings.EVREN_API_KEY:
             raise EvrenError("EVREN API anahtarı tanımlı değil (.env: EVREN_API_KEY).")
         try:
-            async with httpx.AsyncClient(timeout=300) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(f"{self.base_url}/audio/transcriptions", headers={"Authorization": f"Bearer {settings.EVREN_API_KEY}"},
                                          files={"file": (filename, audio, mime)}, data={"model": model_code, "language": language})
         except httpx.TimeoutException as exc:

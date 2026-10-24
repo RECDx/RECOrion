@@ -44,8 +44,13 @@ def fake_evren(monkeypatch):
     seen = {"audio": [], "prompts": []}
     say = {"text": TRANSCRIPT}
 
-    async def transcribe(audio, filename, mime, model_code, language="tr"):
+    async def transcribe(audio, filename, mime, model_code, language="tr", timeout=300):
         assert model_code == "qwen3-asr-1.7b" and audio[:4] == b"RIFF" and filename.endswith(".wav")
+        seen.setdefault("timeouts", []).append(timeout)
+        if say.get("fail_once"):  # geçici hata: bir kez yeniden denenir
+            say["fail_once"] = False
+            from app.services.evren_client import EvrenError
+            raise EvrenError("EVREN yanıt vermedi (zaman aşımı).")
         w = wave.open(io.BytesIO(audio))
         assert w.getframerate() == 16000 and w.getnchannels() == 1  # ffmpeg dönüştürdü
         seen["audio"].append(len(audio))
@@ -139,3 +144,16 @@ def test_probe_seconds_browser_webm_without_duration(tmp_path):
     bad = tmp_path / "bozuk.webm"
     bad.write_bytes(b"ses degil")
     assert meetings.probe_seconds(bad) is None
+
+
+
+def test_transcription_timeout_scales_and_retries_once(client, world, fake_evren):
+    """Kısa kayıtta bekleme süresi kısadır (dakikalarca beklenmez); geçici hatada bir kez yeniden denenir."""
+    from app.services import llm_gateway
+    from app.services.llm_gateway import LLMContext
+
+    seen, say = fake_evren
+    say["fail_once"] = True
+    ctx = LLMContext(tenant_id=__import__("uuid").UUID(world["tenant"]), purpose="TRANSCRIPTION")
+    text = client.portal.call(llm_gateway.transcribe, ctx, _wav(2), "parca.wav", "audio/wav", 4.0)
+    assert text == say["text"] and seen["timeouts"][-2:] == [57.0, 57.0]  # 45 + 3 x 4 sn; ikinci deneme başarılı

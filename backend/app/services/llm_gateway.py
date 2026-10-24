@@ -348,12 +348,17 @@ async def transcribe(ctx: LLMContext, audio: bytes, filename: str, mime: str, se
         model = await resolve_model(db, tenant, "TRANSCRIPTION", None, None)
         est_in = int(seconds * AUDIO_TOKENS_PER_SECOND)
         await _preflight(db, tenant, model, est_in, 2000)
-        started = time.monotonic()
-        try:
-            text = await evren_client.transcribe(audio, filename, mime, model.model_code)
-        except EvrenError as exc:
-            await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
-            raise LLMUnavailable("Ses yazıya çevirme servisi şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.") from exc
+        # Bekleme süresi ses süresine göre (kısa kayıtta kullanıcı dakikalarca beklemesin); geçici hatada bir kez yeniden denenir
+        timeout = min(300.0, 45.0 + 3.0 * seconds)
+        for attempt in (1, 2):
+            started = time.monotonic()
+            try:
+                text = await evren_client.transcribe(audio, filename, mime, model.model_code, timeout=timeout)
+                break
+            except EvrenError as exc:
+                await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
+                if attempt == 2 or (exc.status_code and exc.status_code < 500):
+                    raise LLMUnavailable("Ses yazıya çevirme servisi şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.") from exc
         await _record(db, tenant, model, ctx, est_in, estimate_tokens(text), started)
         return text
 
