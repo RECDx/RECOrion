@@ -94,6 +94,12 @@ async def ensure_catalog() -> None:
         n = await ensure_platform_templates(db)
     if n:
         logger.info("RECDx proje şablonları yüklendi: %s", n)
+    from app.services.regulations import ensure_packs
+
+    async with AsyncSessionLocal() as db:
+        n = await ensure_packs(db)
+    if n:
+        logger.info("Mevzuat paketi taslakları yüklendi (yayın için uzman kontrolü gerekir): %s", n)
 
 
 async def main() -> None:

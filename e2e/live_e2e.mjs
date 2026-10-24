@@ -992,6 +992,33 @@ try {
   const tplProj = ((await api(tp.page, '/api/v1/projects/?scope=mine')).body || []).find((x) => x.name === tplProject);
   if (tplProj) await api(tp.page, `/api/v1/projects/${tplProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
   await tp.ctx.close();
+
+  // 11.2 Mevzuat paketleri: canlı ortamda YAYIMLANMAZ (yayın tüm müşterilere açılır; uzman kontrolü şart — kullanıcı kararı).
+  // Süper Admin taslakları "uzman kontrolü bekliyor" görür; uzman beyanı ve adı olmadan Yayımla düğmesi kilitli kalır, vazgeçer.
+  // Şirket yöneticisi taslakları göremez.
+  const rg = await session('super');
+  await rg.page.goto(`${APP}/#/super-admin/regulations`);
+  const rgList = rg.page.getByRole('list', { name: 'Mevzuat paketleri (yönetim)' });
+  await rgList.waitFor({ timeout: 30000 });
+  const sgkRow = rgList.locator('li', { hasText: 'SGK' });
+  const sgkText = await sgkRow.innerText();
+  const draftOnly = /Taslak · uzman kontrolü bekliyor/.test(sgkText);
+  await sgkRow.getByRole('button', { name: 'Uzman kontrolüyle yayımla' }).click();
+  const pubDlg = rg.page.getByRole('dialog');
+  const lockedEmpty = await pubDlg.getByRole('button', { name: 'Yayımla' }).isDisabled();
+  await pubDlg.locator('#rg-reviewer').fill('Deneme Uzman');
+  const lockedNoConfirm = await pubDlg.getByRole('button', { name: 'Yayımla' }).isDisabled();
+  await shot(rg.page, '17-mevzuat-yayin-kilidi');
+  await pubDlg.getByRole('button', { name: 'Vazgeç' }).click();
+  const rgAfter = ((await api(rg.page, '/api/v1/system/regulation-packs')).body || []).find((p) => p.code === 'sgk');
+  await rg.ctx.close();
+  const rgAdm = await session('admin');
+  const companyPacks = (await api(rgAdm.page, `/api/v1/company/${cfg.tenant_id}/regulation-packs`)).body || [];
+  const draftLeak = rgAfter && !rgAfter.published ? companyPacks.some((p) => p.code === 'sgk') : false;
+  await rgAdm.ctx.close();
+  step((draftOnly ? lockedEmpty && lockedNoConfirm && !rgAfter?.published : true) && !draftLeak,
+    'Mevzuat paketi uzman kontrolü olmadan yayımlanamıyor; taslak şirkete görünmüyor',
+    `${sgkText.split('\n')[0].slice(0, 70)} · boşken kilitli: ${lockedEmpty} · beyansız kilitli: ${lockedNoConfirm} · şirkette taslak: ${draftLeak ? 'EVET' : 'yok'}`);
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

@@ -57,6 +57,7 @@ import { Badge, Modal } from '../ui/components';
 import CreditsPanel from './ai/CreditsPanel';
 import CompanyDashboard from './dashboard/CompanyDashboard';
 import IntegrationsPanel from './integrations/IntegrationsPanel';
+import { CompanyRegulations } from './regulations/Regulations';
 import BrainPanel from './ai/BrainPanel';
 import CatalogImportModal from './catalog/CatalogImportModal';
 import HireWizard from './catalog/HireWizard';
@@ -64,7 +65,7 @@ import DocumentReviewModal from './docs/DocumentReviewModal';
 import DocumentLibrary from './docs/DocumentLibrary';
 import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
-import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug } from 'lucide-react';
+import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck } from 'lucide-react';
 
 // Şirket Yönetimi sol menüsü (Ana Kontrol Merkezi düzeni); gruplar açılıp kapanabilir
 const COMPANY_NAV = [
@@ -83,6 +84,7 @@ const COMPANY_NAV = [
     { tab: 'MANIFESTO', label: 'Sektörel Manifesto', icon: FileText, color: '#f59e0b' },
     { tab: 'BRAIN', label: 'Beyin AI', icon: Brain, color: '#c084fc' },
     { tab: 'INTEGRATIONS', label: 'Entegrasyonlar', icon: Plug, color: 'var(--ac-38bdf8)' },
+    { tab: 'REGULATIONS', label: 'Mevzuat Paketleri', icon: BookOpenCheck, color: '#f59e0b' },
   ] },
   { key: 'KULLANIM', label: 'Kullanım', items: [
     { tab: 'CREDITS', label: 'Kredi ve Kullanım', icon: Coins, color: '#facc15' },
@@ -5102,6 +5104,8 @@ export default function CompanyAdminConsole({
 
           {activeTab === 'DASHBOARD' && <CompanyDashboard tenantId={tenantId} departments={departments} />}
           {activeTab === 'INTEGRATIONS' && <IntegrationsPanel tenantId={tenantId} />}
+          {activeTab === 'REGULATIONS' && <CompanyRegulations tenantId={tenantId}
+            canManage={(currentUser?.permissions || []).includes('tenant:manage') || currentUser?.role === 'COMPANY_ADMIN'} />}
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
 
           <HireWizard

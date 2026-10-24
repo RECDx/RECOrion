@@ -119,6 +119,10 @@ async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> 
     own = await artifact_text(previous, MAX_OWN_CHARS)
     scope = await knowledge.scope_for_agent(db, tenant.id, agent.id, project.id)
     hits = await knowledge.retrieve(scope, f"{task.title}\n{task.description or ''}"[:2000], limit=6)
+    # Mevzuat paketleri (ADIM 11.2): adımla ilgili, şirketin açtığı ve uzman kontrolünden geçmiş özetler
+    from app.services import regulations
+    reg_context, _ = await regulations.context_for(
+        db, tenant.id, f"{task.title}\n{task.description or ''}\n{task.acceptance_criteria or ''}")
     await live.thought(project.id, task.id, "ANALYSIS", f"{agent.display_name}: bilgi katmanlarında {len(hits)} kaynak, "
                        f"{len(dep_blocks)} önceki adım çıktısı bulundu" + ("; düzeltme isteği okunuyor." if feedback else "."))
     await live.thought(project.id, task.id, "WRITING", f"{agent.display_name} {'düzeltilmiş ' if feedback else ''}çıktıyı yazıyor…")
@@ -131,7 +135,7 @@ async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> 
 Başlık: {task.title}
 Ne yapılacak: {task.description or '-'}
 Kabul ölçütü: {task.acceptance_criteria or '-'}
-{knowledge.format_context(hits, max_chars=6000)}
+{knowledge.format_context(hits, max_chars=6000)}{reg_context}
 # Önceki adımların çıktıları
 {chr(10).join(dep_blocks) or 'yok'}
 

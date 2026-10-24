@@ -253,6 +253,10 @@ async def send_chat_message(
     scope = await knowledge.scope_for_agent(db, tenant_id, agent.id if agent else None, project_id)
     citations = await knowledge.retrieve(scope, payload.content, limit=6)
     rag_context = knowledge.format_context(citations)
+    # Mevzuat paketleri (ADIM 11.2): şirketin açtığı, uzman kontrolünden geçmiş özetlerden bu mesajla ilgili olanlar
+    from app.services import regulations
+    reg_context, _ = await regulations.context_for(db, tenant_id, payload.content)
+    rag_context += reg_context
 
     # 3. Model Mesaj Geçmişini Derle (Rolling Context): başkalarının özel yazışması bağlama girmez
     history_res = await db.execute(

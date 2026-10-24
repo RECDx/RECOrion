@@ -56,6 +56,7 @@ import {
   Coins,
   Bot,
   LayoutTemplate,
+  BookOpenCheck,
 } from 'lucide-react';
 import { api } from '../api';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
@@ -63,6 +64,7 @@ import ThemeToggle from '../ui/ThemeToggle';
 import OdooProductPicker from './OdooProductPicker';
 import CatalogAdmin from './catalog/CatalogAdmin';
 import TemplatesAdmin from './projects/TemplatesAdmin';
+import { RegulationAdmin } from './regulations/Regulations';
 import EmailTemplateBuilder from './email/EmailTemplateBuilder';
 import { compileBlocksToHtml, htmlToBlocks } from './email/emailBlocks';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
@@ -77,6 +79,7 @@ const TAB_SLUG_MAP = {
   PROFESSIONS: 'professions',
   CATALOG: 'catalog',
   PROJECT_TEMPLATES: 'project-templates',
+  REGULATIONS: 'regulations',
   PERMISSIONS: 'permissions',
   ROLES: 'roles',
   PLANS: 'plans',
@@ -96,6 +99,7 @@ const SLUG_TAB_MAP = {
   'professions': 'PROFESSIONS',
   'catalog': 'CATALOG',
   'project-templates': 'PROJECT_TEMPLATES',
+  'regulations': 'REGULATIONS',
   'permissions': 'PERMISSIONS',
   'roles': 'ROLES',
   'plans': 'PLANS',
@@ -2120,6 +2124,18 @@ export default function SuperAdminConsole({
                 {!sidebarCollapsed && <span>Proje Şablonları</span>}
               </div>
             </button>
+
+            {/* MEVZUAT PAKETLERİ (ADIM 11.2) */}
+            <button
+              onClick={() => { switchTab('REGULATIONS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'REGULATIONS' ? 'active' : ''}`}
+              title="Mevzuat Paketleri"
+            >
+              <div className="super-admin-nav-item-left">
+                <BookOpenCheck style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+                {!sidebarCollapsed && <span>Mevzuat Paketleri</span>}
+              </div>
+            </button>
             </>
           )}
 
@@ -2374,6 +2390,7 @@ export default function SuperAdminConsole({
               {activeTab === 'AI_ASSISTANT' && 'Süper Yönetici Asistanı'}
               {activeTab === 'CATALOG' && 'Departman & Unvan Kataloğu'}
               {activeTab === 'PROJECT_TEMPLATES' && 'Proje Şablonları'}
+              {activeTab === 'REGULATIONS' && 'Mevzuat Paketleri'}
               {activeTab === 'SECTORS' && 'Sektör Tanımları (Ticaret Bakanlığı)'}
               {activeTab === 'PROFESSIONS' && 'Meslek Grubu Tanımları (Ticaret Bakanlığı)'}
             </span>
@@ -4484,6 +4501,7 @@ export default function SuperAdminConsole({
 
           {activeTab === 'CATALOG' && <CatalogAdmin />}
           {activeTab === 'PROJECT_TEMPLATES' && <TemplatesAdmin />}
+          {activeTab === 'REGULATIONS' && <RegulationAdmin />}
 
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
           {activeTab === 'MODELS' && (

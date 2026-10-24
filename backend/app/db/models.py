@@ -784,6 +784,30 @@ class ProjectTemplate(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class RegulationPack(Base):
+    """Mevzuat bilgi paketi (ADIM 11.2). draft yalnızca RECDx'te; müşteri ve AI personel yalnızca uzman kontrolünden geçmiş published'ı görür."""
+    __tablename__ = "regulation_packs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(40), nullable=False, unique=True)
+    title = Column(String(120), nullable=False)
+    description = Column(Text)
+    draft = Column(JSONB, nullable=False, default=lambda: {"cards": []})
+    published = Column(JSONB)
+    draft_updated_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class TenantRegulationPack(Base):
+    """Şirketin açtığı mevzuat paketi (ADIM 11.2)."""
+    __tablename__ = "tenant_regulation_packs"
+
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True)
+    pack_id = Column(UUID(as_uuid=True), ForeignKey("regulation_packs.id", ondelete="CASCADE"), primary_key=True)
+    enabled_by_actor_id = Column(UUID(as_uuid=True))
+    enabled_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class EdgeJob(Base):
     """Edge ajanına giden iş (ADIM 10.5): araç çağrısı → kuyruk → ajan yoklamada alır → sonucu döner."""
     __tablename__ = "edge_jobs"
