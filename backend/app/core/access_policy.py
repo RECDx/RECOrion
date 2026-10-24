@@ -113,6 +113,11 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/project-templates/{{template_id}}"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/save-as-template"): HANDLER(),
     # Mevzuat paketleri (ADIM 11.2): taslak/yayın RECDx'te (uzman kontrolüyle); şirket yalnızca yayını görür ve açar
+    # Model yönlendirici (ADIM 11.4): platform ayarı, yalnızca RECDx
+    ("GET", f"{P}/system/model-router"): SUPER_ADMIN,
+    ("POST", f"{P}/system/model-router/runs"): SUPER_ADMIN,
+    ("GET", f"{P}/system/model-router/runs/{{run_id}}"): SUPER_ADMIN,
+    ("POST", f"{P}/system/model-router/routes"): SUPER_ADMIN,
     ("GET", f"{P}/system/regulation-packs"): SUPER_ADMIN,
     ("POST", f"{P}/system/regulation-packs"): SUPER_ADMIN,
     ("PUT", f"{P}/system/regulation-packs/{{pack_id}}"): SUPER_ADMIN,

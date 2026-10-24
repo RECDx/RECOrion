@@ -284,10 +284,11 @@ async def send_chat_message(
     # 4. LLM Gateway (ölçüm + kredi düşümü). Hata olursa sahte yanıt üretilmez.
     try:
         # ADIM 10.2: AI personelin yetkili araçları varsa araç döngüsü (okuma anında, yazma onaya düşer)
-        from app.services import tool_gateway
+        from app.services import model_router, tool_gateway
         ai, tool_calls = await tool_gateway.chat_with_tools(
             db, LLMContext(tenant_id=tenant_id, purpose="AGENT_CHAT", actor_id=agent.id if agent else None,
-                           task_id=task_id, project_id=project_id),
+                           task_id=task_id, project_id=project_id,
+                           task_type=model_router.classify(payload.content, task.title, job_title=agent.role if agent else None)),
             llm_messages, agent, project, task,
             model_code=payload.override_model_code,
             # Personelin modeli meşgul/yanıtsızsa paketteki yedek modelle sürer (kullanıcı kararı 22.10.2026; sohbet de dahil)

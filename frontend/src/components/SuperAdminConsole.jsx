@@ -57,6 +57,7 @@ import {
   Bot,
   LayoutTemplate,
   BookOpenCheck,
+  Route,
 } from 'lucide-react';
 import { api } from '../api';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
@@ -70,6 +71,7 @@ import { compileBlocksToHtml, htmlToBlocks } from './email/emailBlocks';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
 import PlatformDashboard, { HealthBadge, SystemHealthPanel, usePlatformHealth } from './dashboard/PlatformDashboard';
 import LlmPricing from './ai/LlmPricing';
+import ModelRouterPanel from './ai/ModelRouterPanel';
 
 const TAB_SLUG_MAP = {
   DASHBOARD: 'dashboard',
@@ -86,6 +88,7 @@ const TAB_SLUG_MAP = {
   EMAIL_TEMPLATES: 'email-templates',
   SCHEDULES: 'schedules',
   AI_MODEL_SETTINGS: 'ai-models',
+  MODEL_ROUTER: 'model-router',
   AI_ASSISTANT: 'ai-assistant',
   MODELS: 'models',
   LLM_PRICES: 'llm-prices'
@@ -106,6 +109,7 @@ const SLUG_TAB_MAP = {
   'email-templates': 'EMAIL_TEMPLATES',
   'schedules': 'SCHEDULES',
   'ai-models': 'AI_MODEL_SETTINGS',
+  'model-router': 'MODEL_ROUTER',
   'ai-assistant': 'AI_ASSISTANT',
   'models': 'MODELS',
   'llm-prices': 'LLM_PRICES'
@@ -2239,6 +2243,18 @@ export default function SuperAdminConsole({
           {(sidebarCollapsed || !closedNavGroups.YAPAYZEKA) && (
             <>
 
+            {/* MODEL YÖNLENDİRİCİ (ADIM 11.4) */}
+            <button
+              onClick={() => { switchTab('MODEL_ROUTER'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'MODEL_ROUTER' ? 'active' : ''}`}
+              title="Model Yönlendirici"
+            >
+              <div className="super-admin-nav-item-left">
+                <Route style={{ width: 17, height: 17, color: '#f43f5e' }} />
+                {!sidebarCollapsed && <span>Model Yönlendirici</span>}
+              </div>
+            </button>
+
             {/* GENEL AI MODELİ */}
             <button
               onClick={() => { switchTab('AI_MODEL_SETTINGS'); setSearchQuery(''); }}
@@ -2387,6 +2403,7 @@ export default function SuperAdminConsole({
               {activeTab === 'MODELS' && 'EVREN Model Kataloğu'}
               {activeTab === 'LLM_PRICES' && 'LLM TL Fiyatları'}
               {activeTab === 'AI_MODEL_SETTINGS' && 'Genel AI Modelleri & Yapay Zeka Kullanımı'}
+              {activeTab === 'MODEL_ROUTER' && 'Model Yönlendirici ve Kalite Testi'}
               {activeTab === 'AI_ASSISTANT' && 'Süper Yönetici Asistanı'}
               {activeTab === 'CATALOG' && 'Departman & Unvan Kataloğu'}
               {activeTab === 'PROJECT_TEMPLATES' && 'Proje Şablonları'}
@@ -4502,6 +4519,7 @@ export default function SuperAdminConsole({
           {activeTab === 'CATALOG' && <CatalogAdmin />}
           {activeTab === 'PROJECT_TEMPLATES' && <TemplatesAdmin />}
           {activeTab === 'REGULATIONS' && <RegulationAdmin />}
+          {activeTab === 'MODEL_ROUTER' && <ModelRouterPanel />}
 
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
           {activeTab === 'MODELS' && (

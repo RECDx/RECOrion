@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, Artifact, ChatMessage, Project, Task, Tenant
-from app.services import code_repo, knowledge, live, llm_gateway, storage, task_flow
+from app.services import code_repo, knowledge, live, llm_gateway, model_router, storage, task_flow
 from app.services.llm_gateway import LLMContext, LLMError
 
 logger = logging.getLogger("recorion.agent_work")
@@ -148,7 +148,8 @@ Kabul ölçütü: {task.acceptance_criteria or '-'}
 Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi tam olarak yaz."""
     try:
         content, result, parts, credits, fallback_from, tool_calls = await _generate(
-            LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id),
+            LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id,
+                       task_type=model_router.classify(task.title, task.description, task.acceptance_criteria, job_title=agent.role)),
             [{"role": "system", "content": _system(agent, tenant, code_repo.active(project))}, {"role": "user", "content": prompt}],
             tooling=(db, agent, project, task))
     except LLMError as exc:
@@ -221,7 +222,8 @@ Kabul ölçütü: {task.acceptance_criteria or '-'}
 
 Sadece şu JSON'u döndür (en fazla 8 madde, her biri en fazla 200 karakter; başka metin yazma):
 {{"passed": true|false, "score": 0-100, "issues": ["düzeltilmesi gereken somut eksik/hata"], "summary": "1-2 cümle değerlendirme"}}"""
-    ctx = LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=reviewer.id, task_id=task.id, project_id=project.id)
+    ctx = LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=reviewer.id, task_id=task.id, project_id=project.id,
+                     task_type="STRUCTURED")  # değerlendirme JSON döner (ADIM 11.4 yönlendirme)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
     verdict, result, last_error = None, None, None
     await live.thought(project.id, task.id, "REVIEW", f"{reviewer.display_name} sürüm {art.version} çıktısını kabul ölçütüne göre değerlendiriyor…")

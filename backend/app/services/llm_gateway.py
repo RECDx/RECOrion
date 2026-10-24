@@ -88,6 +88,7 @@ class LLMContext:
     actor_id: Optional[uuid.UUID] = None  # AI personel (modeli buradan da çözülebilir)
     task_id: Optional[uuid.UUID] = None
     project_id: Optional[uuid.UUID] = None
+    task_type: Optional[str] = None  # ADIM 11.4: iş türü (CODE, ANALYSIS, SUMMARY, WRITING, STRUCTURED) → onaylı yönlendirme
 
 
 @dataclass
@@ -129,7 +130,7 @@ async def allowed_model_codes(db: AsyncSession, tenant: Tenant) -> Optional[set]
 
 
 async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requested: Optional[str],
-                        actor_id: Optional[uuid.UUID]) -> LLMModel:
+                        actor_id: Optional[uuid.UUID], task_type: Optional[str] = None) -> LLMModel:
     allowed = await allowed_model_codes(db, tenant)
     infra = purpose in INFRA_PURPOSES
 
@@ -144,6 +145,11 @@ async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requeste
                 candidates.append(m.model_code)
     if purpose == "BRAIN" and tenant.brain_model_code:
         candidates.append(tenant.brain_model_code)
+    # Model yönlendirici (ADIM 11.4): Süper Admin'in iş türü için onayladığı model, platform varsayılanından önce gelir
+    # (açık seçim, AI personelin modeli ve şirketin Beyin modeli her zaman önce)
+    route_type = task_type or ("STRUCTURED" if purpose == "BRAIN" else None)
+    if route_type and not infra and purpose != "QUALITY_TEST" and (routed := await _setting(db, f"model.route.{route_type}")):
+        candidates.append(routed)
     for key in (PURPOSE_SETTING.get(purpose), DEFAULT_CHAT_SETTING if not infra else None):
         if key and (value := await _setting(db, key)):
             candidates.append(value)
@@ -259,7 +265,7 @@ async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code
                      tools: Optional[List[Dict[str, Any]]] = None) -> GatewayChatResult:
     async with AsyncSessionLocal() as db:
         tenant = await _tenant(db, ctx.tenant_id)
-        model = await resolve_model(db, tenant, ctx.purpose, model_code, ctx.actor_id)
+        model = await resolve_model(db, tenant, ctx.purpose, model_code, ctx.actor_id, ctx.task_type)
         if model.max_output_tokens:
             max_tokens = min(max_tokens, model.max_output_tokens)
         est_in = estimate_tokens(" ".join(str(m.get("content", "")) for m in messages))

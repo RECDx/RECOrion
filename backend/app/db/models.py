@@ -829,6 +829,54 @@ class MeetingRecording(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class QualityRun(Base):
+    """Kalite test seti koşusu (ADIM 11.4)."""
+    __tablename__ = "quality_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    started_by_actor_id = Column(UUID(as_uuid=True))
+    models = Column(JSONB, nullable=False)
+    suite_version = Column(String(20))
+    status = Column(String(16), nullable=False, default="RUNNING")  # RUNNING, DONE, FAILED
+    progress = Column(String(120))
+    error = Column(Text)
+    started_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    finished_at = Column(DateTime(timezone=True))
+
+
+class QualityResult(Base):
+    __tablename__ = "quality_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("quality_runs.id", ondelete="CASCADE"), nullable=False)
+    model_code = Column(String(128), nullable=False)
+    case_code = Column(String(64), nullable=False)
+    task_type = Column(String(32), nullable=False)
+    score = Column(Numeric(5, 3), nullable=False)
+    checks = Column(JSONB)
+    latency_ms = Column(Integer)
+    tokens_in = Column(Integer)
+    tokens_out = Column(Integer)
+    output_excerpt = Column(Text)
+    error = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ModelRouteDecision(Base):
+    """İş türü → model onayı (ADIM 11.4); onaylı yön system_settings 'model.route.<İŞ_TÜRÜ>'."""
+    __tablename__ = "model_route_decisions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_type = Column(String(32), nullable=False)
+    model_code = Column(String(128))
+    previous_model_code = Column(String(128))
+    run_id = Column(UUID(as_uuid=True), ForeignKey("quality_runs.id", ondelete="SET NULL"))
+    evidence = Column(JSONB)
+    note = Column(Text)
+    decided_by_actor_id = Column(UUID(as_uuid=True))
+    decided_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class EdgeJob(Base):
     """Edge ajanına giden iş (ADIM 10.5): araç çağrısı → kuyruk → ajan yoklamada alır → sonucu döner."""
     __tablename__ = "edge_jobs"

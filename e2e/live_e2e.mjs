@@ -1066,6 +1066,23 @@ try {
   const mtProj = ((await api(mt.page, '/api/v1/projects/?scope=mine')).body || []).find((x) => x.name === mtName);
   if (mtProj) await api(mt.page, `/api/v1/projects/${mtProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
   await mt.ctx.close();
+
+  // 11.4 Model yönlendirici: canlıda ONAY VERİLMEZ (platform varsayılanını tüm müşteriler için değiştirir). Süper Admin ekranda
+  // beş iş türünü, son kalite testinin matrisini ve önerileri görür; şirket yöneticisi bu uçlara erişemez
+  const mr = await session('super');
+  await mr.page.goto(`${APP}/#/super-admin/model-router`);
+  const routeTable = mr.page.getByRole('table', { name: 'İş türü yönlendirmeleri' });
+  await routeTable.waitFor({ timeout: 30000 });
+  const routeRows = await routeTable.locator('tbody tr').count();
+  const matrixRows = await mr.page.getByRole('table', { name: 'Kalite matrisi' }).locator('tbody tr').count().catch(() => 0);
+  const recCount = await routeTable.getByRole('button', { name: 'Önerileni onayla' }).count();
+  await shot(mr.page, '19-model-yonlendirici');
+  await mr.ctx.close();
+  const mrAdm = await session('admin');
+  const mrDenied = (await api(mrAdm.page, '/api/v1/system/model-router')).status;
+  await mrAdm.ctx.close();
+  step(routeRows === 5 && mrDenied === 403, 'Model yönlendirici: 5 iş türü, kalite matrisi ve öneriler Süper Admin\'de; şirket yöneticisi erişemiyor',
+    `iş türü: ${routeRows} · matriste model: ${matrixRows} · onay bekleyen öneri: ${recCount} · şirket yöneticisi: ${mrDenied}`);
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);
