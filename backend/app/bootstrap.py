@@ -106,6 +106,12 @@ async def ensure_catalog() -> None:
         n = await ensure_integration_catalog(db)
     if n:
         logger.info("Bağlantı kataloğu kartları yüklendi: %s", n)
+    from app.services.mappings import ensure_templates as ensure_mapping_templates
+
+    async with AsyncSessionLocal() as db:
+        n = await ensure_mapping_templates(db)
+    if n:
+        logger.info("RECDx hazır eşlemeleri yüklendi: %s", n)
 
 
 async def main() -> None:

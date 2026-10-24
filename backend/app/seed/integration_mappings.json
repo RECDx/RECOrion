@@ -1,0 +1,84 @@
+[
+  {"code": "odoo_product", "connector": "odoo", "object_type": "PRODUCT", "name": "Odoo ürün kartı",
+   "description": "Ürün/hizmet kartı → Odoo product.template (Odoo 19/20). Stok koduyla eşleşir: aynı kodla ikinci kart açılmaz, güncellenir.",
+   "target": {"model": "product.template"}, "match": {"source": "code", "target": "default_code"},
+   "rules": [
+     {"target": "name", "transform": "copy", "source": "name"},
+     {"target": "default_code", "transform": "copy", "source": "code"},
+     {"target": "type", "transform": "map", "source": "type", "params": {"values": {"STOCK": "consu", "CONSUMABLE": "consu", "SERVICE": "service"}}},
+     {"target": "is_storable", "transform": "map", "source": "type", "params": {"values": {"STOCK": true, "CONSUMABLE": false, "SERVICE": false}}},
+     {"target": "uom_id", "transform": "lookup", "source": "unit", "params": {"model": "uom.uom", "fields": ["name"], "values": {
+       "Adet": ["Adet", "Birim", "Units", "Unit(s)"], "Kg": ["kg", "Kg"], "g": ["g"], "Ton": ["t", "Ton"], "Lt": ["L", "Litre", "Liter(s)"],
+       "ml": ["ml"], "m": ["m", "Metre"], "m²": ["m²"], "m³": ["m³"], "Saat": ["Saat", "Hours", "Hour(s)"], "Gün": ["Gün", "Days", "Day(s)"],
+       "Paket": ["Paket", "Pack of 6", "Units"], "Koli": ["Koli", "Units"], "Kutu": ["Kutu", "Units"]}}},
+     {"target": "list_price", "transform": "copy", "source": "sale_price"},
+     {"target": "standard_price", "transform": "copy", "source": "purchase_price"},
+     {"target": "barcode", "transform": "copy", "source": "barcode"},
+     {"target": "categ_id", "transform": "lookup", "source": "category", "params": {"model": "product.category", "fields": ["name", "complete_name"], "optional": true}},
+     {"target": "taxes_id", "transform": "lookup", "source": "vat_rate", "params": {"model": "account.tax", "fields": ["amount"], "many": true, "optional": true,
+       "domain": [["type_tax_use", "=", "sale"]]}},
+     {"target": "supplier_taxes_id", "transform": "lookup", "source": "vat_rate", "params": {"model": "account.tax", "fields": ["amount"], "many": true, "optional": true,
+       "domain": [["type_tax_use", "=", "purchase"]]}},
+     {"target": "description_sale", "transform": "copy", "source": "description"}
+   ]},
+  {"code": "odoo_partner", "connector": "odoo", "object_type": "PARTNER", "name": "Odoo cari",
+   "description": "Cari → Odoo res.partner. VKN/TCKN ile eşleşir. Müşteri/tedarikçi rolü Odoo sıralamasına (rank) yazılır.",
+   "target": {"model": "res.partner"}, "match": {"source": "tax_number", "target": "vat"},
+   "rules": [
+     {"target": "name", "transform": "copy", "source": "name"},
+     {"target": "vat", "transform": "copy", "source": "tax_number"},
+     {"target": "email", "transform": "copy", "source": "email"},
+     {"target": "phone", "transform": "copy", "source": "phone"},
+     {"target": "street", "transform": "copy", "source": "street"},
+     {"target": "street2", "transform": "template", "params": {"text": "{district}"}},
+     {"target": "city", "transform": "copy", "source": "city"},
+     {"target": "zip", "transform": "copy", "source": "zip"},
+     {"target": "country_id", "transform": "lookup", "source": "country", "params": {"model": "res.country", "fields": ["code"], "optional": true}},
+     {"target": "customer_rank", "transform": "contains", "source": "roles", "params": {"value": "CUSTOMER", "true_value": 1, "false_value": 0}},
+     {"target": "supplier_rank", "transform": "contains", "source": "roles", "params": {"value": "SUPPLIER", "true_value": 1, "false_value": 0}},
+     {"target": "comment", "transform": "template", "params": {"text": "Vergi dairesi: {tax_office}"}}
+   ]},
+  {"code": "odoo_sale_quote", "connector": "odoo", "object_type": "ORDER", "name": "Odoo satış teklifi",
+   "description": "Satış teklifi/siparişi → Odoo sale.order (teklif olarak açılır; onaylama Odoo'da yapılır). Cari VKN veya unvanla, ürün stok koduyla bulunur.",
+   "target": {"model": "sale.order"}, "when": {"field": "direction", "equals": "SALE"},
+   "rules": [
+     {"target": "partner_id", "transform": "lookup", "source": "partner_ref", "params": {"model": "res.partner", "fields": ["vat", "name"]}},
+     {"target": "date_order", "transform": "copy", "source": "date"},
+     {"target": "note", "transform": "copy", "source": "notes"},
+     {"target": "order_line", "transform": "lines", "source": "lines", "params": {"rules": [
+       {"target": "product_id", "transform": "lookup", "source": "product_code", "params": {"model": "product.product", "fields": ["default_code"], "optional": true}},
+       {"target": "name", "transform": "copy", "source": "description"},
+       {"target": "product_uom_qty", "transform": "copy", "source": "quantity"},
+       {"target": "price_unit", "transform": "copy", "source": "unit_price"},
+       {"target": "discount", "transform": "copy", "source": "discount"},
+       {"target": "tax_ids", "transform": "lookup", "source": "vat_rate", "params": {"model": "account.tax", "fields": ["amount"], "many": true, "optional": true,
+         "domain": [["type_tax_use", "=", "sale"]]}}
+     ]}}
+   ]},
+  {"code": "odoo_purchase_order", "connector": "odoo", "object_type": "ORDER", "name": "Odoo satın alma siparişi",
+   "description": "Satın alma teklif isteği/siparişi → Odoo purchase.order. Tedarikçi VKN veya unvanla, ürün stok koduyla bulunur.",
+   "target": {"model": "purchase.order"}, "when": {"field": "direction", "equals": "PURCHASE"},
+   "rules": [
+     {"target": "partner_id", "transform": "lookup", "source": "partner_ref", "params": {"model": "res.partner", "fields": ["vat", "name"]}},
+     {"target": "date_order", "transform": "copy", "source": "date"},
+     {"target": "order_line", "transform": "lines", "source": "lines", "params": {"rules": [
+       {"target": "product_id", "transform": "lookup", "source": "product_code", "params": {"model": "product.product", "fields": ["default_code"], "optional": true}},
+       {"target": "name", "transform": "copy", "source": "description"},
+       {"target": "product_qty", "transform": "copy", "source": "quantity"},
+       {"target": "price_unit", "transform": "copy", "source": "unit_price"},
+       {"target": "tax_ids", "transform": "lookup", "source": "vat_rate", "params": {"model": "account.tax", "fields": ["amount"], "many": true, "optional": true,
+         "domain": [["type_tax_use", "=", "purchase"]]}}
+     ]}}
+   ]},
+  {"code": "odoo_task", "connector": "odoo", "object_type": "TASK", "name": "Odoo proje görevi",
+   "description": "Görev → Odoo project.task. Proje adı ve sorumlunun e-postası (Odoo kullanıcı girişi) Odoo'da aranır.",
+   "target": {"model": "project.task"},
+   "rules": [
+     {"target": "name", "transform": "copy", "source": "title"},
+     {"target": "description", "transform": "copy", "source": "description"},
+     {"target": "date_deadline", "transform": "copy", "source": "due_date"},
+     {"target": "project_id", "transform": "lookup", "source": "project_ref", "params": {"model": "project.project", "fields": ["name"], "optional": true}},
+     {"target": "user_ids", "transform": "lookup", "source": "assignee_email", "params": {"model": "res.users", "fields": ["login", "email"], "many": true, "optional": true}},
+     {"target": "priority", "transform": "map", "source": "priority", "params": {"values": {"LOW": "0", "NORMAL": "1", "HIGH": "2"}, "default": "1"}}
+   ]}
+]

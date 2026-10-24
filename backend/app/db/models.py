@@ -785,6 +785,34 @@ class IntegrationCatalogEntry(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class IntegrationMapping(Base):
+    """Eşleme (ADIM 12.3): ortak iş nesnesi → bağlantıdaki hedef. tenant_id NULL = RECDx hazır eşlemesi (şablon)."""
+    __tablename__ = "integration_mappings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"))
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="CASCADE"))
+    code = Column(String(64), unique=True)
+    connector = Column(String(32), nullable=False)
+    object_type = Column(String(16), nullable=False)
+    name = Column(String(160), nullable=False)
+    description = Column(Text)
+    target = Column(JSONB, nullable=False)
+    rules = Column(JSONB, nullable=False, default=list)
+    match = Column(JSONB)
+    when = Column(JSONB)
+    status = Column(String(16), nullable=False, default="DRAFT")  # DRAFT, ACTIVE, ARCHIVED
+    version = Column(Integer, nullable=False, default=1)
+    source_template_id = Column(UUID(as_uuid=True), ForeignKey("integration_mappings.id", ondelete="SET NULL"))
+    last_check = Column(JSONB)
+    last_dry_run = Column(JSONB)
+    approved_by_actor_id = Column(UUID(as_uuid=True))
+    approved_at = Column(DateTime(timezone=True))
+    created_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class ProjectTemplate(Base):
     """Proje şablonu (ADIM 11.1). tenant_id NULL = RECDx platform şablonu; dolu = şirket şablonu (KVKK: RECDx göremez)."""
     __tablename__ = "project_templates"

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { KeyRound, LogIn, LogOut, Plug, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
+import { KeyRound, LogIn, LogOut, Plug, Plus, RefreshCw, Save, ShieldCheck, Wand2 } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import '../projects/projects.css';
 import './integrations.css';
 import { CatalogGallery, SetupSteps } from './Catalog';
+import MappingStudio from './MappingStudio';
 
 const STATUS = { EXECUTED: ['Çalıştı', 'success'], PENDING_APPROVAL: ['Onay bekliyor', 'warning'], REJECTED: ['Reddedildi', 'neutral'],
   FAILED: ['Hata', 'danger'], DENIED: ['Yetkisiz', 'danger'] };
@@ -33,6 +34,7 @@ export default function IntegrationsPanel({ tenantId }) {
   const [catalog, setCatalog] = useState(null);
   const [systems, setSystems] = useState(null);
   const [gallery, setGallery] = useState(false);
+  const [studio, setStudio] = useState(null);
   const [conns, setConns] = useState(null);
   const [calls, setCalls] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -99,6 +101,7 @@ export default function IntegrationsPanel({ tenantId }) {
                 <Button size="sm" variant="secondary" onClick={() => setEditing(c)}>Düzenle</Button>
                 <Button size="sm" variant="ghost" onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Devre dışı bırak' : 'Etkinleştir'}</Button>
                 <Button size="sm" icon={ShieldCheck} onClick={() => setOpen(open === c.id ? null : c.id)}>Araçlar ve yetkiler</Button>
+                {['odoo', 'mcp', 'edge'].includes(c.connector) && <Button size="sm" variant="secondary" icon={Wand2} onClick={() => setStudio(c)}>Eşlemeler</Button>}
                 {open === c.id && <div style={{ flexBasis: '100%' }}><GrantsEditor tenantId={tenantId} conn={c} agents={agents} onSaved={load} /></div>}
               </li>
             ))}
@@ -129,6 +132,7 @@ export default function IntegrationsPanel({ tenantId }) {
           </div>
         )}
       </Card>
+      {studio && <MappingStudio tenantId={tenantId} conn={studio} onClose={() => setStudio(null)} />}
       {gallery && <CatalogGallery tenantId={tenantId} catalog={systems} onClose={() => setGallery(false)} onPick={pick} />}
       {editing && <ConnectionModal tenantId={tenantId} catalog={catalog.connectors} conn={editing.id ? editing : null}
         entry={editing.entry || systems.entries.find((e) => e.code === editing.catalog_code)} redirectUri={systems.redirect_uri}
