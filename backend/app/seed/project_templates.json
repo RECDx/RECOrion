@@ -1,0 +1,148 @@
+[
+  {
+    "code": "web-sitesi-yenileme",
+    "name": "Kurumsal web sitesi yenileme",
+    "category": "Yazılım",
+    "kind": "PROJECT",
+    "field_package": "YAZILIM",
+    "description": "Mevcut kurumsal sitenin ihtiyaç analizi, tasarım, geliştirme, içerik, test ve yayına alınması.",
+    "plan": {
+      "summary": "İhtiyaçlar netleştirilir, tasarım onaylanır, geliştirme ve içerik paralel ilerler, test ve KVKK kontrolünden sonra yayına alınır.",
+      "steps": [
+        {"key": "S1", "title": "İhtiyaç analizi ve site haritası", "job_title": "İş Analisti", "department": "Bilgi Teknolojileri", "estimated_days": 2,
+         "description": "Mevcut sitenin analizi, paydaş ihtiyaçları, hedef kitle ve site haritası.", "acceptance_criteria": "Onaylı site haritası ve sayfa listesi"},
+        {"key": "S2", "title": "Arayüz tasarımı", "job_title": "UI/UX Tasarımcı", "department": "Bilgi Teknolojileri", "estimated_days": 3, "depends_on": ["S1"],
+         "description": "Ana sayfa ve şablon sayfa tasarımları, mobil uyum.", "acceptance_criteria": "Onaylı tasarım dosyaları (masaüstü + mobil)"},
+        {"key": "S3", "title": "Geliştirme", "job_title": "Yazılım Geliştirici", "department": "Bilgi Teknolojileri", "estimated_days": 5, "depends_on": ["S2"],
+         "description": "Tasarımın koda dökülmesi, içerik yönetimi, form ve iletişim altyapısı.", "acceptance_criteria": "Test ortamında çalışan site"},
+        {"key": "S4", "title": "İçerik hazırlığı", "job_title": "İçerik Editörü", "department": "Pazarlama", "estimated_days": 3, "depends_on": ["S1"],
+         "description": "Sayfa metinleri, görseller, SEO başlık ve açıklamaları.", "acceptance_criteria": "Tüm sayfaların onaylı içeriği"},
+        {"key": "S5", "title": "Test ve KVKK kontrolü", "job_title": "Test Uzmanı", "department": "Bilgi Teknolojileri", "estimated_days": 2, "depends_on": ["S3", "S4"],
+         "description": "Fonksiyon, tarayıcı, hız testi; çerez bildirimi, aydınlatma metni ve form rızalarının kontrolü.", "acceptance_criteria": "Kritik hatasız test raporu, KVKK kontrol listesi"},
+        {"key": "S6", "title": "Yayına alma", "job_title": "Yazılım Geliştirici", "department": "Bilgi Teknolojileri", "estimated_days": 1, "depends_on": ["S5"],
+         "description": "Canlıya geçiş, yönlendirmeler, izleme.", "acceptance_criteria": "Canlı site ve geçiş kontrol listesi"}
+      ],
+      "risks": ["İçeriklerin gecikmesi geliştirmeyi bekletebilir", "Eski sayfa adreslerinin yönlendirilmemesi arama trafiğini düşürür"]
+    }
+  },
+  {
+    "code": "kvkk-uyum",
+    "name": "KVKK uyum projesi",
+    "category": "Hukuk & Uyum",
+    "kind": "PROJECT",
+    "field_package": "GENEL",
+    "description": "Kişisel veri envanteri, aydınlatma ve rıza metinleri, saklama-imha politikası, teknik ve idari tedbirler.",
+    "plan": {
+      "summary": "Veri envanteri çıkarılır, hukuki metinler ve politikalar hazırlanır, tedbirler uygulanır, eğitim ve iç denetimle kapanır. Hukuki metinler avukat onayından geçer.",
+      "steps": [
+        {"key": "S1", "title": "Kişisel veri envanteri", "job_title": "Uyum Uzmanı", "department": "Hukuk", "estimated_days": 4,
+         "description": "Departman bazında işlenen kişisel veriler, amaç, hukuki sebep, saklama süresi, aktarımlar.", "acceptance_criteria": "Departmanlarca doğrulanmış envanter"},
+        {"key": "S2", "title": "Aydınlatma ve açık rıza metinleri", "job_title": "Hukuk Müşaviri", "department": "Hukuk", "estimated_days": 3, "depends_on": ["S1"],
+         "description": "Çalışan, müşteri, ziyaretçi, aday için aydınlatma metinleri; gerekli yerlerde açık rıza.", "acceptance_criteria": "Avukat onaylı metinler"},
+        {"key": "S3", "title": "Saklama ve imha politikası", "job_title": "Uyum Uzmanı", "department": "Hukuk", "estimated_days": 2, "depends_on": ["S1"],
+         "description": "Veri kategorilerine göre saklama süreleri ve periyodik imha süreci.", "acceptance_criteria": "Onaylı politika"},
+        {"key": "S4", "title": "Teknik tedbirler", "job_title": "Bilgi Güvenliği Uzmanı", "department": "Bilgi Teknolojileri", "estimated_days": 4, "depends_on": ["S1"],
+         "description": "Yetkilendirme, kayıt, şifreleme, yedekleme, erişim gözden geçirmesi.", "acceptance_criteria": "Tedbir kontrol listesi ve kanıtlar"},
+        {"key": "S5", "title": "VERBİS ve iç süreçler", "job_title": "Uyum Uzmanı", "department": "Hukuk", "estimated_days": 2, "depends_on": ["S2", "S3"],
+         "description": "Kayıt yükümlülüğünün değerlendirilmesi, ilgili kişi başvuru ve ihlal bildirim süreçleri.", "acceptance_criteria": "Süreç dokümanları"},
+        {"key": "S6", "title": "Eğitim ve iç denetim", "job_title": "İnsan Kaynakları Uzmanı", "department": "İnsan Kaynakları", "estimated_days": 2, "depends_on": ["S4", "S5"],
+         "description": "Çalışan farkındalık eğitimi ve uyum iç denetimi.", "acceptance_criteria": "Eğitim katılım kaydı, denetim raporu"}
+      ],
+      "risks": ["Departmanların envantere geç dönmesi", "Hukuki metinlerin güncel mevzuata göre avukatça kontrol edilmemesi"]
+    }
+  },
+  {
+    "code": "urun-lansmani",
+    "name": "Yeni ürün lansmanı",
+    "category": "Pazarlama",
+    "kind": "PROJECT",
+    "field_package": "GENEL",
+    "description": "Pazar araştırması, konumlandırma, kampanya, satış ekibi hazırlığı ve lansman sonrası ölçüm.",
+    "plan": {
+      "summary": "Pazar ve rakip analiziyle konumlandırma belirlenir, kampanya ve satış materyalleri hazırlanır, lansman yapılır ve ilk 30 gün ölçülür.",
+      "steps": [
+        {"key": "S1", "title": "Pazar ve rakip analizi", "job_title": "Pazarlama Uzmanı", "department": "Pazarlama", "estimated_days": 3,
+         "description": "Hedef segmentler, rakip fiyat ve mesajları, fırsatlar.", "acceptance_criteria": "Analiz raporu"},
+        {"key": "S2", "title": "Konumlandırma ve fiyat önerisi", "job_title": "Ürün Yöneticisi", "department": "Pazarlama", "estimated_days": 2, "depends_on": ["S1"],
+         "description": "Değer önerisi, mesaj çerçevesi, fiyat seçenekleri.", "acceptance_criteria": "Yönetim onaylı konumlandırma"},
+        {"key": "S3", "title": "Kampanya planı ve içerikler", "job_title": "İçerik Editörü", "department": "Pazarlama", "estimated_days": 4, "depends_on": ["S2"],
+         "description": "Kanal planı, bütçe dağılımı, metin ve görsel içerikler.", "acceptance_criteria": "Onaylı kampanya takvimi ve içerikler"},
+        {"key": "S4", "title": "Satış ekibi materyalleri", "job_title": "Satış Uzmanı", "department": "Satış", "estimated_days": 2, "depends_on": ["S2"],
+         "description": "Sunum, sık sorulan sorular, itiraz karşılama.", "acceptance_criteria": "Satış kiti"},
+        {"key": "S5", "title": "Lansman sonrası ölçüm", "job_title": "Pazarlama Uzmanı", "department": "Pazarlama", "estimated_days": 2, "depends_on": ["S3", "S4"],
+         "description": "İlk 30 günün erişim, dönüşüm ve satış göstergeleri.", "acceptance_criteria": "Ölçüm raporu ve öneriler"}
+      ],
+      "risks": ["Ürünün teslim tarihindeki kayma kampanya takvimini bozar"]
+    }
+  },
+  {
+    "code": "erp-entegrasyonu",
+    "name": "ERP entegrasyonu (e-ticaret / muhasebe)",
+    "category": "Yazılım",
+    "kind": "PROJECT",
+    "field_package": "YAZILIM",
+    "description": "E-ticaret veya muhasebe sistemi ile ERP (Logo, Mikro, Odoo vb.) arasında sipariş, stok, cari ve fatura aktarımı.",
+    "plan": {
+      "summary": "Veri eşleştirme çıkarılır, entegrasyon test ortamında geliştirilir, paralel çalıştırmayla doğrulanır, sonra canlıya alınır.",
+      "steps": [
+        {"key": "S1", "title": "Süreç ve veri eşleştirme", "job_title": "İş Analisti", "department": "Bilgi Teknolojileri", "estimated_days": 3,
+         "description": "Hangi verinin hangi yönde, ne sıklıkta aktarılacağı; alan eşleştirme tablosu.", "acceptance_criteria": "Onaylı eşleştirme dokümanı"},
+        {"key": "S2", "title": "Entegrasyon geliştirme", "job_title": "Yazılım Geliştirici", "department": "Bilgi Teknolojileri", "estimated_days": 6, "depends_on": ["S1"],
+         "description": "Bağlayıcılar, hata ve yeniden deneme, kayıt.", "acceptance_criteria": "Test ortamında uçtan uca aktarım"},
+        {"key": "S3", "title": "Test ve paralel çalıştırma", "job_title": "Test Uzmanı", "department": "Bilgi Teknolojileri", "estimated_days": 4, "depends_on": ["S2"],
+         "description": "Örnek veriyle mutabakat; bir dönem paralel çalıştırma.", "acceptance_criteria": "Mutabakat raporu (fark yok)"},
+        {"key": "S4", "title": "Muhasebe onayı", "job_title": "Muhasebe Uzmanı", "department": "Finans", "estimated_days": 1, "depends_on": ["S3"],
+         "description": "Fatura ve cari kayıtlarının muhasebe açısından kontrolü.", "acceptance_criteria": "Muhasebe onayı"},
+        {"key": "S5", "title": "Canlıya geçiş ve izleme", "job_title": "Yazılım Geliştirici", "department": "Bilgi Teknolojileri", "estimated_days": 2, "depends_on": ["S4"],
+         "description": "Geçiş, ilk hafta yakın izleme, hata alarmı.", "acceptance_criteria": "Geçiş raporu"}
+      ],
+      "risks": ["Kod/birim farklılıkları (stok kodu, KDV) aktarım hatası üretir", "ERP sürüm farklılıkları"]
+    }
+  },
+  {
+    "code": "ise-alim",
+    "name": "Pozisyon için işe alım süreci",
+    "category": "İnsan Kaynakları",
+    "kind": "PROJECT",
+    "field_package": "GENEL",
+    "description": "Pozisyon tanımından teklif ve oryantasyona kadar işe alım; aday verileri KVKK'ya uygun işlenir.",
+    "plan": {
+      "summary": "Pozisyon tanımı onaylanır, ilan yayımlanır, adaylar değerlendirilir, mülakatlardan sonra teklif ve oryantasyonla tamamlanır.",
+      "steps": [
+        {"key": "S1", "title": "Pozisyon tanımı ve yetkinlikler", "job_title": "İnsan Kaynakları Uzmanı", "department": "İnsan Kaynakları", "estimated_days": 1,
+         "description": "Görev tanımı, yetkinlikler, ücret aralığı (gizli).", "acceptance_criteria": "Yönetici onaylı pozisyon tanımı"},
+        {"key": "S2", "title": "İlan ve aday toplama", "job_title": "İnsan Kaynakları Uzmanı", "department": "İnsan Kaynakları", "estimated_days": 5, "depends_on": ["S1"],
+         "description": "İlan metni, kanallar, aday aydınlatma metni.", "acceptance_criteria": "Aday havuzu"},
+        {"key": "S3", "title": "Ön eleme", "job_title": "İnsan Kaynakları Uzmanı", "department": "İnsan Kaynakları", "estimated_days": 2, "depends_on": ["S2"],
+         "description": "Yetkinlik kriterlerine göre ön değerlendirme; ayrımcı ölçüt kullanılmaz.", "acceptance_criteria": "Kısa liste ve gerekçeler"},
+        {"key": "S4", "title": "Mülakatlar ve değerlendirme", "job_title": "İnsan Kaynakları Uzmanı", "department": "İnsan Kaynakları", "estimated_days": 4, "depends_on": ["S3"],
+         "description": "Mülakat planı, değerlendirme formları.", "acceptance_criteria": "Değerlendirme özeti, aday önerisi"},
+        {"key": "S5", "title": "Teklif ve oryantasyon", "job_title": "İnsan Kaynakları Uzmanı", "department": "İnsan Kaynakları", "estimated_days": 2, "depends_on": ["S4"],
+         "description": "Teklif, işe giriş belgeleri, ilk hafta planı.", "acceptance_criteria": "Kabul edilmiş teklif ve oryantasyon planı"}
+      ],
+      "risks": ["Aday verilerinin süresinden fazla saklanması (KVKK)"]
+    }
+  },
+  {
+    "code": "musteri-sikayeti",
+    "name": "Müşteri şikâyeti vakası",
+    "category": "Müşteri Hizmetleri",
+    "kind": "CASE",
+    "field_package": "GENEL",
+    "description": "Bir müşteri şikâyetinin kayıt, kök neden, çözüm, müşteriye dönüş ve önleyici faaliyetle kapatılması.",
+    "plan": {
+      "summary": "Şikâyet kayıt altına alınır, kök neden bulunur, çözüm uygulanır, müşteriye yazılı dönülür ve tekrarını önleyecek faaliyet tanımlanır.",
+      "steps": [
+        {"key": "S1", "title": "Şikâyetin kaydı ve sınıflandırılması", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 0.5,
+         "description": "Şikâyet özeti, etkilenen ürün/hizmet, öncelik.", "acceptance_criteria": "Sınıflandırılmış kayıt", "requires_approval": false},
+        {"key": "S2", "title": "Kök neden analizi", "job_title": "Kalite Uzmanı", "department": "Kalite", "estimated_days": 1, "depends_on": ["S1"],
+         "description": "5 Neden / balık kılçığı ile kök neden.", "acceptance_criteria": "Kök neden raporu"},
+        {"key": "S3", "title": "Çözüm ve müşteriye dönüş", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 1, "depends_on": ["S2"],
+         "description": "Çözümün uygulanması ve müşteriye yazılı yanıt taslağı.", "acceptance_criteria": "Onaylı müşteri yanıtı"},
+        {"key": "S4", "title": "Önleyici faaliyet", "job_title": "Kalite Uzmanı", "department": "Kalite", "estimated_days": 1, "depends_on": ["S2"],
+         "description": "Tekrarını önleyecek süreç değişikliği ve sorumlusu.", "acceptance_criteria": "Önleyici faaliyet kaydı"}
+      ],
+      "risks": ["Yasal süre içinde yanıt verilmemesi"]
+    }
+  }
+]

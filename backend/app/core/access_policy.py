@@ -103,6 +103,15 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/models/sync-evren"): SUPER_ADMIN,
 
     # LLM TL fiyat listesi (ADIM 7.5.1)
+    # Proje şablonları (ADIM 11.1): platform şablonlarını RECDx yönetir; şirket şablonu KVKK gereği RECDx'e görünmez
+    ("GET", f"{P}/system/project-templates"): SUPER_ADMIN,
+    ("POST", f"{P}/system/project-templates"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/project-templates/{{template_id}}"): SUPER_ADMIN,
+    ("GET", f"{P}/project-templates"): AUTH,
+    ("GET", f"{P}/project-templates/{{template_id}}"): AUTH,
+    ("POST", f"{P}/project-templates/{{template_id}}/use"): HANDLER("project:create"),
+    ("PUT", f"{P}/project-templates/{{template_id}}"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/save-as-template"): HANDLER(),
     ("GET", f"{P}/system/llm-prices"): SUPER_ADMIN,
     ("POST", f"{P}/system/llm-prices"): SUPER_ADMIN,
     ("PUT", f"{P}/system/llm-prices/cr-rate"): SUPER_ADMIN,

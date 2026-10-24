@@ -372,6 +372,7 @@ class Project(Base):
     # Müşterinin GitHub/Gitea hesabına yansıtma (ADIM 10.3, #297): şirket bağlantısı + hedef 'sahip/depo'
     mirror_connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="SET NULL"))
     mirror_repo = Column(String(200))
+    template_id = Column(UUID(as_uuid=True), ForeignKey("project_templates.id", ondelete="SET NULL"))  # ADIM 11.1
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -758,6 +759,27 @@ class IntegrationConnection(Base):
     agent_token_hash = Column(String(64))
     agent_seen_at = Column(DateTime(timezone=True))
     agent_info = Column(JSONB)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProjectTemplate(Base):
+    """Proje şablonu (ADIM 11.1). tenant_id NULL = RECDx platform şablonu; dolu = şirket şablonu (KVKK: RECDx göremez)."""
+    __tablename__ = "project_templates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"))
+    code = Column(String(64), unique=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    category = Column(String(80))
+    kind = Column(String(16), nullable=False, default="PROJECT")
+    field_package = Column(String(32), nullable=False, default="GENEL")
+    plan = Column(JSONB, nullable=False)
+    status = Column(String(16), nullable=False, default="ACTIVE")  # ACTIVE, ARCHIVED
+    source_project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"))
+    use_count = Column(Integer, nullable=False, default=0)
+    created_by_actor_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

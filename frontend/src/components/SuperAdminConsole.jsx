@@ -54,13 +54,15 @@ import {
   Globe,
   Menu,
   Coins,
-  Bot
+  Bot,
+  LayoutTemplate,
 } from 'lucide-react';
 import { api } from '../api';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
 import OdooProductPicker from './OdooProductPicker';
 import CatalogAdmin from './catalog/CatalogAdmin';
+import TemplatesAdmin from './projects/TemplatesAdmin';
 import EmailTemplateBuilder from './email/EmailTemplateBuilder';
 import { compileBlocksToHtml, htmlToBlocks } from './email/emailBlocks';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
@@ -74,6 +76,7 @@ const TAB_SLUG_MAP = {
   SECTORS: 'sectors',
   PROFESSIONS: 'professions',
   CATALOG: 'catalog',
+  PROJECT_TEMPLATES: 'project-templates',
   PERMISSIONS: 'permissions',
   ROLES: 'roles',
   PLANS: 'plans',
@@ -92,6 +95,7 @@ const SLUG_TAB_MAP = {
   'sectors': 'SECTORS',
   'professions': 'PROFESSIONS',
   'catalog': 'CATALOG',
+  'project-templates': 'PROJECT_TEMPLATES',
   'permissions': 'PERMISSIONS',
   'roles': 'ROLES',
   'plans': 'PLANS',
@@ -2104,6 +2108,18 @@ export default function SuperAdminConsole({
                 {!sidebarCollapsed && <span>Departman & Unvan</span>}
               </div>
             </button>
+
+            {/* PROJE ŞABLONLARI (ADIM 11.1) */}
+            <button
+              onClick={() => { switchTab('PROJECT_TEMPLATES'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'PROJECT_TEMPLATES' ? 'active' : ''}`}
+              title="Proje Şablonları"
+            >
+              <div className="super-admin-nav-item-left">
+                <LayoutTemplate style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+                {!sidebarCollapsed && <span>Proje Şablonları</span>}
+              </div>
+            </button>
             </>
           )}
 
@@ -2357,6 +2373,7 @@ export default function SuperAdminConsole({
               {activeTab === 'AI_MODEL_SETTINGS' && 'Genel AI Modelleri & Yapay Zeka Kullanımı'}
               {activeTab === 'AI_ASSISTANT' && 'Süper Yönetici Asistanı'}
               {activeTab === 'CATALOG' && 'Departman & Unvan Kataloğu'}
+              {activeTab === 'PROJECT_TEMPLATES' && 'Proje Şablonları'}
               {activeTab === 'SECTORS' && 'Sektör Tanımları (Ticaret Bakanlığı)'}
               {activeTab === 'PROFESSIONS' && 'Meslek Grubu Tanımları (Ticaret Bakanlığı)'}
             </span>
@@ -4466,6 +4483,7 @@ export default function SuperAdminConsole({
           {activeTab === 'LLM_PRICES' && <LlmPricing />}
 
           {activeTab === 'CATALOG' && <CatalogAdmin />}
+          {activeTab === 'PROJECT_TEMPLATES' && <TemplatesAdmin />}
 
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
           {activeTab === 'MODELS' && (

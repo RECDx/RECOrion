@@ -954,6 +954,44 @@ try {
   await od.ctx.close();
   await api(tm.page, `/api/v1/projects/${tProj.body.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
   await tm.ctx.close();
+
+  // 11.1 Proje şablonları: proje yöneticisi RECDx'in hazır "Müşteri şikâyeti vakası" şablonundan Case açar (plan taslak gelir),
+  // sonra bunu şirket şablonu olarak kaydeder; şablon şirkette görünür, RECDx Süper Admin'e görünmez (KVKK)
+  const tp = await session('manager');
+  await tp.page.getByRole('button', { name: 'Şablondan oluştur' }).click();
+  const gallery = tp.page.getByRole('dialog');
+  await gallery.getByRole('button', { name: 'RECDx hazır' }).click();
+  await gallery.getByRole('listitem').filter({ hasText: 'Müşteri şikâyeti vakası' }).click();
+  const tplProject = `${NAME} şikâyet`;
+  await gallery.locator('#tpl-name').fill(tplProject);
+  const tplSteps = await gallery.getByRole('list', { name: 'Şablon adımları' }).locator('li').count();
+  await gallery.getByRole('button', { name: 'Projeyi oluştur' }).click();
+  await tp.page.getByRole('heading', { name: tplProject }).waitFor({ timeout: 20000 });
+  await tp.page.locator('.pj-step').first().waitFor({ timeout: 20000 });
+  const tplPlanSteps = await tp.page.locator('.pj-step').count();
+  step(tplSteps === 4 && tplPlanSteps === 4, 'Şablondan Case açıldı; şablonun 4 adımı plana taslak olarak geldi (Beyin AI çağrısı olmadan)',
+    `galeride ${tplSteps} adım, planda ${tplPlanSteps} adım`);
+  await tp.page.getByRole('button', { name: 'Şablon olarak kaydet' }).click();
+  const tplName = `Şikâyet akışı ${NAME.slice(-5)}`;
+  const saveDlg = tp.page.getByRole('dialog');
+  await saveDlg.locator('#st-name').fill(tplName);
+  await saveDlg.locator('#st-cat').fill('Müşteri Hizmetleri');
+  await saveDlg.getByRole('button', { name: 'Kaydet' }).click();
+  await saveDlg.waitFor({ state: 'detached', timeout: 15000 });
+  const myTpl = ((await api(tp.page, '/api/v1/project-templates')).body || []).find((t) => t.name === tplName);
+  const sa2 = await session('super');
+  const saSees = ((await api(sa2.page, '/api/v1/project-templates')).body || []).some((t) => t.name === tplName);
+  const saDirect = myTpl ? (await api(sa2.page, `/api/v1/project-templates/${myTpl.id}`)).status : 0;
+  await sa2.ctx.close();
+  step(myTpl?.scope === 'COMPANY' && myTpl.step_count === 4 && !saSees && saDirect === 404,
+    'Proje şirket şablonu olarak kaydedildi; şirkette görünüyor, RECDx Süper Admin göremiyor (KVKK)',
+    `${myTpl ? `${myTpl.name} · ${myTpl.step_count} adım` : 'şablon yok'} · Süper Admin listede: ${saSees ? 'EVET' : 'hayır'}, doğrudan: ${saDirect}`);
+  await shot(tp.page, '16-sablondan-proje');
+  // Temizlik: test şablonu arşivlenir, test Case'i iptal edilir (test şirketinde birikmesin)
+  if (myTpl) await api(tp.page, `/api/v1/project-templates/${myTpl.id}`, { method: 'PUT', body: JSON.stringify({ status: 'ARCHIVED' }) });
+  const tplProj = ((await api(tp.page, '/api/v1/projects/?scope=mine')).body || []).find((x) => x.name === tplProject);
+  if (tplProj) await api(tp.page, `/api/v1/projects/${tplProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+  await tp.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

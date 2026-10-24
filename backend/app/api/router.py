@@ -24,6 +24,7 @@ from app.api.v1.repository import router as repository_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.integrations import router as integrations_router
 from app.api.v1.edge import router as edge_router
+from app.api.v1.templates import router as templates_router
 from app.core.access_policy import enforce_access_policy
 
 # Tüm uçlar merkezi erişim politikasından geçer (app/core/access_policy.py)
@@ -54,3 +55,4 @@ api_router.include_router(repository_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(integrations_router)
 api_router.include_router(edge_router)
+api_router.include_router(templates_router)

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, MessagesSquare, Pause, Play, Save } from 'lucide-react';
+import { ArrowLeft, LayoutTemplate, MessagesSquare, Pause, Play, Save } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
@@ -9,6 +9,7 @@ import WorkflowTab from './WorkflowTab';
 import CostTab from './CostTab';
 import CodeRepoTab from './CodeRepoTab';
 import { CloseTab, ReadinessTab, TeamSimTab } from './ProjectTabs';
+import { SaveTemplateModal } from './Templates';
 import { ProjectFields } from './ProjectHub';
 import { KIND, fmtDay, isEditable, statusOf } from './projectMeta';
 import './projects.css';
@@ -44,6 +45,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
   const [tab, setTab] = useState('info');
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const firstLoad = useRef(true);
 
   const reload = useCallback(async () => {
@@ -53,6 +55,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       if (firstLoad.current) {  // başlamış projede İş Akışı sekmesiyle açılır
         firstLoad.current = false;
         if (['ACTIVE', 'PAUSED'].includes(p.status)) setTab('flow');
+        else if (p.plan?.from_template && !p.plan.approved) setTab('plan');  // şablondan gelen taslak plan incelensin
       }
       setForm(pickForm(p));
       setActors(a);
@@ -129,8 +132,12 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
           {['ACTIVE', 'PAUSED', 'COMPLETED'].includes(project.status) && (
             <Button variant="secondary" icon={MessagesSquare} onClick={() => onOpenWork(project)}>Çalışma alanında aç</Button>
           )}
+          {project.can_manage && project.plan?.steps?.length > 0 && (
+            <Button variant="ghost" icon={LayoutTemplate} onClick={() => setSavingTemplate(true)}>Şablon olarak kaydet</Button>
+          )}
         </div>
       </div>
+      {savingTemplate && <SaveTemplateModal project={project} onClose={() => setSavingTemplate(false)} />}
 
       <div className="pj-tabs" role="tablist">
         {TABS.filter(([k]) => k !== 'cost' || project.can_manage).map(([k, l]) => (

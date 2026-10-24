@@ -88,6 +88,12 @@ async def ensure_catalog() -> None:
         added = await load_catalog(db)
     if added["departments"] or added["titles"]:
         logger.info("Platform kataloğu yüklendi: %s departman, %s unvan", added["departments"], added["titles"])
+    from app.services.project_templates import ensure_platform_templates
+
+    async with AsyncSessionLocal() as db:
+        n = await ensure_platform_templates(db)
+    if n:
+        logger.info("RECDx proje şablonları yüklendi: %s", n)
 
 
 async def main() -> None:
