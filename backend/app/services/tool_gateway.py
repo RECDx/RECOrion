@@ -34,7 +34,8 @@ def binding(conn: IntegrationConnection) -> str:
 
 def context(conn: IntegrationConnection) -> Context:
     return Context(config=dict(conn.config or {}), secrets=vault.unseal(conn.secret, binding(conn)) if conn.secret else {},
-                   tenant_id=str(conn.tenant_id))
+                   tenant_id=str(conn.tenant_id), connection_id=str(conn.id),
+                   state={"agent": conn.agent_info or {}, "seen_at": conn.agent_seen_at})
 
 
 def fn_name(conn: IntegrationConnection, tool: str) -> str:

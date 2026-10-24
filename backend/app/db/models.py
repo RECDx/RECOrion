@@ -754,8 +754,29 @@ class IntegrationConnection(Base):
     last_test_ok = Column(Boolean)
     last_error = Column(Text)
     created_by_actor_id = Column(UUID(as_uuid=True))
+    # Edge Connector (ADIM 10.5): ajan anahtarı özeti, son yoklama, ajanın bildirdiği şablon kataloğu
+    agent_token_hash = Column(String(64))
+    agent_seen_at = Column(DateTime(timezone=True))
+    agent_info = Column(JSONB)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EdgeJob(Base):
+    """Edge ajanına giden iş (ADIM 10.5): araç çağrısı → kuyruk → ajan yoklamada alır → sonucu döner."""
+    __tablename__ = "edge_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="CASCADE"), nullable=False)
+    template = Column(String(100), nullable=False)
+    params = Column(JSONB, nullable=False, default=dict)
+    status = Column(String(16), nullable=False, default="QUEUED")  # QUEUED, RUNNING, DONE, FAILED, EXPIRED
+    result = Column(JSONB)
+    error = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    picked_at = Column(DateTime(timezone=True))
+    done_at = Column(DateTime(timezone=True))
 
 
 class AgentToolGrant(Base):

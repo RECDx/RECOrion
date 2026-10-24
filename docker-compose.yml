@@ -244,6 +244,8 @@ services:
       - RECORION_SUPERADMIN_INITIAL_PASSWORD=${RECORION_SUPERADMIN_INITIAL_PASSWORD:-}
     volumes:
       - ./backend:/app
+      # Edge ajanı (ADIM 10.5): testlerde ajan ile geçidin birlikte sınanması için, salt okunur
+      - ./edge_agent:/edge_agent:ro
     networks:
       - recorion_net
 

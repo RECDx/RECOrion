@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plug, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
+import { KeyRound, Plug, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import '../projects/projects.css';
+import './integrations.css';
 
 const STATUS = { EXECUTED: ['Çalıştı', 'success'], PENDING_APPROVAL: ['Onay bekliyor', 'warning'], REJECTED: ['Reddedildi', 'neutral'],
   FAILED: ['Hata', 'danger'], DENIED: ['Yetkisiz', 'danger'] };
@@ -17,6 +18,7 @@ export default function IntegrationsPanel({ tenantId }) {
   const [agents, setAgents] = useState([]);
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(null);
+  const [token, setToken] = useState(null);
   const load = useCallback(() => Promise.all([
     api.getConnectors().then(setCatalog), api.getIntegrations(tenantId).then(setConns), api.getToolCalls(tenantId).then(setCalls),
     api.getCompanyAIAgents(tenantId).then((a) => setAgents(Array.isArray(a) ? a : a.agents || [])),
@@ -36,6 +38,10 @@ export default function IntegrationsPanel({ tenantId }) {
     if (next === 'DISABLED' && !(await confirmDialog({ message: `'${c.name}' devre dışı bırakılsın mı? AI personel bu bağlantının araçlarını kullanamaz.` }))) return;
     try { await api.updateIntegration(tenantId, c.id, { status: next }); load(); } catch (e) { toast.error(e.message); }
   };
+  const newToken = async (c) => {
+    if (c.agent?.has_token && !(await confirmDialog({ message: 'Yeni ajan anahtarı oluşturulsun mu? Eski anahtar hemen geçersiz olur; sunucudaki ajanın ayarı yenilenmeli.' }))) return;
+    try { setToken({ conn: c, ...(await api.newEdgeAgentToken(tenantId, c.id)) }); load(); } catch (e) { toast.error(e.message); }
+  };
 
   return (
     <div className="pj-steps">
@@ -47,9 +53,14 @@ export default function IntegrationsPanel({ tenantId }) {
             {conns.map((c) => (
               <li key={c.id} style={{ flexWrap: 'wrap' }}>
                 <span><strong>{c.name}</strong> <Badge tone="neutral">{c.connector_title}</Badge>{c.config?.access === 'READ_ONLY' && <> <Badge tone="info">Yalnızca okuma</Badge></>}<br />
-                  <small className="pj-hint">{c.last_test_at ? `Son deneme ${fmt(c.last_test_at)}: ${c.last_test_ok ? 'başarılı' : c.last_error || 'başarısız'}` : 'Henüz denenmedi'}</small></span>
+                  <small className="pj-hint">{c.last_test_at ? `Son deneme ${fmt(c.last_test_at)}: ${c.last_test_ok ? 'başarılı' : c.last_error || 'başarısız'}` : 'Henüz denenmedi'}</small>
+                  {c.agent && <><br /><small className="pj-hint">{c.agent.online
+                    ? `Ajan çevrimiçi · ${c.agent.hostname || 'sunucu'} · ${c.agent.templates} izinli şablon`
+                    : c.agent.seen_at ? `Ajan çevrimdışı (son görülme ${fmt(c.agent.seen_at)})` : c.agent.has_token ? 'Ajan henüz bağlanmadı' : 'Ajan anahtarı oluşturulmadı'}</small></>}</span>
                 <Badge tone={c.status === 'ACTIVE' ? 'success' : 'neutral'}>{c.status === 'ACTIVE' ? 'Etkin' : 'Devre dışı'}</Badge>
+                {c.agent && <Badge tone={c.agent.online ? 'success' : 'warning'}>{c.agent.online ? 'Ajan çevrimiçi' : 'Ajan çevrimdışı'}</Badge>}
                 <Button size="sm" variant="secondary" icon={RefreshCw} onClick={() => test(c)}>Dene</Button>
+                {c.connector === 'edge' && <Button size="sm" variant="secondary" icon={KeyRound} onClick={() => newToken(c)}>Ajan anahtarı</Button>}
                 <Button size="sm" variant="secondary" onClick={() => setEditing(c)}>Düzenle</Button>
                 <Button size="sm" variant="ghost" onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Devre dışı bırak' : 'Etkinleştir'}</Button>
                 <Button size="sm" icon={ShieldCheck} onClick={() => setOpen(open === c.id ? null : c.id)}>Araçlar ve yetkiler</Button>
@@ -85,7 +96,24 @@ export default function IntegrationsPanel({ tenantId }) {
       </Card>
       {editing && <ConnectionModal tenantId={tenantId} catalog={catalog.connectors} conn={editing.id ? editing : null}
         onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {token && <AgentTokenModal data={token} onClose={() => setToken(null)} />}
     </div>
+  );
+}
+
+/** Edge ajan anahtarı (ADIM 10.5): bir kez gösterilir; RECOrion'da yalnızca özeti saklanır. */
+function AgentTokenModal({ data, onClose }) {
+  const copy = () => navigator.clipboard?.writeText(data.token).then(() => toast.success('Anahtar kopyalandı.'), () => toast.error('Kopyalanamadı; elle seçin.'));
+  const origin = window.location.origin.replace(':5173', ':8000');
+  return (
+    <Modal open onClose={onClose} title={`${data.conn.name} · ajan anahtarı`} size="md"
+      footer={<><Button variant="secondary" onClick={copy}>Kopyala</Button><Button onClick={onClose}>Kaydettim, kapat</Button></>}>
+      <p className="ui-text-danger">Bu anahtar bir daha gösterilmez. Kaybolursa yeni anahtar oluşturun (eskisi geçersiz olur).</p>
+      <pre aria-label="Ajan anahtarı" className="ig-code">{data.token}</pre>
+      <p className="pj-hint">Şirket sunucusunda (Logo/Mikro veritabanının yanında) ajanı şu ayarlarla başlatın:</p>
+      <pre className="ig-code">{`set RECORION_URL=${origin}\nset RECORION_EDGE_TOKEN=<yukarıdaki anahtar>\npython recorion_edge.py --config edge_config.json`}</pre>
+      <p className="pj-hint">Ajan yalnızca dışa bağlanır (sunucunuza port açmanız gerekmez) ve yalnızca templates.json dosyasındaki izinli sorguları çalıştırır.</p>
+    </Modal>
   );
 }
 

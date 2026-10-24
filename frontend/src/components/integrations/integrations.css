@@ -1,0 +1,12 @@
+/* Entegrasyonlar (ADIM 10): kod/anahtar kutusu — tema değişkenleriyle */
+.ig-code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}

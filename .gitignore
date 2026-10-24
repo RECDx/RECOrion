@@ -40,3 +40,9 @@ backend/storage/
 
 # Canlı e2e test çıktıları (ekran görüntüleri, rapor)
 e2e/artifacts/
+
+# Edge ajanı yerel dosyaları (ADIM 10.5): gerçek yapılandırma, sahte/gerçek veritabanı ve denetim kaydı repoya girmez
+edge_agent/edge_config.json
+edge_agent/templates.json
+edge_agent/*.db
+edge_agent/edge_audit.log

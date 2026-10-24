@@ -45,7 +45,17 @@ def conn_out(c: IntegrationConnection) -> Dict[str, Any]:
     connector = integrations.REGISTRY.get(c.connector)
     return {"id": str(c.id), "connector": c.connector, "connector_title": connector.title if connector else c.connector,
             "name": c.name, "config": c.config or {}, "secrets_set": secrets_set, "status": c.status,
-            "last_test_at": c.last_test_at, "last_test_ok": c.last_test_ok, "last_error": c.last_error, "created_at": c.created_at}
+            "last_test_at": c.last_test_at, "last_test_ok": c.last_test_ok, "last_error": c.last_error, "created_at": c.created_at,
+            **({"agent": _agent_out(c)} if c.connector == "edge" else {})}
+
+
+def _agent_out(c: IntegrationConnection) -> Dict[str, Any]:
+    """Edge ajanı durumu (anahtar asla dönmez; yalnızca tanımlı olup olmadığı)."""
+    from app.integrations import edge
+
+    info = c.agent_info or {}
+    return {"has_token": bool(c.agent_token_hash), "online": edge.online(c.agent_seen_at), "seen_at": c.agent_seen_at,
+            "hostname": info.get("hostname"), "version": info.get("version"), "templates": len(info.get("templates") or [])}
 
 
 @router.get("/integrations/connectors")

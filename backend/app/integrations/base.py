@@ -95,6 +95,8 @@ class Context:
     config: Dict[str, Any]
     secrets: Dict[str, Any]
     tenant_id: Optional[str] = None
+    connection_id: Optional[str] = None
+    state: Dict[str, Any] = field(default_factory=dict)  # bağlayıcının çalışma durumu (Edge: ajanın şablon kataloğu, son görülme)
 
 
 @dataclass

@@ -1,6 +1,6 @@
 // Canlı uçtan uca test (Adım 6, 7.1–7.4, 7.5, 8): gerçek arayüz, gerçek backend, gerçek EVREN ve Temporal. Sahte veri yok. Ayrıntı: e2e/README.md
 import { chromium } from 'playwright-core';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -884,6 +884,66 @@ try {
   const ssrfText = await ssrfRow.innerText();
   step(/özel\/yerel ağ/.test(ssrfText), 'İç ağdaki bir adres MCP sunucusu olarak bağlanamıyor (SSRF koruması)',
     ssrfText.split('\n').find((l) => /Son deneme/.test(l)) || ssrfText.slice(0, 90));
+
+  // 10.5 Edge Connector: şirket sunucusundaki Logo'ya (sahte Logo veritabanı) ajanla bağlanma. Yönetici bağlantıyı ekler,
+  // ajan yokken dener (anlaşılır uyarı), ajan anahtarını alır; "şirket sunucusunda" ajan başlatılır (backend konteyneri içinde,
+  // yalnızca dışa bağlanır); ekran çevrimiçi gösterir; Kaan'a yetki verilir; proje yöneticisi sohbette Logo'dan cari bakiye sorar
+  const edName = `Logo ${NAME.slice(-5)}`;
+  const edRow = await addConn('edge', edName, async () => {});
+  const edBefore = await edRow.innerText();
+  await edRow.getByRole('button', { name: 'Ajan anahtarı' }).click();
+  const tokenBox = od.page.getByLabel('Ajan anahtarı', { exact: true });
+  await tokenBox.waitFor({ timeout: 15000 });
+  const edToken = (await tokenBox.innerText()).trim();
+  await od.page.getByRole('button', { name: 'Kaydettim, kapat' }).click();
+  const edDir = '/tmp/edge_e2e';
+  execFileSync('docker', ['exec', 'recorion_backend', 'sh', '-c', `rm -rf ${edDir} && mkdir -p ${edDir} && python /edge_agent/fake_logo.py ${edDir}/sahte_logo.db && `
+    + `printf '%s' '{"hostname":"LOGO-SUNUCU","database":{"driver":"sqlite","path":"${edDir}/sahte_logo.db"},"templates_file":"/edge_agent/templates.example.json","allow_write":false,"audit_log":"${edDir}/audit.log"}' > ${edDir}/cfg.json`],
+  { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  const edAgent = spawn('docker', ['exec', '-e', 'RECORION_URL=http://localhost:8000', '-e', `RECORION_EDGE_TOKEN=${edToken}`, 'recorion_backend',
+    'timeout', '900', 'python', '/edge_agent/recorion_edge.py', '--config', `${edDir}/cfg.json`], { stdio: 'ignore', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  await od.page.waitForTimeout(4000);
+  await edRow.getByRole('button', { name: 'Dene' }).click();
+  await edRow.getByText(/Ajan çevrimiçi ·/).waitFor({ timeout: 30000 });
+  const edAfter = await edRow.innerText();
+  await edRow.getByRole('button', { name: 'Araçlar ve yetkiler' }).click();
+  await od.page.getByRole('checkbox', { name: 'Kaan: cari_bakiye' }).waitFor({ timeout: 20000 });
+  const edWrite = await od.page.getByRole('checkbox', { name: 'Kaan: cari_not_ekle' }).count();
+  await od.page.getByRole('checkbox', { name: 'Kaan: cari_bakiye' }).check();
+  await od.page.getByRole('checkbox', { name: 'Kaan: cari_ara' }).check();
+  await od.page.getByRole('button', { name: 'Yetkileri kaydet' }).click();
+  await od.page.waitForTimeout(1500);
+  step(/henüz bağlanmadı/.test(edBefore) && /4 izinli şablon/.test(edAfter) && edWrite === 0 && edToken.startsWith('rxe_')
+      && !(await od.page.content()).includes(edToken),
+    'Edge Connector: ajan yokken anlaşılır uyarı; anahtar bir kez gösterildi; ajan bağlandı, 4 okuma şablonu (yazma kapalı) görünüyor',
+    `${edAfter.split('\n').find((l) => /Ajan çevrimiçi ·/.test(l)) || ''} · yazma kutusu: ${edWrite}`);
+  await shot(od.page, '15-edge-connector');
+
+  const eTask = await api(tm.page, `/api/v1/projects/${tProj.body.id}/tasks`, { method: 'POST',
+    body: JSON.stringify({ title: 'Tahsilat ön kontrolü', assignee_actor_id: kaan.id }) });
+  let eCall = null;
+  let eReply = '';
+  for (const content of ['Logo\'da 120.01.001 kodlu cari (ABC Makine) şu an ne kadar borçlu? Logo aracından bakiyeye bakar mısın?',
+    'Lütfen cari_bakiye aracını cari_kodu "120.01.001" ile çağır ve bakiyeyi TL olarak yaz.']) {
+    const r = await api(tm.page, '/api/v1/chat/send', { method: 'POST', body: JSON.stringify({ task_id: eTask.body.id, content }) });
+    eReply = r.body?.assistant_message?.content || JSON.stringify(r.body || r.status).slice(0, 200);
+    eCall = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/tool-calls`)).body || [])
+      .find((c) => c.task_id === eTask.body.id && c.tool === 'cari_bakiye' && c.status === 'EXECUTED');
+    if (eCall) break;
+  }
+  step(Boolean(eCall) && /103[.,\s]?500/.test(eReply),
+    'AI personel şirket sunucusundaki Logo\'dan Edge ajanıyla cari bakiyeyi okudu; doğru tutar yanıta yansıdı',
+    `${eCall ? `${eCall.tool} ${eCall.latency_ms} ms → ${JSON.stringify(eCall.result?.rows)}` : 'araç çağrılmadı'} · yanıt: ${eReply.replace(/\s+/g, ' ').slice(0, 80)}`);
+
+  // Yönetici bağlantıyı devre dışı bırakır: ajan bir sonraki yoklamada reddedilir ve kendiliğinden durur
+  await edRow.getByRole('button', { name: 'Devre dışı bırak' }).click();
+  await dialogOk(od.page);
+  const edStopped = await new Promise((resolve) => {
+    const t = setTimeout(() => resolve(false), 45000);
+    edAgent.on('exit', () => { clearTimeout(t); resolve(true); });
+  });
+  if (!edStopped) edAgent.kill();
+  step(edStopped, 'Edge bağlantısı devre dışı bırakılınca şirket sunucusundaki ajan bağlanamadı ve durdu', edStopped ? 'ajan durdu' : 'ajan 45 sn içinde durmadı');
 
   // Temizlik: gerçek Odoo anahtarı test kaydında kalmaz (kasadaki değer değiştirilir, bağlantı devre dışı)
   const odConn = ((await api(od.page, `/api/v1/company/${cfg.tenant_id}/integrations`)).body || []).find((c) => c.name === odName);

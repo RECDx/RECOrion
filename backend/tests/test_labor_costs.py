@@ -43,7 +43,9 @@ def test_labor_and_token_costs(client, db, world, ai):
         client.post(f"/api/v1/tasks/{human_id}/submit", headers=member, json={"note": "bitti"})
         _wait(client, admin, pid, lambda t, f: t["İnsan adımı"]["status"] == "WAITING_APPROVAL", "insan teslimi")
         assert client.post(f"/api/v1/tasks/{human_id}/decision", headers=admin, json={"approve": True}).status_code == 200
-        _wait(client, admin, pid, lambda t, f: t["İnsan adımı"]["status"] == "DONE" and t["AI adımı"]["status"] == "DONE", "iki adım tamamlanmalı")
+        # Bağımlı adım iş akışınca biraz sonra başlar; başlamasını da bekle (yoksa maliyeti henüz PLANNED görünür)
+        _wait(client, admin, pid, lambda t, f: t["İnsan adımı"]["status"] == "DONE" and t["AI adımı"]["status"] == "DONE"
+              and t["Bağımlı adım"]["status"] in ("IN_PROGRESS", "WAITING_APPROVAL", "DONE"), "iki adım tamamlanmalı, bağımlı adım başlamalı")
 
         # Ücret sonradan değişir: tamamlanan adımın maliyeti değişmez
         client.put(f"/api/v1/company/{tid}/users/{w['member']['id']}", headers=admin, json={"daily_cost_try": 9999})

@@ -1,0 +1,43 @@
+[
+  {
+    "name": "cari_ara",
+    "description": "Ünvanında aranan ifade geçen cari kartları listeler (kod, ünvan, şehir).",
+    "kind": "READ",
+    "max_rows": 20,
+    "params": [{"name": "arama", "type": "string", "max_length": 60, "like": true, "description": "Ünvanda aranacak ifade"}],
+    "sql": "SELECT CODE AS cari_kodu, DEFINITION_ AS unvan, CITY AS sehir FROM LG_001_CLCARD WHERE ACTIVE = 0 AND DEFINITION_ LIKE :arama ESCAPE '\\' ORDER BY CODE"
+  },
+  {
+    "name": "cari_bakiye",
+    "description": "Cari kartın bakiyesini döner (borç - alacak; pozitif = müşteri borçlu).",
+    "kind": "READ",
+    "max_rows": 1,
+    "params": [{"name": "cari_kodu", "type": "string", "max_length": 30, "description": "Cari kodu, ör. 120.01.001"}],
+    "sql": "SELECT C.CODE AS cari_kodu, C.DEFINITION_ AS unvan, COALESCE(SUM(CASE WHEN L.SIGN = 0 THEN L.AMOUNT ELSE -L.AMOUNT END), 0) AS bakiye_tl FROM LG_001_CLCARD C LEFT JOIN LG_001_01_CLFLINE L ON L.CLIENTREF = C.LOGICALREF WHERE C.CODE = :cari_kodu GROUP BY C.CODE, C.DEFINITION_"
+  },
+  {
+    "name": "cari_hareketleri",
+    "description": "Cari kartın verilen tarihten sonraki hareketleri (tarih, tutar, borç/alacak).",
+    "kind": "READ",
+    "max_rows": 50,
+    "params": [{"name": "cari_kodu", "type": "string", "max_length": 30, "description": "Cari kodu"},
+               {"name": "baslangic", "type": "date", "description": "Bu tarihten itibaren"}],
+    "sql": "SELECT L.DATE_ AS tarih, L.AMOUNT AS tutar_tl, CASE WHEN L.SIGN = 0 THEN 'Borç' ELSE 'Alacak' END AS tur FROM LG_001_01_CLFLINE L JOIN LG_001_CLCARD C ON C.LOGICALREF = L.CLIENTREF WHERE C.CODE = :cari_kodu AND L.DATE_ >= :baslangic ORDER BY L.DATE_"
+  },
+  {
+    "name": "stok_miktari",
+    "description": "Stok kartının tüm ambarlardaki eldeki miktarını döner.",
+    "kind": "READ",
+    "max_rows": 1,
+    "params": [{"name": "stok_kodu", "type": "string", "max_length": 30, "description": "Stok kodu, ör. STK-001"}],
+    "sql": "SELECT I.CODE AS stok_kodu, I.NAME AS stok_adi, COALESCE(SUM(T.ONHAND), 0) AS eldeki_miktar, I.UNIT AS birim FROM LG_001_ITEMS I LEFT JOIN LG_001_01_GNTOTST T ON T.STOCKREF = I.LOGICALREF AND T.INVENNO = -1 WHERE I.CODE = :stok_kodu GROUP BY I.CODE, I.NAME, I.UNIT"
+  },
+  {
+    "name": "cari_not_ekle",
+    "description": "Cari karta RECOrion notu ekler (Logo tablolarına değil, ayrı RECORION_NOTLAR tablosuna).",
+    "kind": "WRITE",
+    "params": [{"name": "cari_kodu", "type": "string", "max_length": 30, "description": "Cari kodu"},
+               {"name": "not_metni", "type": "string", "max_length": 500, "description": "Not"}],
+    "sql": "INSERT INTO RECORION_NOTLAR (CARI_KODU, NOT_) VALUES (:cari_kodu, :not_metni)"
+  }
+]

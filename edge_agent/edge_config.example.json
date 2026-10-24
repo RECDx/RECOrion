@@ -1,0 +1,7 @@
+{
+  "hostname": "LOGO-SUNUCU",
+  "database": {"driver": "sqlite", "path": "sahte_logo.db"},
+  "templates_file": "templates.example.json",
+  "allow_write": false,
+  "audit_log": "edge_audit.log"
+}

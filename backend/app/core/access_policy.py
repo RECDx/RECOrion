@@ -300,6 +300,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/company/{{tenant_id}}/tool-calls"): HANDLER(),
     ("GET", f"{P}/me/tool-approvals"): AUTH,
     ("POST", f"{P}/tool-calls/{{call_id}}/decision"): HANDLER(),
+    # Edge Connector (ADIM 10.5): ajan kullanıcı girişi yapmaz; kimlik = ajan anahtarı (uç içinde doğrulanır, özetle eşleşir)
+    ("POST", f"{P}/edge/poll"): PUBLIC,
+    ("POST", f"{P}/edge/jobs/{{job_id}}/result"): PUBLIC,
+    ("POST", f"{C}/integrations/{{cid}}/agent-token"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/repository"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}/repository"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/repository/file"): HANDLER(),

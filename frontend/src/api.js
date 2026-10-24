@@ -161,6 +161,7 @@ export const api = {
   getToolCalls: (tenantId, status) => request(`/company/${tenantId}/tool-calls${status ? `?status=${status}` : ''}`),
   getMyToolApprovals: () => request('/me/tool-approvals'),
   decideToolCall: (id, approve, note) => request(`/tool-calls/${id}/decision`, { method: 'POST', body: JSON.stringify({ approve, note: note || null }) }),
+  newEdgeAgentToken: (tenantId, id) => request(`/company/${tenantId}/integrations/${id}/agent-token`, { method: 'POST' }),
   // Dashboard (Adım 9)
   getPlatformDashboard: (days = 7) => request(`/system/dashboard?days=${days}`),
   getPlatformHealth: (refresh = false) => request(`/system/health${refresh ? '?refresh=true' : ''}`),
