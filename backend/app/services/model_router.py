@@ -35,6 +35,7 @@ QUALITY_MIN = 0.7
 WEIGHTS = {"quality": 0.6, "speed": 0.2, "reliability": 0.2}
 LIVE_DAYS, LIVE_MIN_CALLS = 7, 20
 TEST_PURPOSE = "QUALITY_TEST"
+TEST_MAX_TOKENS = 4096  # gerçek sistemdeki sohbet sınırı: düşünen modeller düşünmeye bütçe ayırır, düşük sınır onları haksızca keser
 _tasks: set = set()
 
 _KEYWORDS = {
@@ -153,10 +154,17 @@ def _check(c: Dict[str, Any], out: str) -> bool:
     return False
 
 
+REASONING_LEAK = re.compile(r"(?i)^\s*(we need|the user|let'?s|okay,? (so|let)|i need to|first,? i)\b|<think>|</think>")
+
+
 def grade(case: Dict[str, Any], output: str) -> Tuple[float, List[Dict[str, Any]]]:
     results = [{"type": c["type"], "ok": _check(c, output or ""), "weight": c.get("weight", 1)} for c in case["checks"]]
     total = sum(r["weight"] for r in results) or 1
-    return round(sum(r["weight"] for r in results if r["ok"]) / total, 3), results
+    score = sum(r["weight"] for r in results if r["ok"]) / total
+    # Genel kural: modelin iç düşünmesi cevaba sızdıysa (müşteri görür) puan yarıya iner
+    leak = bool(REASONING_LEAK.search(output or ""))
+    results.append({"type": "no_reasoning_leak", "ok": not leak, "weight": 0})
+    return round(score * (0.5 if leak else 1), 3), results
 
 
 def load_suite() -> Dict[str, Any]:
@@ -180,7 +188,7 @@ async def _run_case(run_id: uuid.UUID, model_code: str, case: Dict[str, Any]) ->
     out, err, tin, tout = "", None, None, None
     try:
         r = await llm_gateway.chat(LLMContext(tenant_id=None, purpose=TEST_PURPOSE), [{"role": "user", "content": case["prompt"]}],
-                                   model_code=model_code, temperature=0.1, max_tokens=case.get("max_tokens", 800), timeout=180)
+                                   model_code=model_code, temperature=0.1, max_tokens=max(case.get("max_tokens", 0), TEST_MAX_TOKENS), timeout=240)
         out, tin, tout = r.content or "", r.tokens_in, r.tokens_out
     except Exception as exc:  # modelin hatası puana yansır (0), koşu sürer
         err = str(exc)[:500]

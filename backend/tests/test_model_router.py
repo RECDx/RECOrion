@@ -94,6 +94,16 @@ def test_grading_rules_are_strict_and_never_execute_code():
     assert rsvc.grade(_case("json-fatura"), '{"fatura_no": "FTR-2026-0042", "tarih": "2026-10-12", "tutar": "15.750,00", "para_birimi": "TL"}')[0] == 1.0
 
 
+def test_reasoning_leak_halves_score():
+    """Modelin iç düşünmesi cevaba sızarsa (canlı denemede qwen3.8-flash-next) müşteri görür: puan yarıya iner."""
+    c = _case("yazim-duzelt")
+    leaked = "We need answer user's request in Turkish. Yarınki toplantıya herkesin katılması gerekiyor, saat onda başlayacak."
+    s, checks = rsvc.grade(c, leaked)
+    assert s <= 0.5 and next(x for x in checks if x["type"] == "no_reasoning_leak")["ok"] is False
+    assert rsvc.grade(c, "<think>düzelt</think>Yarınki toplantıya herkesin katılması gerekiyor, saat onda başlayacak.")[0] <= 0.5
+    assert rsvc.grade(c, GOOD["yazim-duzelt"])[0] == 1.0
+
+
 def test_classify_task_types():
     assert rsvc.classify("Bayi portalı API geliştirme", "Sipariş servisini Python ile yaz") == "CODE"
     assert rsvc.classify("Toplantı notlarını özetle") == "SUMMARY"
