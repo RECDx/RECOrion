@@ -77,3 +77,51 @@ python recorion_edge.py --config edge_config.example.json --once
 
 Sahte veritabanı Logo tablo adlandırmasını taklit eder (cari kartlar, cari hareketler, stok kartları, ambar toplamları);
 veriler uydurmadır. Gerçek şablonlar müşteri ortamında, müşterinin Logo/Mikro sürümüne göre yazılır.
+
+## REST şablonları: Logo'ya Logo'nun kendi servisiyle yazma (sürüm 0.2.0, ADIM 12.5)
+
+Logo/Mikro tablolarına doğrudan `INSERT` yapmak (ör. malzeme veya cari kartı) programın iç bütünlüğünü bozabilir
+(referans numaraları, bağlı tablolar). Kayıt açma ve güncelleme için ürünün kendi programlama arayüzünü kullanın:
+Logo için şirket ağındaki **Logo REST servisi**. Ajan bu servisi şirket ağının içinden çağırır; servisin internete
+açılması gerekmez.
+
+Yapılandırmaya `http_api` ekleyin (adres ve kimlik yalnızca bu sunucuda; parolalar ortam değişkeninde):
+
+```json
+"http_api": {
+  "base_url": "http://logo-sunucu:32001",
+  "auth": {"type": "oauth_password", "token_path": "/api/v1/token",
+           "username_env": "LOGO_USER", "password_env": "LOGO_PASSWORD",
+           "client_id_env": "LOGO_CLIENT_ID", "client_secret_env": "LOGO_CLIENT_SECRET",
+           "form": {"firmno": "1"}}
+}
+```
+
+`auth.type`: `none`, `bearer` (`token_env`), `basic` (`username_env`, `password_env`) veya `oauth_password` (yukarıdaki).
+Oturum düşerse ajan bir kez yeniden giriş yapar.
+
+Şablon (`sql` yerine `http`):
+
+```json
+{"name": "logo_malzeme_ekle", "kind": "WRITE", "result_id": "INTERNAL_REFERENCE",
+ "params": [{"name": "kod", "type": "string", "max_length": 25}, {"name": "ad", "type": "string", "max_length": 51}],
+ "http": {"method": "POST", "path": "/api/v1/items", "body": {"CODE": ":kod", "NAME": ":ad"}}}
+```
+
+- Yol `/` ile başlar; adres, `..` ve `?` içeremez. Yol parametresi `{ad}`, sorgu ve gövdede yer tutucu yalnızca tam değer
+  olarak `":ad"` yazılır (metin birleştirme yok; değer türüyle yerleşir). Boş bırakılan isteğe bağlı parametrenin alanı
+  gövdeye hiç konmaz.
+- Okuma şablonu `GET`, yazma şablonu `POST/PUT/PATCH` olmalı. `result_list` liste yanıtın içindeki alanı, `result_id`
+  kayıt kimliği alanını gösterir. Yazma şablonları `allow_write: true` olmadıkça bildirilmez ve çalışmaz.
+- RECOrion'da eşleştirme için bir okuma şablonu (ör. `logo_malzeme_bul`) ve güncelleme için bir yazma şablonu
+  (`logo_malzeme_guncelle`, `id` parametresiyle) tanımlanırsa aynı stok koduyla ikinci kart açılmaz, mevcut kart güncellenir.
+
+`templates.logo_rest.example.json` malzeme ve cari kartı için **örnek** şablonlar içerir. Uç ve alan adları Logo REST servis
+sürümüne göre değişebilir: kendi Logo REST servis belgenize göre doğrulayıp düzenleyin. Örnekler, gerçek Logo ile değil,
+`fake_logo_rest.py` sahte servisiyle denenmiştir:
+
+```
+python fake_logo_rest.py 32001
+set LOGO_USER=LOGO& set LOGO_PASSWORD=sahte-parola& set LOGO_CLIENT_ID=recorion& set LOGO_CLIENT_SECRET=sahte-istemci
+python recorion_edge.py --config edge_config.json --once
+```

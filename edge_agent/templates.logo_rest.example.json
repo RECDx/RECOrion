@@ -1,0 +1,75 @@
+[
+  {
+    "name": "logo_malzeme_bul",
+    "description": "Logo'da stok koduyla malzeme kartını arar (varsa kartın Logo referansı döner).",
+    "kind": "READ",
+    "result_id": "INTERNAL_REFERENCE",
+    "params": [{"name": "kod", "type": "string", "max_length": 25, "description": "Malzeme (stok) kodu"}],
+    "http": {"method": "GET", "path": "/api/v1/items", "query": {"code": ":kod"}, "result_list": "items"}
+  },
+  {
+    "name": "logo_malzeme_ekle",
+    "description": "Logo'da yeni malzeme kartı açar (Logo REST servisiyle; Logo tablolarına doğrudan yazılmaz).",
+    "kind": "WRITE",
+    "result_id": "INTERNAL_REFERENCE",
+    "params": [
+      {"name": "kod", "type": "string", "max_length": 25, "description": "Malzeme (stok) kodu"},
+      {"name": "ad", "type": "string", "max_length": 51, "description": "Malzeme açıklaması"},
+      {"name": "kart_turu", "type": "integer", "description": "Logo malzeme kart türü kodu (ör. 1 ticari mal); hizmetler Logo'da ayrı hizmet kartıdır"},
+      {"name": "birim_seti", "type": "string", "max_length": 25, "description": "Birim seti kodu, ör. ADET, KG"},
+      {"name": "kdv_orani", "type": "number", "required": false, "description": "KDV oranı (%)"},
+      {"name": "barkod", "type": "string", "max_length": 50, "required": false, "description": "Barkod"},
+      {"name": "satis_fiyati", "type": "number", "required": false, "description": "Satış fiyatı (bilgi amaçlı)"}
+    ],
+    "http": {"method": "POST", "path": "/api/v1/items",
+             "body": {"CARD_TYPE": ":kart_turu", "CODE": ":kod", "NAME": ":ad", "UNITSET_CODE": ":birim_seti", "VAT": ":kdv_orani",
+                      "BARCODE": ":barkod", "SALE_PRICE": ":satis_fiyati"}}
+  },
+  {
+    "name": "logo_malzeme_guncelle",
+    "description": "Logo'daki malzeme kartını günceller (ad, KDV, barkod, fiyat).",
+    "kind": "WRITE",
+    "result_id": "INTERNAL_REFERENCE",
+    "params": [
+      {"name": "id", "type": "integer", "description": "Logo kart referansı"},
+      {"name": "kod", "type": "string", "max_length": 25, "required": false, "description": "Malzeme kodu (değişmez; bilgi)"},
+      {"name": "ad", "type": "string", "max_length": 51, "required": false, "description": "Malzeme açıklaması"},
+      {"name": "kart_turu", "type": "integer", "required": false, "description": "Kart türü"},
+      {"name": "birim_seti", "type": "string", "max_length": 25, "required": false, "description": "Birim seti kodu"},
+      {"name": "kdv_orani", "type": "number", "required": false, "description": "KDV oranı (%)"},
+      {"name": "barkod", "type": "string", "max_length": 50, "required": false, "description": "Barkod"},
+      {"name": "satis_fiyati", "type": "number", "required": false, "description": "Satış fiyatı"}
+    ],
+    "http": {"method": "PUT", "path": "/api/v1/items/{id}",
+             "body": {"CODE": ":kod", "NAME": ":ad", "CARD_TYPE": ":kart_turu", "UNITSET_CODE": ":birim_seti", "VAT": ":kdv_orani",
+                      "BARCODE": ":barkod", "SALE_PRICE": ":satis_fiyati"}}
+  },
+  {
+    "name": "logo_cari_bul",
+    "description": "Logo'da vergi numarasıyla cari kartı arar.",
+    "kind": "READ",
+    "result_id": "INTERNAL_REFERENCE",
+    "params": [{"name": "vergi_no", "type": "string", "max_length": 15, "description": "VKN veya TCKN"}],
+    "http": {"method": "GET", "path": "/api/v1/Arps", "query": {"tax_id": ":vergi_no"}, "result_list": "items"}
+  },
+  {
+    "name": "logo_cari_ekle",
+    "description": "Logo'da yeni cari kart açar (Logo REST servisiyle).",
+    "kind": "WRITE",
+    "result_id": "INTERNAL_REFERENCE",
+    "params": [
+      {"name": "kod", "type": "string", "max_length": 17, "description": "Cari kodu, ör. 120.01.0042"},
+      {"name": "unvan", "type": "string", "max_length": 201, "description": "Unvan"},
+      {"name": "vergi_no", "type": "string", "max_length": 15, "required": false, "description": "VKN veya TCKN"},
+      {"name": "vergi_dairesi", "type": "string", "max_length": 31, "required": false, "description": "Vergi dairesi"},
+      {"name": "eposta", "type": "string", "max_length": 250, "required": false, "description": "E-posta"},
+      {"name": "telefon", "type": "string", "max_length": 25, "required": false, "description": "Telefon"},
+      {"name": "adres", "type": "string", "max_length": 201, "required": false, "description": "Adres"},
+      {"name": "ilce", "type": "string", "max_length": 51, "required": false, "description": "İlçe"},
+      {"name": "il", "type": "string", "max_length": 21, "required": false, "description": "İl"}
+    ],
+    "http": {"method": "POST", "path": "/api/v1/Arps",
+             "body": {"ACCOUNT_TYPE": 3, "CODE": ":kod", "TITLE": ":unvan", "TAX_ID": ":vergi_no", "TAX_OFFICE": ":vergi_dairesi",
+                      "E_MAIL": ":eposta", "TELEPHONE1": ":telefon", "ADDRESS1": ":adres", "TOWN": ":ilce", "CITY": ":il"}}
+  }
+]

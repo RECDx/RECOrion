@@ -347,7 +347,7 @@ async def decide(db: AsyncSession, tr: IntegrationTransfer, user, approve: bool,
 # --- yazma (Temporal aktivitesi) ---
 
 def _transient(msg: str) -> bool:
-    return bool(re.search(r"ulaşılamadı|yanıt vermedi|geçici olarak|HTTP 50[234]|zaman aşımı|timeout", msg, re.I))
+    return bool(re.search(r"ulaşılamadı|yanıt vermedi|çevrimdışı|geçici olarak|HTTP 50[234]|zaman aşımı|timeout", msg, re.I))
 
 
 def _writable(v: Any) -> Any:
@@ -392,15 +392,28 @@ async def _odoo_write(conn: IntegrationConnection, m: IntegrationMapping, tr: In
 async def _tool_write(conn: IntegrationConnection, m: IntegrationMapping, tr: IntegrationTransfer) -> Dict[str, Any]:
     from app.services import tool_gateway
 
-    tool = next((t for t in await tool_gateway.connection_tools(conn) if t.name == m.target.get("tool")), None)
+    tools = {t.name: t for t in await tool_gateway.connection_tools(conn)}
+    tool = tools.get(m.target.get("tool"))
     if not tool:
         raise TransferFailed(f"Bağlantıda '{m.target.get('tool')}' aracı artık yok.")
+    match = m.match or {}
+    mv = str((tr.object or {}).get(match.get("source")) or "") if match.get("source") else ""
+    existing = await ms.adapter(conn).find(m.target, match["target"], (tr.object or {})[match["source"]]) if mv and m.target.get("find_tool") else None
+    if existing not in (None, ""):
+        upd = tools.get(m.target.get("update_tool") or "")
+        if not upd:
+            raise TransferFailed(f"Hedefte bu kayıt zaten var (#{existing}); güncelleme aracı tanımlı olmadığı için yeni kayıt açılmadı.")
+        result = await upd.run(tool_gateway.context(conn), {**dict(tr.values or {}), "id": existing})
+        rid = str(existing)
+        text = (result.get("text") if isinstance(result, dict) else str(result)) or ""
+        return {"id": rid, "action": "UPDATE", "before": None, "ref": f"{m.target.get('update_tool')} (#{rid})", "url": None,
+                "result": {"text": text[:2000]}, "match_value": mv, "target_key": m.target.get("tool")}
     result = await tool.run(tool_gateway.context(conn), dict(tr.values or {}))
     data = result.get("data") if isinstance(result, dict) else None
     rid = str((data or {}).get("id") or (result.get("id") if isinstance(result, dict) else "") or "")
     text = (result.get("text") if isinstance(result, dict) else str(result)) or ""
     return {"id": rid or None, "action": "CREATE", "before": None, "ref": f"{m.target.get('tool')}{f' (#{rid})' if rid else ''}",
-            "url": None, "result": {"text": text[:2000]}, "match_value": "", "target_key": m.target.get("tool")}
+            "url": None, "result": {"text": text[:2000]}, "match_value": mv, "target_key": m.target.get("tool")}
 
 
 async def execute(transfer_id: str) -> Dict[str, Any]:

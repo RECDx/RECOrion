@@ -31,6 +31,7 @@ from app.services import mappings as ms
 from app.services.llm_gateway import LLMError
 
 router = APIRouter(tags=["Eşleme Stüdyosu"])
+TARGET_KEYS = ("model", "tool", "find_tool", "update_tool")  # araç hedefinde: ara (eşleştirme) ve güncelle araçları
 
 
 def _manage(user: CurrentUser, tenant_id: uuid.UUID) -> None:
@@ -156,7 +157,7 @@ async def create_mapping(tenant_id: uuid.UUID, payload: MappingIn, user: Current
         raise HTTPException(status_code=422, detail="Hedef seçilmedi (Odoo modeli veya araç).")
     m = IntegrationMapping(tenant_id=tenant_id, connection_id=conn.id, connector=conn.connector, object_type=object_type,
                            name=payload.name.strip(), description=(tpl.description if tpl and not payload.description else payload.description),
-                           target={k: v for k, v in target.items() if k in ("model", "tool")}, rules=rules,
+                           target={k: v for k, v in target.items() if k in TARGET_KEYS}, rules=rules,
                            match=(tpl.match if tpl else payload.match), when=(tpl.when if tpl else _clean_when(payload.when, object_type)),
                            source_template_id=tpl.id if tpl else None, status="DRAFT", created_by_actor_id=user.actor_id)
     db.add(m)
@@ -178,7 +179,7 @@ async def update_mapping(tenant_id: uuid.UUID, mid: uuid.UUID, payload: MappingU
             raise HTTPException(status_code=422, detail=str(exc))
         changed = True
     if payload.target is not None:
-        m.target, changed = {k: v for k, v in payload.target.items() if k in ("model", "tool")}, True
+        m.target, changed = {k: v for k, v in payload.target.items() if k in TARGET_KEYS}, True
     if "match" in payload.model_fields_set:
         m.match, changed = payload.match, True
     if "when" in payload.model_fields_set:

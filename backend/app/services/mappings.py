@@ -138,8 +138,40 @@ class OdooTarget(Target):
         return ids[0] if ids else None
 
 
+def tool_result_id(result: Any) -> Optional[Any]:
+    """Arama aracının sonucundan kayıt kimliği: REST şablonu {"id"}; SQL şablonu ilk satırın ilk sütunu; MCP structured id."""
+    if not isinstance(result, dict):
+        return None
+    if result.get("id") not in (None, ""):
+        return result["id"]
+    rows = result.get("rows")
+    if isinstance(rows, list) and rows and isinstance(rows[0], list) and rows[0]:
+        return rows[0][0]
+    data = result.get("data")
+    if isinstance(data, dict) and data.get("id") not in (None, ""):
+        return data["id"]
+    return None
+
+
 class ToolTarget(Target):
-    """MCP aracı veya Edge şablonu: alanlar aracın giriş şemasından."""
+    """MCP aracı veya Edge şablonu: alanlar aracın giriş şemasından. Eşleştirme için target.find_tool (okuma aracı, eşleştirme
+    alanıyla aynı adlı parametre alır) ve güncelleme için target.update_tool (aynı alanlar + id) tanımlanabilir."""
+
+    async def _tool(self, name: str):
+        from app.services import tool_gateway
+
+        return next((t for t in await tool_gateway.connection_tools(self.conn) if t.name == name), None)
+
+    async def find(self, target, field_, value):
+        from app.services import tool_gateway
+
+        name = target.get("find_tool")
+        if not name:
+            return None
+        tool = await self._tool(name)
+        if not tool:
+            raise MappingError(f"Arama aracı '{name}' bu bağlantıda yok.")
+        return tool_result_id(await tool.run(tool_gateway.context(self.conn), {field_: value}))
 
     async def fields(self, target):
         from app.services import tool_gateway
@@ -388,6 +420,7 @@ async def dry_run(mapping: IntegrationMapping, conn: IntegrationConnection, samp
     if not built.errors and m.get("source") and obj.get(m["source"]) not in (None, ""):
         try:
             existing = await tgt.find(mapping.target, m["target"], obj[m["source"]])
+            existing = None if existing in (None, "") else existing
         except (ToolError, MappingError) as exc:
             built.warnings.append(f"Mevcut kayıt aranamadı: {exc}")
         action = "UPDATE" if existing else "CREATE"

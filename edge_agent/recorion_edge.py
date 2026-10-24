@@ -1,5 +1,5 @@
 """
-RECOrion Edge ajanı (ADIM 10.5) — müşterinin kendi sunucusunda çalışır (Logo, Mikro vb. veritabanının yanında).
+RECOrion Edge ajanı (ADIM 10.5, 12.5) — müşterinin kendi sunucusunda çalışır (Logo, Mikro vb. veritabanının yanında).
 
 Güvenlik modeli:
 - Yalnızca DIŞA bağlanır: RECOrion'a yoklama yapar (HTTPS), iş alır, sonucu gönderir. Müşteri ağına port açılmaz.
@@ -9,6 +9,10 @@ Güvenlik modeli:
 - Okuma şablonları salt okunur bağlantıda / geri alınan işlemde çalışır. Yazma şablonları varsayılan KAPALIDIR
   (allow_write: true gerekir) ve RECOrion'da da her biri insan onayından geçer.
 - Her iş yerel denetim kaydına yazılır (şablon, parametreler, satır sayısı, süre; sonuç verisi yazılmaz).
+- REST şablonları (ADIM 12.5): şirket ağındaki bir programlama arayüzünü (ör. Logo REST servisi) çağırır — Logo'nun
+  tablolarına doğrudan yazmak yerine Logo'nun kendi kurallarıyla kayıt açılır. Adres ve kimlik bilgisi YALNIZCA bu
+  sunucudaki yapılandırmadadır (http_api; parolalar ortam değişkeninde). Şablon yolu ve gövdesi burada sabittir;
+  RECOrion'dan yalnızca türü denetlenmiş parametre değerleri gelir ve tam alan değeri olarak yerleşir (metin birleştirme yok).
 
 Çalıştırma:
     pip install httpx            (SQL Server için ayrıca: pip install pyodbc + Microsoft ODBC Driver 18)
@@ -29,13 +33,17 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 import httpx
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 NAME = re.compile(r"^[a-z][a-z0-9_]{1,59}$")
 PARAM = re.compile(r"(?<![:\w]):([a-z][a-z0-9_]*)")
 DEFAULT_MAX_ROWS, HARD_MAX_ROWS, DEFAULT_MAX_LEN = 100, 1000, 200
+HTTP_METHODS = ("GET", "POST", "PUT", "PATCH")
+PATH_PARAM = re.compile(r"\{([a-z][a-z0-9_]*)\}")
+RESULT_LIMIT = 20000
 log = logging.getLogger("recorion_edge")
 
 
@@ -52,17 +60,49 @@ def load_config(path: Path) -> Dict[str, Any]:
     templates = json.loads(tpath.read_text(encoding="utf-8"))
     by_name = {}
     for t in templates:
-        if not NAME.match(t.get("name", "")) or not (t.get("sql") or "").strip():
-            raise SystemExit(f"Geçersiz şablon: {t.get('name')!r} (ad küçük harf/rakam/_; sql zorunlu)")
-        names_in_sql = set(PARAM.findall(t["sql"]))
+        if not NAME.match(t.get("name", "")) or not ((t.get("sql") or "").strip() or isinstance(t.get("http"), dict)):
+            raise SystemExit(f"Geçersiz şablon: {t.get('name')!r} (ad küçük harf/rakam/_; sql veya http zorunlu)")
         declared = {p["name"] for p in t.get("params", [])}
-        if names_in_sql != declared:
-            raise SystemExit(f"Şablon {t['name']}: sql parametreleri {sorted(names_in_sql)} ile tanımlı parametreler {sorted(declared)} aynı olmalı")
+        if t.get("http"):
+            used = http_placeholders(t)
+            if not cfg.get("http_api", {}).get("base_url"):
+                raise SystemExit(f"Şablon {t['name']}: REST şablonu için yapılandırmada http_api.base_url gerekli")
+        else:
+            used = set(PARAM.findall(t["sql"]))
+        if used != declared:
+            raise SystemExit(f"Şablon {t['name']}: kullanılan parametreler {sorted(used)} ile tanımlı parametreler {sorted(declared)} aynı olmalı")
         t.setdefault("kind", "READ")
         by_name[t["name"]] = t
     cfg["templates"] = by_name
     cfg.setdefault("allow_write", False)
     return cfg
+
+
+def _walk_placeholders(v: Any, out: set) -> None:
+    if isinstance(v, str) and PARAM.fullmatch(v):
+        out.add(v[1:])
+    elif isinstance(v, dict):
+        for x in v.values():
+            _walk_placeholders(x, out)
+    elif isinstance(v, list):
+        for x in v:
+            _walk_placeholders(x, out)
+
+
+def http_placeholders(t: Dict[str, Any]) -> set:
+    """REST şablonunu doğrular; kullanılan parametre adlarını döner (yol: {ad}, sorgu/gövde: tam değer ":ad")."""
+    h = t["http"]
+    if h.get("method", "GET") not in HTTP_METHODS:
+        raise SystemExit(f"Şablon {t['name']}: yöntem {HTTP_METHODS} olmalı")
+    path = str(h.get("path") or "")
+    if not path.startswith("/") or "://" in path or ".." in path or "?" in path:
+        raise SystemExit(f"Şablon {t['name']}: yol '/' ile başlamalı; adres, '..' ve '?' içeremez (sorgu için query kullanın)")
+    used = set(PATH_PARAM.findall(path))
+    _walk_placeholders(h.get("query") or {}, used)
+    _walk_placeholders(h.get("body"), used)
+    if h.get("method", "GET") == "GET" and t.get("kind") == "WRITE" or h.get("method", "GET") != "GET" and t.get("kind", "READ") == "READ":
+        raise SystemExit(f"Şablon {t['name']}: okuma şablonu GET, yazma şablonu POST/PUT/PATCH olmalı")
+    return used
 
 
 def catalog(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -135,6 +175,100 @@ def _jsonable(v: Any) -> Any:
     return v
 
 
+def _fill(v: Any, values: Dict[str, Any]) -> Any:
+    """Gövde/sorgu kalıbına parametreleri yerleştirir: yalnızca tam değer ":ad" yer tutucuları (değer türüyle). Boş isteğe bağlı
+    parametrenin alanı gövdeden çıkarılır."""
+    if isinstance(v, str) and PARAM.fullmatch(v):
+        return values.get(v[1:])
+    if isinstance(v, dict):
+        out = {}
+        for k, x in v.items():
+            y = _fill(x, values)
+            if y is not None:
+                out[k] = y
+        return out
+    if isinstance(v, list):
+        return [_fill(x, values) for x in v]
+    return v
+
+
+def _clip(data: Any) -> Any:
+    text = json.dumps(data, ensure_ascii=False, default=str)
+    return data if len(text) <= RESULT_LIMIT else {"truncated": True, "preview": text[:RESULT_LIMIT]}
+
+
+def _pick_id(data: Any, key: Optional[str]) -> Any:
+    item = data[0] if isinstance(data, list) and data else data
+    if isinstance(item, dict):
+        for k in ([key] if key else []) + ["id", "ID", "INTERNAL_REFERENCE", "LOGICALREF"]:
+            if item.get(k) not in (None, ""):
+                return item[k]
+    return None
+
+
+class HTTPApi:
+    """Şirket ağındaki REST arayüzü (ör. Logo REST servisi). Adres ve kimlik yalnızca bu yapılandırmada; parolalar ortam değişkeninde.
+    auth.type: none | bearer (token_env) | basic (username_env, password_env) |
+               oauth_password (token_path, username_env, password_env, isteğe bağlı client_id_env/client_secret_env, form)."""
+
+    def __init__(self, conf: Dict[str, Any], client: Optional[httpx.Client] = None):
+        self.conf, self.auth = conf, conf.get("auth") or {"type": "none"}
+        self.client = client or httpx.Client(base_url=conf["base_url"].rstrip("/"), timeout=float(conf.get("timeout") or 20),
+                                             verify=conf.get("verify_tls", True), follow_redirects=False)
+        self._token, self._exp = None, 0.0
+
+    @staticmethod
+    def _env(name: Optional[str]) -> str:
+        v = os.environ.get(name or "", "")
+        if not v:
+            raise TemplateError(f"Hedef sistem kimlik bilgisi ortam değişkeninde yok ({name}).")
+        return v
+
+    def _oauth(self, force: bool = False) -> str:
+        if self._token and not force and time.time() < self._exp - 30:
+            return self._token
+        a = self.auth
+        form = {"grant_type": "password", "username": self._env(a.get("username_env")), "password": self._env(a.get("password_env")),
+                **{k: str(v) for k, v in (a.get("form") or {}).items()}}
+        basic = (self._env(a["client_id_env"]), os.environ.get(a.get("client_secret_env") or "", "")) if a.get("client_id_env") else None
+        r = self.client.post(a.get("token_path") or "/api/v1/token", data=form, auth=basic)
+        if r.status_code != 200 or not r.json().get("access_token"):
+            raise TemplateError(f"Hedef sistem girişi reddedildi (HTTP {r.status_code}).")
+        body = r.json()
+        self._token, self._exp = body["access_token"], time.time() + float(body.get("expires_in") or 600)
+        return self._token
+
+    def _headers(self, force: bool = False) -> Dict[str, str]:
+        typ = self.auth.get("type", "none")
+        if typ == "bearer":
+            return {"Authorization": f"Bearer {self._env(self.auth.get('token_env'))}"}
+        if typ == "basic":
+            import base64
+            raw = f"{self._env(self.auth.get('username_env'))}:{self._env(self.auth.get('password_env'))}".encode()
+            return {"Authorization": "Basic " + base64.b64encode(raw).decode()}
+        if typ == "oauth_password":
+            return {"Authorization": f"Bearer {self._oauth(force)}"}
+        return {}
+
+    def call(self, method: str, path: str, query: Dict[str, Any], body: Any) -> Tuple[int, Any]:
+        for attempt in (1, 2):
+            r = self.client.request(method, path, params={k: v for k, v in (query or {}).items() if v is not None},
+                                    json=body if method != "GET" else None, headers=self._headers(force=attempt == 2))
+            if r.status_code == 401 and attempt == 1 and self.auth.get("type") == "oauth_password":
+                continue  # oturum düşmüş olabilir: bir kez yeniden giriş
+            break
+        try:
+            data = r.json()
+        except ValueError:
+            data = {"text": r.text[:500]}
+        if r.status_code >= 400:
+            msg = ""
+            if isinstance(data, dict):
+                msg = str(data.get("Message") or data.get("message") or data.get("error_description") or data.get("error") or "")[:200]
+            raise TemplateError(f"Hedef sistem HTTP {r.status_code}{': ' + msg if msg else ''}")
+        return r.status_code, data
+
+
 # ---------------------------------------------------------------- veritabanı sürücüleri
 class SQLiteDriver:
     """Deneme ve test için (sahte Logo veritabanı). Okuma bağlantısı salt okunur açılır."""
@@ -195,7 +329,7 @@ def make_driver(db: Dict[str, Any]):
 
 
 # ---------------------------------------------------------------- işler
-def execute(cfg: Dict[str, Any], driver, job: Dict[str, Any]) -> Dict[str, Any]:
+def execute(cfg: Dict[str, Any], driver, job: Dict[str, Any], http: Optional[HTTPApi] = None) -> Dict[str, Any]:
     t = cfg["templates"].get(job.get("template"))
     if not t:
         raise TemplateError("Bu şablon ajanda tanımlı değil.")
@@ -203,6 +337,20 @@ def execute(cfg: Dict[str, Any], driver, job: Dict[str, Any]) -> Dict[str, Any]:
     if write and not cfg["allow_write"]:
         raise TemplateError("Bu ajanda yazma şablonları kapalı (allow_write).")
     values = check_params(t, job.get("params") or {})
+    if t.get("http"):
+        if not http:
+            raise TemplateError("Bu ajanda REST arayüzü yapılandırılmamış (http_api).")
+        h = t["http"]
+        path = PATH_PARAM.sub(lambda m: quote(str(values.get(m.group(1)) or ""), safe=""), h["path"])
+        status, data = http.call(h.get("method", "GET"), path, _fill(h.get("query") or {}, values), _fill(h.get("body"), values))
+        if isinstance(data, dict) and h.get("result_list") and isinstance(data.get(h["result_list"]), list):
+            data = data[h["result_list"]]
+        out = {"status": status, "data": _clip(data), "id": _pick_id(data, t.get("result_id"))}
+        if isinstance(data, list):
+            out["row_count"] = len(data)
+        return out
+    if driver is None:
+        raise TemplateError("Bu ajanda veritabanı yapılandırılmamış.")
     sql, params = compile_sql(t["sql"], values, driver.style)
     max_rows = min(int(t.get("max_rows") or DEFAULT_MAX_ROWS), HARD_MAX_ROWS)
     cols, rows, count, truncated = driver.run(sql, params, write, max_rows)
@@ -222,7 +370,8 @@ def audit(cfg: Dict[str, Any], job: Dict[str, Any], ok: bool, info: str, ms: int
 class Agent:
     def __init__(self, cfg: Dict[str, Any], url: str, token: str, client: Optional[httpx.Client] = None, wait: int = 25):
         self.cfg, self.url, self.wait = cfg, url.rstrip("/"), wait
-        self.driver = make_driver(cfg["database"])
+        self.driver = make_driver(cfg["database"]) if cfg.get("database") else None
+        self.http = HTTPApi(cfg["http_api"]) if cfg.get("http_api") else None
         self.client = client or httpx.Client(timeout=wait + 15, follow_redirects=False)
         self.headers = {"X-RECOrion-Edge-Token": token, "User-Agent": f"RECOrion-Edge/{VERSION}"}
 
@@ -236,10 +385,13 @@ class Agent:
         for job in jobs:
             start = time.monotonic()
             try:
-                result, ok, err = execute(self.cfg, self.driver, job), True, None
-                info = f"{result.get('row_count', result.get('affected_rows'))} satır"
+                result, ok, err = execute(self.cfg, self.driver, job, self.http), True, None
+                info = f"HTTP {result['status']}" if "status" in result else f"{result.get('row_count', result.get('affected_rows'))} satır"
             except TemplateError as exc:
                 result, ok, err, info = None, False, str(exc), str(exc)
+            except httpx.HTTPError as exc:  # şirket ağındaki arayüze ulaşılamadı: RECOrion geçici hata sayar, yeniden dener
+                log.warning("Hedef sisteme ulaşılamadı: %s", exc)
+                result, ok, err, info = None, False, f"Hedef sisteme ulaşılamadı ({exc.__class__.__name__})", repr(exc)[:300]
             except Exception as exc:  # veritabanı hatası: ayrıntı yerelde, RECOrion'a yalnızca tür
                 log.exception("Şablon çalıştırılamadı: %s", job.get("template"))
                 result, ok, err, info = None, False, f"Veritabanı hatası ({exc.__class__.__name__})", repr(exc)[:300]
