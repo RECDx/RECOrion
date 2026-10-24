@@ -1233,7 +1233,7 @@ try {
   step(ruleCount >= 10 && /hata yok/.test(checkText) && /yeni kayıt açılacak|güncellenecek/.test(dryText) && dryRows >= 8 && approvedBadge > 0,
     'Eşleme stüdyosu: hazır "Odoo ürün kartı" gerçek Odoo alanlarıyla hatasız denetlendi, yazmadan denendi (birim/vergi arandı) ve onaylandı',
     `${ruleCount} kural · ${checkText.replace(/\s+/g, ' ').slice(0, 50)} · ${dryText.split('\n')[0].slice(0, 70)} · ${dryRows} değer`);
-  await studio.getByRole('button', { name: 'Kapat' }).click();
+  await studio.getByRole('button', { name: 'Kapat', exact: true }).last().click();
 
   // Görev eşlemesi RECAi önerisiyle (gerçek EVREN + gerçek Odoo project.task alanları)
   studio = ot.page.getByRole('dialog');
@@ -1255,8 +1255,8 @@ try {
   step(sugRows >= 2 && !/hedefte yok/.test(await studio.innerText()),
     'RECAi görev eşlemesi önerdi: yalnızca Odoo\'da gerçekten olan alanlar (uydurma alan yok), denetim sonucu görünüyor',
     `${((Date.now() - sugStart) / 1000).toFixed(0)} sn · ${sugRows} kural (ilk: ${sugTargets}) · ${sugCheck.replace(/\s+/g, ' ').slice(0, 70)}`);
-  await studio.getByRole('button', { name: 'Kapat' }).click();
-  await studio.getByRole('button', { name: 'Kapat' }).click().catch(() => {});
+  await studio.getByRole('button', { name: 'Kapat', exact: true }).last().click();
+  await studio.getByRole('button', { name: 'Kapat', exact: true }).last().click().catch(() => {});
 
   // 12.4 Hazır "Odoo proje görevi" eşlemesi: görev adına "[RECOrion Test]" öneki (test verisi ayırt edilsin) — stüdyoda kural
   // düzenleme gibi, API ile; denenir ve onaylanır
@@ -1301,7 +1301,7 @@ try {
     'Sisteme aktar: RECAi adım çıktısından görevleri çıkardı; önizlemeler onaya düştü, hiçbiri onaysız yazılmadı',
     `${((Date.now() - exStart) / 1000).toFixed(0)} sn · ${trRows.length} öneri (${pendingT.length} onay bekliyor) · ilk: ${pendingT[0]?.preview.find((p) => p.target === 'name')?.value.slice(0, 60) || '-'}`
     + ` · eşleme denemesi: ${taskDry?.ok ? 'hatasız' : 'hatalı'}, onay ${taskAppr.status}`);
-  await trDlg2.getByRole('button', { name: 'Kapat' }).click();
+  await trDlg2.getByRole('button', { name: 'Kapat', exact: true }).last().click();
 
   await tx.page.getByRole('button', { name: /Onaylarım/ }).click();
   const inbox = tx.page.getByRole('list', { name: 'Onay bekleyen aktarımlar' });
