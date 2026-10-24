@@ -1,18 +1,38 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { KeyRound, Plug, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
+import { KeyRound, LogIn, LogOut, Plug, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import '../projects/projects.css';
 import './integrations.css';
+import { CatalogGallery, SetupSteps } from './Catalog';
 
 const STATUS = { EXECUTED: ['Çalıştı', 'success'], PENDING_APPROVAL: ['Onay bekliyor', 'warning'], REJECTED: ['Reddedildi', 'neutral'],
   FAILED: ['Hata', 'danger'], DENIED: ['Yetkisiz', 'danger'] };
 const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
-/** Entegrasyonlar (ADIM 10.1): dış sistem bağlantıları, AI personel araç yetkileri, araç çağrı kaydı. */
+/** Servisin giriş ekranına gider (ADIM 12.1); dönüşte Entegrasyonlar sekmesi açılır ve sonuç bildirilir. */
+export async function startOAuth(tenantId, conn) {
+  const r = await api.startIntegrationOAuth(tenantId, conn.id);
+  window.location.assign(r.authorize_url);
+}
+
+/** OAuth dönüşü (?oauth=ok|error&msg=...): bildirim gösterilir, adres temizlenir. */
+function useOAuthReturn() {
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.get('oauth')) return;
+    if (q.get('oauth') === 'ok') toast.success('Giriş tamamlandı; bağlantı hazır. Şimdi AI personele araç yetkisi verin.');
+    else toast.error(q.get('msg') || 'Giriş tamamlanamadı.');
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+  }, []);
+}
+
+/** Entegrasyonlar (ADIM 10.1, 12.1): bağlantı kataloğu, dış sistem bağlantıları, AI personel araç yetkileri, araç çağrı kaydı. */
 export default function IntegrationsPanel({ tenantId }) {
   const [catalog, setCatalog] = useState(null);
+  const [systems, setSystems] = useState(null);
+  const [gallery, setGallery] = useState(false);
   const [conns, setConns] = useState(null);
   const [calls, setCalls] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -20,12 +40,24 @@ export default function IntegrationsPanel({ tenantId }) {
   const [open, setOpen] = useState(null);
   const [token, setToken] = useState(null);
   const load = useCallback(() => Promise.all([
-    api.getConnectors().then(setCatalog), api.getIntegrations(tenantId).then(setConns), api.getToolCalls(tenantId).then(setCalls),
+    api.getConnectors().then(setCatalog), api.getIntegrationCatalog().then(setSystems),
+    api.getIntegrations(tenantId).then(setConns), api.getToolCalls(tenantId).then(setCalls),
     api.getCompanyAIAgents(tenantId).then((a) => setAgents(Array.isArray(a) ? a : a.agents || [])),
   ]).catch((e) => toast.error(e.message)), [tenantId]);
   useEffect(() => { if (tenantId) load(); }, [tenantId, load]);
+  useOAuthReturn();
 
-  if (!catalog || !conns) return <p className="pj-hint">Yükleniyor…</p>;
+  if (!catalog || !conns || !systems) return <p className="pj-hint">Yükleniyor…</p>;
+  const pick = (entry) => {
+    if (entry.method === 'PLANNED') return toast.info(`${entry.title}: ${entry.description || 'planlanıyor.'}`);
+    setGallery(false);
+    setEditing({ entry });
+  };
+  const login = async (c) => { try { await startOAuth(tenantId, c); } catch (e) { toast.error(e.message); } };
+  const logout = async (c) => {
+    if (!(await confirmDialog({ message: `'${c.name}' oturumu kapatılsın mı? AI personel bu bağlantıyı yeniden giriş yapılana kadar kullanamaz.` }))) return;
+    try { await api.disconnectIntegrationOAuth(tenantId, c.id); toast.success('Oturum kapatıldı.'); load(); } catch (e) { toast.error(e.message); }
+  };
   const test = async (c) => {
     try {
       const r = await api.testIntegration(tenantId, c.id);
@@ -46,7 +78,7 @@ export default function IntegrationsPanel({ tenantId }) {
   return (
     <div className="pj-steps">
       <Card title="Entegrasyonlar" subtitle="AI personelin dış sistemleri (ERP, mesajlaşma, iş takibi, kod deposu) kullanması. Okumalar anında; yazma işlemleri her zaman insan onayından geçer ve her çağrı kaydedilir."
-        actions={<Button icon={Plus} disabled={!catalog.vault_ready} onClick={() => setEditing({})}>Bağlantı ekle</Button>}>
+        actions={<Button icon={Plus} disabled={!catalog.vault_ready} onClick={() => setGallery(true)}>Bağlantı ekle</Button>}>
         {!catalog.vault_ready && <p className="ui-text-danger">Kimlik kasası yapılandırılmamış; bağlantı eklenemez. RECDx ile iletişime geçin.</p>}
         {conns.length === 0 ? <EmptyState icon={Plug} title="Henüz bağlantı yok" description="Bağlantı ekleyip AI personele araç yetkisi verin." /> : (
           <ul className="pj-list">
@@ -58,6 +90,9 @@ export default function IntegrationsPanel({ tenantId }) {
                     ? `Ajan çevrimiçi · ${c.agent.hostname || 'sunucu'} · ${c.agent.templates} izinli şablon`
                     : c.agent.seen_at ? `Ajan çevrimdışı (son görülme ${fmt(c.agent.seen_at)})` : c.agent.has_token ? 'Ajan henüz bağlanmadı' : 'Ajan anahtarı oluşturulmadı'}</small></>}</span>
                 <Badge tone={c.status === 'ACTIVE' ? 'success' : 'neutral'}>{c.status === 'ACTIVE' ? 'Etkin' : 'Devre dışı'}</Badge>
+                {c.oauth && <Badge tone={c.oauth.connected ? 'success' : 'warning'}>{c.oauth.connected ? 'Giriş yapıldı' : 'Giriş gerekli'}</Badge>}
+                {c.oauth && c.status === 'ACTIVE' && <Button size="sm" icon={LogIn} onClick={() => login(c)}>{c.oauth.connected ? 'Yeniden giriş' : 'Giriş yap'}</Button>}
+                {c.oauth?.connected && <Button size="sm" variant="ghost" icon={LogOut} onClick={() => logout(c)}>Oturumu kapat</Button>}
                 {c.agent && <Badge tone={c.agent.online ? 'success' : 'warning'}>{c.agent.online ? 'Ajan çevrimiçi' : 'Ajan çevrimdışı'}</Badge>}
                 <Button size="sm" variant="secondary" icon={RefreshCw} onClick={() => test(c)}>Dene</Button>
                 {c.connector === 'edge' && <Button size="sm" variant="secondary" icon={KeyRound} onClick={() => newToken(c)}>Ajan anahtarı</Button>}
@@ -94,8 +129,15 @@ export default function IntegrationsPanel({ tenantId }) {
           </div>
         )}
       </Card>
+      {gallery && <CatalogGallery tenantId={tenantId} catalog={systems} onClose={() => setGallery(false)} onPick={pick} />}
       {editing && <ConnectionModal tenantId={tenantId} catalog={catalog.connectors} conn={editing.id ? editing : null}
-        onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+        entry={editing.entry || systems.entries.find((e) => e.code === editing.catalog_code)} redirectUri={systems.redirect_uri}
+        onClose={() => setEditing(null)} onSaved={async (saved) => {
+          setEditing(null);
+          await load();
+          if (saved?.oauth && !saved.oauth.connected && saved.status === 'ACTIVE'
+            && await confirmDialog({ message: `'${saved.name}' kaydedildi. Şimdi servisin giriş ekranına gidip izin verelim mi?`, confirmText: 'Giriş yap' })) login(saved);
+        }} />}
       {token && <AgentTokenModal data={token} onClose={() => setToken(null)} />}
     </div>
   );
@@ -117,27 +159,35 @@ function AgentTokenModal({ data, onClose }) {
   );
 }
 
-function ConnectionModal({ tenantId, catalog, conn, onClose, onSaved }) {
-  const [code, setCode] = useState(conn?.connector || catalog[0]?.code);
-  const [name, setName] = useState(conn?.name || '');
-  const [config, setConfig] = useState(conn?.config || {});
+// MCP kimlik yöntemine göre görünen alanlar (ADIM 12.1)
+const MCP_FIELDS = { token: ['token', 'auth_header'], oauth: ['client_id', 'client_secret'], none: [] };
+const visible = (code, config, key) => {
+  if (code !== 'mcp' || !['token', 'auth_header', 'client_id', 'client_secret'].includes(key)) return true;
+  return MCP_FIELDS[config.auth_mode || 'token'].includes(key);
+};
+
+function ConnectionModal({ tenantId, catalog, conn, entry, redirectUri, onClose, onSaved }) {
+  const [code, setCode] = useState(conn?.connector || entry?.connector || catalog[0]?.code);
+  const [name, setName] = useState(conn?.name || entry?.title || '');
+  const [config, setConfig] = useState(conn?.config || entry?.preset || {});
   const [secrets, setSecrets] = useState({});
   const [busy, setBusy] = useState(false);
   const connector = catalog.find((c) => c.code === code);
   const save = async () => {
     setBusy(true);
     try {
-      if (conn) await api.updateIntegration(tenantId, conn.id, { name, config, secrets });
-      else await api.createIntegration(tenantId, { connector: code, name, config, secrets });
+      const saved = conn ? await api.updateIntegration(tenantId, conn.id, { name, config, secrets })
+        : await api.createIntegration(tenantId, { connector: code, name, config, secrets, catalog_code: entry?.code || null });
       toast.success(conn ? 'Bağlantı güncellendi.' : 'Bağlantı eklendi. Şimdi deneyip AI personele araç yetkisi verin.');
-      onSaved();
+      onSaved(saved);
     } catch (e) { toast.error(e.message); } finally { setBusy(false); }
   };
   return (
     <Modal open onClose={onClose} title={conn ? `${conn.name} · düzenle` : 'Bağlantı ekle'} size="md"
       footer={<><Button variant="secondary" onClick={onClose}>Vazgeç</Button><Button icon={Save} disabled={busy || name.trim().length < 2} onClick={save}>{busy ? 'Kaydediliyor…' : 'Kaydet'}</Button></>}>
+      <SetupSteps entry={entry} redirectUri={redirectUri} />
       <div className="pj-form">
-        {!conn && (
+        {!conn && !entry && (
           <div className="pj-field full">
             <label htmlFor="ig-connector">Sistem</label>
             <select id="ig-connector" className="ui-input" value={code} onChange={(e) => { setCode(e.target.value); setConfig({}); setSecrets({}); }}>
@@ -150,7 +200,7 @@ function ConnectionModal({ tenantId, catalog, conn, onClose, onSaved }) {
           <label htmlFor="ig-name">Bağlantı adı</label>
           <input id="ig-name" className="ui-input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder={`${connector?.title || ''} (şirket)`} />
         </div>
-        {connector?.config_fields.map((f) => (
+        {connector?.config_fields.filter((f) => visible(code, config, f.key)).map((f) => (
           <div className="pj-field full" key={f.key}>
             <label htmlFor={`ig-c-${f.key}`}>{f.label}{f.required ? ' *' : ''}</label>
             {f.options?.length ? (
@@ -165,7 +215,7 @@ function ConnectionModal({ tenantId, catalog, conn, onClose, onSaved }) {
             {f.help && <p className="pj-hint">{f.help}</p>}
           </div>
         ))}
-        {connector?.secret_fields.map((f) => (
+        {connector?.secret_fields.filter((f) => visible(code, config, f.key)).map((f) => (
           <div className="pj-field full" key={f.key}>
             <label htmlFor={`ig-s-${f.key}`}>{f.label}{f.required && !conn ? ' *' : ''}</label>
             <input id={`ig-s-${f.key}`} className="ui-input" type="password" autoComplete="new-password" value={secrets[f.key] || ''}

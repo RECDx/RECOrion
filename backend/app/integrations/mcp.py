@@ -6,6 +6,8 @@
 - Her işlem kendi oturumunu açar: initialize → notifications/initialized → istek (Mcp-Session-Id varsa taşınır).
 - Yanıt application/json veya text/event-stream (SSE) olabilir; SSE'de isteğin kimliğine ait JSON-RPC yanıtı alınır.
 - Adres SSRF korumasından geçer; yönlendirme izlenmez. Kimlik bilgisi (token) kasada; hata mesajlarına yazılmaz.
+- Kimlik (ADIM 12.1): erişim anahtarı (token), tek tık giriş (OAuth 2.1, app/integrations/oauth.py) veya kimliksiz.
+  OAuth'ta erişim token'ı süresi dolmadan tazelenir; sunucu 401 dönerse bir kez yenilenip yeniden denenir.
 """
 import hashlib
 import json
@@ -14,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from app.integrations import oauth
 from app.integrations.base import READ, WRITE, Connector, Context, Field, Tool, ToolError, guard_url, http_client
 
 PROTOCOL_VERSION = "2025-06-18"
@@ -24,9 +27,18 @@ CLIENT_INFO = {"name": "RECOrion", "version": "1.0"}
 _cache: Dict[str, Tuple[float, List[Tool]]] = {}
 
 
+class _Unauthorized(ToolError):
+    pass
+
+
 def _headers(ctx: Context, session: Optional[str] = None) -> Dict[str, str]:
     h = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json", "MCP-Protocol-Version": PROTOCOL_VERSION}
-    token = ctx.secrets.get("token")
+    mode = ctx.config.get("auth_mode")
+    if oauth.enabled(ctx.config):
+        h["Authorization"] = f"Bearer {ctx.secrets.get('_access_token') or ''}"
+        token = None
+    else:
+        token = ctx.secrets.get("token") if mode != "none" else None
     if token:
         name = (ctx.config.get("auth_header") or "Authorization").strip()
         h[name] = f"Bearer {token}" if name.lower() == "authorization" else token
@@ -74,6 +86,8 @@ class _Session:
         except httpx.HTTPError as exc:
             raise ToolError(f"MCP sunucusuna ulaşılamadı ({exc.__class__.__name__}).")
         if r.status_code in (401, 403):
+            if oauth.enabled(self.ctx.config):
+                raise _Unauthorized("MCP sunucusu oturumu kabul etmedi; Entegrasyonlar ekranında yeniden 'Giriş yap'a basın.")
             raise ToolError(f"MCP sunucusu erişimi reddetti ({r.status_code}); token'ı kontrol edin.")
         if r.status_code >= 400:
             raise ToolError(f"MCP sunucusu HTTP {r.status_code} döndürdü.")
@@ -103,17 +117,25 @@ class _Session:
 
 async def _with_session(ctx: Context, fn, timeout: float = 30):
     url = await guard_url((ctx.config.get("url") or "").strip())
-    async with http_client(timeout=timeout) as client:
-        s = await _Session(ctx, client, url).open()
-        try:
-            return await fn(s)
-        finally:
-            await s.close()
+    if oauth.enabled(ctx.config):
+        await oauth.access_token(ctx)  # giriş yapılmamışsa anlaşılır hata; süresi dolmak üzereyse tazeler
+    for attempt in (1, 2):
+        async with http_client(timeout=timeout) as client:
+            try:
+                s = await _Session(ctx, client, url).open()
+                try:
+                    return await fn(s)
+                finally:
+                    await s.close()
+            except _Unauthorized:
+                if attempt == 2 or not ctx.secrets.get("_refresh_token"):
+                    raise
+                await oauth.refresh(ctx)  # token sunucuda geçersiz kılınmış olabilir: bir kez yenile, yeniden dene
 
 
 def _cache_key(ctx: Context) -> str:
-    raw = json.dumps([ctx.config.get("url"), ctx.config.get("auth_header"), ctx.config.get("read_tools"), ctx.secrets.get("token")],
-                     sort_keys=True)
+    raw = json.dumps([ctx.config.get("url"), ctx.config.get("auth_header"), ctx.config.get("read_tools"), ctx.config.get("auth_mode"),
+                      ctx.secrets.get("token"), ctx.secrets.get("_access_token")], sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -195,13 +217,20 @@ CONNECTOR = Connector(
     description="Şirketin kullandığı herhangi bir MCP sunucusunu (Streamable HTTP) bağlar; araçları otomatik keşfedilir.",
     config_fields=[
         Field("url", "Sunucu adresi (MCP uç noktası)", placeholder="https://mcp.sirket.com/mcp"),
+        Field("auth_mode", "Kimlik yöntemi", required=False,
+              help="Tek tık giriş: bağlantıyı kaydedip 'Giriş yap'a basın; servisin kendi ekranında izin verirsiniz, anahtar kopyalanmaz.",
+              options=[["token", "Erişim anahtarı (token)"], ["oauth", "Tek tık giriş (OAuth)"], ["none", "Kimlik gerekmez"]]),
         Field("auth_header", "Kimlik başlığı", required=False, placeholder="Authorization",
               help="Boşsa token 'Authorization: Bearer …' olarak gönderilir; sunucu başka başlık istiyorsa adını yazın (ör. X-API-Key)."),
         Field("read_tools", "Okuma sayılacak araçlar", required=False, placeholder="read_wiki_structure, read_wiki_contents",
               help="Sunucunun salt okunur diye işaretlemediği ama yalnızca bilgi getiren araçlar (virgülle). Listede olmayan "
                    "işaretsiz araçlar yazma sayılır ve her kullanımda insan onayı ister."),
     ],
-    secret_fields=[Field("token", "Erişim token'ı", required=False, help="Sunucu kimlik istemiyorsa boş bırakın. Kasada şifreli saklanır.")],
+    secret_fields=[Field("token", "Erişim token'ı", required=False, help="Yalnızca 'Erişim anahtarı' yönteminde. Kasada şifreli saklanır."),
+                   Field("client_id", "OAuth istemci kimliği", required=False,
+                         help="Yalnızca tek tık girişte ve sunucu otomatik kaydı desteklemiyorsa (ör. HubSpot, Box): servisin geliştirici "
+                              "konsolunda uygulama oluşturup kimliği buraya yazın. Boşsa RECOrion kendini otomatik kaydeder."),
+                   Field("client_secret", "OAuth istemci gizli anahtarı", required=False, help="İstemci kimliğiyle birlikte verildiyse.")],
     tools_fn=_list,
     test_fn=_test,
 )

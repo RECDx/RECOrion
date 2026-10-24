@@ -37,6 +37,11 @@ async function session(userKey, viewport = { width: 1440, height: 1000 }) {
   return { ctx, page };
 }
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
+// Bağlantı kataloğundan sistem kartı seçer (ADIM 12.1); aynı iletişim kutusu bağlantı formuna döner
+const pickCard = async (dlg, title) => {
+  await dlg.getByRole('list', { name: 'Bağlantı kataloğu' }).getByRole('listitem').filter({ hasText: title }).first().click();
+  await dlg.locator('#ig-name').waitFor({ timeout: 10000 });
+};
 const dialogOk = async (page, text) => {
   const d = page.getByRole('alertdialog');
   await d.waitFor({ timeout: 10000 });
@@ -692,7 +697,7 @@ try {
   const igName = `Telegram ${NAME.slice(-5)}`;
   const badToken = `999999:YANLIS-${Date.now()}`;
   const igDlg = ig.page.getByRole('dialog');
-  await igDlg.locator('#ig-connector').selectOption('telegram');
+  await pickCard(igDlg, 'Telegram');
   await igDlg.locator('#ig-name').fill(igName);
   await igDlg.locator('#ig-s-bot_token').fill(badToken);
   await igDlg.getByRole('button', { name: 'Kaydet' }).click();
@@ -764,7 +769,7 @@ try {
   await od.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
   const odName = `Odoo ${NAME.slice(-5)}`;
   const odDlg = od.page.getByRole('dialog');
-  await odDlg.locator('#ig-connector').selectOption('odoo');
+  await pickCard(odDlg, 'Odoo');
   await odDlg.locator('#ig-name').fill(odName);
   await odDlg.locator('#ig-c-url').fill(odooEnv.ODOO_URL);
   await odDlg.locator('#ig-c-db').fill(odooEnv.ODOO_DB);
@@ -816,7 +821,7 @@ try {
   const trName = `Trello ${NAME.slice(-5)}`;
   const trToken = `YANLIS-TRELLO-${Date.now()}`;
   const trDlg = od.page.getByRole('dialog');
-  await trDlg.locator('#ig-connector').selectOption('trello');
+  await pickCard(trDlg, 'Trello');
   await trDlg.locator('#ig-name').fill(trName);
   await trDlg.locator('#ig-s-api_key').fill('0123456789abcdef0123456789abcdef');
   await trDlg.locator('#ig-s-token').fill(trToken);
@@ -832,10 +837,10 @@ try {
 
   // 10.4 Dış MCP sunucusu (gerçek, herkese açık DeepWiki MCP; kimlik gerektirmez): yönetici ekrandan bağlar, işaretsiz bir
   // aracı "okuma" diye tanımlar, dener, Kaan'a yetki verir; Kaan sohbette aracı kullanır
-  const addConn = async (code, name, fill) => {
+  const addConn = async (card, name, fill) => {
     await od.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
     const dlg = od.page.getByRole('dialog');
-    await dlg.locator('#ig-connector').selectOption(code);
+    await pickCard(dlg, card);
     await dlg.locator('#ig-name').fill(name);
     await fill(dlg);
     await dlg.getByRole('button', { name: 'Kaydet' }).click();
@@ -846,7 +851,7 @@ try {
     return row;
   };
   const mcpName = `DeepWiki ${NAME.slice(-5)}`;
-  const mcpRow = await addConn('mcp', mcpName, async (dlg) => {
+  const mcpRow = await addConn('Diğer MCP sunucusu', mcpName, async (dlg) => {
     await dlg.locator('#ig-c-url').fill('https://mcp.deepwiki.com/mcp');
     await dlg.locator('#ig-c-read_tools').fill('read_wiki_structure');
   });
@@ -879,7 +884,7 @@ try {
     `${mCall ? `${mCall.tool} ${mCall.latency_ms} ms` : 'araç çağrılmadı'} · yanıt: ${mReply.replace(/\s+/g, ' ').slice(0, 90)}`);
 
   // Yönetici (yanlışlıkla veya kötü niyetle) iç ağdaki bir adresi MCP sunucusu diye girer: bağlanma reddedilir (SSRF koruması)
-  const ssrfRow = await addConn('mcp', `İç ağ ${NAME.slice(-5)}`, async (dlg) => {
+  const ssrfRow = await addConn('Diğer MCP sunucusu', `İç ağ ${NAME.slice(-5)}`, async (dlg) => {
     await dlg.locator('#ig-c-url').fill('http://backend:8000/api/v1/health');
   });
   const ssrfText = await ssrfRow.innerText();
@@ -890,7 +895,7 @@ try {
   // ajan yokken dener (anlaşılır uyarı), ajan anahtarını alır; "şirket sunucusunda" ajan başlatılır (backend konteyneri içinde,
   // yalnızca dışa bağlanır); ekran çevrimiçi gösterir; Kaan'a yetki verilir; proje yöneticisi sohbette Logo'dan cari bakiye sorar
   const edName = `Logo ${NAME.slice(-5)}`;
-  const edRow = await addConn('edge', edName, async () => {});
+  const edRow = await addConn('Logo (Tiger, GO', edName, async () => {});
   const edBefore = await edRow.innerText();
   await edRow.getByRole('button', { name: 'Ajan anahtarı' }).click();
   const tokenBox = od.page.getByLabel('Ajan anahtarı', { exact: true });
@@ -1084,6 +1089,99 @@ try {
   await mrAdm.ctx.close();
   step(routeRows === 5 && mrDenied === 403, 'Model yönlendirici: 5 iş türü, kalite matrisi ve öneriler Süper Admin\'de; şirket yöneticisi erişemiyor',
     `iş türü: ${routeRows} · matriste model: ${matrixRows} · onay bekleyen öneri: ${recCount} · şirket yöneticisi: ${mrDenied}`);
+
+  // 12.1 Bağlantı kataloğu: yönetici galeride arar ve kategori seçer; "yakında" kartı anlaşılır bilgi verir; sistemini bulamayınca
+  // RECAi'ye sorar (gerçek EVREN) ve önerilen kartla devam eder
+  const ct = await session('admin');
+  await ct.page.getByRole('button', { name: 'Entegrasyonlar' }).click();
+  await ct.page.getByRole('button', { name: 'Bağlantı ekle' }).click();
+  const ctDlg = ct.page.getByRole('dialog');
+  const catList = ctDlg.getByRole('list', { name: 'Bağlantı kataloğu' });
+  await catList.waitFor({ timeout: 15000 });
+  const allCards = await catList.getByRole('listitem').count();
+  await ctDlg.locator('#ig-search').fill('muhasebe');
+  const foundErp = (await catList.getByRole('listitem').allInnerTexts()).map((t) => t.split('\n').find((l) => /Odoo|Logo|Mikro|Netsis/.test(l))).filter(Boolean);
+  await ctDlg.locator('#ig-search').fill('');
+  await ctDlg.getByRole('button', { name: 'ERP', exact: true }).click();
+  const erpCount = await catList.getByRole('listitem').count();
+  await catList.getByRole('listitem').filter({ hasText: 'SAP Business One' }).click();
+  const plannedToast = await ct.page.getByRole('status').filter({ hasText: 'SAP Business One' }).first().innerText({ timeout: 5000 }).catch(() => '');
+  const stillGallery = await catList.isVisible();
+  await shot(ct.page, '20-baglanti-katalogu');
+  step(allCards >= 25 && foundErp.length >= 3 && erpCount >= 8 && /Planlanıyor|Edge/.test(plannedToast) && stillGallery,
+    'Bağlantı kataloğu: arama ve kategori çalışıyor; "yakında" kartı anlaşılır bilgi veriyor',
+    `kart: ${allCards} · "muhasebe" araması: ${foundErp.join(', ')} · ERP: ${erpCount} · yakında: ${plannedToast.slice(0, 70)}`);
+
+  await ctDlg.getByRole('button', { name: 'Tümü', exact: true }).click();
+  await ctDlg.locator('#ig-ask').fill('Logo Tiger 3 kullanıyoruz, veritabanı şirketin kendi sunucusunda. Cari bakiyeleri ve stokları AI personelin görmesini istiyoruz.');
+  const advStart = Date.now();
+  await ctDlg.getByRole('button', { name: 'Nasıl bağlanırım?' }).click();
+  const advice = ctDlg.getByLabel('RECAi önerisi');
+  await advice.waitFor({ timeout: 180000 });
+  const adviceText = await advice.innerText();
+  const continueBtn = advice.getByRole('button', { name: /ile devam et$/ });
+  const continueLabel = await continueBtn.innerText().catch(() => '');
+  step(/Edge|ajan/i.test(adviceText) && /Logo|şirket sunucusu/i.test(continueLabel),
+    'RECAi bağlanma rehberi: "Logo Tiger 3" için Edge yolunu ve adımları önerdi, önerilen kartla devam edilebiliyor',
+    `${((Date.now() - advStart) / 1000).toFixed(0)} sn · ${continueLabel} · ${adviceText.replace(/\s+/g, ' ').slice(0, 120)}`);
+
+  // 12.1 Tek tık giriş (gerçek Linear MCP sunucusu): kart kurulum adımlarını gösterir, kimlik yöntemi OAuth gelir, anahtar alanı
+  // görünmez; kaydedince "giriş yapalım mı" sorulur; Linear'ın GERÇEK giriş sayfasına gidilir (keşif + otomatik istemci kaydı +
+  // PKCE gerçek sunucuyla). Test hesabımız olmadığı için izin vermeden dönülür → anlaşılır bildirim, bağlantı "Giriş gerekli" kalır
+  await ctDlg.locator('#ig-search').fill('linear');
+  await pickCard(ctDlg, 'Linear');
+  const setupSteps = await ctDlg.getByRole('list', { name: 'Kurulum adımları' }).locator('li').count();
+  const authMode = await ctDlg.locator('#ig-c-auth_mode').inputValue();
+  const tokenFields = await ctDlg.locator('#ig-s-token').count();
+  const lnName = `Linear ${NAME.slice(-5)}`;
+  await ctDlg.locator('#ig-name').fill(lnName);
+  await ctDlg.getByRole('button', { name: 'Kaydet' }).click();
+  const ask = ct.page.getByRole('alertdialog');
+  await ask.waitFor({ timeout: 15000 });
+  await ask.getByRole('button', { name: 'Giriş yap' }).click();
+  await ct.page.waitForURL(/mcp\.linear\.app|linear\.app/, { timeout: 45000 });
+  const authUrl = new URL(ct.page.url());
+  await ct.page.waitForLoadState('domcontentloaded').catch(() => {});
+  await shot(ct.page, '21-linear-giris-sayfasi');
+  const authQ = Object.fromEntries(authUrl.searchParams);
+  step(setupSteps >= 1 && authMode === 'oauth' && tokenFields === 0 && /linear\.app$/.test(authUrl.hostname)
+      && authQ.code_challenge_method === 'S256' && !!authQ.client_id && authQ.resource === 'https://mcp.linear.app/mcp' && (authQ.state || '').length >= 32,
+    'Tek tık giriş: Linear kartı OAuth ile geldi; "Giriş yap" Linear\'ın gerçek giriş sayfasına götürdü (otomatik istemci kaydı, PKCE, resource)',
+    `kurulum adımı: ${setupSteps} · yöntem: ${authMode} · anahtar alanı: ${tokenFields} · ${authUrl.hostname}${authUrl.pathname} · istemci: ${authQ.client_id ? 'var' : 'yok'}`);
+
+  await ct.page.goto(`${APP}/api/v1/integrations/oauth/callback?state=${encodeURIComponent(authQ.state || '')}&error=access_denied`);
+  await ct.page.waitForURL(/#\/company-admin/, { timeout: 30000 });
+  const deniedToast = await ct.page.getByRole('alert').filter({ hasText: 'izin verilmedi' }).first().innerText({ timeout: 20000 }).catch(() => '');
+  const lnRow = ct.page.locator('.pj-list li', { hasText: lnName });
+  await lnRow.waitFor({ timeout: 20000 });
+  const lnRowText = await lnRow.innerText();
+  const cleanUrl = !ct.page.url().includes('oauth=');
+  const replay = await (await ct.page.request.get(`${APP}/api/v1/integrations/oauth/callback?state=${encodeURIComponent(authQ.state || '')}&code=x`, { maxRedirects: 0 })).headers().location || '';
+  await shot(ct.page, '22-giris-izin-verilmedi');
+  step(!!deniedToast && /Giriş gerekli/.test(lnRowText) && /Giriş yap/.test(lnRowText) && cleanUrl && /oauth=error/.test(replay),
+    'Linear\'da izin verilmeden dönüldü: Entegrasyonlar açıldı, anlaşılır bildirim; bağlantı "Giriş gerekli"; aynı giriş oturumu ikinci kez kullanılamıyor',
+    `${deniedToast.slice(0, 60)} · satır: ${lnRowText.replace(/\s+/g, ' ').slice(0, 80)} · adres temiz: ${cleanUrl}`);
+  const lnConn = ((await api(ct.page, `/api/v1/company/${cfg.tenant_id}/integrations`)).body || []).find((c) => c.name === lnName);
+  if (lnConn) await api(ct.page, `/api/v1/company/${cfg.tenant_id}/integrations/${lnConn.id}`, { method: 'PUT', body: JSON.stringify({ status: 'DISABLED' }) });
+  await ct.ctx.close();
+
+  // 12.1 Süper Admin kataloğu yönetir (canlıda kart DEĞİŞTİRİLMEZ: tüm müşterilerin galerisini etkiler); şirket yöneticisi erişemez
+  const cs = await session('super');
+  await cs.page.goto(`${APP}/#/super-admin/integration-catalog`);
+  const csTable = cs.page.locator('table.ui-table');
+  await csTable.locator('tbody tr').first().waitFor({ timeout: 30000 });
+  const csRows = await csTable.locator('tbody tr').count();
+  await csTable.locator('tbody tr', { hasText: 'Linear' }).getByRole('button', { name: 'Düzenle' }).click();
+  const csPreset = await cs.page.getByRole('dialog').locator('#ca-preset').inputValue();
+  await cs.page.getByRole('dialog').getByRole('button', { name: 'Vazgeç' }).click();
+  await shot(cs.page, '23-katalog-yonetimi');
+  await cs.ctx.close();
+  const csAdm = await session('admin');
+  const csDenied = (await api(csAdm.page, '/api/v1/system/integration-catalog')).status;
+  await csAdm.ctx.close();
+  step(csRows >= 25 && /mcp\.linear\.app/.test(csPreset) && csDenied === 403,
+    'Bağlantı kataloğu Süper Admin\'de yönetiliyor (kart ön ayarı görünüyor); şirket yöneticisi erişemiyor',
+    `kart: ${csRows} · Linear ön ayarı: ${csPreset.replace(/\s+/g, ' ').slice(0, 60)} · şirket yöneticisi: ${csDenied}`);
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

@@ -161,6 +161,14 @@ export const api = {
   getToolCalls: (tenantId, status) => request(`/company/${tenantId}/tool-calls${status ? `?status=${status}` : ''}`),
   getMyToolApprovals: () => request('/me/tool-approvals'),
   decideToolCall: (id, approve, note) => request(`/tool-calls/${id}/decision`, { method: 'POST', body: JSON.stringify({ approve, note: note || null }) }),
+  // Bağlantı kataloğu ve tek tık giriş (ADIM 12.1)
+  getIntegrationCatalog: () => request('/integrations/catalog'),
+  adviseIntegration: (tenantId, text) => request(`/company/${tenantId}/integrations/advise`, { method: 'POST', body: JSON.stringify({ text }) }),
+  startIntegrationOAuth: (tenantId, id) => request(`/company/${tenantId}/integrations/${id}/oauth/start`, { method: 'POST' }),
+  disconnectIntegrationOAuth: (tenantId, id) => request(`/company/${tenantId}/integrations/${id}/oauth/disconnect`, { method: 'POST' }),
+  getCatalogAdmin: () => request('/system/integration-catalog'),
+  createCatalogEntry: (data) => request('/system/integration-catalog', { method: 'POST', body: JSON.stringify(data) }),
+  updateCatalogEntry: (id, data) => request(`/system/integration-catalog/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   newEdgeAgentToken: (tenantId, id) => request(`/company/${tenantId}/integrations/${id}/agent-token`, { method: 'POST' }),
   // Dashboard (Adım 9)
   getPlatformDashboard: (days = 7) => request(`/system/dashboard?days=${days}`),

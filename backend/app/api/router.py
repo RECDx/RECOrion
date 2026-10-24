@@ -26,6 +26,7 @@ from app.api.v1.integrations import router as integrations_router
 from app.api.v1.edge import router as edge_router
 from app.api.v1.templates import router as templates_router
 from app.api.v1.regulations import router as regulations_router
+from app.api.v1.integration_catalog import router as integration_catalog_router
 from app.api.v1.meetings import router as meetings_router
 from app.api.v1.model_router import router as model_router_router
 from app.core.access_policy import enforce_access_policy
@@ -60,5 +61,6 @@ api_router.include_router(integrations_router)
 api_router.include_router(edge_router)
 api_router.include_router(templates_router)
 api_router.include_router(regulations_router)
+api_router.include_router(integration_catalog_router)
 api_router.include_router(meetings_router)
 api_router.include_router(model_router_router)

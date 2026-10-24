@@ -3,11 +3,18 @@ Entegrasyon (MCP) uçları (ADIM 10.1).
 
 Bağlantılar, araç yetkileri ve çağrı kaydı şirketin içeriğidir: yalnızca o şirketin integration:manage yetkisi olanları
 (KVKK: RECDx platform personeli göremez). Şifreler yalnızca yazılır; yanıtlarda "dolu/boş" olarak döner.
+Gizli alanlarda "_" önekli anahtarlar RECOrion'un kendi yönettiği değerlerdir (OAuth token'ları, kayıtlı istemci; ADIM 12.1):
+kullanıcı bunları gönderemez, yanıtlarda yalnızca "giriş yapıldı/yapılmadı" olarak görünür.
 """
+import logging
+import secrets as pysecrets
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,12 +22,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import integrations
 from app.core import vault
 from app.core.security import CurrentUser, ensure_tenant_content, forbidden, get_current_user
-from app.db.models import Actor, AgentToolGrant, IntegrationConnection, Project, ToolCall
+from app.db.models import Actor, AgentToolGrant, IntegrationCatalogEntry, IntegrationConnection, Project, ToolCall
 from app.db.session import get_db
+from app.integrations import oauth
 from app.integrations.base import READ, Context, ToolError
 from app.services import code_repo, tool_gateway
 
 router = APIRouter(tags=["Entegrasyonlar (MCP)"])
+logger = logging.getLogger("recorion.integrations")
 
 
 def _manage(user: CurrentUser, tenant_id: uuid.UUID) -> None:
@@ -39,14 +48,21 @@ async def _conn(db: AsyncSession, user: CurrentUser, tenant_id: uuid.UUID, cid: 
 
 def conn_out(c: IntegrationConnection) -> Dict[str, Any]:
     try:
-        secrets_set = vault.mask(tool_gateway.context(c).secrets)
+        secrets = tool_gateway.context(c).secrets
     except vault.VaultError:
-        secrets_set = {}
+        secrets = {}
+    secrets_set = vault.mask({k: v for k, v in secrets.items() if not k.startswith("_")})
     connector = integrations.REGISTRY.get(c.connector)
-    return {"id": str(c.id), "connector": c.connector, "connector_title": connector.title if connector else c.connector,
-            "name": c.name, "config": c.config or {}, "secrets_set": secrets_set, "status": c.status,
-            "last_test_at": c.last_test_at, "last_test_ok": c.last_test_ok, "last_error": c.last_error, "created_at": c.created_at,
-            **({"agent": _agent_out(c)} if c.connector == "edge" else {})}
+    out = {"id": str(c.id), "connector": c.connector, "connector_title": connector.title if connector else c.connector,
+           "catalog_code": c.catalog_code, "name": c.name, "config": c.config or {}, "secrets_set": secrets_set, "status": c.status,
+           "last_test_at": c.last_test_at, "last_test_ok": c.last_test_ok, "last_error": c.last_error, "created_at": c.created_at,
+           **({"agent": _agent_out(c)} if c.connector == "edge" else {})}
+    if oauth.enabled(c.config):
+        exp = secrets.get("_expires_at")
+        out["oauth"] = {"connected": bool(secrets.get("_access_token")), "can_refresh": bool(secrets.get("_refresh_token")),
+                        "expires_at": datetime.fromtimestamp(int(exp), timezone.utc) if exp else None,
+                        "redirect_uri": oauth.redirect_uri()}
+    return out
 
 
 def _agent_out(c: IntegrationConnection) -> Dict[str, Any]:
@@ -66,6 +82,7 @@ async def connectors(user: CurrentUser = Depends(get_current_user)):
 
 class ConnectionIn(BaseModel):
     connector: str
+    catalog_code: Optional[str] = Field(None, max_length=64)
     name: str = Field(..., min_length=2, max_length=120)
     config: Dict[str, Any] = Field(default_factory=dict)
     secrets: Dict[str, str] = Field(default_factory=dict)
@@ -78,10 +95,15 @@ class ConnectionUpdate(BaseModel):
     status: Optional[str] = Field(None, pattern="^(ACTIVE|DISABLED)$")
 
 
+def _no_managed(secrets: Dict[str, Any]) -> None:
+    if any(k.startswith("_") for k in secrets):
+        raise HTTPException(status_code=422, detail="Bu alanlar RECOrion tarafından yönetilir; gönderilemez.")
+
+
 def _check_fields(connector, config: Dict[str, Any], secrets: Dict[str, Any]) -> None:
     cfg_keys = {f.key for f in connector.all_config_fields}
     sec_keys = {f.key for f in connector.secret_fields}
-    unknown = (set(config) - cfg_keys) | (set(secrets) - sec_keys)
+    unknown = (set(config) - cfg_keys) | ({k for k in secrets if not k.startswith("_")} - sec_keys)
     if unknown:
         raise HTTPException(status_code=422, detail=f"Bilinmeyen alan: {', '.join(sorted(unknown))}")
     missing = [f.label for f in connector.all_config_fields if f.required and not config.get(f.key)] + \
@@ -111,12 +133,17 @@ async def create_connection(tenant_id: uuid.UUID, payload: ConnectionIn, user: C
         raise HTTPException(status_code=422, detail="Bilinmeyen bağlayıcı.")
     if not vault.enabled():
         raise HTTPException(status_code=503, detail="Kimlik kasası yapılandırılmamış; RECDx ile iletişime geçin.")
+    _no_managed(payload.secrets)
     _check_fields(connector, payload.config, payload.secrets)
+    if payload.catalog_code:
+        entry = (await db.execute(select(IntegrationCatalogEntry).where(IntegrationCatalogEntry.code == payload.catalog_code))).scalar_one_or_none()
+        if not entry or entry.connector != connector.code or entry.status != "ACTIVE":
+            raise HTTPException(status_code=422, detail="Katalog kartı bu sistemle eşleşmiyor.")
     if (await db.execute(select(IntegrationConnection.id).where(IntegrationConnection.tenant_id == tenant_id,
                                                                 IntegrationConnection.name == payload.name.strip()))).first():
         raise HTTPException(status_code=409, detail="Bu adla bir bağlantı zaten var.")
     conn = IntegrationConnection(id=uuid.uuid4(), tenant_id=tenant_id, connector=connector.code, name=payload.name.strip(),
-                                 config=payload.config, created_by_actor_id=user.actor_id)
+                                 config=payload.config, catalog_code=payload.catalog_code, created_by_actor_id=user.actor_id)
     conn.secret = vault.seal({k: v for k, v in payload.secrets.items() if v}, tool_gateway.binding(conn))
     db.add(conn)
     await db.commit()
@@ -129,9 +156,14 @@ async def update_connection(tenant_id: uuid.UUID, cid: uuid.UUID, payload: Conne
     conn = await _conn(db, user, tenant_id, cid)
     connector = integrations.get(conn.connector)
     secrets = tool_gateway.context(conn).secrets
+    _no_managed(payload.secrets or {})
     if payload.secrets:
         secrets.update({k: v for k, v in payload.secrets.items() if v})  # boş gönderilen alan korunur
     config = payload.config if payload.config is not None else (conn.config or {})
+    old = conn.config or {}
+    if (config.get("url"), config.get("auth_mode")) != (old.get("url"), old.get("auth_mode")) or             (payload.secrets or {}).get("client_id"):
+        # Sunucu, kimlik yöntemi veya istemci değişti: eski oturum ve kayıtlı istemci geçersiz (yeniden 'Giriş yap')
+        secrets = {k: v for k, v in secrets.items() if k not in oauth.TOKEN_KEYS + oauth.CLIENT_KEYS}
     _check_fields(connector, config, secrets)
     if payload.name:
         conn.name = payload.name.strip()
@@ -277,3 +309,82 @@ async def decide(call_id: uuid.UUID, payload: DecisionIn, user: CurrentUser = De
     await tool_gateway.decide(db, call, user, payload.approve, payload.note)
     await db.commit()
     return tool_gateway.call_out(call)
+
+
+# --- Tek tık giriş (OAuth) — ADIM 12.1 ---
+
+@router.post("/company/{tenant_id}/integrations/{cid}/oauth/start")
+async def oauth_start(tenant_id: uuid.UUID, cid: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Servisin giriş ekranına gidecek adresi üretir (PKCE + state). İstemci yoksa RECOrion kendini otomatik kaydeder."""
+    conn = await _conn(db, user, tenant_id, cid)
+    if conn.connector != "mcp" or not oauth.enabled(conn.config):
+        raise HTTPException(status_code=409, detail="Bu bağlantının kimlik yöntemi tek tık giriş değil.")
+    if conn.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="Bağlantı devre dışı.")
+    ctx = tool_gateway.context(conn)
+    try:
+        meta = await oauth.discover(conn.config.get("url"))
+        if not meta["auth_required"]:
+            raise HTTPException(status_code=409, detail="Bu MCP sunucusu kimlik istemiyor; kimlik yöntemini 'Kimlik gerekmez' seçin.")
+        client = oauth.client_of(ctx.secrets, meta)
+        if not client:
+            if not meta.get("registration_endpoint"):
+                raise HTTPException(status_code=422, detail="Bu sunucu otomatik istemci kaydını desteklemiyor. Servisin geliştirici "
+                                    f"konsolunda uygulama oluşturun (yönlendirme adresi: {oauth.redirect_uri()}) ve istemci kimliğini girin.")
+            registered = await oauth.register(meta)
+            await oauth.persist(ctx, registered)
+            client = oauth.client_of(ctx.secrets, meta)
+    except ToolError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    state, codes = pysecrets.token_urlsafe(32), oauth.pkce()
+    await oauth.save_pending(state, {"tenant_id": str(tenant_id), "connection_id": str(cid), "actor_id": str(user.actor_id),
+                                     "verifier": codes["verifier"], "token_endpoint": meta["token_endpoint"],
+                                     "auth_methods": meta["auth_methods"], "resource": meta["resource"], "issuer": meta["issuer"]})
+    return {"authorize_url": oauth.authorize_url(meta, client["id"], state, codes["challenge"]), "redirect_uri": oauth.redirect_uri()}
+
+
+def _back(ok: bool, cid: Optional[str], message: str = "") -> RedirectResponse:
+    from app.config import settings
+
+    q = f"oauth={'ok' if ok else 'error'}" + (f"&conn={cid}" if cid else "") + (f"&msg={quote(message[:300])}" if message else "")
+    return RedirectResponse(f"{settings.PUBLIC_APP_URL.rstrip('/')}/?{q}#/company-admin", status_code=302)
+
+
+@router.get("/integrations/oauth/callback")
+async def oauth_callback(state: str = "", code: str = "", error: str = "", error_description: str = "", db: AsyncSession = Depends(get_db)):
+    """Servisin giriş ekranından dönüş (herkese açık uç; yetki tek kullanımlık state ile doğrulanır)."""
+    pending = await oauth.pop_pending(state)
+    if not pending:
+        return _back(False, None, "Giriş oturumu bulunamadı veya süresi doldu; yeniden 'Giriş yap'a basın.")
+    cid = pending["connection_id"]
+    if error:
+        return _back(False, cid, "Giriş iptal edildi veya izin verilmedi." if error == "access_denied" else f"Servis girişi reddetti: {(error_description or error)[:200]}")
+    conn = await db.get(IntegrationConnection, uuid.UUID(cid))
+    if not conn or str(conn.tenant_id) != pending["tenant_id"] or conn.connector != "mcp" or not oauth.enabled(conn.config):
+        return _back(False, None, "Bağlantı bulunamadı veya değişti.")
+    ctx = tool_gateway.context(conn)
+    client = oauth.client_of(ctx.secrets, {"issuer": pending["issuer"]})
+    try:
+        if not client or not code:
+            raise ToolError("Giriş tamamlanamadı (istemci veya kod eksik).")
+        tokens = await oauth.exchange(pending, client, code)
+    except ToolError as exc:
+        conn.last_test_at, conn.last_test_ok, conn.last_error = datetime.now(timezone.utc), False, str(exc)[:1000]
+        await db.commit()
+        return _back(False, cid, str(exc))
+    secrets = {**ctx.secrets, **tokens}
+    conn.secret = vault.seal(secrets, tool_gateway.binding(conn))
+    conn.last_test_at, conn.last_test_ok, conn.last_error = datetime.now(timezone.utc), True, None
+    await db.commit()
+    logger.info("MCP OAuth girişi tamamlandı (bağlantı %s)", cid)
+    return _back(True, cid)
+
+
+@router.post("/company/{tenant_id}/integrations/{cid}/oauth/disconnect")
+async def oauth_disconnect(tenant_id: uuid.UUID, cid: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Oturumu kapatır: RECOrion'daki token'lar silinir (serviste verilen izni ayrıca servisin ayarlarından kaldırabilirsiniz)."""
+    conn = await _conn(db, user, tenant_id, cid)
+    secrets = {k: v for k, v in tool_gateway.context(conn).secrets.items() if k not in oauth.TOKEN_KEYS}
+    conn.secret = vault.seal(secrets, tool_gateway.binding(conn))
+    await db.commit()
+    return conn_out(conn)

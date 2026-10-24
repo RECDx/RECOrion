@@ -759,6 +759,28 @@ class IntegrationConnection(Base):
     agent_token_hash = Column(String(64))
     agent_seen_at = Column(DateTime(timezone=True))
     agent_info = Column(JSONB)
+    catalog_code = Column(String(64))  # ADIM 12.1: katalogdan eklendiyse kartın kodu
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class IntegrationCatalogEntry(Base):
+    """Bağlantı kataloğu kartı (ADIM 12.1): platform geneli, RECDx Süper Admin yönetir; kimlik bilgisi içermez."""
+    __tablename__ = "integration_catalog"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(64), unique=True, nullable=False)
+    title = Column(String(120), nullable=False)
+    vendor = Column(String(120))
+    category = Column(String(40), nullable=False)
+    method = Column(String(16), nullable=False)  # NATIVE, MCP_OAUTH, MCP_TOKEN, EDGE, PLANNED
+    connector = Column(String(32))
+    preset = Column(JSONB, nullable=False, default=dict)
+    description = Column(Text)
+    setup_steps = Column(JSONB, nullable=False, default=list)
+    keywords = Column(Text)
+    sort = Column(Integer, nullable=False, default=100)
+    status = Column(String(16), nullable=False, default="ACTIVE")  # ACTIVE, ARCHIVED
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

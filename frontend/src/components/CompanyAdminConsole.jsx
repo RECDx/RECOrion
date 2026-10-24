@@ -107,7 +107,8 @@ export default function CompanyAdminConsole({
     return currentTenant?.id || currentUser?.tenant_id || null;
   };
 
-  const [activeTab, setActiveTab] = useState('DASHBOARD');  // ADIM 9: açılışta genel bakış
+  // ADIM 9: açılışta genel bakış; ADIM 12.1: servis girişinden (OAuth) dönüşte Entegrasyonlar
+  const [activeTab, setActiveTab] = useState(() => (new URLSearchParams(window.location.search).get('oauth') ? 'INTEGRATIONS' : 'DASHBOARD'));
   // Sol menü: daraltılabilir, gruplar açılıp kapanabilir (tercih bu tarayıcıda hatırlanır); tablet/telefonda çekmece
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);

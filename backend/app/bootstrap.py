@@ -100,6 +100,12 @@ async def ensure_catalog() -> None:
         n = await ensure_packs(db)
     if n:
         logger.info("Mevzuat paketi taslakları yüklendi (yayın için uzman kontrolü gerekir): %s", n)
+    from app.services.integration_catalog import ensure_catalog as ensure_integration_catalog
+
+    async with AsyncSessionLocal() as db:
+        n = await ensure_integration_catalog(db)
+    if n:
+        logger.info("Bağlantı kataloğu kartları yüklendi: %s", n)
 
 
 async def main() -> None:
