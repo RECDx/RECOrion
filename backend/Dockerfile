@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-impress-nogui \
     libreoffice-calc-nogui \
     fonts-dejavu-core \
+    # Toplantı kaydı (ADIM 11.3): ses/video çözme, 16 kHz'e çevirme ve parçalama
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements-dev.txt ./

@@ -808,6 +808,27 @@ class TenantRegulationPack(Base):
     enabled_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class MeetingRecording(Base):
+    """Toplantı kaydı → proje taslağı (ADIM 11.3). Ham ses saklanmaz; yalnızca maskeli metin ve taslak (KVKK: RECDx göremez)."""
+    __tablename__ = "meeting_recordings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    created_by_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    title = Column(String(200), nullable=False)
+    source = Column(String(16), nullable=False, default="UPLOAD")  # UPLOAD, BROWSER
+    status = Column(String(16), nullable=False, default="PROCESSING")  # PROCESSING, READY, FAILED, USED
+    stage = Column(String(200))
+    duration_sec = Column(Numeric(10, 1))
+    transcript_masked = Column(Text)
+    pii = Column(JSONB)
+    draft = Column(JSONB)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"))
+    error = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class EdgeJob(Base):
     """Edge ajanına giden iş (ADIM 10.5): araç çağrısı → kuyruk → ajan yoklamada alır → sonucu döner."""
     __tablename__ = "edge_jobs"

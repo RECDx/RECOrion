@@ -17,7 +17,8 @@ const problems = [];
 const t0 = Date.now();
 const step = (ok, name, detail = '') => { report.push({ ok, name, detail, s: Math.round((Date.now() - t0) / 1000) }); console.log(`${ok ? 'GEÇTİ ' : 'KALDI '} ${name}${detail ? ' - ' + detail : ''}`); };
 
-const browser = await chromium.launch({ executablePath: CHROME });
+// Sahte mikrofon (ADIM 11.3 tarayıcıda kayıt senaryosu): izin sorulmaz, cihaz bip sesi üretir
+const browser = await chromium.launch({ executablePath: CHROME, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
 
 async function session(userKey, viewport = { width: 1440, height: 1000 }) {
   const ctx = await browser.newContext({ viewport });
@@ -76,7 +77,7 @@ try {
   await page.locator('#pj-desc').fill('Bayilerin sipariş verebileceği basit bir web portalı.');
   await page.locator('#pj-req').fill('Bayi girişi olmalı. Bayi ürün listesini görüp sipariş oluşturabilmeli. Sipariş durumu izlenebilmeli. '
     + 'Kapsam küçük tutulsun: en fazla 4 iş adımı yeterli (analiz, geliştirme, test).');
-  await page.getByRole('button', { name: 'Oluştur' }).click();
+  await page.getByRole('button', { name: 'Oluştur', exact: true }).click();
   await page.getByRole('heading', { name: NAME }).waitFor({ timeout: 15000 });
   step(true, 'Proje oluşturuldu (Taslak)', NAME);
 
@@ -1019,6 +1020,52 @@ try {
   step((draftOnly ? lockedEmpty && lockedNoConfirm && !rgAfter?.published : true) && !draftLeak,
     'Mevzuat paketi uzman kontrolü olmadan yayımlanamıyor; taslak şirkete görünmüyor',
     `${sgkText.split('\n')[0].slice(0, 70)} · boşken kilitli: ${lockedEmpty} · beyansız kilitli: ${lockedNoConfirm} · şirkette taslak: ${draftLeak ? 'EVET' : 'yok'}`);
+
+  // 11.3 Toplantıdan proje: proje yöneticisi önce tarayıcıda kısa bir kayıt dener (sahte mikrofon yalnızca bip sesi verir →
+  // anlaşılır konuşma yok uyarısı), sonra toplantı kaydını dosya olarak yükler (EVREN voxcpm2 ile üretilmiş sentetik Türkçe
+  // toplantı); gerçek qwen3-asr yazıya çevirir, Beyin AI taslak çıkarır; yönetici düzeltip projeyi oluşturur, plan taslak gelir
+  const mtFile = path.join(OUT, 'toplanti.mp3');
+  execFileSync('docker', ['exec', '-w', '/app', 'recorion_backend', 'python', 'scripts/live_test_meeting_audio.py', '/tmp/e2e_toplanti.mp3'],
+    { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  execFileSync('docker', ['cp', 'recorion_backend:/tmp/e2e_toplanti.mp3', mtFile], { env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  const mt = await session('manager');
+  await mt.page.getByRole('button', { name: 'Toplantıdan oluştur' }).click();
+  let mtDlg = mt.page.getByRole('dialog');
+  await mtDlg.getByRole('button', { name: 'Tarayıcıda kaydet' }).click();
+  await mtDlg.getByRole('button', { name: 'Kaydı başlat' }).click();
+  await mtDlg.getByText(/Kaydediliyor/).waitFor({ timeout: 10000 });
+  await mt.page.waitForTimeout(4000);
+  await mtDlg.getByRole('button', { name: 'Kaydı bitir' }).click();
+  const recAlert = mtDlg.getByRole('alert');
+  await recAlert.waitFor({ timeout: 120000 });
+  const recMsg = await recAlert.innerText();
+  step(/anlaşılır konuşma/.test(recMsg), 'Tarayıcıda kayıt alındı; konuşma olmayan kayıt anlaşılır uyarıyla reddedildi', recMsg.slice(0, 90));
+  await mtDlg.getByRole('button', { name: 'Yeniden dene' }).click();
+  await mtDlg.getByRole('button', { name: 'Dosya yükle' }).click();
+  await mtDlg.locator('#mt-title').fill('Depo sayım ön görüşmesi');
+  await mtDlg.locator('#mt-file').setInputFiles(mtFile);
+  const mt0 = Date.now();
+  await mtDlg.getByRole('button', { name: 'Yükle ve işle' }).click();
+  await mtDlg.locator('#mt-name').waitFor({ timeout: 8 * 60000 });
+  const mtSecs = Math.round((Date.now() - mt0) / 1000);
+  const draftName = await mtDlg.locator('#mt-name').inputValue();
+  const draftReq = await mtDlg.locator('#mt-req').inputValue();
+  const draftSteps = await mtDlg.getByRole('list', { name: 'Önerilen adımlar' }).locator('li').count();
+  const mtName = `${NAME} toplantı`;
+  await mtDlg.locator('#mt-name').fill(mtName);
+  await shot(mt.page, '18-toplantidan-taslak');
+  step(draftName.length > 3 && /barkod/i.test(draftReq) && /onay/i.test(draftReq) && draftSteps >= 3,
+    'Toplantı kaydı yazıya çevrildi ve Beyin AI isterleri (barkod, muhasebe onayı) ile adımları çıkardı',
+    `${mtSecs} sn · "${draftName}" · ${draftSteps} adım · isterler: ${draftReq.replace(/\s+/g, ' ').slice(0, 80)}`);
+  await mtDlg.getByRole('button', { name: 'Projeyi oluştur' }).click();
+  await mt.page.getByRole('heading', { name: mtName }).waitFor({ timeout: 20000 });
+  await mt.page.locator('.pj-step').first().waitFor({ timeout: 20000 });
+  const mtPlanSteps = await mt.page.locator('.pj-step').count();
+  step(mtPlanSteps === draftSteps, 'Toplantıdan proje oluştu; önerilen adımlar onay bekleyen plan taslağı olarak geldi',
+    `${mtPlanSteps} adım`);
+  const mtProj = ((await api(mt.page, '/api/v1/projects/?scope=mine')).body || []).find((x) => x.name === mtName);
+  if (mtProj) await api(mt.page, `/api/v1/projects/${mtProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+  await mt.ctx.close();
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

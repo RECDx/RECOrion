@@ -41,11 +41,13 @@ PURPOSE_SETTING = {
     "EMBEDDING": "model.default.embedding",
     "RERANK": "model.default.rerank",
     "OCR": "model.default.ocr",
+    "TRANSCRIPTION": "model.default.transcription",
     "GUARD": "model.guard",
     "VISION": "model.default.vision",
     "LEARNING_CARD": "default_manifesto_model",
 }
-INFRA_PURPOSES = {"EMBEDDING", "RERANK", "OCR", "GUARD", "VISION"}  # paket model listesinden bağımsız altyapı modelleri
+INFRA_PURPOSES = {"EMBEDDING", "RERANK", "OCR", "GUARD", "VISION", "TRANSCRIPTION"}  # paket model listesinden bağımsız altyapı modelleri
+AUDIO_TOKENS_PER_SECOND = 25  # yazıya çevirme ucu kullanım bildirmez: ses saniyesi başına tahmini giriş tokenı
 OCR_PAGE_TOKENS = 1000  # OCR ucu kullanım bildirmez: sayfa başına tahmini giriş tokenı
 IMAGE_TOKENS = 1200  # görsel başına tahmini giriş tokenı (kredi ön kontrolü için)
 DEFAULT_CHAT_SETTING = "model.default.chat"
@@ -329,6 +331,24 @@ async def ocr(ctx: LLMContext, png_bytes: bytes) -> str:
             await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
             raise LLMUnavailable("Belge okuma (OCR) servisi şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.") from exc
         await _record(db, tenant, model, ctx, OCR_PAGE_TOKENS, estimate_tokens(text), started)
+        return text
+
+
+async def transcribe(ctx: LLMContext, audio: bytes, filename: str, mime: str, seconds: float) -> str:
+    """Ses parçasını yazıya çevirir (ADIM 11.3). Kredi: saniye başına tahmini giriş + okunan metin kadar çıkış tokenı."""
+    ctx.purpose = "TRANSCRIPTION"
+    async with AsyncSessionLocal() as db:
+        tenant = await _tenant(db, ctx.tenant_id)
+        model = await resolve_model(db, tenant, "TRANSCRIPTION", None, None)
+        est_in = int(seconds * AUDIO_TOKENS_PER_SECOND)
+        await _preflight(db, tenant, model, est_in, 2000)
+        started = time.monotonic()
+        try:
+            text = await evren_client.transcribe(audio, filename, mime, model.model_code)
+        except EvrenError as exc:
+            await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
+            raise LLMUnavailable("Ses yazıya çevirme servisi şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.") from exc
+        await _record(db, tenant, model, ctx, est_in, estimate_tokens(text), started)
         return text
 
 

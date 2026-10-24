@@ -55,7 +55,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       if (firstLoad.current) {  // başlamış projede İş Akışı sekmesiyle açılır
         firstLoad.current = false;
         if (['ACTIVE', 'PAUSED'].includes(p.status)) setTab('flow');
-        else if (p.plan?.from_template && !p.plan.approved) setTab('plan');  // şablondan gelen taslak plan incelensin
+        else if ((p.plan?.from_template || p.plan?.from_meeting) && !p.plan.approved) setTab('plan');  // şablondan gelen taslak plan incelensin
       }
       setForm(pickForm(p));
       setActors(a);

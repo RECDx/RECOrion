@@ -116,6 +116,22 @@ class EvrenClient:
         }, timeout=120)
         return str(data.get("text") or "")
 
+    async def transcribe(self, audio: bytes, filename: str, mime: str, model_code: str, language: str = "tr") -> str:
+        """EVREN /audio/transcriptions (OpenAI uyumlu, çok parçalı form). Dosya boyutu sınırı ~25 MB (24.10.2026 ölçüldü)."""
+        if not settings.EVREN_API_KEY:
+            raise EvrenError("EVREN API anahtarı tanımlı değil (.env: EVREN_API_KEY).")
+        try:
+            async with httpx.AsyncClient(timeout=300) as client:
+                resp = await client.post(f"{self.base_url}/audio/transcriptions", headers={"Authorization": f"Bearer {settings.EVREN_API_KEY}"},
+                                         files={"file": (filename, audio, mime)}, data={"model": model_code, "language": language})
+        except httpx.TimeoutException as exc:
+            raise EvrenError("EVREN yanıt vermedi (zaman aşımı).") from exc
+        except httpx.HTTPError as exc:
+            raise EvrenError(f"EVREN bağlantı hatası: {exc.__class__.__name__}") from exc
+        if resp.status_code != 200:
+            raise EvrenError(f"EVREN hata döndürdü ({resp.status_code}): {resp.text[:300]}", resp.status_code)
+        return str(resp.json().get("text") or "")
+
     async def rerank(self, query: str, documents: List[str], model_code: str, top_n: int = 5) -> RerankResult:
         data = await self._post("/rerank", {"model": model_code, "query": query, "documents": documents, "top_n": top_n})
         usage = data.get("usage") or {}

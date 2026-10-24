@@ -117,6 +117,11 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/system/regulation-packs"): SUPER_ADMIN,
     ("PUT", f"{P}/system/regulation-packs/{{pack_id}}"): SUPER_ADMIN,
     ("POST", f"{P}/system/regulation-packs/{{pack_id}}/publish"): SUPER_ADMIN,
+    # Toplantı kaydından proje (ADIM 11.3): project:create; kayıt yalnızca yükleyene / project:manage'e (uçta denetlenir)
+    ("POST", f"{C}/meetings"): HANDLER("project:create"),
+    ("GET", f"{C}/meetings"): HANDLER("project:create"),
+    ("GET", f"{C}/meetings/{{rec_id}}"): HANDLER("project:create"),
+    ("POST", f"{C}/meetings/{{rec_id}}/project"): HANDLER("project:create"),
     ("GET", f"{C}/regulation-packs"): HANDLER(),
     ("GET", f"{C}/regulation-packs/{{pack_id}}"): HANDLER(),
     ("PUT", f"{C}/regulation-packs/{{pack_id}}"): HANDLER("tenant:manage"),

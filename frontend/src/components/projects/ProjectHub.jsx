@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FolderKanban, LayoutTemplate, Plus } from 'lucide-react';
+import { FolderKanban, LayoutTemplate, Mic, Plus } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, EmptyState, Modal } from '../../ui/components';
 import { toast } from '../../ui/feedback';
 import { KIND, fmtDay, statusOf } from './projectMeta';
 import { TemplateGallery } from './Templates';
+import MeetingToProject from './MeetingToProject';
 import './projects.css';
 
 const canSeeAll = (u) => (u?.permissions || []).includes('project:manage') || u?.role === 'COMPANY_ADMIN';
@@ -16,6 +17,7 @@ export default function ProjectHub({ tenant, currentUser, actors = [], onOpen })
   const [projects, setProjects] = useState(null);
   const [creating, setCreating] = useState(false);
   const [fromTemplate, setFromTemplate] = useState(false);
+  const [fromMeeting, setFromMeeting] = useState(false);
 
   const refresh = useCallback(() => {
     if (!tenant?.id) return;
@@ -38,6 +40,7 @@ export default function ProjectHub({ tenant, currentUser, actors = [], onOpen })
               ))}
             </div>
           )}
+          {canCreate(currentUser) && <Button variant="secondary" icon={Mic} onClick={() => setFromMeeting(true)}>Toplantıdan oluştur</Button>}
           {canCreate(currentUser) && <Button variant="secondary" icon={LayoutTemplate} onClick={() => setFromTemplate(true)}>Şablondan oluştur</Button>}
           {canCreate(currentUser) && <Button icon={Plus} onClick={() => setCreating(true)}>Yeni Proje / Case</Button>}
         </div>
@@ -75,6 +78,10 @@ export default function ProjectHub({ tenant, currentUser, actors = [], onOpen })
       {fromTemplate && (
         <TemplateGallery currentUser={currentUser} onClose={() => setFromTemplate(false)}
           onCreated={(p) => { setFromTemplate(false); refresh(); onOpen(p); }} />
+      )}
+      {fromMeeting && (
+        <MeetingToProject tenant={tenant} onClose={() => setFromMeeting(false)}
+          onCreated={(p) => { setFromMeeting(false); refresh(); onOpen(p); }} />
       )}
     </div>
   );
