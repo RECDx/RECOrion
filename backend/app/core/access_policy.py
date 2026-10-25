@@ -93,9 +93,9 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/professions/{{code}}"): SUPER_ADMIN,
     ("DELETE", f"{P}/professions/{{code}}"): SUPER_ADMIN,
 
-    ("GET", f"{P}/models"): AUTH,
-    ("GET", f"{P}/models/"): AUTH,
-    ("GET", f"{P}/models/{{model_id}}"): AUTH,
+    ("GET", f"{P}/models"): SUPER_ADMIN,  # #349: gerçek model kataloğu yalnızca RECDx
+    ("GET", f"{P}/models/"): SUPER_ADMIN,  # #349: gerçek model kataloğu yalnızca RECDx
+    ("GET", f"{P}/models/{{model_id}}"): SUPER_ADMIN,  # #349: gerçek model kataloğu yalnızca RECDx
     ("POST", f"{P}/models"): SUPER_ADMIN,
     ("POST", f"{P}/models/"): SUPER_ADMIN,
     ("PUT", f"{P}/models/{{model_id}}"): SUPER_ADMIN,
@@ -229,6 +229,9 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{C}/job-titles/{{title_id}}"): TENANT("agent:custom_title"),
     ("DELETE", f"{C}/job-titles/{{title_id}}"): TENANT("agent:custom_title"),
     ("GET", f"{C}/llm-models"): TENANT("tenant:view"),
+    ("GET", f"{C}/recai"): TENANT("tenant:view"),  # #349: RECAi adları ve yetenekler
+    ("GET", f"{P}/system/recai-tiers"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/recai-tiers/{{code}}"): SUPER_ADMIN,
     ("GET", f"{C}/entitlements"): TENANT("tenant:view"),
     ("POST", f"{C}/generate-role-prompt"): TENANT("agent:configure"),
     ("GET", f"{C}/ai-agents"): TENANT("tenant:view"),

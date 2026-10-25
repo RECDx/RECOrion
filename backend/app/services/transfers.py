@@ -119,7 +119,7 @@ async def extract(tenant_id: uuid.UUID, project_id: Optional[uuid.UUID], object_
             data = None
         if isinstance(data, dict) and isinstance(data.get("items"), list):
             return {"items": [i for i in data["items"] if isinstance(i, dict)][:MAX_ITEMS], "notes": str(data.get("notes") or "")[:500],
-                    "model": result.model_code}
+                    "model": result.public_model}
         messages += [{"role": "assistant", "content": result.content or ""}, {"role": "user", "content": "Yalnızca istenen JSON'u ver."}]
     raise ValueError("RECAi çıktıdan kayıt çıkaramadı.")
 

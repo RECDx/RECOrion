@@ -124,6 +124,7 @@ class Plan(Base):
     odoo_product_id = Column(Integer, nullable=True)
     # ADIM 13.1: RECDx uygulama teklifi (RECQmind, RECSlip): yok / indirimli / dahil + Odoo ürünü
     recdx_apps = Column(JSONB, nullable=False, default=dict)
+    recai_tiers = Column(JSONB, nullable=False, default=list)  # #349: paketteki seçilebilir RECAi adları (MERGEN, HIZLI, DERIN)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -162,6 +163,7 @@ class JobTitle(Base):
     base_role_prompt = Column(Text, nullable=False)
     required_skills = Column(JSONB, default=list)
     recommended_model_code = Column(String(128))
+    recommended_tier = Column(String(16))  # #349
     autonomy_level = Column(String(8), default="L1")
     ai_review_status = Column(String(32), default="COMPANY_LOCAL")
     ai_review_feedback = Column(Text)
@@ -288,6 +290,7 @@ class Tenant(Base):
     package_expiry_date = Column(DateTime(timezone=True))
     last_reminder_sent_at = Column(DateTime(timezone=True))
     brain_model_code = Column(String(128))  # şirketin Beyin AI (organizatör) modeli
+    brain_tier = Column(String(16))  # #349: Beyin AI'nin RECAi adı
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -315,6 +318,8 @@ class Actor(Base):
     password_hash = Column(String(255))
     capability_profile = Column(String(64))  # reasoning, code-strong, vision
     preferred_model_id = Column(UUID(as_uuid=True), ForeignKey("llm_models.id", ondelete="SET NULL"))
+    recai_tier = Column(String(16))  # #349: müşterinin seçtiği RECAi adı (model RECDx'çe çözülür)
+    recai_capabilities = Column(JSONB, nullable=False, default=dict)  # #349: {GORSEL, SES, OKUR: bool}
     system_prompt = Column(Text)
     description = Column(Text)
     autonomy_level = Column(String(8), default="L1")  # L1, L2, L3
@@ -1001,6 +1006,22 @@ class IntegrationTransfer(Base):
     rolled_back_at = Column(DateTime(timezone=True))
     rolled_back_by_actor_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RecaiTier(Base):
+    """RECAi adı (#349): müşterinin gördüğü ad → arkasındaki EVREN modeli (+ yedek). Modeli yalnızca RECDx değiştirir."""
+    __tablename__ = "recai_tiers"
+
+    code = Column(String(16), primary_key=True)
+    name = Column(String(64), nullable=False)
+    kind = Column(String(16), nullable=False)  # CHAT (seçilebilir), CAPABILITY (pakette yetenek)
+    purpose = Column(String(32))  # CAPABILITY: VISION, TRANSCRIPTION, OCR
+    description = Column(Text)
+    model_code = Column(String(128), nullable=False)
+    fallback_model_code = Column(String(128))
+    sort = Column(Integer, nullable=False, default=100)
+    updated_by_actor_id = Column(UUID(as_uuid=True))
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

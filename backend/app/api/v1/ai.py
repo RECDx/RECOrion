@@ -9,7 +9,7 @@ KVKK
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -76,14 +76,27 @@ async def company_credits(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_d
                                                                CreditLedgerEntry.entry_type != "USAGE")
                                .order_by(CreditLedgerEntry.created_at.desc()).limit(20))).scalars().all()
     failed = (await db.execute(select(func.count()).where(*period_calls, LLMCall.status == "FAILED"))).scalar()
+    from app.services import recai
+
+    all_tiers = await recai.tiers(db)
+    by_model: Dict[str, Dict[str, Any]] = {}  # #349: RECAi adına göre (gerçek model adı müşteriye gösterilmez)
+    for m, p, c, ti, to, cr in (await db.execute(
+            select(LLMCall.model_code, LLMCall.purpose, func.count(), func.coalesce(func.sum(LLMCall.tokens_in), 0),
+                   func.coalesce(func.sum(LLMCall.tokens_out), 0), func.coalesce(func.sum(LLMCall.credits_cost), 0))
+            .where(*period_calls, LLMCall.status == "SUCCESS").group_by(LLMCall.model_code, LLMCall.purpose))).all():
+        g = by_model.setdefault(recai.public_name(m, all_tiers, p), {"calls": 0, "tokens_in": 0, "tokens_out": 0, "credits": 0.0})
+        g["calls"] += c
+        g["tokens_in"] += int(ti)
+        g["tokens_out"] += int(to)
+        g["credits"] += _f(cr)
     return {
         "summary": summary.as_dict(),
-        "by_model": await breakdown(LLMCall.model_code),
+        "by_model": sorted(({"key": k, **v} for k, v in by_model.items()), key=lambda x: -x["credits"]),
         "by_purpose": await breakdown(LLMCall.purpose),
         "by_actor": by_actor,
         "failed_calls": failed,
         "recent_calls": [{
-            "created_at": c.created_at, "model_code": c.model_code, "purpose": c.purpose,
+            "created_at": c.created_at, "model_code": recai.public_name(c.model_code, all_tiers, c.purpose), "purpose": c.purpose,
             "actor_name": names.get(c.actor_id) if c.actor_id else None, "tokens_in": c.tokens_in,
             "tokens_out": c.tokens_out, "credits": _f(c.credits_cost), "status": c.status, "latency_ms": c.latency_ms,
         } for c in recent],
@@ -196,27 +209,38 @@ async def _chat_models_for(db: AsyncSession, tenant: Tenant) -> List[LLMModel]:
 
 @router.get("/company/{tenant_id}/brain/settings")
 async def get_brain_settings(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """#349: Beyin AI'nin RECAi adı (müşteriye gerçek model adı gösterilmez)."""
+    from app.services import recai
+
     tenant = await _get_tenant(db, tenant_id)
-    default = await db.get(SystemSetting, "model.default.brain")
+    plan = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
+    opts = [o for o in await recai.options(db, plan, bypass=tenant.slug == "recdx_hq") if o["available"]]
     return {
-        "brain_model_code": tenant.brain_model_code,
-        "platform_default": default.value if default else None,
-        "available_models": [{"model_code": m.model_code, "display_name": m.display_name, "model_type": m.model_type,
-                              "effort_coefficient": _f(m.effort_coefficient)} for m in await _chat_models_for(db, tenant)],
+        "brain_model_code": tenant.brain_tier,
+        "platform_default": recai.TIER_NAMES[recai.DEFAULT_TIER],
+        "available_models": opts,
     }
 
 
 class BrainSettingsPayload(BaseModel):
-    brain_model_code: Optional[str] = None  # boş: platform varsayılanı
+    brain_model_code: Optional[str] = None  # #349: RECAi adı (MERGEN, HIZLI, DERIN); boş: varsayılan
 
 
 @router.put("/company/{tenant_id}/brain/settings")
 async def put_brain_settings(tenant_id: uuid.UUID, payload: BrainSettingsPayload, db: AsyncSession = Depends(get_db)):
+    from app.services import recai
+
     tenant = await _get_tenant(db, tenant_id)
-    code = (payload.brain_model_code or "").strip().lower() or None
-    if code and code not in {m.model_code.lower() for m in await _chat_models_for(db, tenant)}:
-        raise ModelNotAllowed(f"'{code}' modeli Beyin AI için kullanılamaz veya şirketinizin paketinde yer almıyor.")
-    tenant.brain_model_code = code
+    code = (payload.brain_model_code or "").strip().upper() or None
+    if code and code not in recai.CHAT_TIERS:
+        mapped = recai.tier_for_model(code, await recai.tiers(db))  # eski model kodu gelirse adına çevrilir
+        if not mapped or mapped not in recai.CHAT_TIERS:
+            raise ModelNotAllowed("Geçersiz RECAi seçimi.")
+        code = mapped
+    plan = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
+    if code and tenant.slug != "recdx_hq" and code not in recai.plan_tiers(plan):
+        raise ModelNotAllowed(f"{recai.TIER_NAMES.get(code, code)} şirketinizin paketinde yer almıyor.")
+    tenant.brain_tier, tenant.brain_model_code = code, None
     await db.commit()
     return await get_brain_settings(tenant_id, db)
 
@@ -254,7 +278,7 @@ async def _converse(db: AsyncSession, ctx: LLMContext, tenant_id: uuid.UUID, act
                          created_at=now.replace(microsecond=min(now.microsecond + 1, 999999)))
     db.add_all([question, answer])
     await db.commit()
-    return {"message": _message_out(answer), "model_code": result.model_code, "credits": result.credits}
+    return {"message": _message_out(answer), "model_code": result.public_model, "credits": result.credits}
 
 
 async def _brain_prompt(db: AsyncSession, tenant: Tenant, query: str) -> str:
@@ -365,3 +389,49 @@ async def assistant_history(limit: int = Query(50, ge=1, le=200),
                             current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     hq_id = await get_hq_tenant_id(db)
     return [_message_out(m) for m in await _history(db, hq_id, current.actor_id, "PLATFORM_ASSISTANT", limit)]
+
+
+# ---------------------------------------------------------------- RECAi adları (#349; Süper Admin)
+def _require_super(user: CurrentUser) -> None:
+    if not user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Bu işlem yalnızca RECDx Süper Admin içindir.")
+
+
+class RecaiTierPayload(BaseModel):
+    model_code: str = Field(..., min_length=2, max_length=128)
+    fallback_model_code: Optional[str] = Field(None, max_length=128)
+
+
+@router.get("/system/recai-tiers")
+async def list_recai_tiers(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """RECAi adları ve arkasındaki modeller (yalnızca RECDx görür)."""
+    from app.services import recai
+
+    _require_super(user)
+    return [recai.out(t, admin=True) for t in (await recai.tiers(db)).values()]
+
+
+@router.put("/system/recai-tiers/{code}")
+async def update_recai_tier(code: str, payload: RecaiTierPayload, user: CurrentUser = Depends(get_current_user),
+                            db: AsyncSession = Depends(get_db)):
+    """Bir RECAi adının arkasındaki modeli (ve yedeğini) değiştirir; müşteride ad değişmez, seçimler kendiliğinden geçer."""
+    from app.core.audit import write_audit_event
+    from app.services import recai
+    _require_super(user)
+    t = (await recai.tiers(db)).get(code.upper())
+    if not t:
+        raise HTTPException(status_code=404, detail="RECAi adı bulunamadı.")
+    want = {"VISION": {"VISION"}, "TRANSCRIPTION": {"AUDIO"}, "OCR": {"OCR"}}.get(t.purpose or "", {"CHAT"})
+    for c in [payload.model_code] + ([payload.fallback_model_code] if payload.fallback_model_code else []):
+        m = (await db.execute(select(LLMModel).where(func.lower(LLMModel.model_code) == c.strip().lower()))).scalar_one_or_none()
+        if not m or m.status != "ACTIVE":
+            raise HTTPException(status_code=422, detail=f"'{c}' etkin bir model değil.")
+        if m.model_type not in want:
+            raise HTTPException(status_code=422, detail=f"'{c}' bu ad için uygun türde değil ({m.model_type}).")
+    before = {"model_code": t.model_code, "fallback_model_code": t.fallback_model_code}
+    t.model_code, t.fallback_model_code = payload.model_code.strip(), (payload.fallback_model_code or "").strip() or None
+    t.updated_by_actor_id = user.actor_id
+    await db.commit()
+    await write_audit_event(action="RECAI_TIER_CHANGED", actor_id=user.actor_id, target_type="recai_tier", target_id=t.code,
+                            payload={"before": before, "after": {"model_code": t.model_code, "fallback_model_code": t.fallback_model_code}})
+    return recai.out(t, admin=True)

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import CurrentUser
 from app.db.models import AgentDocument, Plan, Tenant
+from app.services import recai
 
 DEFAULTS = {
     "can_change_llm": False,
@@ -36,12 +37,19 @@ class Entitlements:
     storage_gb: int
     allowed_models: List[str] = field(default_factory=list)
     bypass: bool = False  # süper admin
+    recai_tiers: List[str] = field(default_factory=list)  # #349: seçilebilir RECAi adları
+    capabilities: dict = field(default_factory=dict)  # #349: {GORSEL, SES, OKUR: bool}
 
     def as_dict(self) -> dict:
-        return {k: v for k, v in self.__dict__.items()}
+        d = {k: v for k, v in self.__dict__.items()}
+        d.pop("allowed_models", None)  # #349: müşteriye gerçek model adları gönderilmez
+        return d
 
     def model_allowed(self, model_code: str) -> bool:
         return self.bypass or not self.allowed_models or model_code.lower() in self.allowed_models
+
+    def tier_allowed(self, code: str) -> bool:
+        return self.bypass or code in self.recai_tiers
 
 
 async def entitlements(db: AsyncSession, tenant: Tenant, user: Optional[CurrentUser] = None) -> Entitlements:
@@ -60,6 +68,8 @@ async def entitlements(db: AsyncSession, tenant: Tenant, user: Optional[CurrentU
         storage_gb=int((plan.storage_gb if plan else 0) or 0),
         allowed_models=[str(m).strip().lower() for m in ((plan.allowed_models if plan else None) or [])],
         bypass=bypass,
+        recai_tiers=list(recai.CHAT_TIERS) if bypass else recai.plan_tiers(plan),
+        capabilities={k: True for k in recai.CAPABILITY_FEATURE} if bypass else recai.plan_capabilities(plan),
     )
 
 

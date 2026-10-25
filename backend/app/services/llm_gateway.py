@@ -102,6 +102,7 @@ class GatewayChatResult:
     raw: Dict[str, Any] = field(default_factory=dict)
     fallback_from: Optional[str] = None  # asıl model yanıt vermediyse onun kodu (yedek modelle üretildi)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)  # ADIM 10.2
+    public_model: str = "RECAi"  # #349: müşteriye gösterilecek RECAi adı (gerçek model adı yerine)
 
 
 async def _setting(db: AsyncSession, key: str) -> Optional[str]:
@@ -121,30 +122,54 @@ async def _tenant(db: AsyncSession, tenant_id: Optional[uuid.UUID]) -> Tenant:
 
 
 async def allowed_model_codes(db: AsyncSession, tenant: Tenant) -> Optional[set]:
-    """Paketin izin verdiği modeller; None = sınırsız (platform veya listesiz paket)."""
+    """Paketin izin verdiği modeller; None = sınırsız (platform veya listesiz paket).
+    #349: paket RECAi adlarıyla tanımlıysa, adların arkasındaki modeller (asıl + yedek); değilse eski model listesi."""
     if tenant.slug == HQ_SLUG or not tenant.plan_id:
         return None
     plan = await db.get(Plan, tenant.plan_id)
+    if plan and plan.recai_tiers:
+        from app.services import recai
+
+        allowed = recai.allowed_models(plan, await recai.tiers(db))
+        # Süper Admin'in onayladığı iş türü yönlendirmeleri (ADIM 11.4) RECAi adı seçilmemiş çağrılarda kullanılabilir
+        routes = (await db.execute(select(SystemSetting).where(SystemSetting.key.like("model.route.%")))).scalars().all()
+        allowed |= {str(r.value).lower() for r in routes if r.value}
+        return allowed or None
     codes = {str(m).lower() for m in (plan.allowed_models or [])} if plan else set()
     return codes or None
 
 
 async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requested: Optional[str],
                         actor_id: Optional[uuid.UUID], task_type: Optional[str] = None) -> LLMModel:
+    from app.services import recai
+
     allowed = await allowed_model_codes(db, tenant)
     infra = purpose in INFRA_PURPOSES
+    all_tiers = await recai.tiers(db)
 
+    # #349: RECAi adı (Mergen/Hızlı/Derin; yetenekler için Görsel/Ses/Okur) arkasındaki asıl + yedek modele çözülür
     candidates: List[str] = []
-    if requested:
+    requested_tier = all_tiers.get(requested.upper()) if requested else None
+    if requested_tier:
+        candidates += recai.models_of(requested_tier)
+    elif requested:
         candidates.append(requested)
+    n_requested = len(candidates)
     if actor_id and not infra:
         actor = await db.get(Actor, actor_id)
-        if actor and actor.preferred_model_id:
+        if actor and actor.recai_tier and actor.recai_tier in all_tiers:
+            candidates += recai.models_of(all_tiers[actor.recai_tier])
+        elif actor and actor.preferred_model_id:
             m = await db.get(LLMModel, actor.preferred_model_id)
             if m:
                 candidates.append(m.model_code)
-    if purpose == "BRAIN" and tenant.brain_model_code:
-        candidates.append(tenant.brain_model_code)
+    if purpose == "BRAIN":
+        if tenant.brain_tier and tenant.brain_tier in all_tiers:
+            candidates += recai.models_of(all_tiers[tenant.brain_tier])
+        elif tenant.brain_model_code:
+            candidates.append(tenant.brain_model_code)
+    if purpose in recai.PURPOSE_TIER and recai.PURPOSE_TIER[purpose] in all_tiers:
+        candidates += recai.models_of(all_tiers[recai.PURPOSE_TIER[purpose]])
     # Model yönlendirici (ADIM 11.4): Süper Admin'in iş türü için onayladığı model, platform varsayılanından önce gelir
     # (açık seçim, AI personelin modeli ve şirketin Beyin modeli her zaman önce)
     route_type = task_type or ("STRUCTURED" if purpose == "BRAIN" else None)
@@ -160,8 +185,9 @@ async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requeste
             continue
         # Altyapı modelleri (embedding/rerank/OCR/guard) paket listesinden bağımsızdır; sohbet modelleri pakete bağlıdır
         if allowed is not None and not infra and model.model_code.lower() not in allowed:
-            if i == 0 and requested:
-                raise ModelNotAllowed(f"'{model.model_code}' modeli şirketinizin paketinde yer almıyor.")
+            if requested and i == n_requested - 1 and not any(c.lower() in allowed for c in candidates[:n_requested]):
+                name = requested_tier.name if requested_tier else recai.public_name(model.model_code, all_tiers)
+                raise ModelNotAllowed(f"'{name}' şirketinizin paketinde yer almıyor.")
             continue
         return model
 
@@ -172,6 +198,19 @@ async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requeste
             if allowed is None or model.model_code.lower() in allowed:
                 return model
     raise LLMError("Bu işlem için kullanılabilir bir yapay zeka modeli bulunamadı.")
+
+
+async def _capability(db: AsyncSession, tenant: Tenant, ctx: "LLMContext", code: str) -> None:
+    """#349: RECAi Görsel / Ses / Okur pakette ve (çağrı bir AI personel içinse) o personelde açık olmalı."""
+    from app.services import recai
+
+    if tenant.slug == HQ_SLUG or not tenant.plan_id:
+        return
+    plan = await db.get(Plan, tenant.plan_id)
+    actor = await db.get(Actor, ctx.actor_id) if ctx.actor_id else None
+    if not recai.capability_allowed(plan, actor if actor is not None and actor.actor_type == "AI_AGENT" else None, code):
+        name = (await recai.tiers(db)).get(code)
+        raise ModelNotAllowed(f"{name.name if name else code} {'bu AI personel için kapalı' if recai.plan_capabilities(plan).get(code) else 'paketinizde yer almıyor'}.")
 
 
 async def _preflight(db: AsyncSession, tenant: Tenant, model: LLMModel, est_in: int, est_out: int) -> None:
@@ -204,7 +243,9 @@ async def _record(db: AsyncSession, tenant: Tenant, model: LLMModel, ctx: LLMCon
             call.cost_try = pricing.call_cost(price, tokens_in, tokens_out)
     db.add(call)
     if not error and tenant.slug != HQ_SLUG:
-        await credits.record_usage(db, tenant.id, cost, call.id, f"{ctx.purpose} · {model.model_code}")
+        from app.services import recai
+
+        await credits.record_usage(db, tenant.id, cost, call.id, f"{ctx.purpose} · {recai.public_name(model.model_code, await recai.tiers(db), ctx.purpose)}")
     await db.commit()
     if not error and tenant.slug != HQ_SLUG:
         try:
@@ -224,9 +265,14 @@ def _num(value) -> Optional[Decimal]:
 async def fallback_model(db: AsyncSession, tenant: Tenant, exclude: str) -> Optional[LLMModel]:
     """Asıl model meşgul/yanıtsızken kullanılacak yedek: önce model.fallback (23.10.2026: mimo-v2.6-pro), AI personel
     varsayılanı, genel varsayılan, sonra paketteki ilk sohbet modeli."""
+    from app.services import recai
+
     allowed = await allowed_model_codes(db, tenant)
-    codes = [c for c in [await _setting(db, FALLBACK_SETTING), await _setting(db, DEFAULT_AGENT_SETTING),
-                         await _setting(db, DEFAULT_CHAT_SETTING)] if c]
+    all_tiers = await recai.tiers(db)
+    own = all_tiers.get(recai.tier_for_model(exclude, all_tiers) or "")
+    # #349: önce yanıt vermeyen modelin RECAi adının yedeği (müşterinin seçtiği ad korunur)
+    codes = [c for c in [own.fallback_model_code if own else None, await _setting(db, FALLBACK_SETTING),
+                         await _setting(db, DEFAULT_AGENT_SETTING), await _setting(db, DEFAULT_CHAT_SETTING)] if c]
     stmt = select(LLMModel).where(LLMModel.status == "ACTIVE", LLMModel.model_type.in_(CHAT_TYPES)).order_by(LLMModel.model_code)
     codes += [m.model_code for m in (await db.execute(stmt)).scalars()]
     for code in codes:
@@ -278,7 +324,9 @@ async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code
         except EvrenError as exc:
             await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
             logger.error("LLM çağrısı başarısız (%s, %s): %s", ctx.purpose, model.model_code, exc)
-            raise LLMUnavailable(f"Yapay zeka servisi şu anda yanıt veremiyor ({model.model_code}). Lütfen biraz sonra tekrar deneyin.",
+            from app.services import recai
+
+            raise LLMUnavailable(f"{recai.public_name(model.model_code, await recai.tiers(db))} şu anda yanıt veremiyor. Lütfen biraz sonra tekrar deneyin.",
                                  model_code=model.model_code) from exc
         tool_calls = list(getattr(result, "tool_calls", None) or [])
         if not result.content.strip() and not tool_calls:  # yalnızca araç çağrısı içeren yanıt boş sayılmaz
@@ -286,9 +334,11 @@ async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code
             raise LLMUnavailable("Model bir yanıt üretemedi (düşünme bütçesi doldu). Lütfen isteği kısaltıp tekrar deneyin.",
                                  model_code=model.model_code)
         cost = await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
+        from app.services import recai
+
         return GatewayChatResult(content=result.content, thought=result.thought, model_code=model.model_code,
                                  tokens_in=result.tokens_in, tokens_out=result.tokens_out, credits=float(cost), raw=result.raw,
-                                 tool_calls=tool_calls)
+                                 tool_calls=tool_calls, public_model=recai.public_name(model.model_code, await recai.tiers(db), ctx.purpose))
 
 
 async def embed(ctx: LLMContext, text: str) -> List[float]:
@@ -328,6 +378,7 @@ async def ocr(ctx: LLMContext, png_bytes: bytes) -> str:
     ctx.purpose = "OCR"
     async with AsyncSessionLocal() as db:
         tenant = await _tenant(db, ctx.tenant_id)
+        await _capability(db, tenant, ctx, "OKUR")
         model = await resolve_model(db, tenant, "OCR", None, None)
         await _preflight(db, tenant, model, OCR_PAGE_TOKENS, 500)
         started = time.monotonic()
@@ -345,6 +396,7 @@ async def transcribe(ctx: LLMContext, audio: bytes, filename: str, mime: str, se
     ctx.purpose = "TRANSCRIPTION"
     async with AsyncSessionLocal() as db:
         tenant = await _tenant(db, ctx.tenant_id)
+        await _capability(db, tenant, ctx, "SES")
         model = await resolve_model(db, tenant, "TRANSCRIPTION", None, None)
         est_in = int(seconds * AUDIO_TOKENS_PER_SECOND)
         await _preflight(db, tenant, model, est_in, 2000)
@@ -382,6 +434,7 @@ async def describe_image(ctx: LLMContext, png_bytes: bytes, instruction: str) ->
     ctx.purpose = "VISION"
     async with AsyncSessionLocal() as db:
         tenant = await _tenant(db, ctx.tenant_id)
+        await _capability(db, tenant, ctx, "GORSEL")
         model = await resolve_model(db, tenant, "VISION", None, None)
         await _preflight(db, tenant, model, IMAGE_TOKENS + estimate_tokens(instruction), 600)
         messages = [{"role": "user", "content": [

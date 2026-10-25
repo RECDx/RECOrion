@@ -9,7 +9,7 @@ from app.db.session import get_db
 from app.db.models import Tenant, Plan, Actor, TenantLead, EmailTemplate, Sector, Profession
 from pydantic import BaseModel
 from app.config import settings
-from app.core.security import CurrentUser, get_current_user
+from app.core.security import CurrentUser, get_current_user, get_optional_user
 from app.core.tokens import hit_rate_limit, issue_email_code, verify_email_code, EMAIL_CODE_TTL_MINUTES
 from app.services import customer_lifecycle as lifecycle
 from app.services import recdx_apps
@@ -34,6 +34,7 @@ class PlanResponse(BaseModel):
     features: Dict[str, Any]
     odoo_product_id: Optional[int] = None
     recdx_apps: Dict[str, Any] = {}  # ADIM 13.1: RECQmind/RECSlip teklifi (yok/indirimli/dahil + Odoo ürünü)
+    recai_tiers: List[str] = []  # #349: paketteki seçilebilir RECAi adları
     is_active: bool
 
     class Config:
@@ -56,6 +57,7 @@ class PlanCreate(BaseModel):
     can_create_custom_titles: bool = False
     odoo_product_id: Optional[int] = None
     recdx_apps: Optional[Dict[str, Any]] = None
+    recai_tiers: Optional[List[str]] = None  # #349: MERGEN, HIZLI, DERIN
     is_active: bool = True
 
 class PlanUpdate(BaseModel):
@@ -73,6 +75,7 @@ class PlanUpdate(BaseModel):
     can_create_custom_titles: bool = False
     odoo_product_id: Optional[int] = None
     recdx_apps: Optional[Dict[str, Any]] = None
+    recai_tiers: Optional[List[str]] = None  # #349: MERGEN, HIZLI, DERIN
     is_active: bool = True
 
 
@@ -168,16 +171,20 @@ class TenantResponse(BaseModel):
         from_attributes = True
 
 @router.get("/plans", response_model=List[PlanResponse])
-async def list_plans(active_only: bool = False, db: AsyncSession = Depends(get_db)):
+async def list_plans(active_only: bool = False, db: AsyncSession = Depends(get_db),
+                     user: Optional[CurrentUser] = Depends(get_optional_user)):
     """
-    Sistemdeki kiralama paketlerini listeler (Madde 7).
+    Sistemdeki kiralama paketlerini listeler (Madde 7). Herkese açıktır (web sitesi); #349: gerçek EVREN model listesi
+    (allowed_models) yalnızca RECDx Süper Admin'e döner — müşteri RECAi adlarını (recai_tiers) görür.
     """
     stmt = select(Plan)
     if active_only:
         stmt = stmt.where(Plan.is_active == True)
     stmt = stmt.order_by(Plan.monthly_price.asc())
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    plans = (await db.execute(stmt)).scalars().all()
+    if user and user.is_super_admin:
+        return plans
+    return [{**PlanResponse.model_validate(p).model_dump(), "allowed_models": []} for p in plans]
 
 @router.post("/plans", response_model=PlanResponse)
 async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
@@ -206,12 +213,20 @@ async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
         can_create_custom_titles=payload.can_create_custom_titles,
         odoo_product_id=payload.odoo_product_id,
         recdx_apps=await _clean_app_offer(payload.recdx_apps),
+        recai_tiers=_clean_tiers(payload.recai_tiers) or ["MERGEN"],
         is_active=payload.is_active
     )
     db.add(plan)
     await db.commit()
     await db.refresh(plan)
     return plan
+
+def _clean_tiers(codes: Optional[List[str]]) -> List[str]:
+    """#349: paketteki seçilebilir RECAi adları (sıra korunur, bilinmeyen atılır)."""
+    from app.services import recai
+
+    return [c for c in recai.CHAT_TIERS if c in {str(x).upper() for x in (codes or [])}]
+
 
 async def _clean_app_offer(raw: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Paketin RECDx uygulama teklifi (ADIM 13.1). Yeni seçilen Odoo ürünü doğrulanır; yanıtta liste fiyatı saklanır."""
@@ -297,6 +312,8 @@ async def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: AsyncSession 
     plan.odoo_product_id = payload.odoo_product_id
     if payload.recdx_apps is not None:
         plan.recdx_apps = await _clean_app_offer(payload.recdx_apps, plan.recdx_apps)
+    if payload.recai_tiers is not None:
+        plan.recai_tiers = _clean_tiers(payload.recai_tiers) or ["MERGEN"]
     plan.is_active = payload.is_active
 
     await db.commit()

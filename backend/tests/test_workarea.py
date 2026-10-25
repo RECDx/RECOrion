@@ -104,4 +104,5 @@ def test_fallback_order_prefers_configured_backup(client, db, world):
             return m.model_code if m else None
     # Veritabanı havuzu uygulamanın olay döngüsüne bağlı: test istemcisinin döngüsünde çalıştırılır
     assert client.portal.call(pick, "deepseek-v4-flash") == "mimo-v2.6-pro"  # asıl model deepseek meşgulse yedek mimo
-    assert client.portal.call(pick, "mimo-v2.6-pro") == "deepseek-v4-flash"  # mimo meşgulse deepseek
+    # #349: önce yanıt vermeyen modelin RECAi adının yedeği (RECAi Derin: mimo → deepseek-v4.1-flash)
+    assert client.portal.call(pick, "mimo-v2.6-pro") == "deepseek-v4.1-flash"

@@ -38,6 +38,12 @@ async def _rec(db: AsyncSession, user: CurrentUser, tenant_id: uuid.UUID, rid: u
 async def upload(tenant_id: uuid.UUID, file: UploadFile = File(...), title: str = Form("", max_length=200),
                  source: str = Form("UPLOAD"), user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     ensure_tenant_content(user, tenant_id, "project:create")
+    from app.db.models import Plan, Tenant
+    from app.services import recai
+
+    tenant = await db.get(Tenant, tenant_id)  # #349: RECAi Ses paketinde olmalı
+    if tenant and tenant.slug != "recdx_hq" and tenant.plan_id and not recai.plan_capabilities(await db.get(Plan, tenant.plan_id)).get("SES"):
+        raise HTTPException(status_code=403, detail="RECAi Ses (toplantıyı yazıya çevirme) paketinizde yer almıyor.")
     name = (file.filename or "kayit").strip()
     ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
     if not ((file.content_type or "").startswith(ALLOWED_PREFIXES) or ext in ALLOWED_EXT):

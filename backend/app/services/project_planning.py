@@ -187,7 +187,7 @@ Sadece şu JSON'u döndür:
         raise HTTPException(status_code=502, detail="Beyin AI geçerli bir plan üretemedi; lütfen tekrar deneyin.") from exc
     if not plan["steps"]:
         raise HTTPException(status_code=502, detail="Beyin AI iş adımı üretemedi; isterleri biraz daha ayrıntılandırıp tekrar deneyin.")
-    plan.update({"model_code": result.model_code, "generated_at": psvc.now().isoformat(), "approved": False})
+    plan.update({"model_code": result.public_model, "generated_at": psvc.now().isoformat(), "approved": False})
     await _attach_hire_matches(db, project, plan)
     project.plan = plan
     project.planning_approved_at = None
@@ -236,7 +236,7 @@ AI personel: {', '.join(f"{p['name']} ({p['title']})" for p in ctx['pool']) or '
         db.add(ChatMessage(tenant_id=project.tenant_id, project_id=project.id, sender_actor_id=actor_id, role=role,
                            content=text, message_type="PLAN_CHAT"))
     await db.commit()
-    return {"content": result.content.strip(), "model_code": result.model_code, "credits": result.credits}
+    return {"content": result.content.strip(), "model_code": result.public_model, "credits": result.credits}
 
 
 async def plan_feedback_from_chat(db: AsyncSession, project: Project) -> str:

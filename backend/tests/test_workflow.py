@@ -160,7 +160,7 @@ def test_workflow_full_cycle(client, world, ai):
     assert next(e for e in flow["events"] if e["kind"] == "AI_OUTPUT")["data"]["parts"] == 2
     assert not any(e["kind"] == "BLOCKED" for e in flow["events"])  # meşgul model yedek modelle aşıldı
     first_out = next(e for e in flow["events"] if e["kind"] == "AI_OUTPUT")
-    assert ai.busy_model == "deepseek-v4-flash" and first_out["data"]["fallback_from"] == "deepseek-v4-flash"
+    assert ai.busy_model == "deepseek-v4-flash" and first_out["data"]["fallback_used"] is True
     assert first_out["data"]["model"] != "deepseek-v4-flash" and "yedek model" in first_out["note"]
     assert client.get(f"/api/v1/tasks/{ai_task['id']}/artifacts/{ai_task['artifact']['id']}", headers=outsider).status_code == 403
     assert client.post(f"/api/v1/tasks/{ai_task['id']}/submit", headers=admin, json={}).status_code == 409  # AI kendi teslim eder

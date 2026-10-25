@@ -113,7 +113,7 @@ def test_brain_chat_charges_credits_and_uses_package_model(client, db, company, 
     body = r.json()
     assert body["message"]["content"] == "Beyin yanıtı"
     # Varsayılan Beyin modeli (glm-5.3) STARTER paketinde yok: paketin izin verdiği ilk sohbet modeli kullanılır
-    assert body["model_code"] == "deepseek-v4-flash"
+    assert body["model_code"] == "RECAi Mergen"  # #349: müşteriye gerçek model adı gösterilmez
     assert body["credits"] == pytest.approx(0.8 * 2.0)  # katsayı 0.8 × (1 + 1)
     system_prompt = fake_evren.chat_calls[-1][1][0]["content"]
     assert "Kredi a A.Ş." in system_prompt
@@ -141,12 +141,14 @@ def test_credit_ledger_is_append_only(db, company):
 
 
 def test_model_outside_package_is_rejected(client, company):
-    r = client.put(f"/api/v1/company/{company['id']}/brain/settings", json={"brain_model_code": "glm-5.3"},
+    # #349: Beyin AI için RECAi adı seçilir; STARTER'da RECAi Derin yok
+    r = client.put(f"/api/v1/company/{company['id']}/brain/settings", json={"brain_model_code": "DERIN"},
                    headers=company["headers"])
-    assert r.status_code == 403
-    r = client.put(f"/api/v1/company/{company['id']}/brain/settings", json={"brain_model_code": "gemma-4-31b"},
+    assert r.status_code == 403 and "RECAi Derin" in r.json()["detail"]
+    r = client.put(f"/api/v1/company/{company['id']}/brain/settings", json={"brain_model_code": "HIZLI"},
                    headers=company["headers"])
-    assert r.status_code == 200 and r.json()["brain_model_code"] == "gemma-4-31b"
+    assert r.status_code == 200 and r.json()["brain_model_code"] == "HIZLI"
+    assert all("deepseek" not in str(o) and "qwen" not in str(o) for o in r.json()["available_models"])
 
 
 def test_evren_failure_returns_503_without_charge(client, db, company, fake_evren):

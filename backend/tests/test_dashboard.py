@@ -35,9 +35,10 @@ def test_company_dashboard(client, db, world):
     d = r.json()
     assert d["projects"]["by_status"].get("READY", 0) >= 1 and d["tasks"]["total"] >= 3
     assert len(d["series"]) == 30 and d["series"][-1]["cost"] >= 3.25
-    a = next(m for m in d["by_model"] if m["model_code"] == "pano-model-a")
+    # #349: müşteriye gerçek model adı değil RECAi adı (RECAi adlarının arkasında olmayan model "RECAi" altında toplanır)
+    assert not any(m["model_code"].startswith("pano-model") for m in d["by_model"])
+    a = next(m for m in d["by_model"] if m["model_code"] == "RECAi")
     assert a["calls"] == 2 and a["credits"] == 20.0 and a["cost"] == 3.25 and a["unpriced_calls"] == 1
-    assert not any(m["model_code"] == "pano-model-b" for m in d["by_model"])
     row = next(p for p in d["costs"]["projects"] if p["project_id"] == pid)
     assert row["budget"] == 10000 and row["other"] == 750 and row["token"] >= 4.25 and row["tasks_total"] == 3
     assert any(c["category"] == "LISANS" and c["amount"] >= 750 for c in d["costs"]["by_category"])
@@ -48,7 +49,7 @@ def test_company_dashboard(client, db, world):
     assert all(set(p) <= {"actor_id", "name", "title", "open", "working", "waiting_approval", "done", "overdue"} for p in d["people"])
 
     r90 = client.get(f"/api/v1/company/{w['tenant']}/dashboard?days=90", headers=admin).json()
-    assert len(r90["series"]) == 90 and any(m["model_code"] == "pano-model-b" for m in r90["by_model"])
+    assert len(r90["series"]) == 90 and next(m for m in r90["by_model"] if m["model_code"] == "RECAi")["calls"] == 3  # 90 günde b de girer
     assert client.get(f"/api/v1/company/{w['tenant']}/dashboard?days=12", headers=admin).status_code == 422
 
 

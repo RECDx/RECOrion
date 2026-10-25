@@ -177,4 +177,4 @@ KURALLAR
         ],
         model_code=model_code, temperature=0.6, max_tokens=8192, timeout=180,
     )
-    return {"manifesto": result.content.strip(), "model_code": result.model_code, "credits": result.credits}
+    return {"manifesto": result.content.strip(), "model_code": result.public_model, "credits": result.credits}

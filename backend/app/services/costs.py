@@ -77,14 +77,17 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
         Actor.id.in_([t.assignee_actor_id for t in tasks if t.assignee_actor_id] or [project.manager_actor_id])))).scalars()}
     # Token maliyeti: adım bazında ve adıma bağlı olmayan proje çağrıları (Beyin AI planlama, planlama sohbeti)
     token_rows = (await db.execute(
-        select(LLMCall.task_id, LLMCall.model_code, func.count(), func.sum(LLMCall.tokens_in), func.sum(LLMCall.tokens_out),
+        select(LLMCall.task_id, LLMCall.model_code, LLMCall.purpose, func.count(), func.sum(LLMCall.tokens_in), func.sum(LLMCall.tokens_out),
                func.sum(LLMCall.cost_try), func.count().filter(LLMCall.cost_try.is_(None)), func.sum(LLMCall.credits_cost))
         .where(LLMCall.project_id == project.id, LLMCall.status == "SUCCESS")
-        .group_by(LLMCall.task_id, LLMCall.model_code))).all()
+        .group_by(LLMCall.task_id, LLMCall.model_code, LLMCall.purpose))).all()
+    from app.services import recai
+
+    all_tiers = await recai.tiers(db)
     by_task: Dict[Any, Dict[str, Any]] = {}
-    by_model: Dict[str, Dict[str, Any]] = {}
-    for task_id, model, calls, t_in, t_out, cost, unpriced, credits in token_rows:
-        for bucket, key in ((by_task, task_id), (by_model, model)):
+    by_model: Dict[str, Dict[str, Any]] = {}  # #349: müşteriye RECAi adına göre
+    for task_id, model, purpose, calls, t_in, t_out, cost, unpriced, credits in token_rows:
+        for bucket, key in ((by_task, task_id), (by_model, recai.public_name(model, all_tiers, purpose))):
             b = bucket.setdefault(key, {"calls": 0, "tokens_in": 0, "tokens_out": 0, "cost": ZERO, "unpriced_calls": 0, "credits": ZERO})
             b["calls"] += calls
             b["tokens_in"] += int(t_in or 0)

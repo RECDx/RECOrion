@@ -77,8 +77,8 @@ def test_preview_renders_prompt_and_forced_model(client, company, tag):
     p = client.get(f"/api/v1/company/{company['id']}/hire/preview?title_id={plan['id']}&department_name=Üretim",
                    headers=company["headers"]).json()
     assert p["role_prompt"] == f"Sen {company['name']} şirketinin Üretim biriminde çalışan bir test uzmanısın."
-    # mimo-v2.6-pro STARTER paketinde yok: paketin ilk modeli kullanılır
-    assert p["recommended_model_code"] is None and p["model_code"] == "deepseek-v4-flash"
+    # #349: unvanın önerisi (RECAi Derin) STARTER paketinde yok: RECAi Mergen kullanılır
+    assert p["recommended_model_code"] is None and p["model_code"] == "MERGEN"
 
 
 def test_hire_from_catalog_adopts_department_and_title(client, db, company, tag):
@@ -90,7 +90,7 @@ def test_hire_from_catalog_adopts_department_and_title(client, db, company, tag)
     r = client.post(f"/api/v1/company/{company['id']}/ai-agents", json=body, headers=company["headers"])
     assert r.status_code in (200, 201), r.text
     agent = r.json()
-    assert agent["department_name"] == f"Mobilya Üretim {tag}" and agent["model_code"] == "deepseek-v4-flash"
+    assert agent["department_name"] == f"Mobilya Üretim {tag}" and agent["model_code"] == "MERGEN" and agent["model_display_name"] == "RECAi Mergen"
     assert agent["system_prompt"] == f"Sen {company['name']} şirketinin Mobilya Üretim {tag} biriminde çalışan bir test uzmanısın."
     src = _exec(db, "SELECT source, source_title_id::text, tenant_id::text FROM job_titles WHERE id = %s", agent["job_title_id"])
     assert src == ("CATALOG", stok["id"], company["id"])

@@ -374,9 +374,10 @@ async def hire_options(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_
                             "name": cd["name"], "description": cd["description"], "source": "CATALOG", "rank": cd["rank"],
                             "profession_match": cd["profession_match"], "title_count": cd["title_count"]})
 
-    models = (await db.execute(select(LLMModel).where(LLMModel.status == "ACTIVE", LLMModel.model_type.in_(CHAT_TYPES))
-                               .order_by(LLMModel.model_code))).scalars().all()
+    from app.services import recai
+
     plan = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
+    tier_opts = await recai.options(db, plan, bypass=ent.bypass)
     active = (await db.execute(select(func.count(Actor.id)).where(
         Actor.tenant_id == tenant.id, Actor.actor_type == "AI_AGENT", Actor.status != "DISABLED"))).scalar() or 0
     return {
@@ -386,8 +387,9 @@ async def hire_options(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_
         "departments": departments,
         "entitlements": {"plan_name": ent.plan_name, "can_change_llm": ent.can_change_llm,
                          "can_edit_role_prompt": ent.can_edit_role_prompt},
-        "models": [{"model_code": m.model_code, "display_name": m.display_name, "effort_coefficient": float(m.effort_coefficient or 1)}
-                   for m in models if ent.model_allowed(m.model_code)],
+        # #349: model yerine RECAi adları (Mergen/Hızlı/Derin) ve yetenekler (Görsel/Ses/Okur)
+        "models": [o for o in tier_opts if o["available"]],
+        "capabilities": await recai.capability_options(db, plan, bypass=ent.bypass),
         "quota": {"max_agents": plan.max_agents if plan else None, "active_agents": active,
                   "is_limit_reached": bool(plan and plan.max_agents is not None and active >= plan.max_agents)},
     }
@@ -419,7 +421,7 @@ async def hire_titles(tenant_id: uuid.UUID, department_id: Optional[uuid.UUID] =
 
     def item(t: JobTitle, kind: str) -> dict:
         return {"id": str(t.id), "kind": kind, "title": t.title, "seniority": t.seniority, "description": t.description,
-                "recommended_model_code": t.recommended_model_code, "autonomy_level": t.autonomy_level,
+                "recommended_model_code": t.recommended_tier, "autonomy_level": t.autonomy_level,
                 "profession_match": bool(professions & set(t.profession_codes or []))}
 
     items = [item(t, "COMPANY") for t in company_titles]
@@ -441,7 +443,7 @@ async def hire_titles(tenant_id: uuid.UUID, department_id: Optional[uuid.UUID] =
 async def hire_preview(tenant_id: uuid.UUID, title_id: uuid.UUID, department_name: Optional[str] = Query(None, max_length=128),
                        current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Sihirbazın 3. adımı: unvanın şirket ve departman adıyla doldurulmuş rol promptu ve kullanılacak model."""
-    from app.services.hiring import default_agent_model, render_role_prompt
+    from app.services.hiring import default_agent_tier, render_role_prompt
     from app.services.plan_features import entitlements
 
     tenant = await _tenant(db, tenant_id)
@@ -449,13 +451,13 @@ async def hire_preview(tenant_id: uuid.UUID, title_id: uuid.UUID, department_nam
     if not t or (t.tenant_id is not None and t.tenant_id != tenant.id):
         raise HTTPException(status_code=404, detail="Unvan bulunamadı.")
     ent = await entitlements(db, tenant, current)
-    rec = (t.recommended_model_code or "").lower() or None
-    default = await default_agent_model(db, ent, t)
+    rec = t.recommended_tier  # #349: RECAi adı
+    default = default_agent_tier(ent, t)
     return {
         "title": t.title, "description": t.description, "seniority": t.seniority, "autonomy_level": t.autonomy_level or "L1",
         "responsibilities": t.responsibilities or [], "required_skills": t.required_skills or [], "kpis": t.kpis or [],
         "role_prompt": render_role_prompt(t.base_role_prompt, tenant.name, department_name),
-        "recommended_model_code": rec if rec and ent.model_allowed(rec) else None,
+        "recommended_model_code": rec if rec and ent.tier_allowed(rec) else None,
         # Varsayılan: AI personel varsayılan modeli (model.default.agent); unvanın önerisi bilgi olarak gösterilir
         "model_code": default,
     }

@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 import httpx
 from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +36,8 @@ from app.core.security import CurrentUser, forbidden, get_current_user
 from app.services.plan_features import deny, ensure_document_quota, entitlements
 
 logger = logging.getLogger(__name__)
+
+from app.services import recai  # noqa: E402  (#349)
 
 router = APIRouter(prefix="/company", tags=["Şirket Yönetimi (Company Admin)"])
 
@@ -179,7 +181,7 @@ class CompanyJobTitleIn(BaseModel):
     description: Optional[str] = Field(None, description="Ünvan Açıklaması")
     base_role_prompt: str = Field(..., description="Sistem Rol Promptu")
     required_skills: List[str] = Field(default_factory=list, description="Gerekli Yetenekler")
-    recommended_model_code: Optional[str] = Field(None, description="Önerilen LLM Modeli")
+    recommended_model_code: Optional[str] = Field(None, description="Önerilen RECAi adı (MERGEN, HIZLI, DERIN)")
     autonomy_level: str = Field("L1", description="Otonomi Seviyesi (L1, L2, L3)")
     source_template_id: Optional[uuid.UUID] = Field(None, description="Seçilen Sistem Şablonu ID'si")
 
@@ -195,7 +197,7 @@ class CompanyJobTitleOut(BaseModel):
     description: Optional[str] = None
     base_role_prompt: str
     required_skills: List[str] = []
-    recommended_model_code: Optional[str] = None
+    recommended_model_code: Optional[str] = Field(None, validation_alias=AliasChoices("recommended_tier", "recommended_model_code"))  # #349: RECAi adı
     autonomy_level: str = "L1"
     ai_review_status: Optional[str] = "COMPANY_LOCAL"
     ai_review_feedback: Optional[str] = None
@@ -215,7 +217,7 @@ class SystemJobTitleTemplateOut(BaseModel):
     description: Optional[str] = None
     base_role_prompt: str
     required_skills: List[str] = []
-    recommended_model_code: Optional[str] = None
+    recommended_model_code: Optional[str] = Field(None, validation_alias=AliasChoices("recommended_tier", "recommended_model_code"))  # #349: RECAi adı
     autonomy_level: str = "L1"
     is_nace_recommended: bool = False
     is_sector_recommended: bool = False
@@ -451,7 +453,7 @@ async def create_company_job_title(
         description=payload.description.strip() if payload.description else None,
         base_role_prompt=role_prompt,
         required_skills=payload.required_skills,
-        recommended_model_code=payload.recommended_model_code,
+        recommended_tier=await _to_tier(db, payload.recommended_model_code),
         autonomy_level=payload.autonomy_level,
         is_active=True
     )
@@ -494,7 +496,7 @@ async def create_company_job_title(
                 description=payload.description,
                 base_role_prompt=role_prompt,
                 required_skills=payload.required_skills,
-                recommended_model_code=payload.recommended_model_code,
+                recommended_tier=await _to_tier(db, payload.recommended_model_code),
                 autonomy_level=payload.autonomy_level,
                 ai_review_status="PROMOTED_GLOBAL",
                 ai_review_feedback=f"Müşteri tanımından RECAi tarafından terfi ettirildi (%{score}): {reason}",
@@ -540,7 +542,7 @@ async def update_company_job_title(
     job_title.description = payload.description.strip() if payload.description else None
     job_title.base_role_prompt = payload.base_role_prompt.strip()
     job_title.required_skills = payload.required_skills
-    job_title.recommended_model_code = payload.recommended_model_code
+    job_title.recommended_tier = await _to_tier(db, payload.recommended_model_code)  # #349
     job_title.autonomy_level = payload.autonomy_level
 
     await db.commit()
@@ -570,7 +572,8 @@ async def delete_company_job_title(
 # ==================================================================
 class AIAgentIn(BaseModel):
     display_name: str = Field(..., description="AI Ajan Adı")
-    model_code: Optional[str] = Field(None, description="AI Ajan LLM Modeli Kodu (paket izin vermiyorsa ünvanın modeli)")
+    model_code: Optional[str] = Field(None, description="RECAi adı (MERGEN, HIZLI, DERIN); eski model kodu da kabul edilir")
+    recai_capabilities: Optional[Dict[str, bool]] = Field(None, description="#349: RECAi Görsel/Ses/Okur bu personelde açık mı")
     job_title_id: Optional[uuid.UUID] = Field(None, description="Şirket unvanı")
     catalog_title_id: Optional[uuid.UUID] = Field(None, description="Platform kataloğundan unvan (işe alımda şirkete eklenir)")
     department_id: Optional[uuid.UUID] = Field(None, description="Şirket departmanı")
@@ -586,7 +589,8 @@ class AIAgentIn(BaseModel):
 
 class AIAgentUpdateIn(BaseModel):
     display_name: Optional[str] = None
-    model_code: Optional[str] = None
+    model_code: Optional[str] = None  # #349: RECAi adı (eski model kodu da kabul edilir)
+    recai_capabilities: Optional[Dict[str, bool]] = None
     job_title_id: Optional[uuid.UUID] = None
     department_id: Optional[uuid.UUID] = None
     description: Optional[str] = None
@@ -615,8 +619,10 @@ class AIAgentOut(BaseModel):
     autonomy_level: str = "L1"
     system_prompt: Optional[str] = None
     preferred_model_id: Optional[uuid.UUID] = None
-    model_code: Optional[str] = None
-    model_display_name: Optional[str] = None
+    model_code: Optional[str] = None  # #349: RECAi adının kodu (MERGEN, HIZLI, DERIN) — gerçek model gönderilmez
+    model_display_name: Optional[str] = None  # #349: RECAi adı
+    recai_tier: Optional[str] = None
+    recai_capabilities: Dict[str, Any] = {}
     job_title_id: Optional[uuid.UUID] = None
     job_title_name: Optional[str] = None
     job_title_code: Optional[str] = None
@@ -651,6 +657,32 @@ async def get_company_entitlements(
     return (await entitlements(db, tenant, current)).as_dict()
 
 
+def _tier_code(actor) -> str:
+    """#349: AI personelin RECAi adı (seçilmemişse Mergen)."""
+    return actor.recai_tier or recai.DEFAULT_TIER
+
+
+async def _to_tier(db: AsyncSession, value: Optional[str]) -> Optional[str]:
+    """RECAi adı (MERGEN/HIZLI/DERIN) ya da eski model kodu → RECAi adı."""
+    v = (value or "").strip()
+    if not v:
+        return None
+    if v.upper() in recai.CHAT_TIERS:
+        return v.upper()
+    return recai.tier_for_model(v, await recai.tiers(db)) or recai.DEFAULT_TIER
+
+
+def _clean_caps(caps: Optional[Dict[str, Any]], ent) -> Dict[str, bool]:
+    """Personel bazında RECAi Görsel/Ses/Okur: paketinde olmayan yetenek açılamaz."""
+    out = {}
+    for code in recai.CAPABILITY_FEATURE:
+        v = (caps or {}).get(code)
+        if v is None:
+            continue
+        out[code] = bool(v) and bool(ent.capabilities.get(code))
+    return out
+
+
 def _forced_model_code(ent, job_title) -> Optional[str]:
     """LLM değiştirme izni yoksa kullanılacak model: ünvanın önerdiği (pakette varsa) ya da paketin ilk modeli."""
     rec = (job_title.recommended_model_code or "").lower() if job_title else ""
@@ -659,37 +691,24 @@ def _forced_model_code(ent, job_title) -> Optional[str]:
     return ent.allowed_models[0] if ent.allowed_models else (rec or None)
 
 
-@router.get("/{tenant_id}/llm-models", response_model=List[LLMModelOptionOut])
-async def list_available_llm_models(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    """Müşteri paketinde izin verilen ve sistemde aktif olan LLM modellerini listeler."""
+@router.get("/{tenant_id}/llm-models")
+async def list_available_llm_models(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """#349: müşterinin seçebileceği RECAi adları (Mergen, Hızlı, Derin). Gerçek EVREN model adları müşteriye gönderilmez.
+    Yanıt eski alan adlarını korur (model_code = RECAi kodu, display_name = RECAi adı)."""
     tenant = await _get_tenant_or_404(db, tenant_id)
+    plan = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
+    opts = await recai.options(db, plan, bypass=current.is_super_admin or tenant.slug == "recdx_hq")
+    return [{**o, "id": o["code"], "status": "ACTIVE"} for o in opts if o["available"]]
 
-    allowed_codes = None
-    if tenant.plan_id:
-        plan = await db.get(Plan, tenant.plan_id)
-        if plan and plan.allowed_models and len(plan.allowed_models) > 0:
-            allowed_codes = [str(m).strip().lower() for m in plan.allowed_models]
 
-    stmt = select(LLMModel).where(LLMModel.status == "ACTIVE").order_by(LLMModel.model_code)
-    all_models = (await db.execute(stmt)).scalars().all()
-
-    if allowed_codes:
-        models = [m for m in all_models if m.model_code.lower() in allowed_codes]
-        if not models:
-            models = all_models
-    else:
-        models = all_models
-
-    return [
-        LLMModelOptionOut(
-            id=m.id,
-            model_code=m.model_code,
-            display_name=m.display_name,
-            model_type=m.model_type,
-            status=m.status
-        )
-        for m in models
-    ]
+@router.get("/{tenant_id}/recai")
+async def recai_options(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """#349: paketteki RECAi adları ve yetenekler (Görsel/Ses/Okur); paketinde olmayanlar kilitli gösterilir."""
+    tenant = await _get_tenant_or_404(db, tenant_id)
+    plan = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
+    bypass = current.is_super_admin or tenant.slug == "recdx_hq"
+    return {"tiers": await recai.options(db, plan, bypass=bypass), "capabilities": await recai.capability_options(db, plan, bypass=bypass),
+            "default": recai.DEFAULT_TIER, "infra_note": "RECAi, EVREN (Türkiye) yapay zeka altyapısında çalışır."}
 
 
 class GenerateRolePromptIn(BaseModel):
@@ -753,7 +772,7 @@ Lütfen doğrudan sistem promptu (persona yönergesi) olarak kullanılacak markd
     )
     return {
         "success": True,
-        "model_code": result.model_code,
+        "model_code": result.public_model,
         "role_prompt": result.content.strip(),
         "credits": result.credits,
     }
@@ -834,8 +853,10 @@ async def list_company_ai_agents(
             system_prompt=a.system_prompt,
             preferred_model_id=a.preferred_model_id,
             daily_cost_try=float(a.daily_cost_try) if a.daily_cost_try is not None else None,
-            model_code=model.model_code if model else None,
-            model_display_name=model.display_name if model else None,
+            model_code=_tier_code(a),
+            model_display_name=recai.TIER_NAMES.get(_tier_code(a)),
+            recai_tier=_tier_code(a),
+            recai_capabilities=a.recai_capabilities or {},
             job_title_id=a.job_title_id,
             job_title_name=title.title if title else None,
             job_title_code=title.code if title else None,
@@ -894,21 +915,16 @@ async def hire_ai_agent(
     )
     dept_name = dept.name if dept else None
 
-    # 3. LLM Modeli: paket izinleri (#241)
+    # 3. RECAi adı (#349; paket izinleri #241): müşteri model değil RECAi adı seçer, modeli RECDx çözer
     ent = await entitlements(db, tenant, current)
-    requested_code = (payload.model_code or "").strip().lower()
-    if not ent.can_change_llm:
-        from app.services.hiring import default_agent_model
-        forced = await default_agent_model(db, ent, job_title)
-        if requested_code and forced and requested_code != forced:
-            deny(f"'{ent.plan_name}' paketiniz LLM modelini değiştirmeye izin vermiyor; bu ünvan için '{forced}' modeli kullanılır.")
-        requested_code = forced or requested_code
-    if requested_code and not ent.model_allowed(requested_code):
-        deny(f"'{requested_code}' modeli '{ent.plan_name}' paketinizde yer almıyor.")
-    model = (await db.execute(select(LLMModel).where(func.lower(LLMModel.model_code) == requested_code))).scalars().first() if requested_code else None
-    if not model:
-        raise HTTPException(status_code=400, detail="Geçerli bir LLM modeli seçiniz.")
-    preferred_model_id = model.id
+    from app.services.hiring import default_agent_tier
+    forced = default_agent_tier(ent, job_title)
+    tier = await _to_tier(db, payload.model_code) or forced
+    if not ent.can_change_llm and tier != forced:
+        deny(f"'{ent.plan_name}' paketiniz RECAi seçimini değiştirmeye izin vermiyor; bu ünvan için {recai.TIER_NAMES[forced]} kullanılır.")
+    if not ent.tier_allowed(tier):
+        deny(f"{recai.TIER_NAMES.get(tier, tier)} '{ent.plan_name}' paketinizde yer almıyor.")
+    preferred_model_id = None
 
     # 4. Sistem Rol Promptu (Özel verilmemişse ünvandan devralınır; paket izin vermiyorsa değiştirilemez).
     # {{company_name}} / {{department_name}} yer tutucuları şirket ve departman adıyla doldurulur.
@@ -933,6 +949,8 @@ async def hire_ai_agent(
         job_title_id=job_title.id,
         department_id=dept.id if dept else None,
         preferred_model_id=preferred_model_id,
+        recai_tier=tier,
+        recai_capabilities=_clean_caps(payload.recai_capabilities, ent),
         system_prompt=role_prompt,
         description=payload.description.strip() if payload.description else None,
         autonomy_level=payload.autonomy_level or job_title.autonomy_level or "L1",
@@ -977,8 +995,10 @@ async def hire_ai_agent(
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
         daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
-        model_code=model.model_code if model else None,
-        model_display_name=model.display_name if model else None,
+        model_code=_tier_code(agent),
+        model_display_name=recai.TIER_NAMES.get(_tier_code(agent)),
+        recai_tier=_tier_code(agent),
+        recai_capabilities=agent.recai_capabilities or {},
         job_title_id=job_title.id,
         job_title_name=job_title.title,
         job_title_code=job_title.code,
@@ -1041,15 +1061,16 @@ async def update_ai_agent(
             raise HTTPException(status_code=404, detail="Seçilen departman bulunamadı.")
         agent.department_id = dept.id
 
-    if payload.model_code is not None:
-        model_stmt = select(LLMModel).where(func.lower(LLMModel.model_code) == payload.model_code.lower())
-        model = (await db.execute(model_stmt)).scalars().first()
-        if model and model.id != agent.preferred_model_id:
+    if payload.model_code is not None:  # #349: RECAi adı
+        tier = await _to_tier(db, payload.model_code)
+        if tier and tier != _tier_code(agent):
             if not ent.can_change_llm:
-                deny(f"'{ent.plan_name}' paketiniz LLM modelini değiştirmeye izin vermiyor.")
-            if not ent.model_allowed(model.model_code):
-                deny(f"'{model.model_code}' modeli '{ent.plan_name}' paketinizde yer almıyor.")
-            agent.preferred_model_id = model.id
+                deny(f"'{ent.plan_name}' paketiniz RECAi seçimini değiştirmeye izin vermiyor.")
+            if not ent.tier_allowed(tier):
+                deny(f"{recai.TIER_NAMES.get(tier, tier)} '{ent.plan_name}' paketinizde yer almıyor.")
+            agent.recai_tier, agent.preferred_model_id = tier, None
+    if payload.recai_capabilities is not None:
+        agent.recai_capabilities = _clean_caps(payload.recai_capabilities, ent)
 
     await db.commit()
     await db.refresh(agent)
@@ -1073,8 +1094,10 @@ async def update_ai_agent(
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
         daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
-        model_code=model.model_code if model else None,
-        model_display_name=model.display_name if model else None,
+        model_code=_tier_code(agent),
+        model_display_name=recai.TIER_NAMES.get(_tier_code(agent)),
+        recai_tier=_tier_code(agent),
+        recai_capabilities=agent.recai_capabilities or {},
         job_title_id=title.id if title else None,
         job_title_name=title.title if title else None,
         job_title_code=title.code if title else None,
@@ -1124,8 +1147,10 @@ async def terminate_ai_agent(
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
         daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
-        model_code=model.model_code if model else None,
-        model_display_name=model.display_name if model else None,
+        model_code=_tier_code(agent),
+        model_display_name=recai.TIER_NAMES.get(_tier_code(agent)),
+        recai_tier=_tier_code(agent),
+        recai_capabilities=agent.recai_capabilities or {},
         job_title_id=title.id if title else None,
         job_title_name=title.title if title else None,
         job_title_code=title.code if title else None,
@@ -1192,8 +1217,10 @@ async def rehire_ai_agent(
         system_prompt=agent.system_prompt,
         preferred_model_id=agent.preferred_model_id,
         daily_cost_try=float(agent.daily_cost_try) if agent.daily_cost_try is not None else None,
-        model_code=model.model_code if model else None,
-        model_display_name=model.display_name if model else None,
+        model_code=_tier_code(agent),
+        model_display_name=recai.TIER_NAMES.get(_tier_code(agent)),
+        recai_tier=_tier_code(agent),
+        recai_capabilities=agent.recai_capabilities or {},
         job_title_id=title.id if title else None,
         job_title_name=title.title if title else None,
         job_title_code=title.code if title else None,

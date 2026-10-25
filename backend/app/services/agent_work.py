@@ -55,7 +55,7 @@ async def _generate(ctx: LLMContext, messages: List[Dict[str, str]], tooling: Op
         else:
             result = await llm_gateway.chat(ctx, messages, **kw)
         if result.fallback_from:
-            fallback_from, fallback_model = result.fallback_from, result.model_code
+            fallback_from, fallback_model = result.fallback_from, result.model_code  # devam parçaları aynı modelle
         pieces.append(result.content)
         credits += float(result.credits)
         if not _truncated(result):
@@ -170,10 +170,10 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
     db.add(ChatMessage(tenant_id=tenant.id, project_id=project.id, task_id=task.id, sender_actor_id=agent.id, role="assistant",
                        content=content, thought_process=result.thought, message_type="CHAT"))
     await db.flush()
-    note = f"Sürüm {version} üretildi." + (f" {fallback_from} yanıt vermediği için yedek model {result.model_code} kullanıldı." if fallback_from else "")
+    note = f"Sürüm {version} üretildi." + (" Asıl model yanıt vermediği için yedek model kullanıldı." if fallback_from else "")
     await task_flow.log(db, project, task, "AI_OUTPUT", agent.id, note,
-                        {"artifact_id": str(art.id), "version": version, "model": result.model_code, "credits": credits, "parts": parts,
-                         "fallback_from": fallback_from,
+                        {"artifact_id": str(art.id), "version": version, "model": result.public_model, "credits": credits, "parts": parts,
+                         "fallback_used": bool(fallback_from),
                          "tool_calls": [{"id": str(c.id), "tool": c.tool, "status": c.status} for c in tool_calls]})
     await code_repo.after_output(db, project, task, version, content, agent.display_name)  # depo varsa adımın dalına commit
     await db.commit()
@@ -252,8 +252,8 @@ Sadece şu JSON'u döndür (en fazla 8 madde, her biri en fazla 200 karakter; ba
     summary = str(verdict.get("summary") or "")[:1000]
     note = summary + ("\n- " + "\n- ".join(issues) if issues else "")
     await task_flow.log(db, project, task, "REVIEW_PASSED" if passed else "REVIEW_FAILED", reviewer.id, note.strip() or None,
-                        {"score": score, "version": art.version, "artifact_id": str(art.id), "model": result.model_code,
-                         "fallback_from": result.fallback_from})
+                        {"score": score, "version": art.version, "artifact_id": str(art.id), "model": result.public_model,
+                         "fallback_used": bool(result.fallback_from)})
     await db.commit()
     return {"ok": True, "passed": passed, "score": score, "note": note.strip(), "actor_id": str(reviewer.id)}
 

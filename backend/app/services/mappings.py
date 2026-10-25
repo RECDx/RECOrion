@@ -531,4 +531,4 @@ async def suggest(tenant_id: uuid.UUID, conn: IntegrationConnection, object_type
     match = data.get("match") if isinstance(data.get("match"), dict) else None
     errors, warnings = check(object_type, kept, fields, conn.connector, match)
     return {"rules": kept, "match": match, "notes": str(data.get("notes") or "")[:1000], "dropped": len(rules) - len(kept),
-            "errors": errors, "warnings": warnings, "model": result.model_code}
+            "errors": errors, "warnings": warnings, "model": result.public_model}

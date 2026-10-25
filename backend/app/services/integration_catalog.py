@@ -136,4 +136,4 @@ async def advise(db: AsyncSession, tenant_id: uuid.UUID, actor_id: Optional[uuid
     entry = by_code.get(str(data.get("code") or ""))
     steps = [str(s).strip()[:400] for s in (data.get("steps") or []) if str(s).strip()][:10]
     return {"entry": out(entry) if entry else None, "summary": str(data.get("summary") or "").strip()[:800],
-            "steps": steps, "notes": str(data.get("notes") or "").strip()[:800], "model": result.model_code}
+            "steps": steps, "notes": str(data.get("notes") or "").strip()[:800], "model": result.public_model}

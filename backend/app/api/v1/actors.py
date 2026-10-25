@@ -232,8 +232,8 @@ Yalnızca doğrudan ajanın sistem promptu olarak kullanılacak metni Türkçe o
 
     return {
         "success": True,
-        "message": f"'{job_title.title}' için rol promptu '{result.model_code}' modeli ile yeniden üretildi.",
-        "model_used": result.model_code,
+        "message": f"'{job_title.title}' için rol promptu {result.public_model} ile yeniden üretildi.",
+        "model_used": result.public_model,
         "new_prompt": job_title.base_role_prompt
     }
 
@@ -255,8 +255,12 @@ async def list_actors(
         stmt = stmt.where(Actor.actor_type == actor_type.upper())
     stmt = stmt.order_by(Actor.actor_type, Actor.display_name)
     actors = (await db.execute(stmt)).scalars().all()
-    codes = dict((await db.execute(select(LLMModel.id, LLMModel.model_code))).all())
-    return [{**ActorResponse.model_validate(a).model_dump(), "preferred_model_code": codes.get(a.preferred_model_id)} for a in actors]
+    from app.services import recai
+
+    # #349: müşteriye gerçek model yerine RECAi adı
+    return [{**ActorResponse.model_validate(a).model_dump(),
+             "preferred_model_code": recai.TIER_NAMES[a.recai_tier or recai.DEFAULT_TIER] if a.actor_type == "AI_AGENT" else None}
+            for a in actors]
 
 
 @router.post("/", response_model=ActorResponse)

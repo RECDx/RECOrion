@@ -142,9 +142,13 @@ def test_login_locks_after_repeated_failures(client, world):
     assert login(client, email, "yanlis").status_code == 429
 
 
-def test_models_listed_for_logged_in_user(client, world):
+def test_model_catalog_only_for_super_admin(client, world):
+    """#349: gerçek EVREN model kataloğunu müşteri göremez (RECAi adlarını görür: /company/{id}/recai)."""
     r = client.get("/api/v1/models/", headers=auth(client, world["admin_a"]))
-    assert r.status_code == 200 and len(r.json()) == 15
+    assert r.status_code == 403
+    r = client.get(f"/api/v1/company/{world['a']}/recai", headers=auth(client, world["admin_a"]))
+    assert r.status_code == 200 and {t["code"] for t in r.json()["tiers"]} == {"MERGEN", "HIZLI", "DERIN"}
+    assert all(t["model_code"] in ("MERGEN", "HIZLI", "DERIN") for t in r.json()["tiers"])  # kod RECAi kodu, gerçek model değil
 
 
 # ---------------------------------------------------------------------------

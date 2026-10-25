@@ -136,16 +136,24 @@ DOKÜMAN:
             quiz.append({"question": str(q["question"]), "options": opts, "answer": ans})
     return {"summary": str(card.get("summary") or "").strip(),
             "key_points": [str(k).strip() for k in (card.get("key_points") or []) if str(k).strip()][:12],
-            "quiz": quiz[:6], "model_code": result.model_code}
+            "quiz": quiz[:6], "model_code": result.public_model}
 
 
-async def _ocr_enabled(db: AsyncSession, doc: AgentDocument) -> bool:
+async def _media(db: AsyncSession, doc: AgentDocument) -> tuple:
+    """(OCR, görsel) açık mı — #349: RECAi Okur ve RECAi Görsel pakette ve dokümanın AI personelinde açık olmalı."""
     if doc.tenant_id is None:
-        return True
-    from app.services.plan_features import entitlements
+        return True, True
+    from app.db.models import Actor, Plan
+    from app.services import recai
 
     tenant = await db.get(Tenant, doc.tenant_id)
-    return bool(tenant and (await entitlements(db, tenant)).ocr_enabled) or bool(tenant and tenant.slug == "recdx_hq")
+    if not tenant:
+        return False, False
+    if tenant.slug == "recdx_hq" or not tenant.plan_id:
+        return True, True
+    plan = await db.get(Plan, tenant.plan_id)
+    agent = await db.get(Actor, doc.agent_id) if doc.agent_id else None
+    return recai.capability_allowed(plan, agent, "OKUR"), recai.capability_allowed(plan, agent, "GORSEL")
 
 
 async def process_document(doc_id: uuid.UUID) -> None:
@@ -163,14 +171,14 @@ async def process_document(doc_id: uuid.UUID) -> None:
             async def ocr(png: bytes) -> str:
                 return await llm_gateway.ocr(ocr_ctx, png)
 
-            media_allowed = await _ocr_enabled(db, doc)  # OCR ve görsel açıklama aynı paket iznine bağlı
-            extracted = await extract(data, doc.file_type, ocr if media_allowed else None)
+            ocr_allowed, vision_allowed = await _media(db, doc)  # RECAi Okur / RECAi Görsel (#349)
+            extracted = await extract(data, doc.file_type, ocr if ocr_allowed else None)
             text = (extracted.text or "").strip()
             is_image_file = doc.file_type in IMAGE_EXTS
 
             # Görseller (yüklenen resim veya doküman içindeki resimler) görsel modelle açıklanır
             descriptions = []
-            if extracted.images and media_allowed:
+            if extracted.images and vision_allowed:
                 vctx = _ctx(doc, "VISION")
                 for i, png in enumerate(extracted.images, 1):
                     try:
@@ -267,7 +275,7 @@ SORULAR:
                         "correct": given == chr(65 + q["answer"])})
     correct = sum(d["correct"] for d in details)
     doc.test_result = {"score": correct, "total": len(quiz), "percent": round(correct * 100 / len(quiz)),
-                       "model_code": result.model_code, "tested_at": _now().isoformat(), "details": details}
+                       "model_code": result.public_model, "tested_at": _now().isoformat(), "details": details}
     await db.commit()
     return doc.test_result
 

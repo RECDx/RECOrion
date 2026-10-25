@@ -68,11 +68,21 @@ async def company_overview(db: AsyncSession, tenant: Tenant, days: int = 30, dep
         d = (since + timedelta(days=i)).date()
         c, cr, tl = by_day.get(d, (0, 0, 0))
         series.append({"date": d.isoformat(), "calls": c, "credits": round(_f(cr), 2), "cost": round(_f(tl), 2)})
-    by_model = [{"model_code": m, "calls": c, "credits": round(_f(cr), 2), "cost": round(_f(tl), 2), "unpriced_calls": u}
-                for m, c, cr, tl, u in (await db.execute(
-                    select(LLMCall.model_code, func.count(), func.sum(LLMCall.credits_cost), func.sum(LLMCall.cost_try),
-                           func.count().filter(LLMCall.cost_try.is_(None)))
-                    .where(*call_scope).group_by(LLMCall.model_code).order_by(func.sum(LLMCall.credits_cost).desc()))).all()]
+    from app.services import recai
+
+    all_tiers = await recai.tiers(db)
+    grouped: Dict[str, Dict[str, Any]] = {}  # #349: müşteriye RECAi adına göre
+    for m, p, c, cr, tl, u in (await db.execute(
+            select(LLMCall.model_code, LLMCall.purpose, func.count(), func.sum(LLMCall.credits_cost), func.sum(LLMCall.cost_try),
+                   func.count().filter(LLMCall.cost_try.is_(None)))
+            .where(*call_scope).group_by(LLMCall.model_code, LLMCall.purpose))).all():
+        g = grouped.setdefault(recai.public_name(m, all_tiers, p), {"calls": 0, "credits": 0.0, "cost": 0.0, "unpriced_calls": 0})
+        g["calls"] += c
+        g["credits"] += _f(cr)
+        g["cost"] += _f(tl)
+        g["unpriced_calls"] += u
+    by_model = sorted(({"model_code": k, "calls": v["calls"], "credits": round(v["credits"], 2), "cost": round(v["cost"], 2),
+                        "unpriced_calls": v["unpriced_calls"]} for k, v in grouped.items()), key=lambda x: -x["credits"])
 
     # Proje maliyetleri (ADIM 7.5 hesabıyla aynı): bütçe / gerçekleşen; personel yalnızca proje toplamı
     totals = {"labor": 0.0, "token": 0.0, "other": 0.0, "actual": 0.0, "budget": 0.0, "budget_projects": 0, "unpriced_calls": 0}

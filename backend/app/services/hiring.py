@@ -105,6 +105,14 @@ async def resolve_hire_target(
     return await adopt_catalog_title(db, tenant, picked, department), department
 
 
+def default_agent_tier(ent, job_title) -> str:
+    """#349: yeni AI personelin RECAi adı — unvanın önerisi pakette varsa o, yoksa Mergen, yoksa paketin ilk adı."""
+    from app.services import recai
+
+    rec = getattr(job_title, "recommended_tier", None) if job_title else None
+    return recai.choose(rec, ent.recai_tiers or [recai.DEFAULT_TIER])
+
+
 async def default_agent_model(db, ent, job_title) -> Optional[str]:
     """Yeni AI personelin modeli: sistem varsayılanı (model.default.agent) pakette varsa o; yoksa unvanın önerisi; yoksa paketin ilk modeli."""
     from app.db.models import SystemSetting

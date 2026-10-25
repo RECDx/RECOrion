@@ -131,7 +131,7 @@ async def make_draft(ctx: LLMContext, transcript: str) -> Dict[str, Any]:
                                    "questions": raw.get("open_questions") or []}, pool_ids=set(), human_ids=None)
     return {"name": str(raw.get("name") or "").strip()[:255] or "Toplantıdan proje", "kind": "CASE" if raw.get("kind") == "CASE" else "PROJECT",
             "description": str(raw.get("description") or "").strip()[:3000], "requirements": str(raw.get("requirements") or "").strip()[:8000],
-            "participants": [str(p)[:120] for p in raw.get("participants") or []][:15], "plan": plan, "model": result.model_code}
+            "participants": [str(p)[:120] for p in raw.get("participants") or []][:15], "plan": plan, "model": result.public_model}
 
 
 async def process(rec_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: Optional[uuid.UUID], src: Path) -> None:

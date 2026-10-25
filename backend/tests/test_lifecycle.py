@@ -222,7 +222,7 @@ def test_starter_cannot_change_llm_or_prompt(client, starter_company):
     assert client.post(url, headers=h, json={**base, "model_code": "deepseek-v4-flash", "system_prompt": "Başka bir prompt"}).status_code == 403
     ok = client.post(url, headers=h, json={**base, "model_code": "deepseek-v4-flash"})
     assert ok.status_code == 201, ok.text
-    assert ok.json()["model_code"] == "deepseek-v4-flash"
+    assert ok.json()["model_code"] == "MERGEN" and ok.json()["recai_tier"] == "MERGEN"  # #349: model değil RECAi adı
 
 
 def test_starter_cannot_create_custom_titles(client, starter_company):
