@@ -259,6 +259,7 @@ class TenantLead(Base):
     odoo_sync_error = Column(Text)
     email_verified_at = Column(DateTime(timezone=True))
     source = Column(String(16), default="WEB")  # WEB, ADMIN
+    preferences = Column(JSONB, nullable=False, default=dict)  # ADIM 13.1: Odoo ve RECDx uygulamaları tercihi
 
     plan = relationship("Plan")
 
@@ -783,6 +784,7 @@ class IntegrationCatalogEntry(Base):
     setup_steps = Column(JSONB, nullable=False, default=list)
     keywords = Column(Text)
     sort = Column(Integer, nullable=False, default=100)
+    requires_app = Column(String(32))  # ADIM 13.1: yalnızca bu RECDx uygulamasını kullanan şirkete görünür (recqmind, recslip)
     status = Column(String(16), nullable=False, default="ACTIVE")  # ACTIVE, ARCHIVED
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

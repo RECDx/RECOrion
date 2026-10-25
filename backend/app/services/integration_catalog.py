@@ -33,7 +33,8 @@ CODE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 def out(e: IntegrationCatalogEntry) -> Dict[str, Any]:
     return {"id": str(e.id), "code": e.code, "title": e.title, "vendor": e.vendor, "category": e.category, "method": e.method,
             "method_label": METHOD_LABEL.get(e.method, e.method), "connector": e.connector, "preset": e.preset or {},
-            "description": e.description, "setup_steps": e.setup_steps or [], "keywords": e.keywords, "sort": e.sort, "status": e.status}
+            "description": e.description, "setup_steps": e.setup_steps or [], "keywords": e.keywords, "sort": e.sort, "status": e.status,
+            "requires_app": e.requires_app}
 
 
 def validate(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -64,7 +65,8 @@ def validate(data: Dict[str, Any]) -> Dict[str, Any]:
     return {"title": str(data.get("title") or "").strip()[:120], "vendor": (str(data.get("vendor") or "").strip()[:120] or None),
             "category": data["category"], "method": method, "connector": connector, "preset": preset,
             "description": (str(data.get("description") or "").strip()[:2000] or None), "setup_steps": steps,
-            "keywords": (str(data.get("keywords") or "").strip()[:500] or None), "sort": int(data.get("sort") or 100)}
+            "keywords": (str(data.get("keywords") or "").strip()[:500] or None), "sort": int(data.get("sort") or 100),
+            "requires_app": data.get("requires_app") if data.get("requires_app") in ("recqmind", "recslip") else None}
 
 
 async def ensure_catalog(db: AsyncSession, path: Path = SEED_FILE) -> int:
@@ -82,9 +84,13 @@ async def ensure_catalog(db: AsyncSession, path: Path = SEED_FILE) -> int:
     return added
 
 
-async def active(db: AsyncSession) -> List[IntegrationCatalogEntry]:
-    return list((await db.execute(select(IntegrationCatalogEntry).where(IntegrationCatalogEntry.status == "ACTIVE")
+async def active(db: AsyncSession, tenant=None) -> List[IntegrationCatalogEntry]:
+    """Etkin kartlar. RECDx uygulama kartları (requires_app) yalnızca o uygulamayı kullanan ve Odoo'su olan şirkete görünür."""
+    from app.services import recdx_apps
+
+    rows = list((await db.execute(select(IntegrationCatalogEntry).where(IntegrationCatalogEntry.status == "ACTIVE")
                                   .order_by(IntegrationCatalogEntry.sort, IntegrationCatalogEntry.title))).scalars())
+    return [e for e in rows if not e.requires_app or (tenant is not None and recdx_apps.is_active(tenant, e.requires_app))]
 
 
 ADVISE_PROMPT = """Sen RECAi'sin: RECOrion'da şirketin dış sistemlerini bağlamasına yardım ediyorsun.

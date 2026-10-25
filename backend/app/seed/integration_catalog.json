@@ -17,6 +17,40 @@
   ]
  },
  {
+  "code": "recqmind",
+  "title": "RECQmind (Odoo Helpdesk)",
+  "vendor": "RECDx",
+  "category": "Müşteri destek",
+  "method": "NATIVE",
+  "connector": "odoo",
+  "requires_app": "recqmind",
+  "sort": 5,
+  "description": "RECQmind'ın Odoo'nuzda açtığı pazar yeri destek biletleri (sipariş, soru, problem, iade). İade, iptal ve kargo problemi gibi biletler RECOrion'da Case olarak yürütülür, sonuç onayla bilete yazılır.",
+  "keywords": "recqmind helpdesk destek pazar yeri trendyol hepsiburada amazon iade iptal kargo",
+  "setup_steps": [
+   "RECQmind'ın kurulu olduğu Odoo'yu bağlayın (Odoo adresi, veritabanı ve Helpdesk'e erişen bir kullanıcının API anahtarı).",
+   "İzinli modellere helpdesk.ticket, helpdesk.tag, sale.order, stock.picking, product.template ekleyin.",
+   "'Dene' ile doğrulayın; ardından Otomasyonlar'dan RECQmind hazır kurallarını açın (Adım 13.3)."
+  ]
+ },
+ {
+  "code": "recslip",
+  "title": "RECSlip (Odoo masraf fişleri)",
+  "vendor": "RECDx",
+  "category": "Finans",
+  "method": "NATIVE",
+  "connector": "odoo",
+  "requires_app": "recslip",
+  "sort": 6,
+  "description": "RECSlip'in Odoo'nuzda okuduğu masraf fişleri ve ön muhasebe kayıtları. Sorunlu fişler RECOrion'da Case olur, ay sonu kapanış kontrolü otomatik açılır.",
+  "keywords": "recslip masraf fiş gider muhasebe luca logo kdv",
+  "setup_steps": [
+   "RECSlip'in kurulu olduğu Odoo'yu bağlayın (masraflara erişen bir kullanıcının API anahtarı).",
+   "İzinli modellere hr.expense, rec.masraf.detay, rec.masraf.detay.ozet ekleyin.",
+   "'Dene' ile doğrulayın; ardından Otomasyonlar'dan RECSlip hazır kurallarını açın (Adım 13.4)."
+  ]
+ },
+ {
   "code": "logo",
   "title": "Logo (Tiger, GO, j-Platform)",
   "vendor": "Logo Yazılım",

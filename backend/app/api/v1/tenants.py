@@ -12,6 +12,7 @@ from app.config import settings
 from app.core.security import CurrentUser, get_current_user
 from app.core.tokens import hit_rate_limit, issue_email_code, verify_email_code, EMAIL_CODE_TTL_MINUTES
 from app.services import customer_lifecycle as lifecycle
+from app.services import recdx_apps
 from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/tenants", tags=["Tenants (Şirketler)"])
@@ -943,6 +944,8 @@ class PurchaseRequest(BaseModel):
     sectors: List[str] = []
     professions: List[str] = []
     nace_codes: List[str] = []
+    # ADIM 13.1: Odoo ve RECDx uygulamaları tercihi (isteğe bağlı): {"has_odoo": true, "apps": {"recqmind": "USING", "recslip": "INTERESTED"}}
+    recdx_apps: Optional[Dict[str, Any]] = None
 
 
 class SendCodeRequest(BaseModel):
@@ -981,6 +984,7 @@ class LeadOut(BaseModel):
     odoo_partner_name: Optional[str] = None
     odoo_sync_status: Optional[str] = None
     odoo_sync_error: Optional[str] = None
+    preferences: dict = {}
     created_at: Optional[datetime] = None
 
     class Config:
@@ -1099,6 +1103,9 @@ async def submit_purchase_request(
         sector_manifesto=manifesto_data["manifesto"],
         package_start_date=None, package_expiry_date=None, is_active=False,
     )
+    prefs = recdx_apps.clean(payload.recdx_apps) if payload.recdx_apps else {}
+    if prefs:
+        recdx_apps.store(tenant, prefs)
     db.add(tenant)
     await db.flush()
     db.add(Actor(
@@ -1113,6 +1120,7 @@ async def submit_purchase_request(
         sectors=payload.sectors or [], professions=payload.professions or [], nace_codes=[],
         generated_manifesto=manifesto_data["manifesto"], assigned_skills=manifesto_data["assigned_skills"],
         status="PENDING", source="WEB", email_verified_at=datetime.utcnow(), odoo_sync_status="PENDING",
+        preferences={"recdx_apps": prefs} if prefs else {},
     )
     db.add(lead)
     await db.commit()

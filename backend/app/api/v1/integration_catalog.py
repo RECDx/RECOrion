@@ -38,7 +38,10 @@ def _super(user: CurrentUser) -> None:
 
 @router.get("/integrations/catalog")
 async def catalog(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return {"entries": [cat.out(e) for e in await cat.active(db)], "categories": list(cat.CATEGORIES),
+    from app.db.models import Tenant
+
+    tenant = None if user.is_platform_staff else await db.get(Tenant, user.tenant_id)
+    return {"entries": [cat.out(e) for e in await cat.active(db, tenant)], "categories": list(cat.CATEGORIES),
             "methods": cat.METHOD_LABEL, "redirect_uri": oauth.redirect_uri()}
 
 
@@ -84,6 +87,7 @@ class EntryIn(BaseModel):
     setup_steps: List[str] = Field(default_factory=list, max_length=12)
     keywords: Optional[str] = Field(None, max_length=500)
     sort: int = 100
+    requires_app: Optional[str] = None
     status: Optional[str] = Field(None, pattern="^(ACTIVE|ARCHIVED)$")
 
 

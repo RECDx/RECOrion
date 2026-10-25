@@ -362,6 +362,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/me/transfer-approvals"): AUTH,
     # RECOrion MCP sunucusu (ADIM 12.6): kimlik kişisel erişim anahtarıyla uç içinde (rxp_; özetle eşleşir, kapsam denetlenir)
     ("POST", f"{P}/mcp"): PUBLIC,
+    # RECDx uygulamaları tercihi (ADIM 13.1): tanıtım herkese açık (satın alma formu); şirket tercihi uç içinde
+    ("GET", f"{P}/recdx-apps"): PUBLIC,
+    ("GET", f"{P}/company/{{tenant_id}}/recdx-apps"): HANDLER(),
+    ("PUT", f"{P}/company/{{tenant_id}}/recdx-apps"): HANDLER(),
     ("GET", f"{P}/mcp"): PUBLIC,
     ("GET", f"{P}/me/personal-tokens"): AUTH,
     ("POST", f"{P}/me/personal-tokens"): AUTH,
