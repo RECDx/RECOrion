@@ -197,6 +197,13 @@ export const api = {
   getPersonalTokens: () => request('/me/personal-tokens'),
   createPersonalToken: (data) => request('/me/personal-tokens', { method: 'POST', body: JSON.stringify(data) }),
   revokePersonalToken: (id) => request(`/me/personal-tokens/${id}`, { method: 'DELETE' }),
+  // RECDx uygulamaları (ADIM 13.1)
+  getPublicRecdxApps: (planCode) => request(`/recdx-apps${planCode ? `?plan_code=${planCode}` : ''}`),
+  getCompanyRecdxApps: (tenantId) => request(`/company/${tenantId}/recdx-apps`),
+  setCompanyRecdxApps: (tenantId, data) => request(`/company/${tenantId}/recdx-apps`, { method: 'PUT', body: JSON.stringify(data) }),
+  getAppRequests: () => request('/system/recdx-app-requests'),
+  updateAppRequest: (id, data) => request(`/system/recdx-app-requests/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  retryAppRequest: (id) => request(`/system/recdx-app-requests/${id}/retry`, { method: 'POST' }),
   getCatalogAdmin: () => request('/system/integration-catalog'),
   createCatalogEntry: (data) => request('/system/integration-catalog', { method: 'POST', body: JSON.stringify(data) }),
   updateCatalogEntry: (id, data) => request(`/system/integration-catalog/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

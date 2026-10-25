@@ -138,10 +138,12 @@ class OdooService:
         } for r in rows]
 
     @classmethod
-    def create_sale_order(cls, partner_id: int, product_id: int, price: float, description: str) -> Dict[str, Any]:
+    def create_sale_order(cls, partner_id: int, product_id: int, price: float, description: str,
+                          extra_lines: Optional[list] = None) -> Dict[str, Any]:
         """
         Odoo sale.order (teklif) oluşturur. Ürün ve fiyat RECOrion paket tanımından gelir
-        (plans.odoo_product_id, plans.monthly_price).
+        (plans.odoo_product_id, plans.monthly_price). extra_lines: RECDx uygulamaları (ADIM 13.1)
+        [{"product_id", "price", "name"}] — paketin teklifine göre indirimli veya 0 fiyatlı satırlar.
         """
         from app.config import settings
 
@@ -164,7 +166,8 @@ class OdooService:
                         'price_unit': float(price),
                         'name': description,
                     })
-                ]
+                ] + [(0, 0, {'product_id': int(ln['product_id']), 'product_uom_qty': 1.0, 'price_unit': float(ln['price']),
+                             'name': ln['name']}) for ln in (extra_lines or [])]
             }
             order_id = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'create', [order_data])
             orders = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'read', [[order_id]],
@@ -174,6 +177,44 @@ class OdooService:
             return {"success": True, "order_id": order_id, "order_name": order_name, "partner_id": partner_id}
         except Exception as e:
             logger.error(f"Odoo sale.order oluşturulurken hata: {e}")
+            return {"success": False, "error": str(e)}
+
+    @classmethod
+    def create_quotation(cls, partner_id: int, lines: list, note: str) -> Dict[str, Any]:
+        """Paket dışında ek ürünler için yeni teklif (ADIM 13.1: Şirket Yönetimi'nden 'paketime ekle')."""
+        from app.config import settings
+
+        uid, models, cfg = cls._get_connection()
+        if not uid or not models:
+            return {"success": False, "error": "Odoo bağlantısı kurulamadı"}
+        try:
+            order_id = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'create', [{
+                'partner_id': partner_id, 'partner_invoice_id': partner_id, 'partner_shipping_id': partner_id,
+                'pricelist_id': settings.ODOO_PRICELIST_ID, 'client_order_ref': note[:100],
+                'order_line': [(0, 0, {'product_id': int(ln['product_id']), 'product_uom_qty': 1.0, 'price_unit': float(ln['price']),
+                                       'name': ln['name']}) for ln in lines]}])
+            name = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'read', [[order_id]], {'fields': ['name']})[0]['name']
+            return {"success": True, "order_id": order_id, "order_name": name}
+        except Exception as e:
+            logger.error(f"Odoo ek teklif oluşturulamadı: {e}")
+            return {"success": False, "error": str(e)}
+
+    @classmethod
+    def create_crm_lead(cls, partner_id: Optional[int], name: str, description: str, expected_revenue: float,
+                        email: Optional[str], phone: Optional[str]) -> Dict[str, Any]:
+        """Odoo CRM fırsatı (ADIM 13.1: RECDx uygulaması için 'teklif istiyorum')."""
+        uid, models, cfg = cls._get_connection()
+        if not uid or not models:
+            return {"success": False, "error": "Odoo bağlantısı kurulamadı"}
+        try:
+            vals = {'name': name[:255], 'type': 'opportunity', 'description': description, 'expected_revenue': float(expected_revenue or 0),
+                    'email_from': email or False, 'phone': phone or False}
+            if partner_id:
+                vals['partner_id'] = partner_id
+            lead_id = models.execute_kw(cfg['db'], uid, cfg['password'], 'crm.lead', 'create', [vals])
+            return {"success": True, "lead_id": lead_id}
+        except Exception as e:
+            logger.error(f"Odoo CRM fırsatı oluşturulamadı: {e}")
             return {"success": False, "error": str(e)}
 
     @classmethod

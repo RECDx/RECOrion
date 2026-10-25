@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, session } from '../api';
+import RecdxAppsChoice from './integrations/RecdxAppsChoice';
 import AdminLeadsModal from './AdminLeadsModal';
 import ThemeToggle from '../ui/ThemeToggle';
 import { notify, promptDialog, toast } from '../ui/feedback';
@@ -43,7 +44,13 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   // Satın Alma Modalı State'leri
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [step, setStep] = useState(1); // 1: Şirket Bilgileri, 2: NACE Kodları, 3: Yetkili/Şifre, 4: Başarı & Manifesto
+  const [recdxApps, setRecdxApps] = useState(null);  // ADIM 13.1: Odoo ve RECDx uygulamaları (paketin teklifiyle)
+  const [appChoice, setAppChoice] = useState({ has_odoo: null, apps: {} });
+  const [step, setStep] = useState(1);
+  useEffect(() => {
+    if (!selectedPlan?.code) return;
+    api.getPublicRecdxApps(selectedPlan.code).then((d) => setRecdxApps(d.apps)).catch(() => setRecdxApps(null));
+  }, [selectedPlan?.code]); // 1: Şirket Bilgileri, 2: NACE Kodları, 3: Yetkili/Şifre, 4: Başarı & Manifesto
   
   // Form Bilgileri (Süper Admin Tanımı ile Birebir Eşleşen)
   const [companyName, setCompanyName] = useState('');
@@ -280,7 +287,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         company_fax: companyFax || null,
         sectors: selectedSectors,
         professions: selectedProfessions,
-        nace_codes: []
+        nace_codes: [],
+        ...(appChoice.has_odoo !== null || Object.keys(appChoice.apps).length ? { recdx_apps: appChoice } : {})
       };
 
       const result = await api.submitPurchaseRequest(payload);
@@ -1192,6 +1200,14 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                       </div>
                     </div>
                   </div>
+
+                  {/* ADIM 13.1: Odoo ve RECDx uygulamaları (isteğe bağlı) */}
+                  {recdxApps && (
+                    <div className="purchase-section-card-3d" style={{ marginTop: 16 }}>
+                      <div className="purchase-section-title-3d"><span>Odoo ve RECDx uygulamaları (isteğe bağlı)</span></div>
+                      <RecdxAppsChoice apps={recdxApps} value={appChoice} onChange={setAppChoice} idPrefix="buy" />
+                    </div>
+                  )}
                 </div>
 
                 <div className="purchase-footer-3d">

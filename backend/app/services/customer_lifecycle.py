@@ -17,10 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.tokens import issue_link_token
-from app.db.models import Actor, NotificationSchedule, Plan, Tenant, TenantLead
+from app.db.models import Actor, NotificationSchedule, Plan, RecdxAppRequest, Tenant, TenantLead
 from app.db.session import AsyncSessionLocal
 from app.services.notification_service import NotificationService
 from app.services.odoo_service import OdooService
+from app.services import recdx_apps
 
 logger = logging.getLogger("recorion.lifecycle")
 
@@ -64,8 +65,12 @@ async def sync_lead_to_odoo(lead_id: uuid.UUID) -> None:
         lead = await db.get(TenantLead, lead_id)
         if not lead:
             return
+        app_reqs = (await db.execute(select(RecdxAppRequest).where(RecdxAppRequest.lead_id == lead.id,
+                                                                   RecdxAppRequest.status == "NEW"))).scalars().all()
         if not settings.ODOO_SYNC_ENABLED:
             lead.odoo_sync_status = "SKIPPED"
+            for r in app_reqs:
+                r.status, r.note = "SKIPPED", "Odoo eşitlemesi kapalı; Genel Merkez elle takip eder."
             await db.commit()
             return
         plan = await db.get(Plan, lead.plan_id) if lead.plan_id else None
@@ -87,14 +92,25 @@ async def sync_lead_to_odoo(lead_id: uuid.UUID) -> None:
                 lead.odoo_partner_id = partner_id
                 lead.odoo_partner_name = partner["name"]
             if not lead.odoo_order_id:
+                adds = [r for r in app_reqs if r.choice == "ADD"]
+                for r in adds:
+                    if not r.odoo_product_id:
+                        r.status, r.error = "FAILED", "Paket tanımında bu uygulamanın Odoo ürünü seçilmemiş."
+                lines = recdx_apps.order_lines(adds)
                 res = await asyncio.to_thread(
                     OdooService.create_sale_order, partner_id, plan.odoo_product_id, float(plan.monthly_price or 0),
-                    f"RECOrion - {plan.name} (aylık kiralama)",
+                    f"RECOrion - {plan.name} (aylık kiralama)", [{k: ln[k] for k in ("product_id", "price", "name")} for ln in lines],
                 )
                 if not res.get("success"):
                     raise RuntimeError(res.get("error") or "Satış teklifi oluşturulamadı.")
                 lead.odoo_order_id = res["order_id"]
                 lead.odoo_order_name = res["order_name"]
+                for ln in lines:  # RECDx uygulama satırları pakete eklendi
+                    ln["request"].status, ln["request"].odoo_order_id, ln["request"].odoo_order_name = "ORDERED", res["order_id"], res["order_name"]
+            tenant = await db.get(Tenant, lead.tenant_id) if lead.tenant_id else None
+            for r in app_reqs:
+                if r.choice == "QUOTE" and r.status == "NEW" and tenant:
+                    await recdx_apps.crm_opportunity(r, tenant, partner_id)
             lead.odoo_sync_status = "SYNCED"
             lead.odoo_sync_error = None
         except Exception as exc:

@@ -8,7 +8,7 @@ const money = (v, cur) => `${Number(v || 0).toLocaleString('tr-TR')} ${cur || ''
  * Paket tanımında Odoo satış ürünü seçimi. Seçilen ürünün ID'si plans.odoo_product_id olur;
  * müşteri bu paketi seçtiğinde Odoo'daki satış kaydı bu ürünle açılır.
  */
-export default function OdooProductPicker({ value, onChange, planPrice }) {
+export default function OdooProductPicker({ value, onChange, planPrice, label = 'Odoo satış ürünü' }) {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -35,7 +35,7 @@ export default function OdooProductPicker({ value, onChange, planPrice }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: '1 / -1' }}>
-      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Odoo satış ürünü</span>
+      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>{label}</span>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input
           type="search"
@@ -51,7 +51,7 @@ export default function OdooProductPicker({ value, onChange, planPrice }) {
           onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
           className="super-admin-input"
           style={{ flex: '2 1 260px' }}
-          aria-label="Odoo satış ürünü"
+          aria-label={label}
           disabled={loading && products.length === 0}
         >
           <option value="">— Odoo ürünü bağlı değil —</option>

@@ -122,6 +122,8 @@ class Plan(Base):
     can_create_custom_titles = Column(Boolean, default=False)
     # Odoo ürün eşleşmesi (product.product id); satış siparişi bu ürün ve monthly_price ile açılır
     odoo_product_id = Column(Integer, nullable=True)
+    # ADIM 13.1: RECDx uygulama teklifi (RECQmind, RECSlip): yok / indirimli / dahil + Odoo ürünü
+    recdx_apps = Column(JSONB, nullable=False, default=dict)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -998,6 +1000,33 @@ class IntegrationTransfer(Base):
     done_at = Column(DateTime(timezone=True))
     rolled_back_at = Column(DateTime(timezone=True))
     rolled_back_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RecdxAppRequest(Base):
+    """RECDx uygulama talebi (ADIM 13.1): müşterinin RECQmind/RECSlip seçimi; Odoo siparişi veya CRM fırsatıyla izlenir."""
+    __tablename__ = "recdx_app_requests"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("tenant_leads.id", ondelete="SET NULL"))
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL"))
+    app = Column(String(32), nullable=False)
+    choice = Column(String(16), nullable=False)  # USING, ADD, QUOTE
+    source = Column(String(16), nullable=False)  # PURCHASE, COMPANY
+    mode = Column(String(16))
+    discount = Column(Numeric(5, 2))
+    list_price = Column(Numeric(14, 2))
+    price = Column(Numeric(14, 2))
+    odoo_product_id = Column(Integer)
+    odoo_order_id = Column(Integer)
+    odoo_order_name = Column(String(64))
+    odoo_lead_id = Column(Integer)
+    status = Column(String(20), nullable=False, default="NEW")
+    error = Column(Text)
+    note = Column(Text)
+    created_by_actor_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

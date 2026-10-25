@@ -33,6 +33,7 @@ class PlanResponse(BaseModel):
     allowed_models: List[str]
     features: Dict[str, Any]
     odoo_product_id: Optional[int] = None
+    recdx_apps: Dict[str, Any] = {}  # ADIM 13.1: RECQmind/RECSlip teklifi (yok/indirimli/dahil + Odoo ürünü)
     is_active: bool
 
     class Config:
@@ -54,6 +55,7 @@ class PlanCreate(BaseModel):
     features: Dict[str, Any] = {}
     can_create_custom_titles: bool = False
     odoo_product_id: Optional[int] = None
+    recdx_apps: Optional[Dict[str, Any]] = None
     is_active: bool = True
 
 class PlanUpdate(BaseModel):
@@ -70,6 +72,7 @@ class PlanUpdate(BaseModel):
     features: Dict[str, Any] = {}
     can_create_custom_titles: bool = False
     odoo_product_id: Optional[int] = None
+    recdx_apps: Optional[Dict[str, Any]] = None
     is_active: bool = True
 
 
@@ -202,12 +205,38 @@ async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
         features=payload.features,
         can_create_custom_titles=payload.can_create_custom_titles,
         odoo_product_id=payload.odoo_product_id,
+        recdx_apps=await _clean_app_offer(payload.recdx_apps),
         is_active=payload.is_active
     )
     db.add(plan)
     await db.commit()
     await db.refresh(plan)
     return plan
+
+async def _clean_app_offer(raw: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Paketin RECDx uygulama teklifi (ADIM 13.1). Yeni seçilen Odoo ürünü doğrulanır; yanıtta liste fiyatı saklanır."""
+    if raw is None:
+        return current or {}
+    try:
+        offer = recdx_apps.clean_offer(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    import asyncio
+    from app.services.odoo_service import OdooService, OdooUnavailable
+
+    for code, item in offer.items():
+        pid = item.get("odoo_product_id")
+        if not pid:
+            continue
+        try:  # ürün adı ve liste fiyatı Odoo'dan (fiyatsız ürün 0)
+            found = await asyncio.to_thread(OdooService.list_products, None, [pid], 1)
+        except OdooUnavailable:
+            raise HTTPException(status_code=503, detail="Odoo'ya ulaşılamadığı için ürün doğrulanamadı. Lütfen daha sonra tekrar deneyin.")
+        if not found:
+            raise HTTPException(status_code=400, detail=f"Odoo'da {pid} ID'li satılabilir bir ürün bulunamadı.")
+        item["odoo_product_name"], item["list_price"] = found[0]["name"], float(found[0].get("list_price") or 0)
+    return offer
+
 
 @router.get("/odoo/products")
 async def list_odoo_products(search: Optional[str] = Query(None, max_length=100)):
@@ -266,6 +295,8 @@ async def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: AsyncSession 
     if payload.odoo_product_id != plan.odoo_product_id:
         await _validate_odoo_product(payload.odoo_product_id)
     plan.odoo_product_id = payload.odoo_product_id
+    if payload.recdx_apps is not None:
+        plan.recdx_apps = await _clean_app_offer(payload.recdx_apps, plan.recdx_apps)
     plan.is_active = payload.is_active
 
     await db.commit()
@@ -1103,9 +1134,9 @@ async def submit_purchase_request(
         sector_manifesto=manifesto_data["manifesto"],
         package_start_date=None, package_expiry_date=None, is_active=False,
     )
-    prefs = recdx_apps.clean(payload.recdx_apps) if payload.recdx_apps else {}
+    prefs = recdx_apps.clean(payload.recdx_apps, plan) if payload.recdx_apps else {}
     if prefs:
-        recdx_apps.store(tenant, prefs)
+        recdx_apps.store(tenant, prefs, plan=plan)
     db.add(tenant)
     await db.flush()
     db.add(Actor(
@@ -1123,6 +1154,9 @@ async def submit_purchase_request(
         preferences={"recdx_apps": prefs} if prefs else {},
     )
     db.add(lead)
+    await db.flush()
+    if prefs:  # RECDx uygulama talepleri: 'paketime ekle' siparişe satır, 'teklif' CRM fırsatı (arka planda, Odoo eşitlemesinde)
+        await recdx_apps.create_requests(db, tenant, plan, prefs["apps"], "PURCHASE", lead=lead)
     await db.commit()
     await db.refresh(lead)
 

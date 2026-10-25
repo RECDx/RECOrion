@@ -27,3 +27,23 @@
 .ig-transfer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
 .ig-transfer p { margin: 0; font-size: 0.8rem; }
 .ig-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--text-main); text-decoration: underline; margin-right: 10px; }
+
+/* Paket tanımında RECDx uygulama teklifi (ADIM 13.1) */
+.pao-box { grid-column: 1 / -1; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+.pao-box legend { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); padding: 0 4px; }
+.pao-hint { margin: 0; font-size: 0.75rem; color: var(--text-muted); }
+.pao-row { display: grid; grid-template-columns: 110px repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; align-items: end; }
+.pao-row strong { color: var(--text-main); font-size: 0.85rem; align-self: center; }
+.pao-row label { display: flex; flex-direction: column; gap: 4px; font-size: 0.72rem; color: var(--text-muted); }
+.pao-row > div { grid-column: 1 / -1; }
+
+/* Odoo ve RECDx uygulamaları seçimi (ADIM 13.1) */
+.ra-box { display: flex; flex-direction: column; gap: 10px; }
+.ra-box fieldset { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.ra-box legend { font-weight: 700; font-size: 0.85rem; color: var(--text-main); padding: 0 4px; }
+.ra-box legend small { font-weight: 500; color: var(--text-muted); margin-left: 6px; }
+.ra-box label { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: 0.82rem; color: var(--text-main); }
+.ra-box p { margin: 6px 0; }
+.ra-hint { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+.ra-hint a { color: var(--text-main); text-decoration: underline; }
+.ra-options { display: flex; flex-wrap: wrap; gap: 4px 0; }

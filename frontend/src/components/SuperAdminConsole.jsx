@@ -64,10 +64,12 @@ import { api } from '../api';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
 import OdooProductPicker from './OdooProductPicker';
+import PlanAppOffers from './integrations/PlanAppOffers';
 import CatalogAdmin from './catalog/CatalogAdmin';
 import TemplatesAdmin from './projects/TemplatesAdmin';
 import { RegulationAdmin } from './regulations/Regulations';
 import IntegrationCatalogAdmin from './integrations/CatalogAdmin';
+import AppRequestsAdmin from './integrations/AppRequestsAdmin';
 import EmailTemplateBuilder from './email/EmailTemplateBuilder';
 import { compileBlocksToHtml, htmlToBlocks } from './email/emailBlocks';
 import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantCreditsModal } from './ai/PlatformAIPanels';
@@ -85,6 +87,7 @@ const TAB_SLUG_MAP = {
   PROJECT_TEMPLATES: 'project-templates',
   REGULATIONS: 'regulations',
   INTEGRATION_CATALOG: 'integration-catalog',
+  APP_REQUESTS: 'app-requests',
   PERMISSIONS: 'permissions',
   ROLES: 'roles',
   PLANS: 'plans',
@@ -107,6 +110,7 @@ const SLUG_TAB_MAP = {
   'project-templates': 'PROJECT_TEMPLATES',
   'regulations': 'REGULATIONS',
   'integration-catalog': 'INTEGRATION_CATALOG',
+  'app-requests': 'APP_REQUESTS',
   'permissions': 'PERMISSIONS',
   'roles': 'ROLES',
   'plans': 'PLANS',
@@ -1573,6 +1577,7 @@ export default function SuperAdminConsole({
         can_create_custom_titles: !!plan.can_create_custom_titles,
         features: { ...{ can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 }, ...(plan.features || {}) },
         odoo_product_id: plan.odoo_product_id ?? '',
+        recdx_apps: plan.recdx_apps || {},
         is_active: plan.is_active
       });
     } else {
@@ -1592,6 +1597,7 @@ export default function SuperAdminConsole({
         can_create_custom_titles: false,
         features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 },
         odoo_product_id: '',
+        recdx_apps: {},
         is_active: true
       });
     }
@@ -2156,6 +2162,18 @@ export default function SuperAdminConsole({
                 {!sidebarCollapsed && <span>Bağlantı Kataloğu</span>}
               </div>
             </button>
+
+            {/* UYGULAMA TALEPLERİ (ADIM 13.1): RECQmind / RECSlip */}
+            <button
+              onClick={() => { switchTab('APP_REQUESTS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'APP_REQUESTS' ? 'active' : ''}`}
+              title="Uygulama Talepleri"
+            >
+              <div className="super-admin-nav-item-left">
+                <Plug style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+                {!sidebarCollapsed && <span>Uygulama Talepleri</span>}
+              </div>
+            </button>
             </>
           )}
 
@@ -2425,6 +2443,7 @@ export default function SuperAdminConsole({
               {activeTab === 'PROJECT_TEMPLATES' && 'Proje Şablonları'}
               {activeTab === 'REGULATIONS' && 'Mevzuat Paketleri'}
               {activeTab === 'INTEGRATION_CATALOG' && 'Bağlantı Kataloğu'}
+              {activeTab === 'APP_REQUESTS' && 'Uygulama Talepleri (RECQmind, RECSlip)'}
               {activeTab === 'SECTORS' && 'Sektör Tanımları (Ticaret Bakanlığı)'}
               {activeTab === 'PROFESSIONS' && 'Meslek Grubu Tanımları (Ticaret Bakanlığı)'}
             </span>
@@ -4537,6 +4556,7 @@ export default function SuperAdminConsole({
           {activeTab === 'PROJECT_TEMPLATES' && <TemplatesAdmin />}
           {activeTab === 'REGULATIONS' && <RegulationAdmin />}
           {activeTab === 'INTEGRATION_CATALOG' && <IntegrationCatalogAdmin />}
+          {activeTab === 'APP_REQUESTS' && <AppRequestsAdmin />}
           {activeTab === 'MODEL_ROUTER' && <ModelRouterPanel />}
 
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
@@ -6963,6 +6983,7 @@ export default function SuperAdminConsole({
                     planPrice={planForm.monthly_price}
                     onChange={(id) => setPlanForm({ ...planForm, odoo_product_id: id })}
                   />
+                  <PlanAppOffers value={planForm.recdx_apps} onChange={(v) => setPlanForm({ ...planForm, recdx_apps: v })} />
                 </div>
               </div>
 
