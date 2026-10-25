@@ -76,6 +76,8 @@ import { ModelSettingsPanel, PlatformAssistantPanel, PlatformUsagePanel, TenantC
 import PlatformDashboard, { HealthBadge, SystemHealthPanel, usePlatformHealth } from './dashboard/PlatformDashboard';
 import LlmPricing from './ai/LlmPricing';
 import ModelRouterPanel from './ai/ModelRouterPanel';
+import RecaiTiersAdmin from './recai/RecaiTiersAdmin';
+import PlanRecaiPicker from './recai/PlanRecaiPicker';
 
 const TAB_SLUG_MAP = {
   DASHBOARD: 'dashboard',
@@ -398,8 +400,9 @@ export default function SuperAdminConsole({
     monthly_credits: 1000,
     storage_gb: 10,
     allowed_models: [],
+    recai_tiers: ['MERGEN'],
     can_create_custom_titles: false,
-    features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 },
+    features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, vision_enabled: false, transcription_enabled: false, max_documents_per_agent: 20 },
     odoo_product_id: '',
     is_active: true
   });
@@ -1574,8 +1577,9 @@ export default function SuperAdminConsole({
         monthly_credits: plan.monthly_credits,
         storage_gb: plan.storage_gb,
         allowed_models: plan.allowed_models || [],
+        recai_tiers: plan.recai_tiers || ['MERGEN'],
         can_create_custom_titles: !!plan.can_create_custom_titles,
-        features: { ...{ can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 }, ...(plan.features || {}) },
+        features: { ...{ can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, vision_enabled: false, transcription_enabled: false, max_documents_per_agent: 20 }, ...(plan.features || {}) },
         odoo_product_id: plan.odoo_product_id ?? '',
         recdx_apps: plan.recdx_apps || {},
         is_active: plan.is_active
@@ -1594,8 +1598,9 @@ export default function SuperAdminConsole({
         monthly_credits: 3000,
         storage_gb: 25,
         allowed_models: [],
+        recai_tiers: ['MERGEN', 'HIZLI'],
         can_create_custom_titles: false,
-        features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, max_documents_per_agent: 20 },
+        features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, vision_enabled: false, transcription_enabled: false, max_documents_per_agent: 20 },
         odoo_product_id: '',
         recdx_apps: {},
         is_active: true
@@ -2326,7 +2331,7 @@ export default function SuperAdminConsole({
             >
               <div className="super-admin-nav-item-left">
                 <Cpu style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
-                {!sidebarCollapsed && <span>EVREN Modelleri</span>}
+                {!sidebarCollapsed && <span>RECAi ve EVREN Modelleri</span>}
               </div>
               {!sidebarCollapsed && (
                 <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', fontFamily: 'monospace' }}>{models.length}</span>
@@ -2434,7 +2439,7 @@ export default function SuperAdminConsole({
               {activeTab === 'SCHEDULES' && 'Otomatik Zamanlayıcılar (Schedules)'}
               {activeTab === 'PERMISSIONS' && 'Sistem Yetki Kataloğu (RBAC)'}
               {activeTab === 'PLANS' && 'Kiralama Paketleri Yönetimi'}
-              {activeTab === 'MODELS' && 'EVREN Model Kataloğu'}
+              {activeTab === 'MODELS' && 'RECAi Adları ve EVREN Model Kataloğu'}
               {activeTab === 'LLM_PRICES' && 'LLM TL Fiyatları'}
               {activeTab === 'AI_MODEL_SETTINGS' && 'Genel AI Modelleri & Yapay Zeka Kullanımı'}
               {activeTab === 'MODEL_ROUTER' && 'Model Yönlendirici ve Kalite Testi'}
@@ -4562,6 +4567,7 @@ export default function SuperAdminConsole({
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
           {activeTab === 'MODELS' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <RecaiTiersAdmin models={models} />
               <div className="super-admin-page-header">
                 <div>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -6872,49 +6878,8 @@ export default function SuperAdminConsole({
                 </div>
               </div>
 
-              {/* Paket İçerisindeki EVREN LLM Modelleri Seçimi (Madde 15) */}
-              <div style={{ padding: 12, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ac-38bdf8)', textTransform: 'uppercase' }}>
-                    Pakete Dahil Edilen EVREN LLM Modelleri ({planForm.allowed_models?.length || 0} Model Seçili)
-                  </div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--nt-94a3b8)' }}>Müşterinin kullanabileceği modeller</span>
-                </div>
-                
-                <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxHeight: 150, overflowY: 'auto' }}>
-                  {models.map((m) => {
-                    const isChecked = (planForm.allowed_models || []).includes(m.model_code);
-                    return (
-                      <label
-                        key={m.id}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6,
-                          background: isChecked ? 'rgba(56,189,248,0.15)' : 'rgb(var(--rgb-shade) / calc(0.3 * var(--shade-k)))',
-                          border: isChecked ? '1px solid rgba(56,189,248,0.4)' : '1px solid rgb(var(--rgb-ov) / 0.04)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            const cur = planForm.allowed_models || [];
-                            if (e.target.checked) {
-                              setPlanForm({ ...planForm, allowed_models: [...cur, m.model_code] });
-                            } else {
-                              setPlanForm({ ...planForm, allowed_models: cur.filter(x => x !== m.model_code) });
-                            }
-                          }}
-                        />
-                        <div style={{ overflow: 'hidden' }}>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-ffffff)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{m.display_name}</div>
-                          <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: 'var(--nt-94a3b8)' }}>{m.model_code}</div>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* #349: Pakete dahil RECAi adları ve yetenekleri (arkasındaki model "RECAi Adları" ekranından değişir) */}
+              <PlanRecaiPicker form={planForm} onChange={setPlanForm} />
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>Açıklama</label>
@@ -6951,10 +6916,9 @@ export default function SuperAdminConsole({
                 <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-main)' }}>Paket İzinleri</div>
                 <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {[
-                    ['can_change_llm', 'AI personelin LLM modelini değiştirebilir'],
+                    ['can_change_llm', 'AI personelin RECAi adını değiştirebilir'],
                     ['can_edit_role_prompt', 'Ünvan rol promptunu değiştirebilir'],
                     ['can_upload_title_documents', 'Ünvanlara bilgi dokümanı yükleyebilir'],
-                    ['ocr_enabled', 'Taranmış belgelerde OCR kullanabilir'],
                   ].map(([key, label]) => (
                     <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
                       <input

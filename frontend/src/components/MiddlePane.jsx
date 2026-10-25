@@ -148,7 +148,7 @@ export default function MiddlePane({
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-dim)' }}
             title="Model, AI personelin ayarlarından Şirket Yönetimi'nde değiştirilir.">
             <Cpu size={13} />
-            <span>Model: <b style={{ color: 'var(--ac-38bdf8)', fontFamily: 'var(--font-mono)' }}>{assignee.preferred_model_code || 'şirket varsayılanı'}</b></span>
+            <span>RECAi: <b style={{ color: 'var(--ac-38bdf8)', fontFamily: 'var(--font-mono)' }}>{assignee.preferred_model_code || 'RECAi Mergen'}</b></span>
           </div>
         )}
       </div>

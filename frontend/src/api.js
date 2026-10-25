@@ -429,6 +429,10 @@ export const api = {
 
   // Müşteri Şirket Yönetimi (Company Admin) - AI Ajan İşe Alım & Yaşam Döngüsü (Madde 3)
   getAvailableLLMModels: (tenantId) => request(`/company/${tenantId}/llm-models`),
+  // #349: RECAi adları ve yetenekleri (gerçek model adı müşteriye gelmez)
+  getCompanyRecai: (tenantId) => request(`/company/${tenantId}/recai`),
+  getRecaiTiers: () => request('/system/recai-tiers'),
+  updateRecaiTier: (code, data) => request(`/system/recai-tiers/${code}`, { method: 'PUT', body: JSON.stringify(data) }),
   getCompanyAIAgents: (tenantId, params = {}) => {
     const query = new URLSearchParams();
     if (params.status) query.append('status', params.status);

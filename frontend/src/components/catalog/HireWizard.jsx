@@ -4,9 +4,10 @@ import { api } from '../../api';
 import { Badge, Button, EmptyState, Modal } from '../../ui/components';
 import { toast } from '../../ui/feedback';
 import { AUTONOMY, SENIORITY } from './labels';
+import RecaiCapabilities from '../recai/RecaiCapabilities';
 import './catalog.css';
 
-const STEPS = ['Departman', 'Unvan', 'Model ve Rol', 'Kimlik'];
+const STEPS = ['Departman', 'Unvan', 'RECAi ve Rol', 'Kimlik'];
 const DEPT_GROUPS = [
   [-1, 'Şirketinizin departmanları'],
   [0, 'Meslek grubunuza özel (katalog)'],
@@ -27,13 +28,15 @@ export default function HireWizard({ tenantId, open, onClose, onHired }) {
   const [titles, setTitles] = useState(null);
   const [title, setTitle] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [form, setForm] = useState({ display_name: '', description: '', hired_at: today(), autonomy_level: 'L1', model_code: '', system_prompt: '' });
+  const [form, setForm] = useState({ display_name: '', description: '', hired_at: today(), autonomy_level: 'L1', model_code: '', recai_capabilities: {}, system_prompt: '' });
   const [saving, setSaving] = useState(false);
+  // #349: RECAi kodu (MERGEN/HIZLI/DERIN) → görünen ad
+  const recaiName = (code) => options?.models?.find((m) => m.model_code === code)?.display_name || (code ? 'RECAi' : 'RECAi Mergen');
 
   useEffect(() => {
     if (!open) return;
     setStep(0); setDept(null); setTitle(null); setTitles(null); setPreview(null); setQuery(''); setOptions(null);
-    setForm({ display_name: '', description: '', hired_at: today(), autonomy_level: 'L1', model_code: '', system_prompt: '' });
+    setForm({ display_name: '', description: '', hired_at: today(), autonomy_level: 'L1', model_code: '', recai_capabilities: {}, system_prompt: '' });
     api.getHireOptions(tenantId).then(setOptions).catch((e) => toast.error(e.message));
   }, [open, tenantId]);
 
@@ -73,6 +76,7 @@ export default function HireWizard({ tenantId, open, onClose, onHired }) {
         catalog_department_id: dept.department_id ? null : dept.catalog_department_id,
         ...(title.kind === 'CATALOG' ? { catalog_title_id: title.id } : { job_title_id: title.id }),
         model_code: ent.can_change_llm ? form.model_code : undefined,
+        recai_capabilities: form.recai_capabilities,
         system_prompt: ent.can_edit_role_prompt && form.system_prompt.trim() !== preview.role_prompt ? form.system_prompt.trim() : undefined,
       };
       const created = await api.hireAIAgent(tenantId, payload);
@@ -168,17 +172,19 @@ export default function HireWizard({ tenantId, open, onClose, onHired }) {
           {step === 2 && (!preview ? <p className="cat-hint">Unvan bilgileri hazırlanıyor…</p> : (
             <div className="cat-form">
               <div className="cat-field">
-                <label htmlFor="hw-model">LLM modeli {!ent.can_change_llm && <Lock size={12} />}</label>
+                <label htmlFor="hw-model">RECAi {!ent.can_change_llm && <Lock size={12} />}</label>
                 <select id="hw-model" className="ui-input" value={form.model_code} disabled={!ent.can_change_llm} onChange={(e) => setForm({ ...form, model_code: e.target.value })}>
                   {!form.model_code && <option value="">Seçin…</option>}
-                  {options.models.map((m) => <option key={m.model_code} value={m.model_code}>{m.display_name} ({m.model_code}) · katsayı {m.effort_coefficient}</option>)}
+                  {options.models.map((m) => <option key={m.model_code} value={m.model_code} disabled={m.available === false}>{m.display_name}{m.description ? ` — ${m.description}` : ''} · katsayı {m.effort_coefficient}{m.available === false ? ' (paketinizde yok)' : ''}</option>)}
                 </select>
                 <span className="cat-hint">
                   {ent.can_change_llm
-                    ? (preview.recommended_model_code ? `Bu unvan için önerilen: ${preview.recommended_model_code}` : 'Unvanın önerdiği model paketinizde yok; listeden seçin.')
-                    : `'${ent.plan_name}' paketiniz model değiştirmeye izin vermiyor; bu unvan için ${form.model_code || 'paket modeli'} kullanılır.`}
+                    ? (preview.recommended_model_code ? `Bu unvan için önerilen: ${recaiName(preview.recommended_model_code)}` : 'Unvanın önerdiği RECAi paketinizde yok; listeden seçin.')
+                    : `'${ent.plan_name}' paketiniz RECAi değiştirmeye izin vermiyor; bu unvan için ${recaiName(form.model_code)} kullanılır.`}
                 </span>
               </div>
+              <RecaiCapabilities capabilities={options.capabilities || []} value={form.recai_capabilities}
+                                 onChange={(caps) => setForm({ ...form, recai_capabilities: caps })} />
               <div className="cat-field">
                 <label htmlFor="hw-aut">Otonomi</label>
                 <select id="hw-aut" className="ui-input" value={form.autonomy_level} onChange={(e) => setForm({ ...form, autonomy_level: e.target.value })}>

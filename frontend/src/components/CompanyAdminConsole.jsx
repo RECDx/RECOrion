@@ -54,6 +54,7 @@ import { api } from '../api';
 import ThemeToggle from '../ui/ThemeToggle';
 import { notify, toast } from '../ui/feedback';
 import { Badge, Modal } from '../ui/components';
+import RecaiCapabilities from './recai/RecaiCapabilities';
 import CreditsPanel from './ai/CreditsPanel';
 import CompanyDashboard from './dashboard/CompanyDashboard';
 import IntegrationsPanel from './integrations/IntegrationsPanel';
@@ -228,7 +229,8 @@ export default function CompanyAdminConsole({
   const [agentSearch, setAgentSearch] = useState('');
   const [agentStatusFilter, setAgentStatusFilter] = useState('ALL'); // ALL | ACTIVE | DISABLED
   const [agentViewMode, setAgentViewMode] = useState('CARDS'); // CARDS | LIST
-  const [availableModels, setAvailableModels] = useState([]);
+  const [availableModels, setAvailableModels] = useState([]); // #349: RECAi adları (MERGEN/HIZLI/DERIN)
+  const [recaiCaps, setRecaiCaps] = useState([]); // #349: RECAi Görsel/Ses/Okur ve pakette olup olmadığı
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [agentQuota, setAgentQuota] = useState({ active_agents: 0, max_agents: 5, plan_name: '', is_limit_reached: false });
 
@@ -237,6 +239,7 @@ export default function CompanyAdminConsole({
   const [agentForm, setAgentForm] = useState({
     display_name: '',
     model_code: '',
+    recai_capabilities: {},
     job_title_id: '',
     department_id: '',
     description: '',
@@ -380,14 +383,16 @@ export default function CompanyAdminConsole({
     api.getCompanyEntitlements(entitlementTenantId).then(setEntitlements).catch(() => setEntitlements(null));
   }, [entitlementTenantId]);
   const canChangeLlm = !entitlements || entitlements.can_change_llm;
+  // #349: RECAi kodu (MERGEN/HIZLI/DERIN) → müşteriye görünen ad
+  const recaiName = (code) => availableModels.find((m) => m.model_code === code)?.display_name || (code ? 'RECAi' : 'RECAi Mergen');
   const canEditRolePrompt = !entitlements || entitlements.can_edit_role_prompt;
   const canCreateCustomTitles = !entitlements || entitlements.can_create_custom_titles;
   const planLabel = entitlements?.plan_name || 'Mevcut';
   // LLM değiştirme izni yoksa kullanılacak model (backend ile aynı kural)
   const forcedModelForTitle = (titleId) => {
     const t = jobTitles.find((x) => x.id === titleId);
-    const rec = (t?.recommended_model_code || '').toLowerCase();
-    const allowed = entitlements?.allowed_models || [];
+    const rec = (t?.recommended_model_code || '').toUpperCase();
+    const allowed = entitlements?.recai_tiers || [];
     if (rec && (!allowed.length || allowed.includes(rec))) return rec;
     return allowed[0] || rec || '';
   };
@@ -547,6 +552,7 @@ export default function CompanyAdminConsole({
     try {
       const models = await api.getAvailableLLMModels(targetId);
       setAvailableModels(models || []);
+      api.getCompanyRecai(targetId).then((r) => setRecaiCaps(r?.capabilities || [])).catch(() => setRecaiCaps([]));
     } catch (err) {
       console.warn("LLM modelleri çekilemedi:", err);
     } finally {
@@ -1010,7 +1016,7 @@ export default function CompanyAdminConsole({
     setIsTitleModalOpen(true);
   };
 
-  // Seçili EVREN AI Modeli ile Sistem Rol Promptu Yazdır (Madde 2)
+  // Seçili RECAi ile Sistem Rol Promptu Yazdır (Madde 2)
   const handleGenerateTitlePrompt = async () => {
     const title = titleForm.title.trim();
     if (!title) {
@@ -1196,6 +1202,7 @@ export default function CompanyAdminConsole({
     setAgentForm({
       display_name: agent.display_name || '',
       model_code: agent.model_code || matchedTitle?.recommended_model_code || '',
+      recai_capabilities: agent.recai_capabilities || {},
       job_title_id: agent.job_title_id || '',
       department_id: deptId,
       description: agent.description || '',
@@ -1347,7 +1354,7 @@ export default function CompanyAdminConsole({
       return;
     }
     if (!agentForm.model_code && canChangeLlm) {
-      setAgentFormError("Lütfen AI Ajan için bir LLM modeli seçiniz.");
+      setAgentFormError("Lütfen AI Ajan için bir RECAi adı seçiniz.");
       return;
     }
 
@@ -1369,6 +1376,7 @@ export default function CompanyAdminConsole({
       const payload = {
         display_name: name,
         model_code: canChangeLlm ? agentForm.model_code : (editingAgent ? undefined : forcedModelForTitle(agentForm.job_title_id)),
+        recai_capabilities: agentForm.recai_capabilities || {},
         job_title_id: agentForm.job_title_id,
         department_id: agentForm.department_id || null,
         description: agentForm.description?.trim() || null,
@@ -1860,7 +1868,7 @@ export default function CompanyAdminConsole({
       });
       if (res?.manifesto) {
         setManifestoText(res.manifesto);
-        showToast(`Kurumsal manifesto (${res.model_code || manifestoModel}) ile hazırlandı!`, "success");
+        showToast(`Kurumsal manifesto ${res.model_code || recaiName(manifestoModel)} ile hazırlandı!`, "success");
       }
     } catch (err) {
       console.error("Manifesto üretilirken hata:", err);
@@ -3749,7 +3757,7 @@ export default function CompanyAdminConsole({
                                 padding: '2px 8px',
                                 borderRadius: '6px'
                               }}>
-                                🤖 {t.recommended_model_code || 'Varsayılan model'}
+                                🤖 {recaiName(t.recommended_model_code)}
                               </span>
 
                               <span style={{
@@ -4077,7 +4085,7 @@ export default function CompanyAdminConsole({
                               </span>
                             </td>
                             <td style={{ padding: '16px 20px', color: 'var(--nt-cbd5e1)', fontSize: '0.8rem' }}>
-                              🤖 {t.recommended_model_code || 'Varsayılan model'}
+                              🤖 {recaiName(t.recommended_model_code)}
                             </td>
                             <td style={{ padding: '16px 20px', textAlign: 'center' }}>
                               <span style={{
@@ -4689,7 +4697,7 @@ export default function CompanyAdminConsole({
                               alignItems: 'center',
                               gap: '4px'
                             }}>
-                              🤖 {agent.model_code || 'Varsayılan model'}
+                              🤖 {agent.model_display_name || recaiName(agent.model_code)}
                             </span>
 
                             <span style={{
@@ -4918,7 +4926,7 @@ export default function CompanyAdminConsole({
                     <thead>
                       <tr style={{ background: 'rgb(var(--rgb-ov) / 0.03)', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
                         <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>AI AJAN ADI</th>
-                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>LLM MODELİ</th>
+                        <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>RECAi</th>
                         <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>ŞİRKET ÜNVANI</th>
                         <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>DEPARTMAN</th>
                         <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-94a3b8)' }}>İŞE ALIM TARİHİ</th>
@@ -4964,7 +4972,7 @@ export default function CompanyAdminConsole({
                                 fontSize: '0.72rem',
                                 fontWeight: '700'
                               }}>
-                                🤖 {agent.model_code || 'Varsayılan model'}
+                                🤖 {agent.model_display_name || recaiName(agent.model_code)}
                               </span>
                             </td>
                             <td style={{ padding: '16px 20px', color: 'var(--ac-38bdf8)', fontSize: '0.825rem', fontWeight: '600' }}>
@@ -5162,7 +5170,7 @@ export default function CompanyAdminConsole({
                       Kurumsal Manifesto & Stratejik Vizyon
                     </h2>
                     <p style={{ fontSize: '0.8rem', color: 'var(--nt-94a3b8)', margin: '2px 0 0 0' }}>
-                      Şirketinizin anayasasını, etik ilkelerini ve AI vizyonunu yönetin; dilediğiniz EVREN AI modeline manifestoyu düzenletin.
+                      Şirketinizin anayasasını, etik ilkelerini ve AI vizyonunu yönetin; manifestoyu RECAi'ye düzenletin.
                     </p>
                   </div>
                 </div>
@@ -5661,7 +5669,7 @@ export default function CompanyAdminConsole({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Sparkles size={18} color="var(--ac-c084fc)" />
                     <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--nt-ffffff)' }}>
-                      EVREN AI ile Kurumsal Manifestoyu Düzenle veya Baştan Üret
+                      RECAi ile Kurumsal Manifestoyu Düzenle veya Baştan Üret
                     </span>
                   </div>
                   <span style={{ fontSize: '0.725rem', color: 'var(--nt-94a3b8)' }}>
@@ -5678,7 +5686,7 @@ export default function CompanyAdminConsole({
                   {/* Model Seçimi */}
                   <div>
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: 'var(--nt-cbd5e1)', marginBottom: '6px' }}>
-                      Kullanılacak EVREN AI Modeli
+                      Kullanılacak RECAi
                     </label>
                     <select
                       value={manifestoModel}
@@ -5696,11 +5704,11 @@ export default function CompanyAdminConsole({
                         outline: 'none'
                       }}
                     >
-                      <option value="">Platform varsayılan modeli</option>
+                      <option value="">Varsayılan (paketteki ilk RECAi)</option>
                       {availableModels && availableModels.length > 0 ? (
                         availableModels.map(m => (
                           <option key={m.model_code} value={m.model_code}>
-                            🤖 {m.name} ({m.model_code})
+                            🤖 {m.display_name}
                           </option>
                         ))
                       ) : null}
@@ -5786,7 +5794,7 @@ export default function CompanyAdminConsole({
                   value={manifestoText}
                   onChange={(e) => setManifestoText(e.target.value)}
                   rows={20}
-                  placeholder="Şirketinizin Kurumsal Manifestosunu buraya yazın veya yukarıdaki EVREN AI modeline hazırlatın..."
+                  placeholder="Şirketinizin Kurumsal Manifestosunu buraya yazın veya RECAi'ye hazırlatın..."
                   style={{
                     width: '100%',
                     background: 'rgb(var(--rgb-sf-0a0e17) / 0.9)',
@@ -7352,7 +7360,7 @@ export default function CompanyAdminConsole({
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <label style={{ fontSize: '0.825rem', fontWeight: '600', color: 'var(--nt-e2e8f0)' }}>
-                      Önerilen EVREN AI Modeli
+                      Önerilen RECAi
                     </label>
                     <span style={{ fontSize: '0.7rem', color: 'var(--ac-38bdf8)', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
                       Paket Kapsamında
@@ -7373,11 +7381,11 @@ export default function CompanyAdminConsole({
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="">Platform varsayılan modeli</option>
+                    <option value="">Varsayılan (paketteki ilk RECAi)</option>
                     {availableModels && availableModels.length > 0 ? (
                       availableModels.map((m) => (
-                        <option key={m.id || m.model_code} value={m.model_code}>
-                          {m.display_name} ({m.model_code})
+                        <option key={m.model_code} value={m.model_code} disabled={m.available === false}>
+                          {m.display_name}{m.description ? ` — ${m.description}` : ''}{m.available === false ? ' (paketinizde yok)' : ''}
                         </option>
                       ))
                     ) : null}
@@ -7440,13 +7448,13 @@ export default function CompanyAdminConsole({
                       boxShadow: '0 2px 8px rgba(168, 85, 247, 0.2)',
                       transition: 'all 0.15s ease'
                     }}
-                    title="Seçili EVREN AI Modeli ile bu ünvana özel Sistem Rol Promptu oluştur"
+                    title="Seçili RECAi ile bu ünvana özel Sistem Rol Promptu oluştur"
                   >
                     <Sparkles size={13} color={isGeneratingTitlePrompt ? 'var(--nt-e2e8f0)' : 'var(--ac-d8b4fe)'} />
                     <span>
                       {isGeneratingTitlePrompt
                         ? 'AI Promptu Yazıyor...'
-                        : `✨ Seçili Model (${titleForm.recommended_model_code || 'AI'}) ile Prompt Yazdır`}
+                        : `✨ ${recaiName(titleForm.recommended_model_code)} ile Prompt Yazdır`}
                     </span>
                   </button>
                 </div>
@@ -7799,7 +7807,7 @@ export default function CompanyAdminConsole({
                     {editingAgent ? 'AI Ajan Bilgilerini Düzenle' : 'Yeni AI Ajan İşe Alım / Tanımlama'}
                   </h3>
                   <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
-                    Ajan adı, LLM modeli, şirket ünvanı ve işe alım tarihi
+                    Ajan adı, RECAi, şirket ünvanı ve işe alım tarihi
                   </span>
                 </div>
               </div>
@@ -7911,7 +7919,7 @@ export default function CompanyAdminConsole({
                     ))}
                   </select>
                   <span style={{ fontSize: '0.7rem', color: 'var(--nt-64748b)', marginTop: '4px', display: 'block' }}>
-                    * Ünvan seçildiğinde önerilen LLM modeli ve Sistem Promptu otomatik aktarılır.
+                    * Ünvan seçildiğinde önerilen RECAi ve Sistem Promptu otomatik aktarılır.
                   </span>
                 </div>
 
@@ -7958,10 +7966,10 @@ export default function CompanyAdminConsole({
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <label style={{ fontSize: '0.825rem', fontWeight: '600', color: 'var(--ac-c084fc)' }}>
-                      AI Ajan LLM Modeli <span style={{ color: '#f43f5e' }}>*</span>
+                      RECAi <span style={{ color: '#f43f5e' }}>*</span>
                     </label>
                     <span style={{ fontSize: '0.7rem', color: canChangeLlm ? 'var(--ac-38bdf8)' : 'var(--ac-fbbf24)', background: canChangeLlm ? 'rgba(56, 189, 248, 0.1)' : 'rgba(245, 158, 11, 0.12)', padding: '2px 6px', borderRadius: '4px' }}
-                          title={canChangeLlm ? '' : `'${planLabel}' paketinde model ünvana göre otomatik belirlenir`}>
+                          title={canChangeLlm ? '' : `'${planLabel}' paketinde RECAi adı ünvana göre otomatik belirlenir`}>
                       {canChangeLlm ? 'Değiştirilebilir' : 'Paketinizde sabit'}
                     </span>
                   </div>
@@ -7981,11 +7989,11 @@ export default function CompanyAdminConsole({
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="">Platform varsayılan modeli</option>
+                    <option value="">Varsayılan (paketteki ilk RECAi)</option>
                     {availableModels && availableModels.length > 0 ? (
                       availableModels.map((m) => (
-                        <option key={m.id || m.model_code} value={m.model_code}>
-                          {m.display_name} ({m.model_code})
+                        <option key={m.model_code} value={m.model_code} disabled={m.available === false}>
+                          {m.display_name}{m.description ? ` — ${m.description}` : ''}{m.available === false ? ' (paketinizde yok)' : ''}
                         </option>
                       ))
                     ) : null}
@@ -8021,6 +8029,12 @@ export default function CompanyAdminConsole({
                     <option value="L3">L3 - Tam Otonom</option>
                   </select>
                 </div>
+              </div>
+
+              {/* #349: RECAi Görsel / Ses / Okur — paketinde olanlar bu personel için açılıp kapatılır */}
+              <div style={{ marginBottom: '16px' }}>
+                <RecaiCapabilities capabilities={recaiCaps} value={agentForm.recai_capabilities || {}}
+                                   onChange={(caps) => setAgentForm({ ...agentForm, recai_capabilities: caps })} />
               </div>
 
               {/* 4. İşe Alım Tarihi (Tanımlama Tarihi) */}
@@ -8675,7 +8689,7 @@ export default function CompanyAdminConsole({
                   </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                     {selectedAgentForDocs.job_title_name ? `${selectedAgentForDocs.job_title_name} • ` : ''}
-                    {selectedAgentForDocs.model_display_name || selectedAgentForDocs.model_code || 'AI Modeli'}
+                    {selectedAgentForDocs.model_display_name || selectedAgentForDocs.model_code || 'RECAi'}
                   </p>
                 </div>
               </div>

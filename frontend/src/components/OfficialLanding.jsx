@@ -3,6 +3,7 @@ import { api, session } from '../api';
 import RecdxAppsChoice from './integrations/RecdxAppsChoice';
 import AdminLeadsModal from './AdminLeadsModal';
 import ThemeToggle from '../ui/ThemeToggle';
+import { RECAI_CAPABILITIES, recaiTierName } from './recai/names';
 import { notify, promptDialog, toast } from '../ui/feedback';
 import { 
   Building2, 
@@ -476,10 +477,13 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   </div>
 
                   <div className="plan-models-box">
-                    <span className="models-title">Erişilebilir Modeller ({p.allowed_models?.length}):</span>
+                    <span className="models-title">RECAi ({p.recai_tiers?.length || 0}):</span>
                     <div className="model-tags-wrap">
-                      {p.allowed_models?.map(m => (
-                        <span key={m} className="model-mini-tag">{m}</span>
+                      {(p.recai_tiers || []).map(code => (
+                        <span key={code} className="model-mini-tag">{recaiTierName(code)}</span>
+                      ))}
+                      {RECAI_CAPABILITIES.filter(c => p.features?.[c.feature]).map(c => (
+                        <span key={c.code} className="model-mini-tag" title={c.hint}>{c.name}</span>
                       ))}
                     </div>
                   </div>

@@ -35,7 +35,7 @@ export default function BrainPanel({ tenantId, currentUser, canManage }) {
     try {
       const s = await api.updateBrainSettings(tenantId, choice);
       setSettings(s);
-      toast.success('Beyin AI modeli kaydedildi.');
+      toast.success('Beyin AI için RECAi kaydedildi.');
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -46,26 +46,26 @@ export default function BrainPanel({ tenantId, currentUser, canManage }) {
   const loadHistory = useCallback(() => api.getBrainHistory(tenantId), [tenantId]);
   const send = useCallback((content) => api.sendBrainMessage(tenantId, content), [tenantId]);
   const options = settings?.available_models || [];
-  const defaultAvailable = options.some((m) => m.model_code === settings?.platform_default);
+  const defaultAvailable = options.some((m) => m.display_name === settings?.platform_default && m.available !== false);
 
   return (
     <div className="ai-stack">
       <Card
-        title="Beyin AI Modeli"
-        subtitle="Beyin AI, şirketinizin organizatör yapay zekasıdır. Paketinizin izin verdiği modellerden birini seçebilirsiniz."
+        title="Beyin AI — RECAi"
+        subtitle="Beyin AI, şirketinizin organizatör yapay zekasıdır. Paketinizdeki RECAi adlarından birini seçebilirsiniz."
         actions={canManage && <Button size="sm" onClick={save} disabled={saving || !settings || choice === (settings.brain_model_code || '')}>Kaydet</Button>}
       >
         <div className="ai-field">
-          <label htmlFor="brain-model">Model</label>
+          <label htmlFor="brain-model">RECAi</label>
           <select id="brain-model" className="ui-input" value={choice} disabled={!canManage || !settings} onChange={(e) => setChoice(e.target.value)}>
             <option value="">
-              Platform varsayılanı{settings?.platform_default ? ` (${settings.platform_default}${defaultAvailable ? '' : ' — paketinizde yok, paketteki ilk uygun model kullanılır'})` : ''}
+              Platform varsayılanı{settings?.platform_default ? ` (${settings.platform_default}${defaultAvailable ? '' : ' — paketinizde yok, paketteki ilk uygun RECAi kullanılır'})` : ''}
             </option>
             {options.map((m) => (
-              <option key={m.model_code} value={m.model_code}>{m.display_name} ({m.model_code}) · katsayı {fmtPrecise(m.effort_coefficient)}</option>
+              <option key={m.model_code} value={m.model_code} disabled={m.available === false}>{m.display_name}{m.description ? ` — ${m.description}` : ''} · katsayı {fmtPrecise(m.effort_coefficient)}</option>
             ))}
           </select>
-          <span className="ai-dim">Katsayı yükseldikçe model daha güçlü ama işlem başına daha çok kredi harcar.</span>
+          <span className="ai-dim">Katsayı yükseldikçe RECAi daha güçlü ama işlem başına daha çok kredi harcar.</span>
         </div>
       </Card>
 
