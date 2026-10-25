@@ -17,8 +17,18 @@ const problems = [];
 const t0 = Date.now();
 const step = (ok, name, detail = '') => { report.push({ ok, name, detail, s: Math.round((Date.now() - t0) / 1000) }); console.log(`${ok ? 'GEÇTİ ' : 'KALDI '} ${name}${detail ? ' - ' + detail : ''}`); };
 
-// Sahte mikrofon (ADIM 11.3 tarayıcıda kayıt senaryosu): izin sorulmaz, cihaz bip sesi üretir
-const browser = await chromium.launch({ executablePath: CHROME, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+// Sahte mikrofon (ADIM 11.3 tarayıcıda kayıt senaryosu): izin sorulmaz; mikrofon SESSİZ dosya verir (kapalı mikrofon gibi).
+// Varsayılan sahte cihazın bip sesi gerçekçi değil ve ses-yazı modelini takılmaya götürüyordu (25.10.2026)
+const SILENCE = path.join(OUT, 'sessiz.wav');
+{
+  const n = 16000 * 6;
+  const b = Buffer.alloc(44 + n * 2);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(16000, 24); b.writeUInt32LE(32000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+  fs.writeFileSync(SILENCE, b);
+}
+const browser = await chromium.launch({ executablePath: CHROME, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
+  `--use-file-for-fake-audio-capture=${SILENCE}`] });
 
 async function session(userKey, viewport = { width: 1440, height: 1000 }) {
   const ctx = await browser.newContext({ viewport });
@@ -1045,7 +1055,7 @@ try {
   const recAlert = mtDlg.getByRole('alert');
   await recAlert.waitFor({ timeout: 240000 });  // ses-yazı: kısa kayıtta ~1 dk bekleme + bir yeniden deneme
   const recMsg = await recAlert.innerText();
-  step(/anlaşılır konuşma/.test(recMsg), 'Tarayıcıda kayıt alındı; konuşma olmayan kayıt anlaşılır uyarıyla reddedildi', recMsg.slice(0, 90));
+  step(/ses algılanmadı|anlaşılır konuşma/.test(recMsg), 'Tarayıcıda kayıt alındı; sessiz kayıt (kapalı mikrofon) ses-yazıya gönderilmeden anlaşılır uyarıyla reddedildi', recMsg.slice(0, 90));
   await mtDlg.getByRole('button', { name: 'Yeniden dene' }).click();
   await mtDlg.getByRole('button', { name: 'Dosya yükle' }).click();
   await mtDlg.locator('#mt-title').fill('Depo sayım ön görüşmesi');
@@ -1276,6 +1286,7 @@ try {
   const tx = await session('manager');
   const trProj = (await api(tx.page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME);
   await tx.page.goto(`${APP}/#/workspace?project=${trProj.id}`);
+  await tx.page.reload();
   await tx.page.getByRole('tab', { name: /İş Akışı/ }).click();
   const transferBtn = tx.page.getByRole('button', { name: 'Sisteme aktar' }).first();
   await transferBtn.waitFor({ timeout: 20000 });
@@ -1329,6 +1340,7 @@ try {
     `${doneT.status} · ${doneT.external_ref || doneT.error || ''} · Odoo: ${odooTask?.name?.slice(0, 50) || '-'} · ret: ${rejected?.status || '—'}`);
 
   await tx.page.goto(`${APP}/#/workspace?project=${trProj.id}`);
+  await tx.page.reload();
   await tx.page.getByRole('tab', { name: /Kapanış/ }).click();
   const extCard = tx.page.getByRole('list', { name: 'Proje aktarımları' });
   await extCard.waitFor({ timeout: 20000 });
@@ -1363,7 +1375,7 @@ try {
   const lgRow = lg.page.locator('.pj-list li', { hasText: lgName });
   await lgRow.waitFor({ timeout: 15000 });
   await lgRow.getByRole('button', { name: 'Ajan anahtarı' }).click();
-  const lgToken = (await lg.page.getByLabel('Ajan anahtarı').innerText()).trim();
+  const lgToken = (await lg.page.locator('pre[aria-label="Ajan anahtarı"]').innerText()).trim();
   await lg.page.getByRole('button', { name: 'Kaydettim, kapat' }).click();
   const lgAgent = spawn('docker', ['exec', '-e', 'RECORION_URL=http://localhost:8000', '-e', `RECORION_EDGE_TOKEN=${lgToken}`, '-e', 'LOGO_USER=LOGO',
     '-e', 'LOGO_PASSWORD=sahte-parola', '-e', 'LOGO_CLIENT_ID=recorion', '-e', 'LOGO_CLIENT_SECRET=sahte-istemci', 'recorion_backend',
@@ -1396,6 +1408,7 @@ try {
   }
   const lgFirst = lgRows[0];
   await lm.page.goto(`${APP}/#/workspace?project=${trProj.id}`);
+  await lm.page.reload();
   await lm.page.getByRole('tab', { name: /Kapanış/ }).click();
   const lgCard = lm.page.getByRole('list', { name: 'Proje aktarımları' }).getByRole('listitem').filter({ hasText: lgName }).first();
   await lgCard.waitFor({ timeout: 20000 });

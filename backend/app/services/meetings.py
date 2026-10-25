@@ -32,6 +32,8 @@ MAX_SECONDS = 3 * 3600
 MIN_SECONDS = 2
 CHUNK_SECONDS = 600
 MIN_TRANSCRIPT_CHARS = 40  # bundan kısa metinden proje taslağı çıkarılmaz (sessiz/anlamsız kayıt)
+SILENCE_DB = -50.0  # parçanın en yüksek ses düzeyi bunun altındaysa sessiz sayılır (kapalı mikrofon): yazıya çevrilmez
+SILENT_ERROR = "Kayıtta ses algılanmadı (mikrofon kapalı veya sessiz). Mikrofonu kontrol edip yeniden kaydedin."
 _tasks: set = set()
 
 DRAFT_PROMPT = """Aşağıda bir iş toplantısının yazıya çevrilmiş metni var (kişisel veriler maskelendi; yazıya çevirmede küçük hatalar olabilir).
@@ -67,6 +69,18 @@ def probe_seconds(path: Path) -> Optional[float]:
         return int(h) * 3600 + int(m) * 60 + float(s)
     except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
         return None
+
+
+def max_volume(path: Path) -> Optional[float]:
+    """Parçanın en yüksek ses düzeyi (dBFS); ölçülemezse None (sessiz sayılmaz, yazıya çevrilir)."""
+    try:
+        r = _run(["ffmpeg", "-nostdin", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"], 120)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    m = re.search(r"max_volume:\s*(-?inf|-?\d+(?:\.\d+)?) dB", r.stderr)
+    if not m:
+        return None
+    return float("-inf") if "inf" in m.group(1) else float(m.group(1))
 
 
 def split_audio(path: Path, out_dir: Path) -> List[Path]:
@@ -135,6 +149,13 @@ async def process(rec_id: uuid.UUID, tenant_id: uuid.UUID, actor_id: Optional[uu
         src.unlink(missing_ok=True)  # ham kayıt hemen silinir; yalnızca geçici parçalar kalır
         ctx = LLMContext(tenant_id=tenant_id, purpose="TRANSCRIPTION", actor_id=actor_id)
         parts = []
+        loud = [c for c in chunks if (v := await asyncio.to_thread(max_volume, c)) is None or v > SILENCE_DB]
+        for c in chunks:
+            if c not in loud:
+                c.unlink(missing_ok=True)  # sessiz parça: ses-yazıya gönderilmez (kredi ve bekleme yok)
+        if not loud:
+            raise ValueError(SILENT_ERROR)
+        chunks = loud
         for i, chunk in enumerate(chunks, 1):
             await _update(rec_id, stage=f"Yazıya çevriliyor ({i}/{len(chunks)})…")
             chunk_seconds = max(1.0, min(CHUNK_SECONDS, seconds - (i - 1) * CHUNK_SECONDS))

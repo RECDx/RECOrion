@@ -157,3 +157,22 @@ def test_transcription_timeout_scales_and_retries_once(client, world, fake_evren
     ctx = LLMContext(tenant_id=__import__("uuid").UUID(world["tenant"]), purpose="TRANSCRIPTION")
     text = client.portal.call(llm_gateway.transcribe, ctx, _wav(2), "parca.wav", "audio/wav", 4.0)
     assert text == say["text"] and seen["timeouts"][-2:] == [57.0, 57.0]  # 45 + 3 x 4 sn; ikinci deneme başarılı
+
+
+def test_silent_recording_rejected_without_transcription(client, world, fake_evren):
+    """Kapalı mikrofon (tamamen sessiz kayıt): ses-yazıya hiç gönderilmez, anında anlaşılır uyarı."""
+    seen, _ = fake_evren
+    before = len(seen["audio"])
+    buf = io.BytesIO()
+    w = wave.open(buf, "wb")
+    w.setnchannels(1)
+    w.setsampwidth(2)
+    w.setframerate(16000)
+    w.writeframes(b"\x00\x00" * 16000 * 4)
+    w.close()
+    admin = world["admin"]["h"]
+    base = f"/api/v1/company/{world['tenant']}/meetings"
+    r = client.post(base, headers=admin, files={"file": ("kayit.wav", buf.getvalue(), "audio/wav")}, data={"source": "BROWSER"})
+    rec = _wait(client, admin, f"{base}/{r.json()['id']}")
+    assert rec["status"] == "FAILED" and "ses algılanmadı" in rec["error"]
+    assert len(seen["audio"]) == before  # EVREN'e gönderilmedi
