@@ -5,6 +5,7 @@ Kullanım (e2e/live_e2e.mjs çağırır):
     docker exec -w /app recorion_backend python scripts/live_test_meeting_audio.py /tmp/e2e_toplanti.mp3
 """
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -20,8 +21,16 @@ TEXT = ("Merhaba arkadaşlar, bugünkü toplantının konusu depo için barkodlu
 
 
 def main(out: str) -> None:
-    r = httpx.post(f"{settings.EVREN_API_BASE_URL.rstrip('/')}/audio/speech", headers={"Authorization": f"Bearer {settings.EVREN_API_KEY}"},
-                   json={"model": "voxcpm2", "input": TEXT, "voice": "default", "response_format": "mp3"}, timeout=180)
+    # Geçici ağ/DNS hatasında (26.10.2026: EVREN adresi bir an çözülemedi) bir kez daha denenir
+    for attempt in range(3):
+        try:
+            r = httpx.post(f"{settings.EVREN_API_BASE_URL.rstrip('/')}/audio/speech", headers={"Authorization": f"Bearer {settings.EVREN_API_KEY}"},
+                           json={"model": "voxcpm2", "input": TEXT, "voice": "default", "response_format": "mp3"}, timeout=180)
+            break
+        except httpx.TransportError:
+            if attempt == 2:
+                raise
+            time.sleep(10)
     r.raise_for_status()
     Path(out).write_bytes(r.content)
     print(f"{len(r.content)} bayt")

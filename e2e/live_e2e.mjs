@@ -37,8 +37,9 @@ async function session(userKey, viewport = { width: 1440, height: 1000 }) {
   page.on('response', (r) => { if (r.status() >= 500) problems.push(`[${userKey}] ${r.status()} ${r.request().method()} ${r.url()}`); });
   page.on('pageerror', (e) => problems.push(`[${userKey}] sayfa hatası: ${e.message.slice(0, 200)}`));
   const u = cfg.users[userKey];
-  await page.goto(`${APP}/#/landing`);
-  await page.getByRole('button', { name: /Giriş Yap/ }).first().click();
+  // Dış kaynak (yazı tipi vb.) ağ kopmasında takılırsa "load" beklenmez; giriş butonu görününce devam edilir (26.10.2026)
+  await page.goto(`${APP}/#/landing`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.getByRole('button', { name: /Giriş Yap/ }).first().click({ timeout: 60000 });
   await page.locator('input[type="email"]').last().fill(u.email);
   await page.locator('input[type="password"]').last().fill(u.password);
   await page.getByRole('button', { name: /Giriş Yap →/ }).click();
@@ -249,11 +250,13 @@ try {
   // 5.1 Onaylarım kuyruğu (7.3): sayaç ve liste; İncele projeye götürür
   await page.getByRole('button', { name: /Onaylarım \(\d+\)/ }).waitFor({ timeout: 45000 });
   await page.getByRole('button', { name: /Onaylarım/ }).click();
-  await page.locator('.pj-list li', { hasText: first }).waitFor({ timeout: 20000 });
-  const inboxText = await page.locator('.pj-list li', { hasText: first }).innerText();
+  // Yarıda kalmış eski koşuların aynı adlı onayları listede olabilir: satır bu koşunun projesiyle daraltılır
+  const inboxRow = page.locator('.pj-list li', { hasText: first }).filter({ hasText: NAME });
+  await inboxRow.waitFor({ timeout: 20000 });
+  const inboxText = await inboxRow.innerText();
   step(/Onay bekliyor/.test(inboxText), 'Onaylarım kuyruğunda bekleyen karar görünüyor', inboxText.replace(/\s+/g, ' ').slice(0, 90));
   await shot(page, '03b-onaylarim');
-  await page.locator('.pj-list li', { hasText: first }).getByRole('button', { name: 'İncele' }).click();
+  await inboxRow.getByRole('button', { name: 'İncele' }).click();
   await stepCard(page, first).waitFor({ timeout: 20000 });
   step(true, 'Onaylarım > İncele projenin İş Akışı sekmesini açtı');
 

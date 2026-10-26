@@ -8,6 +8,7 @@ Hata durumunda sahte yanıt veya rastgele vektör üretilmez; EvrenError fırlat
 Eski istemcideki "mock" geri dönüşleri kesintileri gizliyor ve hafızayı rastgele
 vektörlerle kirletiyordu.
 """
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -52,6 +53,21 @@ def estimate_tokens(text: str) -> int:
     return max(1, int(len(text or "") / 3.5))
 
 
+# Bağlantı kurulamadıysa (DNS, bağlantı reddi) istek EVREN'e ulaşmamıştır; kısa aralarla yeniden denemek güvenlidir
+# (çift işlem/ücret oluşmaz). 26.10.2026: bilgisayarın ağındaki birkaç saniyelik DNS kopmaları işi düşürüyordu.
+CONNECT_RETRY_DELAYS = (3, 8)
+
+
+async def _send(make_request):
+    for delay in (*CONNECT_RETRY_DELAYS, None):
+        try:
+            return await make_request()
+        except httpx.ConnectError:
+            if delay is None:
+                raise
+            await asyncio.sleep(delay)
+
+
 class EvrenClient:
     @property
     def base_url(self) -> str:
@@ -63,9 +79,12 @@ class EvrenClient:
         return {"Authorization": f"Bearer {settings.EVREN_API_KEY}", "Content-Type": "application/json"}
 
     async def _post(self, path: str, payload: Dict[str, Any], timeout: Optional[float] = None) -> Dict[str, Any]:
-        try:
+        async def go():
             async with httpx.AsyncClient(timeout=timeout or settings.LLM_TIMEOUT_SECONDS) as client:
-                resp = await client.post(f"{self.base_url}{path}", headers=self._headers(), json=payload)
+                return await client.post(f"{self.base_url}{path}", headers=self._headers(), json=payload)
+
+        try:
+            resp = await _send(go)
         except httpx.TimeoutException as exc:
             raise EvrenError("EVREN yanıt vermedi (zaman aşımı).") from exc
         except httpx.HTTPError as exc:
@@ -120,10 +139,13 @@ class EvrenClient:
         """EVREN /audio/transcriptions (OpenAI uyumlu, çok parçalı form). Dosya boyutu sınırı ~25 MB (24.10.2026 ölçüldü)."""
         if not settings.EVREN_API_KEY:
             raise EvrenError("EVREN API anahtarı tanımlı değil (.env: EVREN_API_KEY).")
-        try:
+        async def go():
             async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(f"{self.base_url}/audio/transcriptions", headers={"Authorization": f"Bearer {settings.EVREN_API_KEY}"},
+                return await client.post(f"{self.base_url}/audio/transcriptions", headers={"Authorization": f"Bearer {settings.EVREN_API_KEY}"},
                                          files={"file": (filename, audio, mime)}, data={"model": model_code, "language": language})
+
+        try:
+            resp = await _send(go)
         except httpx.TimeoutException as exc:
             raise EvrenError("EVREN yanıt vermedi (zaman aşımı).") from exc
         except httpx.HTTPError as exc:
