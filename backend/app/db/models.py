@@ -383,6 +383,8 @@ class Project(Base):
     mirror_connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="SET NULL"))
     mirror_repo = Column(String(200))
     template_id = Column(UUID(as_uuid=True), ForeignKey("project_templates.id", ondelete="SET NULL"))  # ADIM 11.1
+    source_rule_id = Column(UUID(as_uuid=True))  # ADIM 13.2: işi açan otomasyon kuralı
+    source_ref = Column(String(255))  # ADIM 13.2: dış kayıt (ör. odoo:helpdesk.ticket:42)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1111,3 +1113,51 @@ class ToolCall(Base):
     latency_ms = Column(Integer)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     executed_at = Column(DateTime(timezone=True))
+
+
+class AutomationRule(Base):
+    """Otomasyon kuralı (ADIM 13.2): ne olunca (WEBHOOK/POLL/SCHEDULE) + koşul + ne yapılsın (Case/proje aç, bildir)."""
+    __tablename__ = "automation_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(160), nullable=False)
+    description = Column(Text)
+    status = Column(String(16), nullable=False, default="ACTIVE")  # ACTIVE, PAUSED, ARCHIVED
+    trigger = Column(String(16), nullable=False)  # WEBHOOK, POLL, SCHEDULE
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="SET NULL"))
+    event_type = Column(String(120))
+    poll = Column(JSONB)  # {tool, args, id_field, version_field, interval_minutes}
+    schedule = Column(JSONB)  # {every: DAY|WEEK|MONTH, time: "09:00", weekday: 0-6, day: 1-31 | -1 (ay sonu)}
+    conditions = Column(JSONB, nullable=False, default=list)  # [{field, op, value}]
+    action = Column(JSONB, nullable=False)  # {type, kind, template_id, name, manager_actor_id, auto_start, plan_with_recai, notify_actor_ids}
+    requirements = Column(Text)  # açılan işin isterleri ({{alan}} yer tutucularıyla)
+    webhook_secret = Column(Text)  # kimlik kasasında şifreli
+    rate_limit_per_hour = Column(Integer, nullable=False, default=20)
+    cursor = Column(JSONB)
+    next_run_at = Column(DateTime(timezone=True))
+    last_fired_at = Column(DateTime(timezone=True))
+    fire_count = Column(Integer, nullable=False, default=0)
+    last_error = Column(Text)
+    created_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AutomationLog(Base):
+    """Otomasyon çalışma günlüğü (ADIM 13.2): her olay ve sonucu; silinemez (veritabanı tetikleyicisi)."""
+    __tablename__ = "automation_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    rule_id = Column(UUID(as_uuid=True))
+    rule_name = Column(String(160))
+    source = Column(String(16), nullable=False)
+    event_type = Column(String(120))
+    external_ref = Column(String(255))
+    dedupe_key = Column(String(255))
+    outcome = Column(String(16), nullable=False)
+    detail = Column(Text)
+    project_id = Column(UUID(as_uuid=True))
+    payload = Column(JSONB)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

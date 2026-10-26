@@ -32,13 +32,18 @@ async def lifespan(app: FastAPI):
     if settings.SCHEDULER_ENABLED and telegram_service.enabled():
         import asyncio
         telegram_task = asyncio.create_task(telegram_service.poll_loop())
+    automation_task = None
+    if settings.SCHEDULER_ENABLED:  # ADIM 13.2: izleme ve zamanlayıcı kuralları
+        import asyncio
+        from app.services.automations import loop as automation_loop
+        automation_task = asyncio.create_task(automation_loop())
     workflow_task = None
     if settings.WORKFLOW_ENABLED:
         import asyncio
         from app.workflows.engine import run_worker
         workflow_task = asyncio.create_task(run_worker())
     yield
-    for task in (scheduler_task, telegram_task, workflow_task):
+    for task in (scheduler_task, telegram_task, automation_task, workflow_task):
         if task:
             task.cancel()
     logger.info("🛑 RECOrion Backend Durduruluyor...")
