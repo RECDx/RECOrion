@@ -215,6 +215,10 @@ async def propose(db: AsyncSession, tenant_id: uuid.UUID, mapping_id, trigger: s
             from app.services import support
 
             items = [support.closing_defaults(project, items[0])]
+        elif m.object_type == "EXPENSE_RECEIPT":
+            from app.services import expenses
+
+            items = [expenses.closing_defaults(project, items[0])]
     out = []
     for i, item in enumerate(items):
         tr = placeholder if (i == 0 and placeholder) else IntegrationTransfer(**base)

@@ -99,6 +99,22 @@ OBJECTS: Dict[str, Dict[str, Any]] = {
         F("status", "Durum", "enum", options=["OPEN", "SOLVED"], option_labels={"OPEN": "Açık", "SOLVED": "Çözüldü"}),
         F("resolution", "Çözüm / iç not", "text", max_length=8000, help="Yapılan işlem ve müşteriye verilecek yanıt; bilete iç not olarak yazılır"),
     ]},
+    # ADIM 13.4: RECSlip/Odoo masraf kaydı. expense_ref ile mevcut kayıt bulunur; resolution kayda iç not olarak yazılır.
+    "EXPENSE_RECEIPT": {"label": "Masraf fişi", "fields": [
+        F("expense_ref", "Masraf no", "string", help="Masraf sistemindeki kayıt numarası; doluysa mevcut kayıt güncellenir", max_length=64),
+        F("description", "Açıklama", "string", max_length=255, help="Yeni masraf açılırken zorunlu"),
+        F("date", "Fiş tarihi", "date"),
+        F("total_amount", "Toplam tutar (KDV dahil)", "number", min=0),
+        F("vat_amount", "KDV tutarı", "number", min=0),
+        F("currency", "Para birimi", "enum", options=CURRENCIES),
+        F("vendor_name", "Satıcı", "string", max_length=255),
+        F("vendor_tax_number", "Satıcı VKN/TCKN", "string", max_length=20),
+        F("receipt_no", "Fiş / belge no", "string", max_length=64),
+        F("category", "Masraf türü", "string", max_length=120, help="Odoo'daki masraf ürünü (ör. Yemek, Yol)"),
+        F("employee_name", "Çalışan", "string", max_length=255),
+        F("payment", "Ödeyen", "enum", options=["EMPLOYEE", "COMPANY"], option_labels={"EMPLOYEE": "Çalışan (geri ödenecek)", "COMPANY": "Şirket"}),
+        F("resolution", "Karar / iç not", "text", max_length=8000, help="Sorunlu fişte verilen karar ve gerekçe; kayda iç not olarak yazılır"),
+    ]},
     "DOCUMENT": {"label": "Doküman", "fields": [
         F("title", "Başlık", "string", True, max_length=255),
         F("artifact_id", "RECOrion çıktısı", "string", True, help="Adım çıktısının (dosyanın) kimliği", max_length=64),

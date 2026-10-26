@@ -142,7 +142,11 @@ def describe(tenant: Optional[Tenant] = None, connections: Optional[list] = None
     pref = get(tenant)
     odoo_connected = any(c.connector == "odoo" and c.status == "ACTIVE" for c in (connections or []))
     last = {}
-    for r in sorted(requests or [], key=lambda x: x.created_at or now()):
+    def when(r) -> datetime:  # yeni eklenen talep bellekte saat dilimsiz (utcnow), veritabanından gelen saat dilimli
+        t = r.created_at or now()
+        return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+    for r in sorted(requests or [], key=when):
         last[r.app] = request_out(r)
     out = []
     for code, a in APPS.items():

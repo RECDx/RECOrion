@@ -812,5 +812,98 @@
     }
    }
   ]
+ },
+ {
+  "code": "odoo_expense",
+  "connector": "odoo",
+  "object_type": "EXPENSE_RECEIPT",
+  "name": "Odoo masraf kaydı (RECSlip)",
+  "description": "Masraf fişi → Odoo hr.expense (Odoo 19/20, RECSlip). Masraf numarasıyla eşleşir: sorunlu fişten açılan Case kapanınca yeni masraf açılmaz; karar ve gerekçe masraf kaydına iç not olarak yazılır, tutar ve muhasebe alanları değiştirilmez. Yeni masraf açılırken masraf türü, satıcı (VKN ile) ve çalışan Odoo'da adıyla aranır; bulunamazsa boş bırakılır.",
+  "target": {
+   "model": "hr.expense",
+   "note": {
+    "source": "resolution",
+    "title": "RECOrion Case kararı"
+   },
+   "update_sources": [
+    "resolution"
+   ]
+  },
+  "match": {
+   "source": "expense_ref",
+   "target": "id"
+  },
+  "rules": [
+   {
+    "target": "name",
+    "transform": "copy",
+    "source": "description"
+   },
+   {
+    "target": "date",
+    "transform": "copy",
+    "source": "date"
+   },
+   {
+    "target": "total_amount_currency",
+    "transform": "copy",
+    "source": "total_amount"
+   },
+   {
+    "target": "product_id",
+    "transform": "lookup",
+    "source": "category",
+    "params": {
+     "model": "product.product",
+     "fields": [
+      "name"
+     ],
+     "domain": [
+      [
+       "can_be_expensed",
+       "=",
+       true
+      ]
+     ],
+     "optional": true
+    }
+   },
+   {
+    "target": "vendor_id",
+    "transform": "lookup",
+    "source": "vendor_tax_number",
+    "params": {
+     "model": "res.partner",
+     "fields": [
+      "vat"
+     ],
+     "optional": true
+    }
+   },
+   {
+    "target": "employee_id",
+    "transform": "lookup",
+    "source": "employee_name",
+    "params": {
+     "model": "hr.employee",
+     "fields": [
+      "name"
+     ],
+     "optional": true
+    }
+   },
+   {
+    "target": "payment_mode",
+    "transform": "map",
+    "source": "payment",
+    "params": {
+     "values": {
+      "EMPLOYEE": "own_account",
+      "COMPANY": "company_account"
+     },
+     "default": "own_account"
+    }
+   }
+  ]
  }
 ]

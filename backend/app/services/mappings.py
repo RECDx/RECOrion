@@ -61,12 +61,16 @@ SAMPLES: Dict[str, Dict[str, Any]] = {
                        "category": "RETURN", "channel": "TRENDYOL", "priority": "HIGH", "customer_name": "RECOrion Test Müşterisi",
                        "customer_email": "musteri@recorion-test.example", "order_ref": "TY-0000001", "product_ref": "Kulaklık",
                        "status": "OPEN"},
+    "EXPENSE_RECEIPT": {"description": "RECOrion Test: müşteri ziyareti yemeği", "date": "2026-10-20", "total_amount": 1250.0,
+                        "vat_amount": 113.64, "currency": "TRY", "vendor_name": "RECOrion Test Lokantası", "vendor_tax_number": "1234567890",
+                        "receipt_no": "F-000123", "category": "Meals", "payment": "EMPLOYEE",
+                        "resolution": "Fiş incelendi; satıcı VKN'si doğrulandı, gider yazılabilir."},
     "DOCUMENT": {"title": "RECOrion Test raporu", "artifact_id": "00000000-0000-0000-0000-000000000000", "description": "Deneme"},
 }
 
 
-# RECDx uygulamasına bağlı hazır eşlemeler: yalnızca o uygulamayı kullanan şirkete görünür (ADIM 13.3)
-APP_TEMPLATES = {"odoo_helpdesk_ticket": "recqmind"}
+# RECDx uygulamasına bağlı hazır eşlemeler: yalnızca o uygulamayı kullanan şirkete görünür (ADIM 13.3, 13.4)
+APP_TEMPLATES = {"odoo_helpdesk_ticket": "recqmind", "odoo_expense": "recslip"}
 
 
 class MappingError(Exception):

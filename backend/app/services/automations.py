@@ -57,7 +57,8 @@ POLL_MAX_EVENTS = 20  # bir turda en fazla açılan olay (fazlası sonraki tura 
 PAYLOAD_LIMIT = 16000
 LOOP_WINDOW = timedelta(days=7)
 ORIGIN_KEYS = ("x_recorion_origin", "recorion_origin")
-ENRICHERS = ("helpdesk_ticket",)
+ENRICHERS = ("helpdesk_ticket", "hr_expense")
+SUMMARIES = ("expense_month",)
 DEDUPE = table("automation_dedupe", column("rule_id", PGUUID(as_uuid=True)), column("key"), column("tenant_id", PGUUID(as_uuid=True)))
 
 _tasks: set = set()
@@ -178,6 +179,8 @@ def clean_schedule(raw: Any) -> Dict[str, Any]:
         if not (d == -1 or 1 <= d <= 31):
             raise AutomationError("Ayın günü 1–31 ya da ay sonu (-1) olmalı.")
         out["day"] = d
+    if s.get("summary") in SUMMARIES:
+        out["summary"] = s["summary"]
     return out
 
 
@@ -562,10 +565,8 @@ async def poll(db: AsyncSession, rule: AutomationRule) -> Dict[str, Any]:
             raise AutomationError(f"'{cfg.get('tool')}' bu bağlantıda okuma aracı değil.")
         result = await asyncio.wait_for(tool.run(ctx, dict(cfg.get("args") or {})), timeout=tool_gateway.CALL_TIMEOUT)
         records = _records(result)
-        if cfg.get("enrich") == "helpdesk_ticket" and conn.connector == "odoo":
-            from app.services import support
-
-            records = await support.enrich(ctx, records)
+        if cfg.get("enrich") in ENRICHERS and conn.connector == "odoo":
+            records = await enricher(cfg["enrich"])(ctx, records)
     except Exception as exc:
         rule.last_error = f"İzleme çalışmadı: {str(exc)[:300]}"
         await db.commit()
@@ -601,15 +602,39 @@ async def poll(db: AsyncSession, rule: AutomationRule) -> Dict[str, Any]:
     return {"baseline": first, "new": len(fresh), "handled": handled}
 
 
+def enricher(name: str):
+    from app.services import expenses, support
+
+    return {"helpdesk_ticket": support.enrich, "hr_expense": expenses.enrich}[name]
+
+
+async def schedule_payload(db: AsyncSession, rule: AutomationRule, at: datetime) -> Dict[str, Any]:
+    """Zamanlayıcı olayının verisi; kuralda özet (ör. ay sonu masraf özeti) varsa bağlantıdan okunup eklenir."""
+    local = at.astimezone(TZ)
+    last = calendar.monthrange(local.year, local.month)[1]
+    payload = {"date": local.date().isoformat(), "time": local.strftime("%H:%M"), "period": local.strftime("%Y-%m"),
+               "weekday": local.weekday(), "is_month_end": local.day == last}
+    if (rule.schedule or {}).get("summary") == "expense_month":
+        from app.services import expenses, tool_gateway
+
+        conn = await db.get(IntegrationConnection, rule.connection_id) if rule.connection_id else None
+        if not conn or conn.tenant_id != rule.tenant_id or conn.status != "ACTIVE" or conn.connector != "odoo":
+            raise AutomationError("Masraf özeti için etkin Odoo bağlantısı gerekli.")
+        payload["expenses"] = await expenses.month_summary(tool_gateway.context(conn), payload["period"])
+    return payload
+
+
 async def run_schedule(db: AsyncSession, rule: AutomationRule) -> Dict[str, Any]:
     due = rule.next_run_at or now()
     rule.next_run_at = next_schedule(rule.schedule or {}, max(now(), due))
     await db.commit()
-    local = due.astimezone(TZ)
-    last = calendar.monthrange(local.year, local.month)[1]
-    payload = {"date": local.date().isoformat(), "time": local.strftime("%H:%M"), "period": local.strftime("%Y-%m"),
-               "weekday": local.weekday(), "is_month_end": local.day == last}
-    return await handle(db, rule, "SCHEDULE", payload, event_type="schedule", dedupe_key=f"{local:%Y-%m-%dT%H:%M}")
+    try:
+        payload = await schedule_payload(db, rule, due)
+    except Exception as exc:
+        rule.last_error = f"Zamanlayıcı özeti okunamadı: {str(exc)[:300]}"
+        await db.commit()
+        return {"error": rule.last_error}
+    return await handle(db, rule, "SCHEDULE", payload, event_type="schedule", dedupe_key=f"{due.astimezone(TZ):%Y-%m-%dT%H:%M}")
 
 
 async def run_due() -> int:

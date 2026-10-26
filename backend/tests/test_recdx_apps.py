@@ -68,6 +68,19 @@ def test_offer_and_choice_rules():
         recdx_apps.clean_offer({"recqmind": {"mode": "BEDAVA"}})
 
 
+def test_describe_sorts_new_and_stored_requests():
+    """Kayıt yeni eklenmiş talep (bellekte saat dilimsiz) ile veritabanından gelen talebi birlikte sıralar (13.4'te bulunan 500)."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import RecdxAppRequest
+
+    old = RecdxAppRequest(id=uuid.uuid4(), tenant_id=uuid.uuid4(), app="recslip", choice="QUOTE", status="NEW",
+                          created_at=datetime.now(timezone.utc) - timedelta(days=1))
+    new = RecdxAppRequest(id=uuid.uuid4(), tenant_id=old.tenant_id, app="recslip", choice="USING", status="NEW", created_at=datetime.utcnow())
+    apps = {a["code"]: a for a in recdx_apps.describe(requests=[new, old])["apps"]}
+    assert apps["recslip"]["request"]["choice"] == "USING"
+
+
 def test_plan_offer_editable_by_super_admin(client, db, fake_odoo):
     sa = _super(client, db)
     pid = _plan(db, "STARTER")

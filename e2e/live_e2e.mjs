@@ -652,17 +652,25 @@ try {
     `adlar: ${(recaiOpts.body?.tiers || []).map((t) => t.display_name).join(', ')} · yetenek: ${(recaiOpts.body?.capabilities || []).map((c) => `${c.name}${c.in_plan ? '' : ' (yok)'}`).join(', ')}`
     + ` · sızıntı: ${recaiLeak ? recaiLeak[0] : 'yok'} · panel: ${tierPanel.status} · katalog: ${modelCat.status}`);
   await adm.page.getByRole('tab', { name: '7 gün' }).click();
-  await adm.page.waitForTimeout(1500);
-  const week = (await adm.page.locator('.viz-root svg g.viz-hit').count());
+  // görünüm yenilenene kadar beklenir (sabit bekleme yavaş yanıtta eski 30 günlük seriyi sayıyordu)
+  let week = 0;
+  for (let i = 0; i < 30; i++) {
+    week = await adm.page.locator('.viz-root svg g.viz-hit').count();
+    if (week > 0 && week % 7 === 0) break;
+    await adm.page.waitForTimeout(500);
+  }
   const deptSel = adm.page.locator('select[aria-label="Departman"]');
   let deptNote = 'departman yok';
+  let creditCard = await adm.page.getByRole('heading', { name: 'Kredi', exact: true }).count();
   if (await deptSel.count()) {
     await deptSel.selectOption({ index: 1 });
-    await adm.page.waitForTimeout(1500);
+    // Departman seçilince şirket düzeyindeki kredi kartı kalkar (kredi hakkı şirkete aittir)
+    for (let i = 0; i < 30 && creditCard; i++) {
+      await adm.page.waitForTimeout(500);
+      creditCard = await adm.page.getByRole('heading', { name: 'Kredi', exact: true }).count();
+    }
     deptNote = `departman: ${await deptSel.evaluate((x) => x.selectedOptions[0]?.text)}`;
   }
-  // Departman seçilince şirket düzeyindeki kredi kartı kalkar (kredi hakkı şirkete aittir)
-  const creditCard = await adm.page.getByRole('heading', { name: 'Kredi', exact: true }).count();
   step(week > 0 && week % 7 === 0 && (deptNote === 'departman yok' || creditCard === 0),
     'Pano filtreleri (dönem, departman) tüm görünümü yeniliyor', `7 günlük seri: ${week} sütun · ${deptNote} · kredi kartı: ${creditCard ? 'var' : 'yok'}`);
   // 9.2 AI personel karnesi ve tahmini tasarruf: bu koşuda çalışan AI personel karnede; ROI ya hesaplanır ya KVKK gerekçesi yazar
