@@ -11,9 +11,12 @@ Akış:
    Eşleştirme alanı varsa önce hedefte aranır: kayıt varsa güncellenir, yoksa açılır — çift kayıt olmaz (dış kayıt bağı).
    Güncellemeden önce eski değerler saklanır.
 6. Geri alma: açılan kayıt arşivlenir (siparişte iptal edilir); güncellenen kaydın eski değerleri geri yazılır.
+Dış kayıttan açılan iş (ADIM 13.3, ör. RECQmind biletinden Case): projenin kaynak kaydı (source_ref) eşlemenin hedef modeliyle
+aynıysa nesnenin eşleştirme alanı o kayıtla doldurulur ve tek nesne önerilir — sonuç yeni kayıt değil, kaynak kaydın güncellemesidir.
 Hiçbir yazma onaysız yapılmaz; her adım silinemez aktarım kaydına düşer. Şahıs carisinin TCKN'si ekranda maskelenir.
 """
 import asyncio
+import html
 import json
 import logging
 import re
@@ -157,17 +160,18 @@ async def prepare(db: AsyncSession, tr: IntegrationTransfer, obj: Dict[str, Any]
     m, conn = await _mapping_ready(db, tr.tenant_id, tr.mapping_id)
     clean, errs = bo.validate(tr.object_type, obj)
     tgt = ms.adapter(conn)
-    built = await ms.build(m, clean or obj, tgt)
+    existing, warn = None, None
+    try:
+        existing = await ms.existing_id(m, clean, tgt)
+    except (ToolError, ms.MappingError) as exc:
+        warn = f"Mevcut kayıt aranamadı: {exc}"
+    built = await ms.build(m, clean or obj, tgt, update=existing is not None)
+    if warn:
+        built.warnings.append(warn)
     errors = list(dict.fromkeys(errs + built.errors))
     if not ms.applies(m, clean):
         errors.append(f"Bu kayıt eşlemenin koşuluna uymuyor ({m.when.get('field')} = {m.when.get('equals')}).")
-    action = "CREATE"
-    match = m.match or {}
-    if not errors and match.get("source") and clean.get(match["source"]) not in (None, ""):
-        try:
-            action = "UPDATE" if await tgt.find(m.target, match["target"], clean[match["source"]]) else "CREATE"
-        except (ToolError, ms.MappingError) as exc:
-            built.warnings.append(f"Mevcut kayıt aranamadı: {exc}")
+    action = "UPDATE" if existing is not None else "CREATE"
     tenant = await db.get(Tenant, tr.tenant_id)
     amt = amount(tr.object_type, clean)
     tr.object, tr.values, tr.preview, tr.action, tr.amount = clean or obj, built.values, built.preview, action, amt
@@ -204,6 +208,13 @@ async def propose(db: AsyncSession, tenant_id: uuid.UUID, mapping_id, trigger: s
         await db.commit()
         return out
     items = found["items"] or [{}]
+    linked = source_record(project, m)
+    if linked:  # kaynak kayda bağlı iş: tek nesne, eşleştirme alanı kaynak kayıt
+        items = [{**items[0], m.match["source"]: linked}]
+        if m.object_type == "SUPPORT_TICKET":
+            from app.services import support
+
+            items = [support.closing_defaults(project, items[0])]
     out = []
     for i, item in enumerate(items):
         tr = placeholder if (i == 0 and placeholder) else IntegrationTransfer(**base)
@@ -219,6 +230,18 @@ async def propose(db: AsyncSession, tenant_id: uuid.UUID, mapping_id, trigger: s
     for tr in out:
         await notify_pending(db, tr)
     return out
+
+
+def source_record(project: Optional[Project], m: IntegrationMapping) -> Optional[str]:
+    """Proje dış kayıttan açıldıysa (source_ref = bağlayıcı:model:kimlik) ve eşleme aynı modele yazıyorsa o kaydın kimliği."""
+    ref = (project.source_ref or "") if project else ""
+    parts = ref.split(":")
+    if len(parts) != 3 or not (m.match or {}).get("source"):
+        return None
+    connector, model, rid = parts
+    if connector == m.connector and model == (m.target or {}).get("model") and rid:
+        return rid
+    return None
 
 
 def spawn(coro) -> None:
@@ -377,6 +400,12 @@ async def _odoo_write(conn: IntegrationConnection, m: IntegrationMapping, tr: In
     else:
         created = await odoo._kw(tgt.ctx, model, "create", [vals])
         rid, action, before = created[0] if isinstance(created, list) else created, "CREATE", None
+    note = (m.target or {}).get("note") or {}
+    text = str((tr.object or {}).get(note.get("source")) or "").strip() if note.get("source") else ""
+    if text:  # iç not (chatter): müşteriye gitmez; geri alınamaz, aktarım kaydında görünür
+        title = html.escape(note.get("title") or "RECOrion")
+        body = f"<p><b>{title}</b></p><p>" + html.escape(text).replace("\n", "<br/>") + "</p>"
+        await odoo._kw(tgt.ctx, model, "message_post", [[rid]], {"body": body, "message_type": "comment", "subtype_xmlid": "mail.mt_note"})
     name = ""
     try:
         rows = await odoo._kw(tgt.ctx, model, "read", [[rid]], {"fields": ["display_name"]})

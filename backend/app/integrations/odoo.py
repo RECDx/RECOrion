@@ -18,7 +18,8 @@ _styles: Dict[str, str] = {}  # adres → "json2" / "jsonrpc" (otomatik algılam
 # JSON-2'de konumsal argümanlar adlandırılır
 JSON2_ARGS = {"search_read": ["domain"], "search_count": ["domain"], "create": ["vals_list"], "write": ["ids", "vals"],
               "read": ["ids"], "fields_get": [], "name_search": ["name"], "context_get": [], "default_get": ["fields"],
-              "action_cancel": ["ids"], "button_cancel": ["ids"]}
+              "action_cancel": ["ids"], "button_cancel": ["ids"],
+              "message_post": ["ids"]}
 
 
 class _NoJson2(Exception):

@@ -65,6 +65,7 @@ class ProjectResponse(BaseModel):
     started_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    source_ref: Optional[str] = None  # ADIM 13.3: dış kayıttan açıldıysa (ör. odoo:helpdesk.ticket:42)
 
     class Config:
         from_attributes = True
@@ -114,7 +115,8 @@ class TaskResponse(BaseModel):
 
 
 def _out(p: Project) -> Dict[str, Any]:
-    return {**ProjectResponse.model_validate(p).model_dump(), "status_label": svc.STATUS_LABELS.get(p.status, p.status)}
+    return {**ProjectResponse.model_validate(p).model_dump(), "status_label": svc.STATUS_LABELS.get(p.status, p.status),
+            "source_label": svc.source_label(p.source_ref)}
 
 
 @router.get("")

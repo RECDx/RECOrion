@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import vault
 from app.core.security import CurrentUser, ensure_tenant_content, forbidden, get_current_user
-from app.db.models import IntegrationConnection, IntegrationMapping
+from app.db.models import IntegrationConnection, IntegrationMapping, Tenant
 from app.db.session import get_db
 from app.integrations.base import ToolError
 from app.services import business_objects as bo
@@ -65,6 +65,10 @@ def out(m: IntegrationMapping) -> Dict[str, Any]:
             "last_check": m.last_check, "last_dry_run": m.last_dry_run, "approved_at": m.approved_at, "updated_at": m.updated_at}
 
 
+def _target(object_type: str, target: Dict[str, Any]) -> Dict[str, Any]:
+    return {**{k: v for k, v in target.items() if k in TARGET_KEYS}, **ms.clean_target_options(object_type, target)}
+
+
 def _errors(exc: Exception) -> HTTPException:
     if isinstance(exc, LLMError):
         return HTTPException(status_code=exc.status_code, detail=exc.message)
@@ -90,7 +94,8 @@ async def templates(tenant_id: uuid.UUID, connector: Optional[str] = None, user:
     stmt = select(IntegrationMapping).where(IntegrationMapping.tenant_id.is_(None), IntegrationMapping.status == "ACTIVE")
     if connector:
         stmt = stmt.where(IntegrationMapping.connector == connector)
-    return [out(m) for m in (await db.execute(stmt.order_by(IntegrationMapping.object_type))).scalars()]
+    tenant = await db.get(Tenant, tenant_id)
+    return [out(m) for m in (await db.execute(stmt.order_by(IntegrationMapping.object_type))).scalars() if ms.template_visible(m.code, tenant)]
 
 
 @router.get("/company/{tenant_id}/integrations/{cid}/target-fields")
@@ -145,6 +150,8 @@ async def create_mapping(tenant_id: uuid.UUID, payload: MappingIn, user: Current
             raise HTTPException(status_code=404, detail="Hazır eşleme bulunamadı.")
         if tpl.connector != conn.connector:
             raise HTTPException(status_code=422, detail="Hazır eşleme bu sistem türü için değil.")
+        if not ms.template_visible(tpl.code, await db.get(Tenant, tenant_id)):
+            raise HTTPException(status_code=404, detail="Hazır eşleme bulunamadı.")
     object_type = tpl.object_type if tpl else payload.object_type
     if object_type not in bo.OBJECTS:
         raise HTTPException(status_code=422, detail="Bilinmeyen nesne türü.")
@@ -157,7 +164,7 @@ async def create_mapping(tenant_id: uuid.UUID, payload: MappingIn, user: Current
         raise HTTPException(status_code=422, detail="Hedef seçilmedi (Odoo modeli veya araç).")
     m = IntegrationMapping(tenant_id=tenant_id, connection_id=conn.id, connector=conn.connector, object_type=object_type,
                            name=payload.name.strip(), description=(tpl.description if tpl and not payload.description else payload.description),
-                           target={k: v for k, v in target.items() if k in TARGET_KEYS}, rules=rules,
+                           target=_target(object_type, target), rules=rules,
                            match=(tpl.match if tpl else payload.match), when=(tpl.when if tpl else _clean_when(payload.when, object_type)),
                            source_template_id=tpl.id if tpl else None, status="DRAFT", created_by_actor_id=user.actor_id)
     db.add(m)
@@ -179,7 +186,7 @@ async def update_mapping(tenant_id: uuid.UUID, mid: uuid.UUID, payload: MappingU
             raise HTTPException(status_code=422, detail=str(exc))
         changed = True
     if payload.target is not None:
-        m.target, changed = {k: v for k, v in payload.target.items() if k in TARGET_KEYS}, True
+        m.target, changed = _target(m.object_type, payload.target), True
     if "match" in payload.model_fields_set:
         m.match, changed = payload.match, True
     if "when" in payload.model_fields_set:

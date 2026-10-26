@@ -64,6 +64,7 @@ export default function ProjectHub({ tenant, currentUser, actors = [], onOpen })
                   <span>Yönetici: {manager?.display_name || '—'}</span>
                   <span>{p.task_count || 0} iş adımı</span>
                   <span>{fmtDay(p.start_date)} – {fmtDay(p.end_date)}</span>
+                  {p.source_label && <span data-testid="pj-source">Kaynak: {p.source_label}</span>}
                 </div>
               </button>
             );

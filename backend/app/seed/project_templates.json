@@ -144,5 +144,39 @@
       ],
       "risks": ["Yasal süre içinde yanıt verilmemesi"]
     }
-  }
+  },
+  {"code": "recqmind-iade", "name": "İade talebi (RECQmind)", "category": "Müşteri Hizmetleri", "kind": "CASE", "field_package": "GENEL", "description": "Pazar yerinden gelen iade talebinin sipariş, iade koşulu ve stok kontrolüyle sonuçlandırılması; sonuç Odoo biletine yazılır.",
+    "plan": {"summary": "Talep ve sipariş doğrulanır, iade koşulları ve ürün durumu incelenir, iade/ret kararı verilir, stok ve muhasebe kaydı hazırlanır, müşteriye yanıt onaylanır.",
+      "steps": [
+        {"key": "S1", "title": "Talep ve sipariş doğrulama", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 0.5, "description": "Bilet, sipariş numarası, teslim tarihi, ürün ve iade gerekçesi; pazar yeri iade süresi kontrolü.", "acceptance_criteria": "Doğrulanmış talep özeti", "requires_approval": false},
+        {"key": "S2", "title": "İade koşulu ve ürün durumu incelemesi", "job_title": "Depo Sorumlusu", "department": "Lojistik", "estimated_days": 1, "description": "İade kargo bilgisi, ürünün ambalaj/kullanım durumu, ayıplı mal mı cayma hakkı mı ayrımı (6502 sayılı Kanun).", "acceptance_criteria": "İnceleme notu ve iade kararı önerisi", "depends_on": ["S1"]},
+        {"key": "S3", "title": "İade/ret kararı, stok ve muhasebe kaydı", "job_title": "Muhasebe Uzmanı", "department": "Finans", "estimated_days": 0.5, "description": "İade faturası/ücret iadesi ve stok girişi için kayıt taslağı; ret ise gerekçesi.", "acceptance_criteria": "Onaylı karar ve kayıt taslağı", "depends_on": ["S2"]},
+        {"key": "S4", "title": "Müşteriye yanıt ve bilet sonucu", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 0.5, "description": "Müşteriye gönderilecek yanıt taslağı ve bilete yazılacak iç not (yapılan işlem, sonuç, varsa iade/iptal numarası). Case kapanınca sonuç onayla Odoo biletine iç not olarak yazılır.", "acceptance_criteria": "Onaylı müşteri yanıtı ve bilet notu", "depends_on": ["S3"]}
+      ],
+      "risks": ["Pazar yeri iade süresinin kaçırılması", "Ayıplı mal iadesinde yasal sürenin aşılması"]}},
+  {"code": "recqmind-iptal", "name": "Sipariş iptali (RECQmind)", "category": "Müşteri Hizmetleri", "kind": "CASE", "field_package": "GENEL", "description": "Sipariş iptal talebinin kargo durumu ve ödeme iadesiyle sonuçlandırılması; sonuç Odoo biletine yazılır.",
+    "plan": {"summary": "Siparişin kargo durumu kontrol edilir; kargolanmadıysa iptal edilir, kargolandıysa iade sürecine yönlendirilir; ödeme iadesi ve müşteri yanıtı hazırlanır.",
+      "steps": [
+        {"key": "S1", "title": "Sipariş ve kargo durumu kontrolü", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 0.5, "description": "Sipariş, ödeme ve sevkiyat durumu; kargoya verildiyse iade sürecine yönlendirme önerisi.", "acceptance_criteria": "Durum özeti ve iptal kararı", "requires_approval": false},
+        {"key": "S2", "title": "Sevkiyatın durdurulması ve stok", "job_title": "Depo Sorumlusu", "department": "Lojistik", "estimated_days": 0.5, "description": "Toplanan/paketlenen ürünün sevkiyattan çekilmesi, stoğa geri alınması.", "acceptance_criteria": "Sevkiyat iptal kaydı", "depends_on": ["S1"]},
+        {"key": "S3", "title": "Ödeme iadesi", "job_title": "Muhasebe Uzmanı", "department": "Finans", "estimated_days": 0.5, "description": "Pazar yeri ödeme iadesi ve iptal faturası/kayıt taslağı.", "acceptance_criteria": "Ödeme iadesi kaydı", "depends_on": ["S1"]},
+        {"key": "S4", "title": "Müşteriye yanıt ve bilet sonucu", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 0.5, "description": "Müşteriye gönderilecek yanıt taslağı ve bilete yazılacak iç not (yapılan işlem, sonuç, varsa iade/iptal numarası). Case kapanınca sonuç onayla Odoo biletine iç not olarak yazılır.", "acceptance_criteria": "Onaylı müşteri yanıtı ve bilet notu", "depends_on": ["S2", "S3"]}
+      ],
+      "risks": ["Kargoya verilmiş siparişin iptal edilmesi"]}},
+  {"code": "recqmind-kargo", "name": "Kargo problemi (RECQmind)", "category": "Müşteri Hizmetleri", "kind": "CASE", "field_package": "GENEL", "description": "Geciken, kaybolan veya hasarlı teslim edilen gönderinin kargo firmasıyla takibi ve çözümü; sonuç Odoo biletine yazılır.",
+    "plan": {"summary": "Gönderi takip edilir, kargo firmasından bilgi/tutanak alınır, yeniden gönderim veya iade kararı verilir, müşteriye yanıt onaylanır.",
+      "steps": [
+        {"key": "S1", "title": "Gönderi takibi ve problem tespiti", "job_title": "Lojistik Uzmanı", "department": "Lojistik", "estimated_days": 0.5, "description": "Takip numarası, son hareket, gecikme/kayıp/hasar tespiti.", "acceptance_criteria": "Problem tespit notu", "requires_approval": false},
+        {"key": "S2", "title": "Kargo firmasıyla çözüm", "job_title": "Lojistik Uzmanı", "department": "Lojistik", "estimated_days": 1, "description": "Kargo firmasına başvuru, hasar tutanağı, tazmin talebi.", "acceptance_criteria": "Başvuru kaydı ve firma yanıtı", "depends_on": ["S1"]},
+        {"key": "S3", "title": "Yeniden gönderim veya iade kararı", "job_title": "Depo Sorumlusu", "department": "Lojistik", "estimated_days": 0.5, "description": "Stoktan yeniden gönderim ya da ücret iadesi önerisi.", "acceptance_criteria": "Onaylı karar", "depends_on": ["S2"]},
+        {"key": "S4", "title": "Müşteriye yanıt ve bilet sonucu", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 0.5, "description": "Müşteriye gönderilecek yanıt taslağı ve bilete yazılacak iç not (yapılan işlem, sonuç, varsa iade/iptal numarası). Case kapanınca sonuç onayla Odoo biletine iç not olarak yazılır.", "acceptance_criteria": "Onaylı müşteri yanıtı ve bilet notu", "depends_on": ["S3"]}
+      ],
+      "risks": ["Pazar yeri teslim süresi ihlali ve satıcı puanı düşüşü"]}},
+  {"code": "recqmind-urun-sorusu", "name": "Ürün sorusu (RECQmind)", "category": "Müşteri Hizmetleri", "kind": "CASE", "field_package": "GENEL", "description": "Müşterinin ürünle ilgili sorusunun ürün bilgisi ve stokla yanıtlanması; yanıt Odoo biletine yazılır.",
+    "plan": {"summary": "Soru ve ürün belirlenir, teknik bilgi ve stok kontrol edilir, doğru ve kısa bir yanıt onaylanır.",
+      "steps": [
+        {"key": "S1", "title": "Ürün bilgisi ve stok kontrolü", "job_title": "Ürün Uzmanı", "department": "Satış", "estimated_days": 0.5, "description": "Ürün kartı, teknik özellik, uyumluluk, stok ve tahmini sevk süresi.", "acceptance_criteria": "Kaynaklı bilgi notu", "requires_approval": false},
+        {"key": "S2", "title": "Müşteriye yanıt ve bilet sonucu", "job_title": "Müşteri Temsilcisi", "department": "Müşteri Hizmetleri", "estimated_days": 0.5, "description": "Müşteriye gönderilecek yanıt taslağı ve bilete yazılacak iç not (yapılan işlem, sonuç, varsa iade/iptal numarası). Case kapanınca sonuç onayla Odoo biletine iç not olarak yazılır.", "acceptance_criteria": "Onaylı müşteri yanıtı ve bilet notu", "depends_on": ["S1"]}
+      ],
+      "risks": ["Yanlış teknik bilgi nedeniyle iade"]}}
 ]

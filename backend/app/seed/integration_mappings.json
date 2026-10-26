@@ -682,5 +682,135 @@
     "source": "city"
    }
   ]
+ },
+ {
+  "code": "odoo_helpdesk_ticket",
+  "connector": "odoo",
+  "object_type": "SUPPORT_TICKET",
+  "name": "Odoo Helpdesk bileti (RECQmind)",
+  "description": "Destek kaydı → Odoo helpdesk.ticket (Odoo 19/20, RECQmind). Bilet numarasıyla eşleşir: biletten açılan Case kapanınca yeni bilet açılmaz; yalnızca durum güncellenir ve çözüm bilete iç not olarak yazılır (müşteriye gitmez). Tür etiketleri ve Çözüldü aşaması Helpdesk'inizde adıyla aranır; bulunamazsa boş bırakılır.",
+  "target": {
+   "model": "helpdesk.ticket",
+   "note": {
+    "source": "resolution",
+    "title": "RECOrion Case sonucu"
+   },
+   "update_sources": [
+    "status",
+    "resolution"
+   ]
+  },
+  "match": {
+   "source": "ticket_ref",
+   "target": "id"
+  },
+  "rules": [
+   {
+    "target": "name",
+    "transform": "copy",
+    "source": "subject"
+   },
+   {
+    "target": "description",
+    "transform": "copy",
+    "source": "description"
+   },
+   {
+    "target": "partner_name",
+    "transform": "copy",
+    "source": "customer_name"
+   },
+   {
+    "target": "partner_email",
+    "transform": "copy",
+    "source": "customer_email"
+   },
+   {
+    "target": "partner_phone",
+    "transform": "copy",
+    "source": "customer_phone"
+   },
+   {
+    "target": "priority",
+    "transform": "map",
+    "source": "priority",
+    "params": {
+     "values": {
+      "LOW": "0",
+      "NORMAL": "1",
+      "HIGH": "2",
+      "URGENT": "3"
+     },
+     "default": "1"
+    }
+   },
+   {
+    "target": "tag_ids",
+    "transform": "lookup",
+    "source": "category",
+    "params": {
+     "model": "helpdesk.tag",
+     "fields": [
+      "name"
+     ],
+     "values": {
+      "RETURN": [
+       "İade",
+       "Return",
+       "Returns"
+      ],
+      "CANCEL": [
+       "İptal",
+       "Cancel",
+       "Cancellation"
+      ],
+      "SHIPPING": [
+       "Kargo",
+       "Shipping",
+       "Delivery"
+      ],
+      "PRODUCT_QUESTION": [
+       "Ürün sorusu",
+       "Soru",
+       "Question"
+      ],
+      "ORDER": [
+       "Sipariş",
+       "Order"
+      ],
+      "OTHER": [
+       "Diğer",
+       "Other"
+      ]
+     },
+     "many": true,
+     "optional": true
+    }
+   },
+   {
+    "target": "stage_id",
+    "transform": "lookup",
+    "source": "status",
+    "params": {
+     "model": "helpdesk.stage",
+     "fields": [
+      "name"
+     ],
+     "optional": true,
+     "values": {
+      "OPEN": [
+       "Yeni",
+       "New"
+      ],
+      "SOLVED": [
+       "Çözüldü",
+       "Solved",
+       "Kapatıldı",
+       "Closed"
+      ]
+     }
+    }
+   }
+  ]
  }
 ]

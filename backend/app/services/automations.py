@@ -10,6 +10,10 @@ Koşul: olay verisindeki alanlar (nokta ile iç alan) eq, ne, contains, in, gt, 
 Ne yapılsın: Case/proje aç (şablon varsa planı taslağa konur; isterler {{alan}} yer tutucularıyla doldurulur) veya yalnızca bildir.
   Açılan iş TASLAK kalır ve yöneticisine bildirilir. Otomatik başlatma yalnızca kuralda açıkça istenmişse ve onaylı
   şablon planıyla (her adıma AI personel atanabildiyse) yapılır; olmazsa iş taslakta kalır, neden bildirilir.
+Bilet zenginleştirme (ADIM 13.3): izleme ayarında enrich=helpdesk_ticket ise okunan Helpdesk biletlerine etiket adları ve
+  "ticket" ortak nesnesi eklenir (services/support.py); koşullar ticket.category gibi alanlara yazılabilir.
+Kapanışta aktarım (ADIM 13.3): eylemde transfer_on_close eşlemeleri varsa açılan iş kapanınca bu eşlemelerle aktarım önerilir
+  (kaynak kayda bağlı: ör. biletten açılan Case'in sonucu aynı bilete yazılır, onayla).
 Korumalar: aynı olay bir kez işlenir (tekrar engeli), RECOrion'un kendi yazdığı kayıttan gelen olay iş açmaz (döngü engeli),
   kural başına saatlik ve şirket başına saatlik sınır (hız sınırı). Her olay ve sonucu silinemez günlüğe yazılır.
 """
@@ -34,8 +38,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import vault
-from app.db.models import (Actor, AutomationLog, AutomationRule, ExternalLink, IntegrationConnection, IntegrationTransfer, Project,
-                           ProjectTemplate, Tenant)
+from app.db.models import (Actor, AutomationLog, AutomationRule, ExternalLink, IntegrationConnection, IntegrationMapping, IntegrationTransfer,
+                           Project, ProjectTemplate, Tenant)
 from app.db.session import AsyncSessionLocal
 
 logger = logging.getLogger("recorion.automations")
@@ -53,6 +57,7 @@ POLL_MAX_EVENTS = 20  # bir turda en fazla açılan olay (fazlası sonraki tura 
 PAYLOAD_LIMIT = 16000
 LOOP_WINDOW = timedelta(days=7)
 ORIGIN_KEYS = ("x_recorion_origin", "recorion_origin")
+ENRICHERS = ("helpdesk_ticket",)
 DEDUPE = table("automation_dedupe", column("rule_id", PGUUID(as_uuid=True)), column("key"), column("tenant_id", PGUUID(as_uuid=True)))
 
 _tasks: set = set()
@@ -186,8 +191,11 @@ def clean_poll(raw: Any) -> Dict[str, Any]:
         interval = max(POLL_MIN_MINUTES, min(int(p.get("interval_minutes") or 15), 1440))
     except (TypeError, ValueError):
         interval = 15
-    return {"tool": tool, "args": args, "id_field": str(p.get("id_field") or "id"),
-            "version_field": str(p.get("version_field") or "") or None, "interval_minutes": interval}
+    out = {"tool": tool, "args": args, "id_field": str(p.get("id_field") or "id"),
+           "version_field": str(p.get("version_field") or "") or None, "interval_minutes": interval}
+    if p.get("enrich") in ENRICHERS:
+        out["enrich"] = p["enrich"]
+    return out
 
 
 async def clean_action(db: AsyncSession, tenant_id: uuid.UUID, raw: Any) -> Dict[str, Any]:
@@ -223,6 +231,12 @@ async def clean_action(db: AsyncSession, tenant_id: uuid.UUID, raw: Any) -> Dict
     if a.get("auto_start") and not out.get("template_id"):
         raise AutomationError("Otomatik başlatma yalnızca onaylı bir şablon planıyla seçilebilir.")
     out["plan_with_recai"] = a.get("plan_with_recai", True) is not False and not out.get("template_id")
+    out["transfer_on_close"] = []
+    for mid in (a.get("transfer_on_close") or [])[:5]:
+        m = await db.get(IntegrationMapping, _uuid(mid))
+        if not m or m.tenant_id != tenant_id or m.status == "ARCHIVED":
+            raise AutomationError("Kapanışta aktarım için seçilen eşleme bulunamadı.")
+        out["transfer_on_close"].append(str(m.id))
     return out
 
 
@@ -417,7 +431,7 @@ async def _act(db: AsyncSession, rule: AutomationRule, payload: Dict[str, Any], 
     p = Project(tenant_id=tenant.id, slug=await psvc.unique_slug(db, tenant.id, name), name=name, kind=a.get("kind", "CASE"),
                 description=f"'{rule.name}' otomasyonuyla açıldı.", requirements=requirements, status="DRAFT",
                 manager_actor_id=manager.id, created_by_actor_id=manager.id, source_rule_id=rule.id,
-                source_ref=(external_ref or None) and external_ref[:255])
+                source_ref=(external_ref or None) and external_ref[:255], transfer_on_close=list(a.get("transfer_on_close") or []))
     db.add(p)
     await db.flush()
     await psvc.set_member(db, p, manager, "MANAGER", manager.id)
@@ -547,6 +561,11 @@ async def poll(db: AsyncSession, rule: AutomationRule) -> Dict[str, Any]:
         if not tool or tool.kind != READ:
             raise AutomationError(f"'{cfg.get('tool')}' bu bağlantıda okuma aracı değil.")
         result = await asyncio.wait_for(tool.run(ctx, dict(cfg.get("args") or {})), timeout=tool_gateway.CALL_TIMEOUT)
+        records = _records(result)
+        if cfg.get("enrich") == "helpdesk_ticket" and conn.connector == "odoo":
+            from app.services import support
+
+            records = await support.enrich(ctx, records)
     except Exception as exc:
         rule.last_error = f"İzleme çalışmadı: {str(exc)[:300]}"
         await db.commit()
@@ -555,7 +574,7 @@ async def poll(db: AsyncSession, rule: AutomationRule) -> Dict[str, Any]:
     seen: Dict[str, str] = dict((rule.cursor or {}).get("seen") or {})
     first = not (rule.cursor or {}).get("initialized")
     fresh = []
-    for r in _records(result):
+    for r in records:
         rid = get_path(r, id_f)
         if rid is None:
             continue

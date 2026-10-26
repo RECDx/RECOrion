@@ -19,9 +19,12 @@ from app.core import vault
 from app.core.audit import write_audit_event
 from app.core.security import CurrentUser, ensure_tenant_content, forbidden, get_current_user
 from app.core.tokens import hit_rate_limit
-from app.db.models import AutomationLog, AutomationRule, IntegrationConnection
+from app.db.models import AutomationLog, AutomationRule, IntegrationConnection, IntegrationMapping, ProjectTemplate, Tenant
 from app.db.session import get_db
 from app.services import automations as svc
+from app.services import business_objects as bo
+from app.services import recdx_apps
+from app.services import support
 from app.services.llm_gateway import LLMError
 
 router = APIRouter(tags=["Otomasyonlar"])
@@ -179,8 +182,11 @@ async def test_rule(tenant_id: uuid.UUID, rid: uuid.UUID, payload: TestIn, user:
                     db: AsyncSession = Depends(get_db)):
     """Örnek olayla dener: koşullar ve döngü engeli değerlendirilir, ne olacağı söylenir; hiçbir şey açılmaz."""
     rule = await _rule(db, user, tenant_id, rid)
-    rid_ = svc.get_path(payload.payload, (rule.poll or {}).get("id_field") or "id")
-    return await svc.handle(db, rule, "TEST", payload.payload, event_type=payload.event_type,
+    sample = payload.payload
+    if (rule.poll or {}).get("enrich") == "helpdesk_ticket":
+        sample = support.normalize_sample(sample)
+    rid_ = svc.get_path(sample, (rule.poll or {}).get("id_field") or "id")
+    return await svc.handle(db, rule, "TEST", sample, event_type=payload.event_type,
                             record_id=str(rid_) if rid_ is not None else None, test=True)
 
 
@@ -231,6 +237,106 @@ async def suggest(tenant_id: uuid.UUID, payload: SuggestIn, user: CurrentUser = 
         raise HTTPException(status_code=503, detail=str(exc))
     except LLMError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+
+
+# ---------------------------------------------------------------- RECQmind hazır kuralları (ADIM 13.3)
+async def _recqmind_state(db: AsyncSession, tenant_id: uuid.UUID) -> Dict[str, Any]:
+    tenant = await db.get(Tenant, tenant_id)
+    conns = (await db.execute(select(IntegrationConnection).where(IntegrationConnection.tenant_id == tenant_id,
+                                                                  IntegrationConnection.connector == "odoo",
+                                                                  IntegrationConnection.status == "ACTIVE"))).scalars().all()
+    templates = {t.code: t.id for t in (await db.execute(select(ProjectTemplate).where(
+        ProjectTemplate.tenant_id.is_(None), ProjectTemplate.status == "ACTIVE",
+        ProjectTemplate.code.in_([p["template"] for p in support.PRESETS])))).scalars()}
+    mappings = (await db.execute(select(IntegrationMapping).where(IntegrationMapping.tenant_id == tenant_id,
+                                                                  IntegrationMapping.object_type == "SUPPORT_TICKET",
+                                                                  IntegrationMapping.status != "ARCHIVED"))).scalars().all()
+    rules = (await db.execute(select(AutomationRule).where(AutomationRule.tenant_id == tenant_id, AutomationRule.status != "ARCHIVED",
+                                                           AutomationRule.name.in_([p["name"] for p in support.PRESETS])))).scalars().all()
+    active = recdx_apps.is_active(tenant, "recqmind") if tenant else False
+    reason = None if active else "RECQmind şirketinizde açık değil (Şirket Yönetimi → RECDx uygulamaları: Odoo var ve 'Zaten kullanıyorum' / 'Paketime ekle')."
+    if active and not conns:
+        reason = "Etkin bir Odoo bağlantısı yok; Entegrasyonlar'dan RECQmind'ın kurulu olduğu Odoo'yu bağlayın."
+    return {"tenant": tenant, "connections": conns, "templates": templates, "mappings": mappings, "rules": rules,
+            "available": reason is None, "reason": reason}
+
+
+@router.get("/company/{tenant_id}/automations/presets/recqmind")
+async def recqmind_presets(tenant_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """RECQmind hazır kuralları: açılabilir mi, hangi bağlantılar, hangi türler zaten kurulu."""
+    _manage(user, tenant_id)
+    st = await _recqmind_state(db, tenant_id)
+    have = {(r.name, str(r.connection_id)) for r in st["rules"]}
+    return {"available": st["available"], "reason": st["reason"],
+            "connections": [{"id": str(c.id), "name": c.name} for c in st["connections"]],
+            "mappings": [{"id": str(m.id), "name": m.name, "status": m.status, "connection_id": str(m.connection_id)} for m in st["mappings"]],
+            "categories": [{"code": p["category"], "label": bo.SUPPORT_CATEGORY_LABELS[p["category"]], "rule_name": p["name"],
+                            "template_ready": p["template"] in st["templates"],
+                            "installed_on": [cid for (n, cid) in have if n == p["name"]]} for p in support.PRESETS]}
+
+
+class RecqmindIn(BaseModel):
+    connection_id: uuid.UUID
+    manager_actor_id: uuid.UUID
+    categories: List[str] = Field(default_factory=lambda: [p["category"] for p in support.PRESETS])
+    interval_minutes: int = Field(10, ge=5, le=1440)
+    auto_start: bool = False
+
+
+@router.post("/company/{tenant_id}/automations/presets/recqmind", status_code=201)
+async def install_recqmind(tenant_id: uuid.UUID, payload: RecqmindIn, user: CurrentUser = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db)):
+    """Seçilen türler için izleme kurallarını kurar; bağlantıda Helpdesk eşlemesi yoksa hazır eşlemeden TASLAK kopya açar
+    (Case sonucunun bilete yazılabilmesi için eşlemenin Eşleme Stüdyosu'nda denenip onaylanması gerekir)."""
+    _manage(user, tenant_id)
+    st = await _recqmind_state(db, tenant_id)
+    if not st["available"]:
+        raise HTTPException(status_code=409, detail=st["reason"])
+    conn = next((c for c in st["connections"] if c.id == payload.connection_id), None)
+    if not conn:
+        raise HTTPException(status_code=404, detail="Odoo bağlantısı bulunamadı veya etkin değil.")
+    allowed = [m.strip() for m in ((conn.config or {}).get("allowed_models") or "").split(",") if m.strip()]
+    if allowed and support.MODEL not in allowed:
+        raise HTTPException(status_code=422, detail="Bu bağlantıda helpdesk.ticket modeli izinli değil; bağlantı ayarlarında izinli modellere ekleyin.")
+    cats = [c for c in dict.fromkeys(x.upper() for x in payload.categories) if c in {p["category"] for p in support.PRESETS}]
+    if not cats:
+        raise HTTPException(status_code=422, detail="En az bir tür seçin (İade, İptal, Kargo, Ürün sorusu).")
+    notes: List[str] = []
+    mapping = next((m for m in st["mappings"] if m.connection_id == conn.id), None)
+    if not mapping:
+        tpl = (await db.execute(select(IntegrationMapping).where(IntegrationMapping.tenant_id.is_(None),
+                                                                 IntegrationMapping.code == "odoo_helpdesk_ticket"))).scalars().first()
+        if tpl:
+            mapping = IntegrationMapping(tenant_id=tenant_id, connection_id=conn.id, connector="odoo", object_type=tpl.object_type,
+                                         name=tpl.name, description=tpl.description, target=tpl.target, rules=tpl.rules, match=tpl.match,
+                                         when=tpl.when, source_template_id=tpl.id, status="DRAFT", created_by_actor_id=user.actor_id)
+            db.add(mapping)
+            await db.flush()
+            notes.append("Helpdesk eşlemesi taslak olarak eklendi: Eşleme Stüdyosu'nda 'Dene' ve 'Onayla' yapılınca Case sonuçları bilete yazılabilir.")
+        else:
+            notes.append("Hazır Helpdesk eşlemesi bulunamadı; Case sonucu bilete yazılmaz.")
+    elif mapping.status != "ACTIVE":
+        notes.append("Helpdesk eşlemesi henüz onaylı değil: onaylanınca Case sonuçları bilete yazılabilir.")
+    have = {(r.name, r.connection_id) for r in st["rules"]}
+    created = []
+    for spec in support.preset_rules(conn.id, payload.manager_actor_id, st["templates"], cats, mapping.id if mapping else None,
+                                     payload.interval_minutes, payload.auto_start):
+        if (spec["name"], conn.id) in have:
+            notes.append(f"'{spec['name']}' bu bağlantıda zaten kurulu; atlandı.")
+            continue
+        rule = AutomationRule(id=uuid.uuid4(), tenant_id=tenant_id, created_by_actor_id=user.actor_id, status="ACTIVE", action={})
+        await _apply(db, rule, RuleIn(**spec))
+        db.add(rule)
+        created.append(rule)
+    missing = [p["category"] for p in support.PRESETS if p["category"] in cats and p["template"] not in st["templates"]]
+    if missing:
+        notes.append("Şablonu bulunamayan türler kurulmadı: " + ", ".join(bo.SUPPORT_CATEGORY_LABELS[c] for c in missing))
+    await db.commit()
+    for rule in created:
+        await write_audit_event(action="AUTOMATION_CREATED", actor_id=user.actor_id, target_type="automation_rule", target_id=str(rule.id),
+                                payload={"name": rule.name, "trigger": rule.trigger, "preset": "recqmind"})
+    return {"rules": [await _out(db, r) for r in created], "mapping": {"id": str(mapping.id), "status": mapping.status} if mapping else None,
+            "notes": notes}
 
 
 # ---------------------------------------------------------------- anlık bildirim (herkese açık; imzayla)

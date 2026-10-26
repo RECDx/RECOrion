@@ -14,6 +14,12 @@ from typing import Any, Dict, List, Optional, Tuple
 VERSION = "1"
 UNITS = ["Adet", "Kg", "g", "Ton", "Lt", "ml", "m", "m²", "m³", "Saat", "Gün", "Paket", "Koli", "Kutu"]
 CURRENCIES = ["TRY", "USD", "EUR", "GBP"]
+SUPPORT_CATEGORIES = ["RETURN", "CANCEL", "SHIPPING", "PRODUCT_QUESTION", "ORDER", "OTHER"]
+SUPPORT_CATEGORY_LABELS = {"RETURN": "İade", "CANCEL": "İptal", "SHIPPING": "Kargo", "PRODUCT_QUESTION": "Ürün sorusu",
+                           "ORDER": "Sipariş", "OTHER": "Diğer"}
+SUPPORT_CHANNELS = ["TRENDYOL", "HEPSIBURADA", "AMAZON", "N11", "WEB", "EMAIL", "OTHER"]
+SUPPORT_CHANNEL_LABELS = {"TRENDYOL": "Trendyol", "HEPSIBURADA": "Hepsiburada", "AMAZON": "Amazon", "N11": "n11", "WEB": "Web sitesi",
+                          "EMAIL": "E-posta", "OTHER": "Diğer"}
 
 
 def F(key: str, label: str, type_: str, required: bool = False, help: str = "", **kw) -> Dict[str, Any]:
@@ -75,6 +81,23 @@ OBJECTS: Dict[str, Dict[str, Any]] = {
         F("assignee_email", "Sorumlu e-postası", "email", max_length=254),
         F("project_ref", "Proje", "string", max_length=255),
         F("priority", "Öncelik", "enum", options=["LOW", "NORMAL", "HIGH"], option_labels={"LOW": "Düşük", "NORMAL": "Normal", "HIGH": "Yüksek"}),
+    ]},
+    # ADIM 13.3: RECQmind/Helpdesk bileti. ticket_ref ile mevcut bilet bulunur; resolution bilete iç not olarak yazılır.
+    "SUPPORT_TICKET": {"label": "Destek kaydı", "fields": [
+        F("ticket_ref", "Bilet no", "string", help="Destek sistemindeki bilet numarası; doluysa mevcut bilet güncellenir", max_length=64),
+        F("subject", "Konu", "string", max_length=255, help="Yeni bilet açılırken zorunlu"),
+        F("description", "Müşteri mesajı", "text", max_length=8000),
+        F("category", "Tür", "enum", options=SUPPORT_CATEGORIES, option_labels=SUPPORT_CATEGORY_LABELS),
+        F("channel", "Kanal", "enum", options=SUPPORT_CHANNELS, option_labels=SUPPORT_CHANNEL_LABELS),
+        F("priority", "Öncelik", "enum", options=["LOW", "NORMAL", "HIGH", "URGENT"],
+          option_labels={"LOW": "Düşük", "NORMAL": "Normal", "HIGH": "Yüksek", "URGENT": "Acil"}),
+        F("customer_name", "Müşteri adı", "string", max_length=255),
+        F("customer_email", "Müşteri e-postası", "email", max_length=254),
+        F("customer_phone", "Müşteri telefonu", "string", max_length=32, pattern=r"^[0-9+()\s\-]{7,32}$"),
+        F("order_ref", "Sipariş no", "string", max_length=64),
+        F("product_ref", "Ürün", "string", max_length=255, help="Ürün adı veya stok kodu"),
+        F("status", "Durum", "enum", options=["OPEN", "SOLVED"], option_labels={"OPEN": "Açık", "SOLVED": "Çözüldü"}),
+        F("resolution", "Çözüm / iç not", "text", max_length=8000, help="Yapılan işlem ve müşteriye verilecek yanıt; bilete iç not olarak yazılır"),
     ]},
     "DOCUMENT": {"label": "Doküman", "fields": [
         F("title", "Başlık", "string", True, max_length=255),

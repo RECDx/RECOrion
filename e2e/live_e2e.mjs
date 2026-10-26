@@ -1166,7 +1166,7 @@ try {
   const ask = ct.page.getByRole('alertdialog');
   await ask.waitFor({ timeout: 15000 });
   await ask.getByRole('button', { name: 'Giriş yap' }).click();
-  await ct.page.waitForURL(/mcp\.linear\.app|linear\.app/, { timeout: 45000 });
+  await ct.page.waitForURL(/mcp\.linear\.app|linear\.app/, { timeout: 45000, waitUntil: 'commit' });  // dış sayfanın tam yüklenmesi beklenmez
   const authUrl = new URL(ct.page.url());
   await ct.page.waitForLoadState('domcontentloaded').catch(() => {});
   await shot(ct.page, '21-linear-giris-sayfasi');

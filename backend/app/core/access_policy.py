@@ -373,6 +373,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/company/{{tenant_id}}/automations"): HANDLER(),
     ("POST", f"{P}/company/{{tenant_id}}/automations"): HANDLER(),
     ("POST", f"{P}/company/{{tenant_id}}/automations/suggest"): HANDLER(),
+    ("GET", f"{P}/company/{{tenant_id}}/automations/presets/recqmind"): HANDLER(),
+    ("POST", f"{P}/company/{{tenant_id}}/automations/presets/recqmind"): HANDLER(),
     ("PUT", f"{P}/company/{{tenant_id}}/automations/{{rid}}"): HANDLER(),
     ("POST", f"{P}/company/{{tenant_id}}/automations/{{rid}}/status"): HANDLER(),
     ("POST", f"{P}/company/{{tenant_id}}/automations/{{rid}}/rotate-secret"): HANDLER(),

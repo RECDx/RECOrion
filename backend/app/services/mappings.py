@@ -11,6 +11,9 @@ Kural = bir hedef alan nasıl doldurulur:
             values ile aday adlar (Adet → ["Adet", "Units"]), fields ile sırayla aranacak alanlar, many ile çoklu ilişki,
             optional ile bulunamazsa alan atlanır (uyarı) — yoksa hata.
 - lines     kalemler (yalnızca Odoo, one2many): her kalem için iç kurallar → [[0, 0, {...}], ...]
+Hedefte ek seçenekler (ADIM 13.3): note.source → yazmadan sonra kayda iç not (Odoo chatter, ör. bilete çözüm);
+update_sources → mevcut kayıt güncellenirken YALNIZCA bu kaynak alanlardan gelen kurallar yazılır (ör. bilette konu/mesaj
+ezilmez, yalnızca durum ve not). Zorunlu hedef alan denetimi yalnızca yeni kayıtta yapılır (mevcut kayıtta zaten doludur).
 Doğrulama hedefin KENDİ alan tanımlarından yapılır (Odoo fields_get + default_get, MCP araç şeması, Edge şablon parametreleri):
 sürüme göre değişen alan adları (ör. Odoo 20'de tax_ids) eşleme kaydedilirken yakalanır. Deneme (dry-run) YAZMAZ:
 yalnızca okuma (arama) yapar ve hedefe gidecek değerleri, eksik zorunlu alanları ve "yeni kayıt / mevcut kaydı güncelle"
@@ -54,12 +57,39 @@ SAMPLES: Dict[str, Dict[str, Any]] = {
               "lines": [{"product_code": "RECT-ELT-01", "description": "El terminali", "quantity": 5, "unit": "Adet", "unit_price": 12500, "vat_rate": 20}]},
     "TASK": {"title": "RECOrion Test: depo sayımı hazırlığı", "description": "Raf etiketlerini kontrol et.", "due_date": "2026-11-15",
              "priority": "HIGH"},
+    "SUPPORT_TICKET": {"subject": "RECOrion Test: kulaklık iadesi", "description": "Ürün kutusu hasarlı geldi, iade etmek istiyorum.",
+                       "category": "RETURN", "channel": "TRENDYOL", "priority": "HIGH", "customer_name": "RECOrion Test Müşterisi",
+                       "customer_email": "musteri@recorion-test.example", "order_ref": "TY-0000001", "product_ref": "Kulaklık",
+                       "status": "OPEN"},
     "DOCUMENT": {"title": "RECOrion Test raporu", "artifact_id": "00000000-0000-0000-0000-000000000000", "description": "Deneme"},
 }
 
 
+# RECDx uygulamasına bağlı hazır eşlemeler: yalnızca o uygulamayı kullanan şirkete görünür (ADIM 13.3)
+APP_TEMPLATES = {"odoo_helpdesk_ticket": "recqmind"}
+
+
 class MappingError(Exception):
     pass
+
+
+def template_visible(code: Optional[str], tenant) -> bool:
+    from app.services import recdx_apps
+
+    app = APP_TEMPLATES.get(code or "")
+    return not app or (tenant is not None and recdx_apps.is_active(tenant, app))
+
+
+def clean_target_options(object_type: str, target: Dict[str, Any]) -> Dict[str, Any]:
+    """Hedefin ek seçenekleri: iç not kaynağı ve güncellemede yazılacak kaynak alanlar (nesnede olmayan atılır)."""
+    src = {f["key"] for f in bo.OBJECTS.get(object_type, {}).get("fields", [])}
+    out: Dict[str, Any] = {}
+    note = target.get("note") if isinstance(target.get("note"), dict) else {}
+    if note.get("source") in src:
+        out["note"] = {"source": note["source"], "title": str(note.get("title") or "")[:80]}
+    if isinstance(target.get("update_sources"), list):
+        out["update_sources"] = [x for x in target["update_sources"] if x in src][:40]
+    return out
 
 
 @dataclass
@@ -134,6 +164,10 @@ class OdooTarget(Target):
         return self._cache[key]
 
     async def find(self, target, field_, value):
+        if field_ == "id":  # kayıt kimliğiyle eşleşme (ör. bilet no): tam sayı olmalı
+            if not str(value).strip().isdigit():
+                return None
+            value = int(str(value).strip())
         ids = await self.lookup(target["model"], field_, value, [])
         return ids[0] if ids else None
 
@@ -270,7 +304,7 @@ def check(object_type: str, rules: List[Dict[str, Any]], fields: Dict[str, Dict[
         if missing:
             warnings.append("Eşlenmemiş zorunlu alan: " + ", ".join(missing[:10]))
         if match:
-            if match.get("source") not in src or match.get("target") not in fields:
+            if match.get("source") not in src or (match.get("target") not in fields and not (connector == "odoo" and match.get("target") == "id")):
                 errors.append("Eşleştirme alanı geçersiz (tekrar aktarımda aynı kaydı bulmak için kaynak ve hedef alan).")
     return errors, warnings
 
@@ -377,9 +411,10 @@ def _display(v: Any) -> str:
     return str(v)[:200]
 
 
-async def build(mapping: IntegrationMapping, obj: Dict[str, Any], tgt: Target) -> Built:
-    """Nesneden hedefe gidecek değerleri üretir (aramalar okuma; YAZMA YOK)."""
+async def build(mapping: IntegrationMapping, obj: Dict[str, Any], tgt: Target, update: bool = False) -> Built:
+    """Nesneden hedefe gidecek değerleri üretir (aramalar okuma; YAZMA YOK). update: mevcut kayıt güncellenecek."""
     out = Built()
+    only = (mapping.target or {}).get("update_sources") if update else None
     clean, errs = bo.validate(mapping.object_type, obj)
     out.errors += errs
     try:
@@ -388,6 +423,8 @@ async def build(mapping: IntegrationMapping, obj: Dict[str, Any], tgt: Target) -
         out.errors.append(str(exc))
         return out
     for rule in mapping.rules or []:
+        if only is not None and rule.get("source") not in only:
+            continue
         finfo = fields.get(rule["target"], {})
         try:
             ok, v = await _rule_value(rule, clean, finfo, tgt, out)
@@ -401,9 +438,24 @@ async def build(mapping: IntegrationMapping, obj: Dict[str, Any], tgt: Target) -
         out.preview.append({"target": rule["target"], "label": finfo.get("label") or rule["target"], "value": _display(v),
                             "source": rule.get("source"), "transform": rule["transform"]})
     missing = [f"{n} ({f['label']})" for n, f in fields.items() if f.get("required") and n not in out.values]
-    if missing:
+    if missing and not update:
         out.errors.append("Hedefte zorunlu ama boş kalan alan: " + ", ".join(missing[:10]))
+    note = (mapping.target or {}).get("note") or {}
+    if note.get("source") and clean.get(note["source"]):
+        out.preview.append({"target": "(iç not)", "label": note.get("title") or "İç not", "value": str(clean[note["source"]])[:200],
+                            "source": note["source"], "transform": "note"})
+    if update and not out.values and not (note.get("source") and clean.get(note["source"])):
+        out.errors.append("Mevcut kayıtta güncellenecek bir değer yok.")
     return out
+
+
+async def existing_id(mapping: IntegrationMapping, obj: Dict[str, Any], tgt: Target) -> Optional[Any]:
+    """Eşleştirme alanıyla hedefteki mevcut kayıt (yoksa None). Arama hatası çağırana iletilir."""
+    m = mapping.match or {}
+    if not m.get("source") or obj.get(m["source"]) in (None, ""):
+        return None
+    found = await tgt.find(mapping.target, m["target"], obj[m["source"]])
+    return None if found in (None, "") else found
 
 
 def applies(mapping: IntegrationMapping, obj: Dict[str, Any]) -> bool:
@@ -414,16 +466,15 @@ def applies(mapping: IntegrationMapping, obj: Dict[str, Any]) -> bool:
 async def dry_run(mapping: IntegrationMapping, conn: IntegrationConnection, sample: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     obj = sample or SAMPLES.get(mapping.object_type) or {}
     tgt = adapter(conn)
-    built = await build(mapping, obj, tgt)
-    action, existing = "CREATE", None
-    m = mapping.match or {}
-    if not built.errors and m.get("source") and obj.get(m["source"]) not in (None, ""):
-        try:
-            existing = await tgt.find(mapping.target, m["target"], obj[m["source"]])
-            existing = None if existing in (None, "") else existing
-        except (ToolError, MappingError) as exc:
-            built.warnings.append(f"Mevcut kayıt aranamadı: {exc}")
-        action = "UPDATE" if existing else "CREATE"
+    existing, warn = None, None
+    try:
+        existing = await existing_id(mapping, bo.validate(mapping.object_type, obj)[0] or obj, tgt)
+    except (ToolError, MappingError) as exc:
+        warn = f"Mevcut kayıt aranamadı: {exc}"
+    built = await build(mapping, obj, tgt, update=existing is not None)
+    if warn:
+        built.warnings.append(warn)
+    action = "UPDATE" if existing is not None else "CREATE"
     if not applies(mapping, obj):
         built.warnings.append("Bu örnek, eşlemenin koşuluna uymuyor; gerçek aktarımda bu eşleme kullanılmaz.")
     return {"ok": not built.errors, "at": datetime.now(timezone.utc).isoformat(), "version": mapping.version, "sample": bo.mask_pii(mapping.object_type, obj),

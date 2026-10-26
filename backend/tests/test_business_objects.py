@@ -22,7 +22,7 @@ def _vkn(prefix: str) -> str:
 
 def test_catalog_lists_all_objects():
     codes = {o["code"] for o in bo.catalog()}
-    assert codes == {"PRODUCT", "PARTNER", "ORDER", "TASK", "DOCUMENT"}
+    assert codes == {"PRODUCT", "PARTNER", "ORDER", "TASK", "SUPPORT_TICKET", "DOCUMENT"}
     product = next(o for o in bo.catalog() if o["code"] == "PRODUCT")
     assert product["version"] == bo.VERSION and {"code", "name", "unit", "vat_rate"} <= {f["key"] for f in product["fields"]}
 
@@ -71,7 +71,7 @@ def test_order_lines_validated_per_row():
 def test_objects_api(client, world):
     h = world["member"]["h"]
     r = client.get("/api/v1/integrations/objects", headers=h)
-    assert r.status_code == 200 and len(r.json()["objects"]) == 5
+    assert r.status_code == 200 and len(r.json()["objects"]) == 6
     r = client.post("/api/v1/integrations/objects/PRODUCT/validate", headers=h, json={"name": "Vida", "type": "SERVICE", "unit": "Saat"})
     assert r.json() == {"ok": True, "object": {"name": "Vida", "type": "SERVICE", "unit": "Saat"}, "errors": []}
     assert client.post("/api/v1/integrations/objects/YOK/validate", headers=h, json={}).status_code == 404

@@ -153,3 +153,15 @@ async def members_out(db: AsyncSession, project_id: uuid.UUID) -> List[Dict]:
                              .where(ProjectMember.project_id == project_id).order_by(ProjectMember.role, Actor.display_name))).all()
     return [{"actor_id": str(a.id), "display_name": a.display_name, "actor_type": a.actor_type, "role": m.role,
              "email": a.email if a.actor_type == "HUMAN" else None, "status": a.status} for m, a in rows]
+
+
+SOURCE_MODELS = {"helpdesk.ticket": "destek bileti", "sale.order": "satış siparişi", "project.task": "görev", "hr.expense": "masraf"}
+
+
+def source_label(ref: Optional[str]) -> Optional[str]:
+    """Dış kayıt bağı (ADIM 13.3) ekranda: "odoo:helpdesk.ticket:42" → "Odoo destek bileti #42"."""
+    parts = (ref or "").split(":")
+    if len(parts) != 3 or not parts[2]:
+        return ref or None
+    connector, model, rid = parts
+    return f"{connector.capitalize()} {SOURCE_MODELS.get(model, model)} #{rid}"
