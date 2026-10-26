@@ -631,9 +631,23 @@ try {
   const completed = Number((dash.match(/TAMAMLANAN\s*\n\s*(\d+)/i) || [])[1] || 0);
   const budgetRow = adm.page.locator('.viz-bars li', { hasText: NAME });
   const budgetText = (await budgetRow.count()) ? await budgetRow.first().innerText() : '';
-  step(completed >= 1 && /mimo|deepseek/.test(dash) && /3\.500|15\.000/.test(budgetText + dash),
-    'Şirket panosu proje durumlarını, LLM kırılımını ve bu koşunun bütçesini gösteriyor',
-    `tamamlanan proje ${completed} · ${budgetText.replace(/\s+/g, ' ').slice(0, 70) || 'proje satırı yok'}`);
+  const realModel = dash.match(/deepseek|mimo|qwen|gemma|glm/i);
+  step(completed >= 1 && /RECAi/.test(dash) && !realModel && /3\.500|15\.000/.test(budgetText + dash),
+    'Şirket panosu proje durumlarını, RECAi kırılımını (gerçek model adı olmadan) ve bu koşunun bütçesini gösteriyor',
+    `tamamlanan proje ${completed} · ${budgetText.replace(/\s+/g, ' ').slice(0, 70) || 'proje satırı yok'}${realModel ? ` · gerçek model adı göründü: ${realModel[0]}` : ''}`);
+
+  // #349: şirket yöneticisi RECAi adlarını ve yetenekleri görür; gerçek model adı hiçbir yanıtta yok; RECAi Adları paneli
+  // (arkasındaki model) yalnızca RECDx Süper Admin'de
+  const recaiOpts = await api(adm.page, `/api/v1/company/${cfg.tenant_id}/recai`);
+  const agentsRaw = JSON.stringify((await api(adm.page, `/api/v1/company/${cfg.tenant_id}/ai-agents`)).body);
+  const tierPanel = await api(adm.page, '/api/v1/system/recai-tiers');
+  const modelCat = await api(adm.page, '/api/v1/models/');
+  const recaiLeak = (JSON.stringify(recaiOpts.body) + agentsRaw).match(/deepseek|mimo|qwen|gemma|glm/i);
+  step(recaiOpts.status === 200 && recaiOpts.body.tiers.some((t) => t.display_name === 'RECAi Mergen') && recaiOpts.body.capabilities.length === 3
+    && !recaiLeak && tierPanel.status === 403 && modelCat.status === 403,
+    'RECAi adları: şirket yöneticisi Mergen/Hızlı/Derin ve Görsel/Ses/Okur görüyor; gerçek model adı yok; RECAi Adları paneli ve model kataloğu kapalı',
+    `adlar: ${(recaiOpts.body?.tiers || []).map((t) => t.display_name).join(', ')} · yetenek: ${(recaiOpts.body?.capabilities || []).map((c) => `${c.name}${c.in_plan ? '' : ' (yok)'}`).join(', ')}`
+    + ` · sızıntı: ${recaiLeak ? recaiLeak[0] : 'yok'} · panel: ${tierPanel.status} · katalog: ${modelCat.status}`);
   await adm.page.getByRole('tab', { name: '7 gün' }).click();
   await adm.page.waitForTimeout(1500);
   const week = (await adm.page.locator('.viz-root svg g.viz-hit').count());
@@ -1301,7 +1315,7 @@ try {
   const trList = trDlg2.getByRole('list', { name: 'Bu adımın aktarımları' });
   await trList.waitFor({ timeout: 20000 });
   let trRows = [];
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < 180; i++) {
     trRows = ((await api(tx.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).filter((x) => x.connection_name === otName);
     if (trRows.length && trRows.every((x) => x.status !== 'EXTRACTING')) break;
     await tx.page.waitForTimeout(2000);
@@ -1313,6 +1327,7 @@ try {
     `${((Date.now() - exStart) / 1000).toFixed(0)} sn · ${trRows.length} öneri (${pendingT.length} onay bekliyor) · ilk: ${pendingT[0]?.preview.find((p) => p.target === 'name')?.value.slice(0, 60) || '-'}`
     + ` · eşleme denemesi: ${taskDry?.ok ? 'hatasız' : 'hatalı'}, onay ${taskAppr.status}`);
   await trDlg2.getByRole('button', { name: 'Kapat', exact: true }).last().click();
+  if (!pendingT.length) throw new Error(`Aktarım önizlemesi onaya düşmedi (${trRows.map((x) => x.status).join(', ') || 'öneri yok'})`);
 
   await tx.page.getByRole('button', { name: /Onaylarım/ }).click();
   const inbox = tx.page.getByRole('list', { name: 'Onay bekleyen aktarımlar' });
