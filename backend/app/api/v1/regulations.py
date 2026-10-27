@@ -139,7 +139,7 @@ class EnableIn(BaseModel):
 @router.put("/company/{tenant_id}/regulation-packs/{pack_id}")
 async def company_toggle(tenant_id: uuid.UUID, pack_id: uuid.UUID, payload: EnableIn, user: CurrentUser = Depends(get_current_user),
                          db: AsyncSession = Depends(get_db)):
-    ensure_tenant_content(user, tenant_id, "tenant:manage")
+    ensure_tenant_content(user, tenant_id, "regulation:manage")
     p = await db.get(RegulationPack, pack_id)
     if not p or not p.published:
         raise HTTPException(status_code=404, detail="Paket bulunamadı.")

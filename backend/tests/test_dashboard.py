@@ -105,7 +105,7 @@ def test_agent_scorecard_and_roi(client, db, world, ai):
 
 
 def test_department_dashboard(client, db, world):
-    """ADIM 9.3: departman panosu yetkisi kendi departmanıyla sınırlı; parasal bilgi ayrıca billing:view ister."""
+    """ADIM 9.3: departman panosu yetkisi kendi departmanıyla sınırlı; parasal bilgi ayrıca cost:view ister."""
     w = world
     tid = w["tenant"]
     url = f"/api/v1/company/{tid}/dashboard"
@@ -133,8 +133,8 @@ def test_department_dashboard(client, db, world):
         me = next(p for p in d["people"] if p["actor_id"] == member["id"])
         assert me["open"] >= 1  # Satış projesindeki insan adımı
         assert client.get(f"{url}?department_id={dept_b}", headers=member["h"]).status_code == 403
-        # billing:view ile parasal bilgi de görünür
-        _exec(db, "UPDATE actors SET extra_permissions = '[\"department:dashboard\", \"billing:view\"]'::jsonb WHERE id = %s", member["id"])
+        # cost:view ile parasal bilgi de görünür
+        _exec(db, "UPDATE actors SET extra_permissions = '[\"department:dashboard\", \"cost:view\"]'::jsonb WHERE id = %s", member["id"])
         d = client.get(url, headers=member["h"]).json()
         assert d["can_view_costs"] is True and {p["name"] for p in d["costs"]["projects"]} == {"Satış Projesi"}
         # Şirket yöneticisi istediği departmanı seçer

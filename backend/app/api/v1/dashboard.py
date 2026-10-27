@@ -27,7 +27,7 @@ async def dashboard_scope(db: AsyncSession, user: CurrentUser, tenant_id: uuid.U
     tenant = await db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
-    if not user.has("tenant:manage"):
+    if not user.has("dashboard:view"):
         if not user.has("department:dashboard"):
             raise forbidden("Panoyu yalnızca şirket yöneticisi veya departman panosu yetkisi olanlar görebilir.")
         own = user.actor.department_id
@@ -41,7 +41,7 @@ async def dashboard_scope(db: AsyncSession, user: CurrentUser, tenant_id: uuid.U
         dept = await db.get(Department, department_id)
         if not dept or dept.tenant_id != tenant_id:
             raise HTTPException(status_code=404, detail="Departman bulunamadı.")
-    return tenant, department_id, dept.name if dept else None, user.has("billing:view") or user.has("tenant:manage")
+    return tenant, department_id, dept.name if dept else None, user.has("cost:view")
 
 
 @router.get("/system/dashboard")
@@ -66,6 +66,6 @@ async def company_dashboard(tenant_id: uuid.UUID, days: int = Query(30), departm
     tenant, dept, dept_name, money = await dashboard_scope(db, user, tenant_id, department_id)
     out = await dashboards.company_overview(db, tenant, days, dept)
     out["department_name"] = dept_name
-    out["department_locked"] = not user.has("tenant:manage")
+    out["department_locked"] = not user.has("dashboard:view")
     out["can_view_costs"] = money
     return out if money else dashboards.without_money(out)

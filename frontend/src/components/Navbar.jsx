@@ -11,6 +11,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import AdminLeadsModal from './AdminLeadsModal';
+import { canOpenCompanyConsole, roleLabel } from '../permissions';
 
 export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser, onGoToAdminConsole, onGoToCompanyAdmin, onLogout }) {
   const isHealthy = health?.status === 'healthy';
@@ -140,7 +141,7 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
         )}
 
         {/* Company Admin Console Button */}
-        {(currentUser?.role === 'COMPANY_ADMIN' || currentUser?.role === 'SUPER_ADMIN') && onGoToCompanyAdmin && (
+        {canOpenCompanyConsole(currentUser) && onGoToCompanyAdmin && (
           <button
             onClick={onGoToCompanyAdmin}
             style={{
@@ -192,7 +193,7 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
               {currentUser?.display_name || 'Cüneyt Admin'}
             </div>
             <div style={{ fontSize: '0.675rem', color: currentUser?.role === 'SUPER_ADMIN' ? 'var(--ac-38bdf8)' : 'var(--text-muted)' }}>
-              {currentUser?.role === 'SUPER_ADMIN' ? '👑 RECDx Süper Admin' : (currentUser?.role || 'Müşteri Şirket Yöneticisi')}
+              {currentUser?.role === 'SUPER_ADMIN' ? '👑 RECDx Süper Admin' : (roleLabel(currentUser) || 'Müşteri Şirket Yöneticisi')}
             </div>
           </div>
         </div>

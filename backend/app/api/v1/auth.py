@@ -14,7 +14,8 @@ from app.core.security import (
     CurrentUser, create_access_token, get_current_user, hash_password, load_current_user,
     password_needs_upgrade, verify_password,
 )
-from app.db.models import Actor, Tenant, TenantLead
+from app.core import permission_catalog
+from app.db.models import Actor, Tenant, TenantLead, TenantRole
 from app.db.session import get_db
 
 # Diğer modüller şifre fonksiyonlarını buradan içe aktarır
@@ -39,6 +40,7 @@ class UserProfileResponse(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     role: str
+    role_name: Optional[str] = None
     tenant_id: uuid.UUID
     tenant_name: str
     tenant_slug: str
@@ -111,6 +113,7 @@ async def _clear_failures(email: str) -> None:
 async def _profile(db: AsyncSession, actor: Actor, user: Optional[CurrentUser] = None) -> dict:
     user = user or await load_current_user(db, actor)
     tenant = await db.get(Tenant, actor.tenant_id)
+    role = await db.get(TenantRole, actor.role_id) if actor.role_id else None
     return dict(
         actor_id=actor.id,
         display_name=actor.display_name,
@@ -118,6 +121,7 @@ async def _profile(db: AsyncSession, actor: Actor, user: Optional[CurrentUser] =
         phone=actor.phone,
         address=actor.address,
         role=actor.role,
+        role_name=(role.name if role else None) or permission_catalog.role_label(actor.role),
         tenant_id=actor.tenant_id,
         tenant_name=tenant.name if tenant else "",
         tenant_slug=tenant.slug if tenant else "",

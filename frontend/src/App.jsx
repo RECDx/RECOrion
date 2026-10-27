@@ -14,6 +14,7 @@ import ApprovePage from './components/approvals/ApprovePage';
 import ApprovalsInbox from './components/approvals/ApprovalsInbox';
 import PersonalTokens from './components/integrations/PersonalTokens';
 import { api, session } from './api';
+import { can } from './permissions';
 import { mergeMessages, useProjectLive } from './live';
 import CompanyDashboard from './components/dashboard/CompanyDashboard';
 import { confirmDialog, notify, promptDialog, toast } from './ui/feedback';
@@ -345,9 +346,10 @@ export default function App() {
 
   // 6. Promote Memory to Corporate Memory (NS_GLOBAL)
   // Hafıza kararları (Adım 8.4): Kurum Hafızasına onay/taşıma, ret (gerekçe isteğe bağlı), geri alma (gerekçe zorunlu)
-  const canPromote = !!currentUser?.permissions?.some((p) => p === 'memory:promote' || p === '*');
-  // Pano (ADIM 9.3): şirket yöneticisi veya departman panosu yetkisi olan kendi departmanını görür
-  const canDashboard = !!currentUser?.permissions?.some((p) => p === 'department:dashboard' || p === 'tenant:manage');
+  const canPromote = can(currentUser, 'memory:promote');
+  const canRevoke = can(currentUser, 'memory:revoke');
+  // Pano (ADIM 9.3): şirket geneli pano veya departman panosu yetkisi olan (kendi departmanını) görür
+  const canDashboard = can(currentUser, 'department:dashboard', 'dashboard:view');
   const handleMemoryAction = async (kind, item) => {
     try {
       if (kind === 'promote') {
@@ -657,6 +659,7 @@ export default function App() {
           memoryItems={memoryItems}
           actors={actors}
           canPromote={canPromote}
+          canRevoke={canRevoke}
           onMemoryAction={handleMemoryAction}
           onApproveQualityGate={(t) => runTaskAction(() => api.decideTask(t.id, true), 'Onaylandı; iş akışı sonraki adıma geçiyor.')}
           onRejectQualityGate={async (t) => {

@@ -29,6 +29,7 @@ export default function RightPane({
   memoryItems,
   actors,
   canPromote,
+  canRevoke,
   onMemoryAction,
   onApproveQualityGate,
   onRejectQualityGate,
@@ -152,7 +153,7 @@ export default function RightPane({
                     </button>
                   </div>
                 )}
-                {canPromote && m.status === 'APPROVED' && (
+                {canRevoke && m.status === 'APPROVED' && (
                   <div style={{ display: 'flex', gap: '6px' }}>
                     {m.scope === 'AGENT' && (
                       <button type="button" className="btn btn-secondary" style={{ fontSize: '0.66rem', padding: '3px 8px', flex: 1 }} onClick={() => onMemoryAction?.('promote', m)}>

@@ -68,6 +68,7 @@ import DocumentLibrary from './docs/DocumentLibrary';
 import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
 import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck } from 'lucide-react';
+import { canOpenTab, roleLabel } from '../permissions';
 
 // Şirket Yönetimi sol menüsü (Ana Kontrol Merkezi düzeni); gruplar açılıp kapanabilir
 const COMPANY_NAV = [
@@ -103,15 +104,25 @@ export default function CompanyAdminConsole({
   onLogout
 }) {
   const resolveInitialTenantId = () => {
-    // COMPANY_ADMIN için currentUser.tenant_id MUTLAK önceliklidir
-    if (currentUser?.role === 'COMPANY_ADMIN' && currentUser?.tenant_id) {
+    // Müşteri kullanıcısı için currentUser.tenant_id MUTLAK önceliklidir (yalnızca RECDx şirket seçer)
+    if (!currentUser?.is_super_admin && currentUser?.tenant_id) {
       return currentUser.tenant_id;
     }
     return currentTenant?.id || currentUser?.tenant_id || null;
   };
 
   // ADIM 9: açılışta genel bakış; ADIM 12.1: servis girişinden (OAuth) dönüşte Entegrasyonlar
-  const [activeTab, setActiveTab] = useState(() => (new URLSearchParams(window.location.search).get('oauth') ? 'INTEGRATIONS' : 'DASHBOARD'));
+  // Menüler kullanıcının izinlerine göre (src/permissions.js); izni olmayan sekme hiç açılmaz (isteği 403 almasın), ilk izinli sekmeye geçilir
+  const [activeTab, setActiveTab] = useState(() => {
+    const wanted = new URLSearchParams(window.location.search).get('oauth') ? 'INTEGRATIONS' : 'DASHBOARD';
+    if (canOpenTab(currentUser, wanted)) return wanted;
+    return COMPANY_NAV.flatMap((g) => g.items).find((i) => canOpenTab(currentUser, i.tab))?.tab || wanted;
+  });
+  const nav = COMPANY_NAV.map((g) => ({ ...g, items: g.items.filter((i) => canOpenTab(currentUser, i.tab)) })).filter((g) => g.items.length);
+  const firstTab = nav[0]?.items[0]?.tab;
+  useEffect(() => {
+    if (firstTab && !canOpenTab(currentUser, activeTab)) setActiveTab(firstTab);
+  }, [activeTab, firstTab, currentUser]);
   // Sol menü: daraltılabilir, gruplar açılıp kapanabilir (tercih bu tarayıcıda hatırlanır); tablet/telefonda çekmece
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -371,7 +382,7 @@ export default function CompanyAdminConsole({
   };
 
   const getActiveTenantId = () => {
-    if (currentUser?.role === 'COMPANY_ADMIN' && currentUser?.tenant_id) {
+    if (!currentUser?.is_super_admin && currentUser?.tenant_id) {
       return currentUser.tenant_id;
     }
     return tenantId || currentTenant?.id || tenant?.id || currentUser?.tenant_id;
@@ -401,7 +412,7 @@ export default function CompanyAdminConsole({
 
   // currentUser veya currentTenant değiştiğinde tenantId senkronizasyonu
   useEffect(() => {
-    const expectedId = (currentUser?.role === 'COMPANY_ADMIN' && currentUser?.tenant_id)
+    const expectedId = (!currentUser?.is_super_admin && currentUser?.tenant_id)
       ? currentUser.tenant_id
       : (currentTenant?.id || currentUser?.tenant_id || null);
 
@@ -1925,7 +1936,7 @@ export default function CompanyAdminConsole({
         </div>
 
         <nav className="super-admin-nav">
-          {COMPANY_NAV.map((group) => (
+          {nav.map((group) => (
             <React.Fragment key={group.key}>
               {!sidebarCollapsed && (
                 <button type="button" className="super-admin-nav-section-title super-admin-nav-group-toggle" onClick={() => toggleNavGroup(group.key)} aria-expanded={!closedNavGroups[group.key]}>
@@ -2074,7 +2085,7 @@ export default function CompanyAdminConsole({
                 {currentUser?.display_name || 'Yetkili Yönetici'}
               </div>
               <div style={{ fontSize: '0.675rem', color: 'var(--nt-94a3b8)' }}>
-                {currentUser?.role === 'SUPER_ADMIN' ? '👑 Platform Süper Admin' : 'Yetkili Personel'}
+                {currentUser?.role === 'SUPER_ADMIN' ? '👑 Platform Süper Admin' : (roleLabel(currentUser) || 'Yetkili Personel')}
               </div>
             </div>
           </div>
@@ -6357,13 +6368,9 @@ export default function CompanyAdminConsole({
                     }}
                   >
                     <option value="ALL">Tüm Modüller</option>
-                    <option value="RBAC">RBAC (Rol & Kullanıcı)</option>
-                    <option value="PLATFORM">PLATFORM (Kurum & Ayarlar)</option>
-                    <option value="AGENTS">AGENTS (AI Ajanlar)</option>
-                    <option value="PROJECTS">PROJECTS (Projeler & Görevler)</option>
-                    <option value="CHAT">CHAT (Sohbet & İletişim)</option>
-                    <option value="MEMORY">MEMORY (Kolektif Hafıza)</option>
-                    <option value="BILLING">BILLING (Fatura & Paketler)</option>
+                    {[...new Map(systemPermissions.map((p) => [p.module, p.module_name || p.module])).entries()].map(([code, name]) => (
+                      <option key={code} value={code}>{name}</option>
+                    ))}
                   </select>
                 </div>
 

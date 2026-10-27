@@ -200,7 +200,7 @@ async def revoke_memory_item(memory_id: uuid.UUID, payload: ReviewIn, user: Curr
     item = await db.get(MemoryItem, memory_id)
     if not item:
         raise HTTPException(status_code=404, detail="Hafıza kaydı bulunamadı.")
-    ensure_tenant_content(user, item.tenant_id, "memory:promote")
+    ensure_tenant_content(user, item.tenant_id, "memory:revoke")
     if item.status != "APPROVED":
         raise HTTPException(status_code=409, detail="Yalnızca onaylı bilgi geri alınabilir.")
     if not (payload.note or "").strip():

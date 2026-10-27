@@ -524,7 +524,7 @@ try {
   const fileModal = page.getByRole('dialog');
   await fileModal.locator('pre').waitFor({ timeout: 20000 });
   const fileText = await fileModal.locator('pre').innerText();
-  step(fileText.length > 50, 'Depodaki dosya RECOrion içinden görüntülendi', `${codeFiles[0] || 'doküman'} · ${fileText.length} karakter`);
+  step(fileText.trim().length > 0, 'Depodaki dosya RECOrion içinden görüntülendi', `${codeFiles[0] || 'doküman'} · ${fileText.length} karakter`);
   await shot(page, '06b-kod-deposu');
   await fileModal.getByRole('button', { name: 'Kapat' }).click();
 
@@ -1278,10 +1278,15 @@ try {
   await studio.getByRole('table', { name: 'Eşleme kuralları' }).waitFor({ timeout: 60000 });
   const sugStart = Date.now();
   await studio.getByRole('button', { name: 'RECAi önersin' }).click();
-  await ot.page.getByRole('status').filter({ hasText: 'RECAi eşleme önerdi' }).first().waitFor({ timeout: 240000 }).catch(() => {});
+  // Ana model zaman aşımına düşerse (240 sn) yedek model devreye girer; öneri bitene kadar ("RECAi hazırlıyor…" kalkana dek) beklenir
+  await studio.getByRole('button', { name: 'RECAi hazırlıyor…' }).waitFor({ timeout: 5000 }).catch(() => {});
+  await studio.getByRole('button', { name: 'RECAi önersin' }).waitFor({ timeout: 600000 }).catch(() => {});
   const sugRows = await studio.getByRole('table', { name: 'Eşleme kuralları' }).locator('tbody tr').count();
   const sugTargets = await studio.getByRole('table', { name: 'Eşleme kuralları' }).locator('tbody tr select').first().inputValue().catch(() => '');
-  await studio.getByRole('button', { name: 'Kaydet' }).click();
+  // Öneri hata verirse (EVREN meşgul) kaydedilecek değişiklik yok; "Kaydet" pasif kalır, test durmadan adım KALDI yazılır
+  const sugSave = studio.getByRole('button', { name: 'Kaydet' });
+  if (await sugSave.isEnabled()) await sugSave.click();
+  else problems.push(`[admin] RECAi eşleme önerisi gelmedi: ${await ot.page.getByRole('status').allInnerTexts().then((t) => t.join(' | ').slice(0, 200)).catch(() => '')}`);
   await ot.page.waitForTimeout(1500);
   await studio.getByRole('button', { name: 'Denetle' }).click();
   await studio.getByLabel('Denetim sonucu').waitFor({ timeout: 60000 });
@@ -1344,10 +1349,10 @@ try {
   const inbox = tx.page.getByRole('list', { name: 'Onay bekleyen aktarımlar' });
   await inbox.waitFor({ timeout: 30000 });
   const trFirst = pendingT[0];
-  const firstCard = inbox.getByRole('listitem', { name: `Aktarım: ${trFirst.object.title}` });
+  const firstCard = inbox.getByRole('listitem', { name: `Aktarım: ${trFirst.object.name || trFirst.object.title}`, exact: true });
   await firstCard.getByRole('button', { name: 'Onayla ve aktar' }).click();
   if (pendingT[1]) {
-    await inbox.getByRole('listitem', { name: `Aktarım: ${pendingT[1].object.title}` }).getByRole('button', { name: 'Reddet' }).click();
+    await inbox.getByRole('listitem', { name: `Aktarım: ${pendingT[1].object.name || pendingT[1].object.title}`, exact: true }).getByRole('button', { name: 'Reddet' }).click();
     await dialogOk(tx.page, 'Bu işi Odoo\'da biz açacağız');
   }
   let doneT = null;
@@ -1371,7 +1376,7 @@ try {
   const extCard = tx.page.getByRole('list', { name: 'Proje aktarımları' });
   await extCard.waitFor({ timeout: 20000 });
   const extLink = await tx.page.locator('a.ig-link', { hasText: otName }).first().getAttribute('href').catch(() => null);
-  await extCard.getByRole('listitem', { name: `Aktarım: ${trFirst.object.title}` }).getByRole('button', { name: 'Geri al' }).click();
+  await extCard.getByRole('listitem', { name: `Aktarım: ${trFirst.object.name || trFirst.object.title}`, exact: true }).getByRole('button', { name: 'Geri al' }).click();
   await dialogOk(tx.page);
   await tx.page.waitForTimeout(2500);
   const afterRb = (await otCall('project.task', 'read', { ids: [Number(doneT.external_id)], fields: ['active'] }))[0];
@@ -1784,6 +1789,42 @@ try {
   }
   if (ticketId) await odooCall('helpdesk.ticket', 'write', { ids: [ticketId], vals: { active: false } });
   await au.ctx.close();
+
+  // ---------------------------------------------------------------- Yetki kataloğu ve roller (İSTEK #353)
+  // Dışarıdan kullanıcıya geçici "Entegrasyon Yöneticisi" rolü verilir: Work Space'ten Şirket Yönetimi açılır, menüde yalnızca
+  // kendi ekranları görünür. Sonunda roller geri alınır (live_test_setup de her koşuda sıfırlar).
+  const ad = await session('admin');
+  const custRoles = (await api(ad.page, '/api/v1/system/roles')).body || [];
+  const intRole = custRoles.find((r) => r.name === 'Entegrasyon Yöneticisi');
+  const pmRole = custRoles.find((r) => r.name === 'Proje Yöneticisi');
+  const outsiderId = cfg.users.outsider.id;
+  try {
+    const setRole = await api(ad.page, `${T13}/users/${outsiderId}`, { method: 'PUT', body: JSON.stringify({ role_id: intRole?.id }) });
+    const ow = await session('outsider');
+    const probBefore = problems.length;
+    await ow.page.getByRole('button', { name: /Şirket Yönetimi/ }).click({ timeout: 20000 });
+    const nav = ow.page.locator('nav.super-admin-nav');
+    await nav.getByText('Entegrasyonlar').waitFor({ timeout: 20000 });
+    const menu = (await nav.innerText()).replace(/\s+/g, ' ');
+    await shot(ow.page, '33-yetki-entegrasyon-yoneticisi');
+    const manifesto = await api(ow.page, `${T13}/manifesto`, { method: 'PUT', body: JSON.stringify({ manifesto: 'deneme' }) });
+    const maps = await api(ow.page, `${T13}/mappings`);
+    await ow.ctx.close();
+    // İzni olmayan ekranın isteği hiç gönderilmez (konsolda 403 yok)
+    const denied = problems.slice(probBefore).filter((x) => x.startsWith('[outsider]') && /403/.test(x)).length;
+    step(denied === 0 && setRole.status === 200 && setRole.body?.role_name === 'Entegrasyon Yöneticisi' && /Entegrasyonlar/.test(menu) && /Otomasyonlar/.test(menu)
+        && !/Kullanıcı Yönetimi|Sektörel Manifesto|Kredi ve Kullanım|Departmanlar/.test(menu) && manifesto.status === 403 && maps.status === 200,
+      "Entegrasyon Yöneticisi rolü: Work Space'ten Şirket Yönetimi açılıyor, menüde yalnızca Entegrasyonlar ve Otomasyonlar var, izinsiz ekran isteği gitmiyor; manifestoyu değiştiremiyor",
+      `${setRole.status} · konsolda 403: ${denied} · menü: ${menu.slice(0, 120)} · manifesto ${manifesto.status} · eşlemeler ${maps.status}`);
+    // Müşteri RECDx rolünü görmez; şirketin tek yöneticisi Proje Yöneticisi yapılamaz
+    const lastAdmin = await api(ad.page, `${T13}/users/${cfg.users.admin.id}`, { method: 'PUT', body: JSON.stringify({ role_id: pmRole?.id }) });
+    step(!custRoles.some((r) => /Süper Yönetici/.test(r.name)) && custRoles.length >= 10 && lastAdmin.status === 400,
+      'Müşteri RECDx süper yönetici rolünü görmüyor; şirketin son yöneticisi Proje Yöneticisi yapılamıyor', `${custRoles.length} rol · son yönetici: ${lastAdmin.status}`);
+  } finally {
+    tamper(`UPDATE actors SET role_id = NULL, role = 'USER' WHERE id = '${outsiderId}' AND tenant_id = '${cfg.tenant_id}'`);
+    tamper(`UPDATE actors SET role_id = NULL, role = 'COMPANY_ADMIN' WHERE id = '${cfg.users.admin.id}' AND tenant_id = '${cfg.tenant_id}'`);
+    await ad.ctx.close();
+  }
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

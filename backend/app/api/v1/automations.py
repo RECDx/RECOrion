@@ -34,8 +34,8 @@ BODY_LIMIT = 256 * 1024
 
 def _manage(user: CurrentUser, tenant_id: uuid.UUID) -> None:
     ensure_tenant_content(user, tenant_id)
-    if not user.has("integration:manage"):
-        raise forbidden("Otomasyonları yalnızca entegrasyon yönetimi yetkisi olanlar yönetebilir.")
+    if not user.has("automation:manage"):
+        raise forbidden("Otomasyonları yalnızca otomasyon kuralları yetkisi olanlar yönetebilir.")
 
 
 def hook_url(rule: AutomationRule) -> str:

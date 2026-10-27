@@ -37,7 +37,7 @@ async def _transfer(db: AsyncSession, user: CurrentUser, tid: uuid.UUID, manage:
     if not tr:
         raise HTTPException(status_code=404, detail="Aktarım bulunamadı.")
     ensure_tenant_content(user, tr.tenant_id)
-    if user.has("integration:manage"):
+    if user.has("integration:manage") or user.has("integration:approve"):
         return tr
     if not tr.project_id:
         raise forbidden("Bu aktarımı yalnızca entegrasyon yöneticisi görebilir.")
@@ -199,8 +199,8 @@ async def rollback(transfer_id: uuid.UUID, user: CurrentUser = Depends(get_curre
 @router.post("/transfers/{transfer_id}/retry")
 async def retry(transfer_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     tr = await _transfer(db, user, transfer_id)
-    if not user.has("integration:manage"):
-        raise forbidden("Başarısız aktarımı yalnızca entegrasyon yöneticisi yeniden deneyebilir.")
+    if not user.has("integration:approve"):
+        raise forbidden("Başarısız aktarımı yalnızca dış sisteme yazma onayı yetkisi olanlar yeniden deneyebilir.")
     if tr.status != "FAILED" or not tr.approvals or len([a for a in tr.approvals if a.get("approve")]) < tr.required_approvals:
         raise HTTPException(status_code=409, detail="Yalnızca onaylanmış ama yazılamamış aktarım yeniden denenebilir.")
     tr.status, tr.error = "APPROVED", None
@@ -213,7 +213,7 @@ async def retry(transfer_id: uuid.UUID, user: CurrentUser = Depends(get_current_
 async def company_transfers(tenant_id: uuid.UUID, status: Optional[str] = None, limit: int = Query(100, le=500),
                             user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     ensure_tenant_content(user, tenant_id)
-    if not user.has("integration:manage"):
+    if not (user.has("integration:manage") or user.has("integration:approve")):
         raise forbidden("Aktarım günlüğünü yalnızca entegrasyon yöneticisi görebilir.")
     stmt = select(IntegrationTransfer).where(IntegrationTransfer.tenant_id == tenant_id)
     if status:

@@ -78,6 +78,7 @@ import LlmPricing from './ai/LlmPricing';
 import ModelRouterPanel from './ai/ModelRouterPanel';
 import RecaiTiersAdmin from './recai/RecaiTiersAdmin';
 import PlanRecaiPicker from './recai/PlanRecaiPicker';
+import { PERMISSION_MODULES, moduleName } from '../permissions';
 
 const TAB_SLUG_MAP = {
   DASHBOARD: 'dashboard',
@@ -1468,7 +1469,8 @@ export default function SuperAdminConsole({
         name: role.name,
         description: role.description || '',
         permissions: [...(role.permissions || [])],
-        is_system: role.is_system !== undefined ? role.is_system : true
+        is_system: role.is_system !== undefined ? role.is_system : true,
+        base_role: role.base_role || ''
       });
     } else {
       setEditingRole(null);
@@ -1476,7 +1478,8 @@ export default function SuperAdminConsole({
         name: '',
         description: '',
         permissions: [],
-        is_system: true
+        is_system: true,
+        base_role: ''
       });
     }
     setRolePermissionSearch('');
@@ -1524,7 +1527,8 @@ export default function SuperAdminConsole({
           name: roleForm.name,
           description: roleForm.description,
           permissions: roleForm.permissions,
-          is_system: roleForm.is_system
+          is_system: roleForm.is_system,
+          ...(roleForm.base_role !== 'SUPER_ADMIN' ? { base_role: roleForm.base_role || null } : {})
         });
         setActionFeedback({ type: 'success', text: `✓ '${roleForm.name}' yetki rolü güncellendi.` });
       } else {
@@ -1532,7 +1536,8 @@ export default function SuperAdminConsole({
           name: roleForm.name,
           description: roleForm.description,
           permissions: roleForm.permissions,
-          is_system: roleForm.is_system
+          is_system: roleForm.is_system,
+          ...(roleForm.base_role !== 'SUPER_ADMIN' ? { base_role: roleForm.base_role || null } : {})
         });
         setActionFeedback({ type: 'success', text: `✓ '${roleForm.name}' yetki rolü oluşturuldu.` });
       }
@@ -3918,14 +3923,14 @@ export default function SuperAdminConsole({
 
               {/* Modül Filtreleri */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {['ALL', 'PLATFORM', 'RBAC', 'AGENTS', 'PROJECTS', 'CHAT', 'MEMORY', 'BILLING'].map((mod) => (
+                {['ALL', ...PERMISSION_MODULES.map(([c]) => c)].map((mod) => (
                   <button
                     key={mod}
                     onClick={() => setPermissionModuleFilter(mod)}
                     className="super-admin-btn-secondary"
                     style={permissionModuleFilter === mod ? { background: '#7134e2', color: '#fff', borderColor: '#7134e2' } : {}}
                   >
-                    {mod === 'ALL' ? 'TÜM MODÜLLER' : mod}
+                    {mod === 'ALL' ? 'TÜM MODÜLLER' : moduleName(mod)}
                   </button>
                 ))}
               </div>
@@ -3937,7 +3942,7 @@ export default function SuperAdminConsole({
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                           <span style={{ background: 'rgba(20,108,235,0.2)', color: 'var(--ac-60a5fa)', padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem', fontWeight: 700 }}>
-                            {perm.module}
+                            {perm.module_name || moduleName(perm.module)}
                           </span>
                           <span style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-a78bfa)', fontSize: '0.75rem' }}>
                             {perm.code}
@@ -3945,6 +3950,9 @@ export default function SuperAdminConsole({
                         </div>
                         <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--nt-ffffff)', margin: '6px 0 4px 0' }}>{perm.name}</h4>
                         <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '4px 0 10px 0', lineHeight: 1.4 }}>{perm.description || '-'}</p>
+                        {perm.enforced === false && (
+                          <p style={{ fontSize: '0.68rem', color: 'var(--ac-fbbf24)', margin: '0 0 8px 0' }}>Henüz bir işleme bağlı değil: rol listesinde görünür, sistemde bir şeyi açmaz.</p>
+                        )}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
                           {(perm.default_for_roles || []).map((r, i) => (
                             <span key={i} style={{ background: 'rgb(var(--rgb-ov) / 0.06)', color: 'var(--nt-cbd5e1)', padding: '2px 6px', borderRadius: 4, fontSize: '0.65rem' }}>
@@ -3993,7 +4001,7 @@ export default function SuperAdminConsole({
                           <td style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--ac-a78bfa)' }}>{perm.code}</td>
                           <td>
                             <span style={{ background: 'rgba(20,108,235,0.2)', color: 'var(--ac-60a5fa)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.68rem' }}>
-                              {perm.module}
+                              {perm.module_name || moduleName(perm.module)}
                             </span>
                           </td>
                           <td>
@@ -6361,8 +6369,8 @@ export default function SuperAdminConsole({
                     onChange={(e) => setPermissionForm({ ...permissionForm, module: e.target.value })}
                     className="super-admin-select"
                   >
-                    {['PLATFORM', 'RBAC', 'AGENTS', 'PROJECTS', 'CHAT', 'MEMORY', 'BILLING'].map(m => (
-                      <option key={m} value={m}>{m}</option>
+                    {PERMISSION_MODULES.map(([m, label]) => (
+                      <option key={m} value={m}>{label}</option>
                     ))}
                   </select>
                 </div>
@@ -6471,6 +6479,20 @@ export default function SuperAdminConsole({
                     <span>Sistem / Global Rol Olarak Tanımla</span>
                   </label>
                 </div>
+                <div>
+                  <label htmlFor="role-base" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 4 }}>
+                    Temel Rol
+                  </label>
+                  <select id="role-base" className="super-admin-select" value={roleForm.base_role || ''}
+                    disabled={roleForm.base_role === 'SUPER_ADMIN'}
+                    onChange={(e) => setRoleForm({ ...roleForm, base_role: e.target.value })}>
+                    <option value="">Yok (yalnızca seçilen izinler)</option>
+                    <option value="COMPANY_ADMIN">Şirket Yöneticisi (konsol açılır, son yönetici korunur)</option>
+                    <option value="PROJECT_MANAGER">Proje Yöneticisi</option>
+                    <option value="USER">Uzman Kullanıcı</option>
+                    {roleForm.base_role === 'SUPER_ADMIN' && <option value="SUPER_ADMIN">RECDx Süper Yönetici</option>}
+                  </select>
+                </div>
               </div>
 
               {/* 2. Rol Açıklaması */}
@@ -6574,7 +6596,7 @@ export default function SuperAdminConsole({
 
                   {/* Modül Butonları */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {['ALL', 'PLATFORM', 'RBAC', 'AGENTS', 'PROJECTS', 'CHAT', 'MEMORY', 'BILLING'].map((mod) => (
+                    {['ALL', ...PERMISSION_MODULES.map(([c]) => c)].map((mod) => (
                       <button
                         key={mod}
                         type="button"
@@ -6590,7 +6612,7 @@ export default function SuperAdminConsole({
                           cursor: 'pointer'
                         }}
                       >
-                        {mod === 'ALL' ? 'TÜMÜ' : mod}
+                        {mod === 'ALL' ? 'TÜMÜ' : moduleName(mod)}
                       </button>
                     ))}
                   </div>
@@ -6701,7 +6723,7 @@ export default function SuperAdminConsole({
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginBottom: 2 }}>
                               <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '1px 5px', borderRadius: 3, background: 'rgb(var(--rgb-ov) / 0.08)', color: 'var(--ac-a78bfa)' }}>
-                                {p.module}
+                                {moduleName(p.module)}
                               </span>
                               <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 700, color: isSelected ? 'var(--ac-34d399)' : 'var(--nt-cbd5e1)' }}>
                                 {p.code}

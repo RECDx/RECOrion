@@ -209,7 +209,7 @@ async def _notify(db: AsyncSession, call: ToolCall, conn: IntegrationConnection)
 def can_decide(user, call: ToolCall) -> bool:
     if call.tenant_id != user.tenant_id or user.is_platform_staff:
         return False
-    return call.approver_actor_id == user.actor_id or user.has("integration:manage")
+    return call.approver_actor_id == user.actor_id or user.has("integration:approve")
 
 
 async def decide(db: AsyncSession, call: ToolCall, user, approve: bool, note: Optional[str]) -> ToolCall:

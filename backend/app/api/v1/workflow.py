@@ -72,7 +72,8 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
             "started_at": t.started_at, "submitted_at": t.submitted_at, "completed_at": t.completed_at,
             # AI personel kendi teslim eder; insan personeli yerine yönetici de teslim edebilir
             "can_submit": t.status in task_flow.WORKING and (assignee is None or assignee.actor_type == "HUMAN") and (is_assignee or manages),
-            "can_decide": t.status == "WAITING_APPROVAL" and (approver_id == user.actor_id or user.has("project:manage")),
+            "can_decide": t.status == "WAITING_APPROVAL" and (approver_id == user.actor_id or user.has("project:manage")
+                                                              or user.has("task:approve") or user.has("task:reject")),
             "can_release": t.status == "QUARANTINED" and manages,
             # ADIM 12.4: çıktıyı dış sisteme aktarma (proje yöneticisi) ve adım bitince önerilecek eşlemeler
             "can_transfer": manages and t.status in ("DONE", "WAITING_APPROVAL") and bool(art),
@@ -115,7 +116,8 @@ async def decide_task(task_id: uuid.UUID, payload: DecisionIn, user: CurrentUser
     task, project = await _task(db, user, task_id)
     if task.status != "WAITING_APPROVAL":
         raise HTTPException(status_code=409, detail="Bu iş adımı onay beklemiyor.")
-    if (task.approver_actor_id or project.manager_actor_id) != user.actor_id and not user.has("project:manage"):
+    deputy = user.has("task:approve" if payload.approve else "task:reject")  # vekâleten karar (Kalite ve Onay Sorumlusu)
+    if (task.approver_actor_id or project.manager_actor_id) != user.actor_id and not (user.has("project:manage") or deputy):
         raise forbidden("Bu iş adımını yalnızca onaylayıcısı onaylayabilir.")
     note = (payload.note or "").strip()
     if not payload.approve and not note:

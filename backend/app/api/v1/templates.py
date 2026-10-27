@@ -134,8 +134,8 @@ async def update_template(template_id: uuid.UUID, payload: TemplateUpdate, user:
     t = await _get(db, user, template_id)
     if t.tenant_id is None:
         raise HTTPException(status_code=403, detail="RECDx şablonları yalnızca Süper Admin tarafından düzenlenir.")
-    if not (t.created_by_actor_id == user.actor_id or user.has("project:manage")):
-        raise HTTPException(status_code=403, detail="Şablonu yalnızca oluşturan veya proje yönetim yetkisi olan düzenler.")
+    if not (t.created_by_actor_id == user.actor_id or user.has("template:manage")):
+        raise HTTPException(status_code=403, detail="Şablonu yalnızca oluşturan veya şirket şablonlarını yönetme yetkisi olan düzenler.")
     _update(t, payload)
     await db.commit()
     return tsvc.out(t, full=True)

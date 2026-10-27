@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import uuid
+from app.core import permission_catalog as pc
+from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.db.models import SystemPermission, TenantRole, Actor
 
@@ -26,9 +28,25 @@ class PermissionResponse(BaseModel):
     description: Optional[str] = None
     default_for_roles: list
     is_system: bool
+    module_name: Optional[str] = None
+    enforced: bool = True  # False: henüz bir işleme bağlı değil (kodda denetlenmiyor)
 
     class Config:
         from_attributes = True
+
+
+def _perm_out(p: SystemPermission) -> PermissionResponse:
+    out = PermissionResponse.model_validate(p)
+    out.module_name = pc.MODULES.get(p.module, p.module)
+    out.enforced = p.code in pc.CODES and p.code not in pc.NOT_ENFORCED
+    return out
+
+
+@router.get("/permission-modules")
+async def list_permission_modules():
+    """İzin modülleri (kod -> ekranda görünen ad), müşteri menüsü sırasıyla."""
+    return [{"code": k, "name": v} for k, v in pc.MODULES.items()]
+
 
 @router.get("/permissions", response_model=List[PermissionResponse])
 async def list_system_permissions(
@@ -42,9 +60,11 @@ async def list_system_permissions(
     stmt = select(SystemPermission)
     if module:
         stmt = stmt.where(SystemPermission.module == module.upper())
-    stmt = stmt.order_by(SystemPermission.module, SystemPermission.code)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    order = {m: i for i, m in enumerate(pc.MODULES)}
+    rank = {c: i for i, c in enumerate(pc.CODES)}
+    rows = (await db.execute(stmt)).scalars().all()
+    rows.sort(key=lambda p: (order.get(p.module, 99), rank.get(p.code, 999), p.code))
+    return [_perm_out(p) for p in rows]
 
 @router.post("/permissions", response_model=PermissionResponse)
 async def create_system_permission(payload: PermissionCreate, db: AsyncSession = Depends(get_db)):
@@ -118,12 +138,32 @@ class RoleCreate(BaseModel):
     description: Optional[str] = None
     permissions: List[str] = []
     is_system: bool = True
+    base_role: Optional[str] = None
 
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
     is_system: Optional[bool] = None
+    base_role: Optional[str] = None
+
+BASE_ROLES = ("COMPANY_ADMIN", "PROJECT_MANAGER", "USER")  # SUPER_ADMIN yalnızca göçle (RECDx rolü)
+
+
+async def _check_role_payload(db: AsyncSession, permissions: Optional[List[str]], base_role: Optional[str]) -> None:
+    if permissions:
+        valid = set((await db.execute(select(SystemPermission.code))).scalars().all())
+        bad = sorted({p for p in permissions if p not in valid and p != "*"})
+        if bad:
+            raise HTTPException(status_code=400, detail=f"Geçersiz izin kodları: {', '.join(bad)}")
+    if base_role and base_role not in BASE_ROLES:
+        raise HTTPException(status_code=400, detail="Temel rol Şirket Yöneticisi, Proje Yöneticisi, Uzman Kullanıcı veya boş olabilir.")
+
+
+def is_platform_role(role: TenantRole) -> bool:
+    """Yalnızca RECDx'e ait rol: müşterilere listelenmez ve atanamaz."""
+    perms = set(role.permissions or [])
+    return role.base_role == "SUPER_ADMIN" or bool(perms & pc.PLATFORM_ONLY)
 
 class RoleResponse(BaseModel):
     id: uuid.UUID
@@ -132,47 +172,26 @@ class RoleResponse(BaseModel):
     description: Optional[str] = None
     permissions: list = []
     is_system: bool = False
+    base_role: Optional[str] = None
+    base_role_name: Optional[str] = None
     created_at: Optional[datetime] = None
     actor_count: int = 0
 
     class Config:
         from_attributes = True
 
-DEFAULT_SYSTEM_ROLES = [
-    {
-        "name": "Süper Yönetici (Platform Admin)",
-        "description": "RECOrion platformunun tam yetkili yöneticisi. Tüm sistem, müşteri ve güvenlik ayarlarını yönetebilir.",
-        "permissions": ["*"],
-        "is_system": True
-    },
-    {
-        "name": "Kurumsal Operasyon & Müşteri Yöneticisi",
-        "description": "Müşteri ve kiralama paketlerini, onay süreçlerini ve bildirim zamanlayıcılarını yönetir.",
-        "permissions": ["tenant:view", "tenant:manage", "billing:view"],
-        "is_system": True
-    },
-    {
-        "name": "Güvenlik & Uyum Denetçisi (SecOps & Compliance)",
-        "description": "Erişim loglarını, rol tanımlarını ve RBAC izin hiyerarşisini denetler.",
-        "permissions": ["tenant:view", "role:edit", "chat:export"],
-        "is_system": True
-    },
-    {
-        "name": "Yapay Zeka Mimarisi & Ajan Lideri",
-        "description": "EVREN modellerini yapılandırır, otonom ajanları ve görev dağılımlarını orkestre eder.",
-        "permissions": ["agent:hire", "agent:configure", "agent:custom_title", "agent:quarantine", "project:manage", "chat:participate", "chat:view_a2a"],
-        "is_system": True
-    },
-    {
-        "name": "Standart Kurumsal Kullanıcı",
-        "description": "Temel sohbet, proje takibi ve hafıza arama yetkilerine sahip standart kullanıcı.",
-        "permissions": ["tenant:view", "task:create", "chat:participate", "memory:search"],
-        "is_system": True
-    }
-]
+
+def _role_out(role_obj: TenantRole, actor_count: int) -> RoleResponse:
+    return RoleResponse(
+        id=role_obj.id, tenant_id=role_obj.tenant_id, name=role_obj.name, description=role_obj.description,
+        permissions=role_obj.permissions or [], is_system=role_obj.is_system, base_role=role_obj.base_role,
+        base_role_name=pc.role_label(role_obj.base_role) if role_obj.base_role else None,
+        created_at=role_obj.created_at, actor_count=actor_count,
+    )
+
 
 @router.get("/roles", response_model=List[RoleResponse])
-async def list_system_roles(db: AsyncSession = Depends(get_db)):
+async def list_system_roles(user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     Sistem genelindeki yetki rollerini ve her role atanmış aktör/kullanıcı sayısını listeler (Madde 1).
     Eğer henüz rol tanımlanmamışsa varsayılan kurumsal sistem rollerini otomatik tohumlar (seed).
@@ -191,34 +210,19 @@ async def list_system_roles(db: AsyncSession = Depends(get_db)):
         perms_res = await db.execute(select(SystemPermission.code))
         all_perms = perms_res.scalars().all()
 
-        for d in DEFAULT_SYSTEM_ROLES:
-            perms = list(all_perms) if d["permissions"] == ["*"] else d["permissions"]
-            role_obj = TenantRole(
-                tenant_id=None,
-                name=d["name"],
-                description=d["description"],
-                permissions=perms,
-                is_system=d["is_system"]
-            )
-            db.add(role_obj)
+        for d in pc.SYSTEM_ROLES:
+            perms = list(all_perms) if d["permissions"] == ["*"] else list(d["permissions"])
+            db.add(TenantRole(tenant_id=None, name=d["name"], description=d["description"], permissions=perms,
+                              is_system=True, base_role=d.get("base_role")))
         await db.commit()
 
         # Yeniden çek
         rows = (await db.execute(stmt)).all()
 
-    result = []
-    for role_obj, actor_count in rows:
-        result.append(RoleResponse(
-            id=role_obj.id,
-            tenant_id=role_obj.tenant_id,
-            name=role_obj.name,
-            description=role_obj.description,
-            permissions=role_obj.permissions or [],
-            is_system=role_obj.is_system,
-            created_at=role_obj.created_at,
-            actor_count=actor_count
-        ))
-    return result
+    # Müşteriler RECDx'e ait rolü görmez; şirket başına kullanıcı sayısı da yalnızca RECDx'e gösterilir
+    if not user.is_platform_staff:
+        return [_role_out(r, 0) for r, _ in rows if not is_platform_role(r)]
+    return [_role_out(r, n) for r, n in rows]
 
 @router.post("/roles", response_model=RoleResponse)
 async def create_system_role(payload: RoleCreate, db: AsyncSession = Depends(get_db)):
@@ -238,28 +242,21 @@ async def create_system_role(payload: RoleCreate, db: AsyncSession = Depends(get
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail=f"'{cleaned_name}' adında bir yetki rolü zaten mevcut.")
+    await _check_role_payload(db, payload.permissions, payload.base_role)
 
     role = TenantRole(
         tenant_id=None,
         name=cleaned_name,
         description=payload.description.strip() if payload.description else None,
         permissions=payload.permissions or [],
-        is_system=payload.is_system
+        is_system=payload.is_system,
+        base_role=payload.base_role or None,
     )
     db.add(role)
     await db.commit()
     await db.refresh(role)
 
-    return RoleResponse(
-        id=role.id,
-        tenant_id=role.tenant_id,
-        name=role.name,
-        description=role.description,
-        permissions=role.permissions or [],
-        is_system=role.is_system,
-        created_at=role.created_at,
-        actor_count=0
-    )
+    return _role_out(role, 0)
 
 @router.put("/roles/{role_id}", response_model=RoleResponse)
 async def update_system_role(role_id: uuid.UUID, payload: RoleUpdate, db: AsyncSession = Depends(get_db)):
@@ -288,8 +285,16 @@ async def update_system_role(role_id: uuid.UUID, payload: RoleUpdate, db: AsyncS
     if payload.description is not None:
         role.description = payload.description.strip() if payload.description else None
 
+    if role.base_role == "SUPER_ADMIN" and (payload.permissions is not None or "base_role" in payload.model_fields_set):
+        raise HTTPException(status_code=400, detail="RECDx süper yönetici rolünün izinleri değiştirilemez.")
+    await _check_role_payload(db, payload.permissions, payload.base_role)
     if payload.permissions is not None:
         role.permissions = payload.permissions
+    if "base_role" in payload.model_fields_set:
+        role.base_role = payload.base_role or None
+        # Bu role bağlı kullanıcıların rol kodu da güncellenir (şirket yöneticisi denetimleri buna bakar)
+        for a in (await db.execute(select(Actor).where(Actor.role_id == role.id))).scalars():
+            a.role = role.base_role or role.name
 
     if payload.is_system is not None:
         role.is_system = payload.is_system
@@ -302,16 +307,7 @@ async def update_system_role(role_id: uuid.UUID, payload: RoleUpdate, db: AsyncS
     )
     actor_count = actor_count_res.scalar() or 0
 
-    return RoleResponse(
-        id=role.id,
-        tenant_id=role.tenant_id,
-        name=role.name,
-        description=role.description,
-        permissions=role.permissions or [],
-        is_system=role.is_system,
-        created_at=role.created_at,
-        actor_count=actor_count
-    )
+    return _role_out(role, actor_count)
 
 @router.delete("/roles/{role_id}")
 async def delete_system_role(role_id: uuid.UUID, db: AsyncSession = Depends(get_db)):

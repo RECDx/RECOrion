@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core import permission_catalog
 from app.db.models import Actor, Tenant, TenantRole
 from app.db.session import get_db
 
@@ -34,22 +35,9 @@ WILDCARD = "*"
 # Yalnızca RECDx ana şirketindeki kullanıcılara verilebilen izinler
 PLATFORM_ONLY_PERMISSIONS = {WILDCARD, "system:admin"}
 
-ROLE_BASE_PERMISSIONS = {
-    "COMPANY_ADMIN": {
-        "tenant:manage", "tenant:view", "role:create", "role:edit", "role:delete",
-        "user:invite", "user:manage", "agent:hire", "agent:configure",
-        "agent:custom_title", "agent:quarantine", "project:create", "project:manage",
-        "task:create", "task:approve", "task:reject", "chat:participate",
-        "chat:view_a2a", "chat:export", "memory:search", "memory:promote", "memory:revoke",
-        "billing:view", "department:dashboard", "integration:manage",
-    },
-    "PROJECT_MANAGER": {
-        "tenant:view", "agent:hire", "project:create", "project:manage", "task:create",
-        "task:approve", "task:reject", "chat:participate", "chat:view_a2a",
-        "memory:search", "memory:promote",
-    },
-}
-DEFAULT_PERMISSIONS = {"tenant:view", "task:create", "chat:participate", "memory:search"}
+# Rol kodlarının temel izinleri izin kataloğundan gelir (app/core/permission_catalog.py)
+ROLE_BASE_PERMISSIONS = permission_catalog.ROLE_BASE_PERMISSIONS
+DEFAULT_PERMISSIONS = permission_catalog.DEFAULT_PERMISSIONS
 
 # ---------------------------------------------------------------------------
 # Şifreler
@@ -148,11 +136,12 @@ class CurrentUser:
 async def compute_permissions(db: AsyncSession, actor: Actor, is_platform_staff: bool) -> Set[str]:
     if actor.role == "SUPER_ADMIN" and is_platform_staff:
         return {WILDCARD}
-    perms = set(ROLE_BASE_PERMISSIONS.get(actor.role, DEFAULT_PERMISSIONS))
-    if actor.role_id:
-        role = await db.get(TenantRole, actor.role_id)
-        if role and (role.tenant_id is None or role.tenant_id == actor.tenant_id):
-            perms.update(role.permissions or [])
+    role = await db.get(TenantRole, actor.role_id) if actor.role_id else None
+    if role and (role.tenant_id is None or role.tenant_id == actor.tenant_id):
+        # Rolü atanmış kullanıcı: rolün izinleri (+ temel rol kodunun izinleri); varsayılan izinler eklenmez
+        perms = set(ROLE_BASE_PERMISSIONS.get(actor.role, set())) | set(role.permissions or [])
+    else:
+        perms = set(ROLE_BASE_PERMISSIONS.get(actor.role, DEFAULT_PERMISSIONS))
     perms.update(actor.extra_permissions or [])
     if not is_platform_staff:
         perms -= PLATFORM_ONLY_PERMISSIONS

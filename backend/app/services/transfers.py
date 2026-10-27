@@ -345,8 +345,8 @@ async def can_decide(db: AsyncSession, user, tr: IntegrationTransfer) -> bool:
         return False  # aynı kişi iki kez onaylayamaz
     if not tr.approvals:  # ilk onay: proje yöneticisi veya entegrasyon yöneticisi
         project = await db.get(Project, tr.project_id) if tr.project_id else None
-        return bool(project and project.manager_actor_id == user.actor_id) or user.has("integration:manage")
-    return user.has("integration:manage")  # ikinci onay: entegrasyon yöneticisi
+        return bool(project and project.manager_actor_id == user.actor_id) or user.has("integration:approve")
+    return user.has("integration:approve")  # ikinci onay: dış sisteme yazma onayı yetkisi
 
 
 async def decide(db: AsyncSession, tr: IntegrationTransfer, user, approve: bool, note: Optional[str]) -> IntegrationTransfer:

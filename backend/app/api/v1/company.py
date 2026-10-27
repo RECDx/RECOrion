@@ -32,6 +32,8 @@ from app.db.models import (
 )
 from app.api.v1.auth import hash_password
 from app.core.net import UnsafeURLError, safe_request
+from app.api.v1.system import is_platform_role
+from app.core import permission_catalog as pc
 from app.core.security import CurrentUser, forbidden, get_current_user
 from app.services.plan_features import deny, ensure_document_quota, entitlements
 
@@ -2039,7 +2041,7 @@ async def list_company_users(
             job_title_name=job_title_name,
             job_title_code=job_title_code,
             role_id=a.role_id,
-            role_name=role_name or a.role,
+            role_name=role_name or pc.role_label(a.role),
             role=a.role,
             extra_permissions=extra_p,
             effective_permissions=effective_p,
@@ -2048,6 +2050,23 @@ async def list_company_users(
         ))
 
     return result
+
+
+async def _assignable_role(db: AsyncSession, current: CurrentUser, tenant_id: uuid.UUID, role_id: uuid.UUID) -> TenantRole:
+    """Şirkete atanabilecek rol: sistem rolü veya şirketin kendi rolü; RECDx'e ait rol müşteriye atanamaz."""
+    r = await db.get(TenantRole, role_id)
+    if not r or (r.tenant_id is not None and r.tenant_id != tenant_id) or (is_platform_role(r) and not current.is_platform_staff):
+        raise HTTPException(status_code=404, detail="Seçilen sistem yetki rolü bulunamadı.")
+    return r
+
+
+async def _ensure_other_admin(db: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    """Şirkette en az bir aktif şirket yöneticisi kalmalıdır."""
+    others = (await db.execute(select(func.count(Actor.id)).where(
+        Actor.tenant_id == tenant_id, Actor.actor_type == "HUMAN", Actor.role == "COMPANY_ADMIN",
+        Actor.id != user_id, Actor.status != "DISABLED"))).scalar() or 0
+    if not others:
+        raise HTTPException(status_code=400, detail="Şirketin başka aktif Şirket Yöneticisi kalmıyor. Önce başka bir kullanıcıya Şirket Yöneticisi rolünü atayın.")
 
 
 def _ensure_can_grant(current: CurrentUser, permissions: List[str]) -> None:
@@ -2133,13 +2152,11 @@ async def create_company_user(
         job_title_code = jt.code
 
     # 7. Sistem Yetki Rolü Kontrolü
-    role_name = "MEMBER"
+    role_name = "USER"
     role_perms = []
     if payload.role_id:
-        r = await db.get(TenantRole, payload.role_id)
-        if not r or (r.tenant_id is not None and r.tenant_id != tenant_id):
-            raise HTTPException(status_code=404, detail="Seçilen sistem yetki rolü bulunamadı.")
-        role_name = r.name
+        r = await _assignable_role(db, current, tenant_id, payload.role_id)
+        role_name = r.base_role or r.name
         role_perms = r.permissions or []
 
     # 8. Ek İzinler
@@ -2180,7 +2197,7 @@ async def create_company_user(
         job_title_name=job_title_name,
         job_title_code=job_title_code,
         role_id=user.role_id,
-        role_name=role_name,
+        role_name=(r.name if payload.role_id else pc.role_label(role_name)),
         role=user.role,
         extra_permissions=extra_p,
         effective_permissions=effective_p,
@@ -2231,6 +2248,8 @@ async def update_company_user(
                         status_code=403,
                         detail=f"Satın aldığınız '{plan.name}' paketinin azami İnsan Kullanıcı kotası ({plan.max_humans} Kullanıcı) dolmuştur. Bu kullanıcıyı aktifleştiremezsiniz. Lütfen paketinizi yükseltin veya başka bir kullanıcıyı pasife alın."
                     )
+        if target_status == "DISABLED" and user.status != "DISABLED" and user.role == "COMPANY_ADMIN":
+            await _ensure_other_admin(db, tenant_id, user.id)
         user.status = target_status
 
     if payload.display_name is not None:
@@ -2276,15 +2295,18 @@ async def update_company_user(
             user.job_title_id = None
 
     if payload.role_id is not None:
+        was_admin = user.role == "COMPANY_ADMIN"
         if payload.role_id:
-            r = await db.get(TenantRole, payload.role_id)
-            if not r or (r.tenant_id is not None and r.tenant_id != tenant_id):
-                raise HTTPException(status_code=404, detail="Seçilen yetki rolü bulunamadı.")
+            r = await _assignable_role(db, current, tenant_id, payload.role_id)
             _ensure_can_grant(current, r.permissions or [])
             user.role_id = payload.role_id
-            user.role = r.name
+            user.role = r.base_role or r.name
         else:
             user.role_id = None
+            if user.role not in ("COMPANY_ADMIN", "PROJECT_MANAGER"):
+                user.role = "USER"
+        if was_admin and user.role != "COMPANY_ADMIN":
+            await _ensure_other_admin(db, tenant_id, user.id)
 
     if payload.extra_permissions is not None:
         _ensure_can_grant(current, payload.extra_permissions)
@@ -2331,7 +2353,7 @@ async def update_company_user(
         job_title_name=job_title_name,
         job_title_code=job_title_code,
         role_id=user.role_id,
-        role_name=role_name or user.role,
+        role_name=role_name or pc.role_label(user.role),
         role=user.role,
         extra_permissions=extra_p,
         effective_permissions=effective_p,

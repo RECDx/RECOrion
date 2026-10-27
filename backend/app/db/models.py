@@ -190,7 +190,7 @@ class SystemPermission(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     code = Column(String(64), unique=True, nullable=False)
-    module = Column(String(64), nullable=False)  # PLATFORM, RBAC, AGENTS, PROJECTS, CHAT, MEMORY, BILLING
+    module = Column(String(64), nullable=False)  # modüller: app/core/permission_catalog.MODULES
     name = Column(String(128), nullable=False)
     description = Column(Text)
     default_for_roles = Column(JSONB, default=list)
@@ -207,6 +207,8 @@ class TenantRole(Base):
     description = Column(Text)
     permissions = Column(JSONB, default=list)
     is_system = Column(Boolean, default=False)
+    # Atanınca actors.role bu kod olur (COMPANY_ADMIN, PROJECT_MANAGER, USER; SUPER_ADMIN yalnızca RECDx); boşsa rol adı
+    base_role = Column(String(32))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 

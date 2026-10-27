@@ -36,8 +36,8 @@ TARGET_KEYS = ("model", "tool", "find_tool", "update_tool")  # araç hedefinde: 
 
 def _manage(user: CurrentUser, tenant_id: uuid.UUID) -> None:
     ensure_tenant_content(user, tenant_id)
-    if not user.has("integration:manage"):
-        raise forbidden("Eşlemeleri yalnızca entegrasyon yönetimi yetkisi olanlar yönetebilir.")
+    if not user.has("mapping:manage"):
+        raise forbidden("Eşlemeleri yalnızca eşleme stüdyosu yetkisi olanlar yönetebilir.")
 
 
 async def _connection(db: AsyncSession, tenant_id: uuid.UUID, cid: uuid.UUID) -> IntegrationConnection:
