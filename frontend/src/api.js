@@ -177,6 +177,20 @@ export const api = {
   approveMapping: (tenantId, id) => request(`/company/${tenantId}/mappings/${id}/approve`, { method: 'POST' }),
   archiveMapping: (tenantId, id) => request(`/company/${tenantId}/mappings/${id}/archive`, { method: 'POST' }),
   suggestMapping: (tenantId, data) => request(`/company/${tenantId}/mappings/suggest`, { method: 'POST', body: JSON.stringify(data) }),
+
+  // Otomasyonlar (ADIM 13.2–13.5): olayla başlayan işler, RECDx uygulaması hazır kuralları, çalışma günlüğü
+  getAutomations: (tenantId) => request(`/company/${tenantId}/automations`),
+  createAutomation: (tenantId, data) => request(`/company/${tenantId}/automations`, { method: 'POST', body: JSON.stringify(data) }),
+  updateAutomation: (tenantId, id, data) => request(`/company/${tenantId}/automations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  setAutomationStatus: (tenantId, id, status) => request(`/company/${tenantId}/automations/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  rotateAutomationSecret: (tenantId, id) => request(`/company/${tenantId}/automations/${id}/rotate-secret`, { method: 'POST' }),
+  testAutomation: (tenantId, id, payload, eventType) => request(`/company/${tenantId}/automations/${id}/test`, { method: 'POST', body: JSON.stringify({ payload, event_type: eventType || null }) }),
+  runAutomation: (tenantId, id) => request(`/company/${tenantId}/automations/${id}/run`, { method: 'POST' }),
+  getAutomationLog: (tenantId, id) => request(`/company/${tenantId}/automations/${id}/log`),
+  getCompanyAutomationLog: (tenantId) => request(`/company/${tenantId}/automation-log`),
+  suggestAutomation: (tenantId, text, sample) => request(`/company/${tenantId}/automations/suggest`, { method: 'POST', body: JSON.stringify({ text, sample: sample || null }) }),
+  getAutomationPresets: (tenantId, app) => request(`/company/${tenantId}/automations/presets/${app}`),
+  installAutomationPresets: (tenantId, app, data) => request(`/company/${tenantId}/automations/presets/${app}`, { method: 'POST', body: JSON.stringify(data) }),
   getTargetFields: (tenantId, cid, target) => request(`/company/${tenantId}/integrations/${cid}/target-fields?${new URLSearchParams(target).toString()}`),
   // Çıktıdan kayda aktarım (ADIM 12.4)
   getTransferOptions: (projectId) => request(`/projects/${projectId}/transfer-options`),

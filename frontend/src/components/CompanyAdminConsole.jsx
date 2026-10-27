@@ -58,6 +58,7 @@ import RecaiCapabilities from './recai/RecaiCapabilities';
 import CreditsPanel from './ai/CreditsPanel';
 import CompanyDashboard from './dashboard/CompanyDashboard';
 import IntegrationsPanel from './integrations/IntegrationsPanel';
+import Automations from './integrations/Automations';
 import { CompanyRegulations } from './regulations/Regulations';
 import BrainPanel from './ai/BrainPanel';
 import CatalogImportModal from './catalog/CatalogImportModal';
@@ -85,6 +86,7 @@ const COMPANY_NAV = [
     { tab: 'MANIFESTO', label: 'Sektörel Manifesto', icon: FileText, color: '#f59e0b' },
     { tab: 'BRAIN', label: 'Beyin AI', icon: Brain, color: '#c084fc' },
     { tab: 'INTEGRATIONS', label: 'Entegrasyonlar', icon: Plug, color: 'var(--ac-38bdf8)' },
+    { tab: 'AUTOMATIONS', label: 'Otomasyonlar', icon: Zap, color: 'var(--ac-fbbf24)' },
     { tab: 'REGULATIONS', label: 'Mevzuat Paketleri', icon: BookOpenCheck, color: '#f59e0b' },
   ] },
   { key: 'KULLANIM', label: 'Kullanım', items: [
@@ -5113,6 +5115,7 @@ export default function CompanyAdminConsole({
 
           {activeTab === 'DASHBOARD' && <CompanyDashboard tenantId={tenantId} departments={departments} />}
           {activeTab === 'INTEGRATIONS' && <IntegrationsPanel tenantId={tenantId} />}
+          {activeTab === 'AUTOMATIONS' && <div className="pj-steps"><Automations tenantId={tenantId} /></div>}
           {activeTab === 'REGULATIONS' && <CompanyRegulations tenantId={tenantId}
             canManage={(currentUser?.permissions || []).includes('tenant:manage') || currentUser?.role === 'COMPANY_ADMIN'} />}
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
