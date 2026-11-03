@@ -74,20 +74,20 @@ export default function RecslipCaseTab({ project }) {
         </div>
         <h4 className="pj-sub">Yönetici / yetkili AI onayı</h4>
         <div className="pj-form" aria-label="Yönetici onay kriterleri">
-          <label className="pj-field full" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label className="pj-field full pj-toggle">
             <input type="checkbox" disabled={ro} checked={c.manager.approve_all} onChange={(e) => set(['criteria', 'manager', 'approve_all'], e.target.checked)} /> Tümünü AI onaylasın (eşikler aranmaz)</label>
           <div className="pj-field"><label>En yüksek fiş tutarı</label>{num(['criteria', 'manager', 'max_amount'], { min: 0 })}</div>
           <div className="pj-field"><label>Çalışan başına aylık sınır</label>{num(['criteria', 'manager', 'monthly_employee_limit'], { min: 0 })}</div>
           <div className="pj-field"><label>İzinli risk</label><span>{RISK.map(([k, l]) => (
             <label key={k} style={{ marginRight: 10 }}><input type="checkbox" disabled={ro} checked={c.manager.risk_levels.includes(k)} onChange={() => toggleIn(['criteria', 'manager', 'risk_levels'], k)} /> {l}</label>))}</span></div>
-          <label className="pj-field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label className="pj-field pj-toggle">
             <input type="checkbox" disabled={ro} checked={c.manager.weekend_to_human} onChange={(e) => set(['criteria', 'manager', 'weekend_to_human'], e.target.checked)} /> Hafta sonu harcaması insana</label>
-          <label className="pj-field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label className="pj-field pj-toggle">
             <input type="checkbox" disabled={ro} checked={c.manager.duplicate_to_human} onChange={(e) => set(['criteria', 'manager', 'duplicate_to_human'], e.target.checked)} /> Mükerrer şüphesi insana</label>
         </div>
         <h4 className="pj-sub">Muhasebe AI onayı</h4>
         <div className="pj-form" aria-label="Muhasebe onay kriterleri">
-          <label className="pj-field full" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label className="pj-field full pj-toggle">
             <input type="checkbox" disabled={ro} checked={c.accountant.approve_all} onChange={(e) => set(['criteria', 'accountant', 'approve_all'], e.target.checked)} /> Tümünü AI onaylasın (eşikler aranmaz; düzeltmeler yine yapılır)</label>
           <div className="pj-field"><label>En yüksek fiş tutarı</label>{num(['criteria', 'accountant', 'max_amount'], { min: 0 })}</div>
           <div className="pj-field"><label>En düşük fiş güveni</label>{num(['criteria', 'accountant', 'min_confidence'], { min: 0, max: 100 })}</div>
@@ -96,7 +96,7 @@ export default function RecslipCaseTab({ project }) {
             <label key={k} style={{ marginRight: 10 }}><input type="checkbox" disabled={ro} checked={c.accountant.risk_levels.includes(k)} onChange={() => toggleIn(['criteria', 'accountant', 'risk_levels'], k)} /> {l}</label>))}</span></div>
           <div className="pj-field full"><label>Güvenli sayılan eşleşme kaynakları (diğerleri RECAi:Mergen ikinci görüşüne gider)</label><span>{SOURCES.map(([k, l]) => (
             <label key={k} style={{ marginRight: 10 }}><input type="checkbox" disabled={ro} checked={c.accountant.safe_sources.includes(k)} onChange={() => toggleIn(['criteria', 'accountant', 'safe_sources'], k)} /> {l}</label>))}</span></div>
-          <label className="pj-field" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label className="pj-field pj-toggle">
             <input type="checkbox" disabled={ro} checked={c.accountant.kkeg_to_human} onChange={(e) => set(['criteria', 'accountant', 'kkeg_to_human'], e.target.checked)} /> KKEG'li fiş insana</label>
         </div>
       </Card>

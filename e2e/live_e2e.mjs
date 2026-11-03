@@ -32,6 +32,8 @@ const browser = await chromium.launch({ executablePath: CHROME, args: ['--use-fa
 
 async function session(userKey, viewport = { width: 1440, height: 1000 }) {
   const ctx = await browser.newContext({ viewport });
+  // Kılavuz görüntüleri için: E2E_THEME=light
+  if (process.env.E2E_THEME) await ctx.addInitScript((t) => { try { localStorage.setItem('recorion_theme', t); } catch { /* */ } }, process.env.E2E_THEME);
   const page = await ctx.newPage();
   page.on('console', (m) => { if (m.type() === 'error') problems.push(`[${userKey}] konsol: ${m.text().slice(0, 200)}`); });
   page.on('response', (r) => { if (r.status() >= 500) problems.push(`[${userKey}] ${r.status()} ${r.request().method()} ${r.url()}`); });
@@ -1639,6 +1641,7 @@ try {
     await sdlg.locator('#rs-agent option').nth(1).waitFor({ state: 'attached', timeout: 15000 });
     await sdlg.locator('#rs-agent').selectOption({ index: 1 });
     await sdlg.locator('#rs-approver').selectOption({ label: 'Canlı Test Yöneticisi' });
+    await shot(au.page, '39-recslip-kurulum');
     await sdlg.getByRole('button', { name: /Kur ve bu ayın/ }).click();
     const setupToast = await toastText(au.page, /aylık süreci kuruldu/, 60000);
     await slipCard.getByText('Çalışıyor').waitFor({ timeout: 20000 });
@@ -1705,7 +1708,11 @@ try {
     await cs.page.reload();
     await cs.page.getByRole('tab', { name: 'RECSlip' }).click();
     await cs.page.getByRole('list', { name: 'RECSlip AI kararları' }).waitFor({ timeout: 20000 });
-    await cs.page.locator('#rs-export-time').fill('11:30');
+    // Saat alanı: yazılan değer tutana kadar (ekran ilk yüklemede ayarları yeniden çizebilir)
+    for (let i = 0; i < 3 && (await cs.page.locator('#rs-export-time').inputValue()) !== '11:30'; i += 1) {
+      await cs.page.locator('#rs-export-time').fill('11:30');
+      await cs.page.waitForTimeout(500);
+    }
     await cs.page.getByRole('button', { name: 'Kaydet', exact: true }).first().click();
     const saved14 = await toastText(cs.page, /RECSlip ayarları kaydedildi/, 20000);
     await shot(cs.page, '36-recslip-case-sekmesi');

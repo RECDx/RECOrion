@@ -86,3 +86,6 @@
 .pj-flow-key { font-weight: 800; color: var(--text-dim); }
 .pj-flow-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
 @media (max-width: 1024px) { .pj-flow-layout { grid-template-columns: 1fr; } }
+/* Onay kutusu + etiket satırı (RECSlip ayarları vb.) */
+.pj-field.pj-toggle { flex-direction: row; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; color: var(--text-main); }
+.pj-toggle input[type="checkbox"] { width: auto; margin: 0; flex: none; }
