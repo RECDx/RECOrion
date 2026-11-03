@@ -19,7 +19,10 @@ _styles: Dict[str, str] = {}  # adres → "json2" / "jsonrpc" (otomatik algılam
 JSON2_ARGS = {"search_read": ["domain"], "search_count": ["domain"], "create": ["vals_list"], "write": ["ids", "vals"],
               "read": ["ids"], "fields_get": [], "name_search": ["name"], "context_get": [], "default_get": ["fields"],
               "action_cancel": ["ids"], "button_cancel": ["ids"],
-              "message_post": ["ids"]}
+              "message_post": ["ids"],
+              # RECSlip.App v2 dış çağrıları (ADIM 14): kişinin kendi anahtarıyla
+              "rs_external_approve": ["ids"], "rs_external_refuse": ["ids"], "rs_external_export": ["ids"],
+              "rs_external_mergen_inputs": ["ids"], "action_mark_posted": ["ids"]}
 
 
 class _NoJson2(Exception):

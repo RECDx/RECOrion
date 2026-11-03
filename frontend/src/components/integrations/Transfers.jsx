@@ -34,7 +34,7 @@ export function TransferCard({ tr, canManage, decide, onChange }) {
   };
   const approvedCount = (tr.approvals || []).filter((a) => a.approve).length;
   return (
-    <li className="ig-transfer" aria-label={`Aktarım: ${titleOf(tr)}`}>
+    <li className="ig-transfer" aria-label={`Aktarım: ${titleOf(tr)}`} data-transfer-id={tr.id}>
       <div className="ig-transfer-head">
         <span><strong>{tr.object_label}: {titleOf(tr)}</strong> <Badge tone={tone}>{label}</Badge><br />
           <small className="pj-hint">{tr.connection_name} · {tr.action === 'UPDATE' ? 'mevcut kaydı günceller' : tr.action === 'CREATE' ? 'yeni kayıt açar' : ''}

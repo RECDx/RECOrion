@@ -57,8 +57,8 @@ POLL_MAX_EVENTS = 20  # bir turda en fazla açılan olay (fazlası sonraki tura 
 PAYLOAD_LIMIT = 16000
 LOOP_WINDOW = timedelta(days=7)
 ORIGIN_KEYS = ("x_recorion_origin", "recorion_origin")
-ENRICHERS = ("helpdesk_ticket", "hr_expense")
-SUMMARIES = ("expense_month",)
+ENRICHERS = ("helpdesk_ticket",)
+SUMMARIES: tuple = ()  # ADIM 14: RECSlip ay sonu özeti v2 aylık Case'e taşındı
 DEDUPE = table("automation_dedupe", column("rule_id", PGUUID(as_uuid=True)), column("key"), column("tenant_id", PGUUID(as_uuid=True)))
 
 _tasks: set = set()
@@ -327,12 +327,22 @@ async def _is_loop(db: AsyncSession, rule: AutomationRule, payload: Dict[str, An
         return "Olay RECOrion'un kendi işleminden geliyor (kaynak işareti)."
     if rule.connection_id and record_id:
         since = now() - LOOP_WINDOW
-        tr = (await db.execute(select(IntegrationTransfer.id).where(
+        trq = select(IntegrationTransfer.id).where(
             IntegrationTransfer.connection_id == rule.connection_id, IntegrationTransfer.external_id == str(record_id),
-            IntegrationTransfer.status.in_(("DONE", "ROLLED_BACK")), IntegrationTransfer.done_at >= since).limit(1))).first()
-        link = (await db.execute(select(ExternalLink.id).where(
+            IntegrationTransfer.status.in_(("DONE", "ROLLED_BACK")), IntegrationTransfer.done_at >= since)
+        lnq = select(ExternalLink.id).where(
             ExternalLink.connection_id == rule.connection_id, ExternalLink.external_id == str(record_id),
-            ExternalLink.updated_at >= since).limit(1))).first()
+            ExternalLink.updated_at >= since)
+        # İzlenen model biliniyorsa yalnızca aynı modelin kaydı sayılır (bilet #6 ile RECOrion'un yazdığı görev #6 aynı kayıt değil)
+        watched = ((rule.poll or {}).get("args") or {}).get("model") or (rule.poll or {}).get("tool")
+        if watched:
+            # eşlemesi bilinmeyen aktarım temkinle döngü sayılır
+            trq = trq.outerjoin(IntegrationMapping, IntegrationMapping.id == IntegrationTransfer.mapping_id).where(
+                (IntegrationMapping.id.is_(None))
+                | (func.coalesce(IntegrationMapping.target["model"].astext, IntegrationMapping.target["tool"].astext) == watched))
+            lnq = lnq.where(ExternalLink.target_key == watched)
+        tr = (await db.execute(trq.limit(1))).first()
+        link = (await db.execute(lnq.limit(1))).first()
         if tr or link:
             return f"Kayıt #{record_id} RECOrion tarafından yazıldı; kendi kaydından iş açılmaz."
     return None
@@ -603,9 +613,9 @@ async def poll(db: AsyncSession, rule: AutomationRule) -> Dict[str, Any]:
 
 
 def enricher(name: str):
-    from app.services import expenses, support
+    from app.services import support
 
-    return {"helpdesk_ticket": support.enrich, "hr_expense": expenses.enrich}[name]
+    return {"helpdesk_ticket": support.enrich}[name]
 
 
 async def schedule_payload(db: AsyncSession, rule: AutomationRule, at: datetime) -> Dict[str, Any]:
@@ -614,13 +624,6 @@ async def schedule_payload(db: AsyncSession, rule: AutomationRule, at: datetime)
     last = calendar.monthrange(local.year, local.month)[1]
     payload = {"date": local.date().isoformat(), "time": local.strftime("%H:%M"), "period": local.strftime("%Y-%m"),
                "weekday": local.weekday(), "is_month_end": local.day == last}
-    if (rule.schedule or {}).get("summary") == "expense_month":
-        from app.services import expenses, tool_gateway
-
-        conn = await db.get(IntegrationConnection, rule.connection_id) if rule.connection_id else None
-        if not conn or conn.tenant_id != rule.tenant_id or conn.status != "ACTIVE" or conn.connector != "odoo":
-            raise AutomationError("Masraf özeti için etkin Odoo bağlantısı gerekli.")
-        payload["expenses"] = await expenses.month_summary(tool_gateway.context(conn), payload["period"])
     return payload
 
 

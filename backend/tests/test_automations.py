@@ -184,6 +184,17 @@ def test_poll_baseline_new_records_and_loop(client, db, world, monkeypatch):
     records[0]["write_date"] = "2026-10-26 10:00:00"
     assert [h["outcome"] for h in client.post(run_url, headers=w["admin"]["h"]).json()["handled"]] == ["DRAFTED"]
 
+    # RECOrion'un başka modele yazdığı aynı numaralı kayıt (görev #4) bilet #4'ü döngü saydırmaz; aynı modeldeki (#5) saydırır
+    for model, ext in (("project.task", "4"), ("helpdesk.ticket", "5")):
+        _exec(db, "INSERT INTO external_links (tenant_id, connection_id, target_key, match_value, external_id) "
+                  "VALUES (%s, %s, %s, %s, %s) RETURNING id", w["tenant"], conn, model, f"e2e-{ext}", ext)
+    db.commit()
+    records.append({"id": 4, "name": "Başka modelde aynı numara", "write_date": "2026-10-26 11:00:00"})
+    records.append({"id": 5, "name": "RECOrion'un yazdığı bilet", "write_date": "2026-10-26 11:00:00"})
+    got = {h["external_ref"].rsplit(":", 1)[-1] if h.get("external_ref") else i: h["outcome"]
+           for i, h in enumerate(client.post(run_url, headers=w["admin"]["h"]).json()["handled"])}
+    assert sorted(got.values()) == ["DRAFTED", "LOOP"], got
+
 
 def test_recai_suggests_rule_without_invented_fields(client, world, monkeypatch):
     from app.services import llm_gateway

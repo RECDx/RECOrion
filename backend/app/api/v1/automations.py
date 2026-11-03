@@ -23,7 +23,7 @@ from app.db.models import AutomationLog, AutomationRule, IntegrationConnection, 
 from app.db.session import get_db
 from app.services import automations as svc
 from app.services import business_objects as bo
-from app.services import expenses, recdx_apps
+from app.services import recdx_apps
 from app.services import support
 from app.services.llm_gateway import LLMError
 
@@ -186,8 +186,6 @@ async def test_rule(tenant_id: uuid.UUID, rid: uuid.UUID, payload: TestIn, user:
     enrich = (rule.poll or {}).get("enrich")
     if enrich == "helpdesk_ticket":
         sample = support.normalize_sample(sample)
-    elif enrich == "hr_expense":
-        sample = expenses.normalize_sample(sample)
     rid_ = svc.get_path(sample, (rule.poll or {}).get("id_field") or "id")
     return await svc.handle(db, rule, "TEST", sample, event_type=payload.event_type,
                             record_id=str(rid_) if rid_ is not None else None, test=True)
@@ -250,16 +248,13 @@ async def suggest(tenant_id: uuid.UUID, payload: SuggestIn, user: CurrentUser = 
         raise HTTPException(status_code=503, detail=str(exc))
 
 
-# ---------------------------------------------------------------- RECDx uygulaması hazır kuralları (ADIM 13.3 RECQmind, 13.4 RECSlip)
+# ---------------------------------------------------------------- RECDx uygulaması hazır kuralları (ADIM 13.3 RECQmind)
+# RECSlip'in hazır kuralları ADIM 14'te kaldırıldı: RECSlip.App v2 aylık süreç (app/services/recslip_case.py) yürütür.
 PRESET_APPS = {
     "recqmind": {"svc": support, "label": "RECQmind", "object_type": "SUPPORT_TICKET", "mapping": "odoo_helpdesk_ticket",
                  "mapping_label": "Helpdesk", "target_label": "bilete", "interval": 10,
                  "key": lambda p: p["category"], "title": lambda p: bo.SUPPORT_CATEGORY_LABELS[p["category"]],
                  "pick": "En az bir tür seçin (İade, İptal, Kargo, Ürün sorusu)."},
-    "recslip": {"svc": expenses, "label": "RECSlip", "object_type": "EXPENSE_RECEIPT", "mapping": "odoo_expense",
-                "mapping_label": "Masraf", "target_label": "masraf kaydına", "interval": 15,
-                "key": lambda p: p["code"], "title": lambda p: p["label"],
-                "pick": "En az bir kural seçin (Sorunlu fiş, Ay sonu kapanış)."},
 }
 
 

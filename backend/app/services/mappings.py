@@ -70,7 +70,7 @@ SAMPLES: Dict[str, Dict[str, Any]] = {
 
 
 # RECDx uygulamasına bağlı hazır eşlemeler: yalnızca o uygulamayı kullanan şirkete görünür (ADIM 13.3, 13.4)
-APP_TEMPLATES = {"odoo_helpdesk_ticket": "recqmind", "odoo_expense": "recslip"}
+APP_TEMPLATES = {"odoo_helpdesk_ticket": "recqmind"}
 
 
 class MappingError(Exception):

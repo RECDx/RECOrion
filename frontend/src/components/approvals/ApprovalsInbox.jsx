@@ -5,6 +5,7 @@ import { Badge, Button, EmptyState } from '../../ui/components';
 import { promptDialog, toast } from '../../ui/feedback';
 import '../projects/projects.css';
 import { TransferCard } from '../integrations/Transfers';
+import { RecslipDecisionCard } from '../integrations/RecslipDecisions';
 
 const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
@@ -13,8 +14,10 @@ export default function ApprovalsInbox({ onOpenProject, onCount }) {
   const [items, setItems] = useState(null);
   const [tools, setTools] = useState([]);  // Adım 10: AI personelin onay bekleyen yazma işlemleri
   const [transfers, setTransfers] = useState([]);  // Adım 12.4: dış sisteme aktarım önizlemeleri
-  const load = useCallback(() => Promise.all([api.getMyApprovals(), api.getMyToolApprovals().catch(() => []), api.getMyTransferApprovals().catch(() => [])])
-    .then(([r, t, x]) => { setItems(r); setTools(t); setTransfers(x); onCount?.(r.length + t.length + x.length); })
+  const [slips, setSlips] = useState([]);  // Adım 14.3: RECSlip fişleri (AI kriter dışı buldu)
+  const load = useCallback(() => Promise.all([api.getMyApprovals(), api.getMyToolApprovals().catch(() => []), api.getMyTransferApprovals().catch(() => []),
+    api.getMyRecslipDecisions().catch(() => [])])
+    .then(([r, t, x, sl]) => { setItems(r); setTools(t); setTransfers(x); setSlips(sl); onCount?.(r.length + t.length + x.length + sl.length); })
     .catch((e) => { setItems([]); toast.error(e.message); }), [onCount]);
   const decideTool = async (c, approve) => {
     const note = approve ? '' : await promptDialog({ title: 'Reddet', message: 'Ret gerekçesi (isteğe bağlı):' });
@@ -39,6 +42,14 @@ export default function ApprovalsInbox({ onOpenProject, onCount }) {
           <span className="pj-sub">Kararınızı bekleyen iş adımları. E-postadaki bağlantıdan veya Telegram butonlarından da karar verebilirsiniz.</span>
         </div>
       </div>
+      {slips.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: '0.95rem', margin: '0 0 8px' }}>RECSlip masraf fişleri</h3>
+          <ul className="pj-list" aria-label="Onay bekleyen RECSlip fişleri">
+            {slips.map((d) => <RecslipDecisionCard key={d.id} d={d} onChange={load} />)}
+          </ul>
+        </div>
+      )}
       {transfers.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <h3 style={{ fontSize: '0.95rem', margin: '0 0 8px' }}>Dış sisteme aktarımlar</h3>

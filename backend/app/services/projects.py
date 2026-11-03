@@ -164,4 +164,6 @@ def source_label(ref: Optional[str]) -> Optional[str]:
     if len(parts) != 3 or not parts[2]:
         return ref or None
     connector, model, rid = parts
+    if connector == "recslip":  # ADIM 14: aylık RECSlip Case'i (recslip:<bağlantı>:<dönem>)
+        return f"RECSlip.App v2 · dönem {rid}"
     return f"{connector.capitalize()} {SOURCE_MODELS.get(model, model)} #{rid}"

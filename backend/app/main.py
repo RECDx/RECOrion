@@ -37,13 +37,18 @@ async def lifespan(app: FastAPI):
         import asyncio
         from app.services.automations import loop as automation_loop
         automation_task = asyncio.create_task(automation_loop())
+    recslip_task = None
+    if settings.SCHEDULER_ENABLED:  # ADIM 14: RECSlip.App v2 aylık süreç (onay takibi, kesim, aktarım)
+        import asyncio
+        from app.services.recslip_case import loop as recslip_loop
+        recslip_task = asyncio.create_task(recslip_loop())
     workflow_task = None
     if settings.WORKFLOW_ENABLED:
         import asyncio
         from app.workflows.engine import run_worker
         workflow_task = asyncio.create_task(run_worker())
     yield
-    for task in (scheduler_task, telegram_task, automation_task, workflow_task):
+    for task in (scheduler_task, telegram_task, automation_task, recslip_task, workflow_task):
         if task:
             task.cancel()
     logger.info("🛑 RECOrion Backend Durduruluyor...")

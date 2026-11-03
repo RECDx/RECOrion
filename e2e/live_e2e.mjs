@@ -1349,10 +1349,11 @@ try {
   const inbox = tx.page.getByRole('list', { name: 'Onay bekleyen aktarımlar' });
   await inbox.waitFor({ timeout: 30000 });
   const trFirst = pendingT[0];
-  const firstCard = inbox.getByRole('listitem', { name: `Aktarım: ${trFirst.object.name || trFirst.object.title}`, exact: true });
+  // aynı adlı aktarımlar olabilir (RECAi iki işi aynı adla çıkarabilir): kart kimlikle seçilir
+  const firstCard = inbox.locator(`li[data-transfer-id="${trFirst.id}"]`);
   await firstCard.getByRole('button', { name: 'Onayla ve aktar' }).click();
   if (pendingT[1]) {
-    await inbox.getByRole('listitem', { name: `Aktarım: ${pendingT[1].object.name || pendingT[1].object.title}`, exact: true }).getByRole('button', { name: 'Reddet' }).click();
+    await inbox.locator(`li[data-transfer-id="${pendingT[1].id}"]`).getByRole('button', { name: 'Reddet' }).click();
     await dialogOk(tx.page, 'Bu işi Odoo\'da biz açacağız');
   }
   let doneT = null;
@@ -1376,7 +1377,7 @@ try {
   const extCard = tx.page.getByRole('list', { name: 'Proje aktarımları' });
   await extCard.waitFor({ timeout: 20000 });
   const extLink = await tx.page.locator('a.ig-link', { hasText: otName }).first().getAttribute('href').catch(() => null);
-  await extCard.getByRole('listitem', { name: `Aktarım: ${trFirst.object.name || trFirst.object.title}`, exact: true }).getByRole('button', { name: 'Geri al' }).click();
+  await extCard.locator(`li[data-transfer-id="${trFirst.id}"]`).getByRole('button', { name: 'Geri al' }).click();
   await dialogOk(tx.page);
   await tx.page.waitForTimeout(2500);
   const afterRb = (await otCall('project.task', 'read', { ids: [Number(doneT.external_id)], fields: ['active'] }))[0];

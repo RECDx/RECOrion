@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import '../projects/projects.css';
 import './integrations.css';
+import RecslipSetup from './RecslipSetup';
 
 const TRIGGERS = { WEBHOOK: 'Anlık bildirim', POLL: 'İzleme', SCHEDULE: 'Zamanlayıcı' };
 const STATUS = { ACTIVE: ['Etkin', 'success'], PAUSED: ['Duraklatıldı', 'neutral'] };
@@ -16,8 +17,8 @@ export const OUTCOMES = {
 const SOURCES = { WEBHOOK: 'anlık bildirim', POLL: 'izleme', SCHEDULE: 'zamanlayıcı', TEST: 'deneme' };
 const OPS = [['eq', '='], ['ne', '≠'], ['contains', 'içerir'], ['in', 'şunlardan biri'], ['gt', '>'], ['gte', '≥'], ['lt', '<'], ['lte', '≤'], ['exists', 'dolu']];
 const WEEKDAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
-const APPS = [{ code: 'recqmind', title: 'RECQmind', hint: 'Helpdesk biletlerinden iade, iptal, kargo ve ürün sorusu Case\'leri; Case sonucu bilete yazılır.' },
-  { code: 'recslip', title: 'RECSlip', hint: 'Sorunlu masraf fişinden Case; ay sonu masraf kapanışı; karar masraf kaydına iç not olarak yazılır.' }];
+// RECSlip'in hazır kuralları yok (ADIM 14): RECSlip.App v2 aylık süreci ayrı kartta kurulur
+const APPS = [{ code: 'recqmind', title: 'RECQmind', hint: 'Helpdesk biletlerinden iade, iptal, kargo ve ürün sorusu Case\'leri; Case sonucu bilete yazılır.' }];
 const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 const projectLink = (id) => `#/workspace?project=${id}&view=work`;
 
@@ -98,6 +99,7 @@ export default function Automations({ tenantId }) {
               </div>
             );
           })}
+          <RecslipSetup tenantId={tenantId} people={people} />
         </div>
         {rules.length === 0 ? <EmptyState icon={Zap} title="Henüz kural yok" description="Hazır kuralları kurun veya yeni kural ekleyin (RECAi anlatımınızdan taslak çıkarır)." /> : (
           <ul className="pj-list" aria-label="Otomasyon kuralları">

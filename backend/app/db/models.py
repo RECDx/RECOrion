@@ -387,6 +387,7 @@ class Project(Base):
     template_id = Column(UUID(as_uuid=True), ForeignKey("project_templates.id", ondelete="SET NULL"))  # ADIM 11.1
     source_rule_id = Column(UUID(as_uuid=True))  # ADIM 13.2: işi açan otomasyon kuralı
     source_ref = Column(String(255))  # ADIM 13.2: dış kayıt (ör. odoo:helpdesk.ticket:42)
+    settings = Column(JSONB)  # ADIM 14: Case ayarları (RECSlip: takip sıklığı, aktarım zamanı, tekrar, onay kriterleri, durum)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1163,3 +1164,88 @@ class AutomationLog(Base):
     project_id = Column(UUID(as_uuid=True))
     payload = Column(JSONB)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class PersonalCredential(Base):
+    """Kişinin şirket bağlantısındaki kendi anahtarı (ADIM 14.2): ör. RECSlip v2'de onay, kişinin kendi Odoo kullanıcısıyla.
+    Anahtar kasada şifreli (bağlantı + kişiye bağlı); API'de asla dönmez. Kişinin AI personeli onun adına yalnızca bu
+    anahtarla işlem yapar; Odoo'da kişinin kendi yetkileri geçerlidir."""
+    __tablename__ = "personal_credentials"
+    __table_args__ = (UniqueConstraint("actor_id", "connection_id", name="uq_personal_credential"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="CASCADE"), nullable=False)
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="CASCADE"), nullable=False)
+    agent_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))  # kişinin adına çalışan AI personel
+    external_uid = Column(Integer)  # dış sistemdeki kullanıcı (Odoo res.users)
+    external_login = Column(String(160))
+    external_name = Column(String(160))
+    secret = Column(Text)
+    expires_at = Column(DateTime(timezone=True))
+    status = Column(String(16), nullable=False, default="ACTIVE")  # ACTIVE, INVALID
+    last_test_at = Column(DateTime(timezone=True))
+    last_test_ok = Column(Boolean)
+    last_error = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RecslipDecision(Base):
+    """RECSlip v2 onay adımının AI değerlendirmesi (ADIM 14.3). verdict: APPROVE / REVIEW (insana) / REFUSE.
+    status: AUTO_DONE (AI onayladı), PENDING (kişinin Onaylarım'ında), HUMAN_APPROVED, HUMAN_REFUSED, ELSEWHERE (Odoo'da
+    karar verildi), FAILED. İnsan kararı AI önerisiyle karşılaştırılır (human_agreed): AI-insan uyum oranı buradan."""
+    __tablename__ = "recslip_decisions"
+    __table_args__ = (UniqueConstraint("connection_id", "step_id", name="uq_recslip_decision_step"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"))
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="CASCADE"), nullable=False)
+    expense_id = Column(Integer, nullable=False)
+    step_id = Column(Integer, nullable=False)
+    role = Column(String(16), nullable=False)  # manager, extra, accountant
+    expense_name = Column(String(255))
+    employee_name = Column(String(160))
+    amount = Column(Numeric(14, 2))
+    currency = Column(String(3))
+    receipt_date = Column(Date)
+    approver_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    agent_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    verdict = Column(String(16), nullable=False)
+    status = Column(String(16), nullable=False)
+    reasons = Column(JSONB, nullable=False, default=list)
+    corrections = Column(JSONB, nullable=False, default=list)  # [{line_id, line, old, new, new_id, reason, confidence}]
+    error = Column(Text)
+    decided_by_actor_id = Column(UUID(as_uuid=True))
+    decided_at = Column(DateTime(timezone=True))
+    human_agreed = Column(Boolean)
+    human_note = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RecslipExport(Base):
+    """Aylık RECSlip aktarım dosyası (ADIM 14.4): dönem başına bir kayıt; denemeler ve muhasebeye işlendi durumu."""
+    __tablename__ = "recslip_exports"
+    __table_args__ = (UniqueConstraint("connection_id", "period", name="uq_recslip_export_period"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"))
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("integration_connections.id", ondelete="CASCADE"), nullable=False)
+    period = Column(String(7), nullable=False)  # YYYY-AA
+    odoo_export_id = Column(Integer)
+    name = Column(String(255))
+    software = Column(String(16))
+    receipt_count = Column(Integer)
+    total = Column(Numeric(14, 2))
+    not_exported = Column(Integer)
+    artifact_id = Column(UUID(as_uuid=True), ForeignKey("artifacts.id", ondelete="SET NULL"))
+    status = Column(String(16), nullable=False, default="PENDING")  # PENDING, CREATED, POSTED, FAILED
+    attempts = Column(Integer, nullable=False, default=0)
+    next_attempt_at = Column(DateTime(timezone=True))
+    last_error = Column(Text)
+    posted_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

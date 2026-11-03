@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import '../projects/projects.css';
+import PersonalCredentials from './PersonalCredentials';
 import './integrations.css';
 
 const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -46,6 +47,7 @@ export default function PersonalTokens() {
           </ul>
         )}
       </Card>
+      <div style={{ marginTop: 16 }}><PersonalCredentials /></div>
       {creating && <CreateToken onClose={() => setCreating(false)} onCreated={(t) => { setCreating(false); setShown(t); load(); }} />}
       {shown && <ShowToken data={shown} onClose={() => setShown(null)} />}
     </div>

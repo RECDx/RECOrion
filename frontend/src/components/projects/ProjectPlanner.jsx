@@ -8,6 +8,7 @@ import PlanTab from './PlanTab';
 import WorkflowTab from './WorkflowTab';
 import CostTab from './CostTab';
 import CodeRepoTab from './CodeRepoTab';
+import RecslipCaseTab from './RecslipCaseTab';
 import { CloseTab, ReadinessTab, TeamSimTab } from './ProjectTabs';
 import { SaveTemplateModal } from './Templates';
 import { ProjectFields } from './ProjectHub';
@@ -23,6 +24,7 @@ const TABS = [
   ['flow', 'İş Akışı'],
   ['cost', 'Maliyet'],
   ['repo', 'Kod Deposu'],
+  ['recslip', 'RECSlip'],  // ADIM 14: yalnızca RECSlip aylık Case'inde
   ['close', 'Kapanış'],
 ];
 const CONFIRM = {
@@ -140,7 +142,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       {savingTemplate && <SaveTemplateModal project={project} onClose={() => setSavingTemplate(false)} />}
 
       <div className="pj-tabs" role="tablist">
-        {TABS.filter(([k]) => k !== 'cost' || project.can_manage).map(([k, l]) => (
+        {TABS.filter(([k]) => (k !== 'cost' || project.can_manage) && (k !== 'recslip' || project.source_ref?.startsWith('recslip:'))).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`pj-tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
             {l}{counts[k] ? <small>{counts[k]}</small> : null}
           </button>
@@ -168,6 +170,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       {tab === 'flow' && <WorkflowTab project={project} />}
       {tab === 'cost' && project.can_manage && <CostTab project={project} />}
       {tab === 'repo' && <CodeRepoTab project={project} />}
+      {tab === 'recslip' && <RecslipCaseTab project={project} />}
       {tab === 'close' && <CloseTab project={project} currentUser={currentUser} onAction={action} busy={busy} />}
     </div>
   );

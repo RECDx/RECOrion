@@ -22,6 +22,8 @@ from app.api.v1.cost_items import router as cost_items_router
 from app.api.v1.live import router as live_router
 from app.api.v1.repository import router as repository_router
 from app.api.v1.dashboard import router as dashboard_router
+from app.api.v1.credentials import router as credentials_router
+from app.api.v1.recslip import router as recslip_router
 from app.api.v1.integrations import router as integrations_router
 from app.api.v1.edge import router as edge_router
 from app.api.v1.templates import router as templates_router
@@ -74,3 +76,5 @@ api_router.include_router(recdx_apps_router)
 api_router.include_router(automations_router)
 api_router.include_router(meetings_router)
 api_router.include_router(model_router_router)
+api_router.include_router(credentials_router)
+api_router.include_router(recslip_router)
