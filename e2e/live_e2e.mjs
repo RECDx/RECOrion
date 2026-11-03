@@ -1537,7 +1537,7 @@ try {
     return r.json();
   };
   const toastText = async (page, re, timeout = 60000) => {
-    const t = page.getByRole('status').filter({ hasText: re }).first();
+    const t = page.locator('[role="status"], [role="alert"]').filter({ hasText: re }).first();  // hata bildirimleri role=alert
     await t.waitFor({ timeout }).catch(() => {});
     return (await t.innerText().catch(() => '')).trim();
   };
@@ -1570,124 +1570,156 @@ try {
   step(!!appsSaved && openCount === 2, 'RECDx uygulamaları: Odoo var, RECQmind ve RECSlip "Zaten kullanıyorum"; ikisinde de entegrasyon açıldı (sipariş/teklif yazılmadı)',
     `${appsSaved || 'bildirim yok'} · açık: ${openCount}`);
 
-  // 13.5 Otomasyonlar ekranı: iki uygulamanın hazır kuralları kullanılabilir; RECSlip kuralları ekrandan kurulur (yönetici: proje yöneticisi)
+  // 13.5 Otomasyonlar ekranı: RECQmind hazır kuralları kullanılabilir; RECSlip'in v1 hazır kuralları yok (ADIM 14: v2 aylık süreç kartı)
   await au.page.getByRole('button', { name: 'Otomasyonlar' }).click();
   await au.page.getByText('Otomasyon günlüğü').waitFor({ timeout: 20000 });
-  const slipBox = au.page.getByLabel('RECSlip hazır kuralları');
-  await slipBox.getByText('Kullanılabilir').waitFor({ timeout: 20000 });
   await au.page.getByLabel('RECQmind hazır kuralları').getByText('Kullanılabilir').waitFor({ timeout: 20000 }).catch(() => {});
   const qmAvail = await au.page.getByLabel('RECQmind hazır kuralları').getByText('Kullanılabilir').count();
-  await slipBox.getByRole('button', { name: 'Hazır kuralları kur' }).click();
-  let pdlg = au.page.getByRole('dialog');
-  await pdlg.locator('#ap-conn').selectOption({ label: otName });
-  await pdlg.locator('#ap-manager').selectOption({ label: 'Canlı Test Yöneticisi' });
-  await pdlg.getByRole('button', { name: 'Kur', exact: true }).click();
-  const slipInstalled = await toastText(au.page, /kural kuruldu/);
-  const slipProb = 'RECSlip: Sorunlu masraf fişi → Case';
-  const slipMonth = 'RECSlip: Ay sonu masraf kapanışı';
-  await ruleRow(au.page, slipProb).waitFor({ timeout: 15000 });
-  const rules13 = (await api(au.page, `${T13}/automations`)).body || [];
-  const probRule = rules13.find((r) => r.name === slipProb && r.connection_id === otConn.id);
-  const monthRule = rules13.find((r) => r.name === slipMonth && r.connection_id === otConn.id);
-  made13.rules.push(probRule?.id, monthRule?.id);
-  await shot(au.page, '30-otomasyonlar-recslip');
-  step(qmAvail === 1 && /2 kural kuruldu/.test(slipInstalled) && probRule?.poll?.enrich === 'hr_expense' && monthRule?.schedule?.summary === 'expense_month',
-    'Otomasyonlar ekranı: RECQmind/RECSlip hazır kuralları açık; RECSlip "sorunlu fiş" (izleme) ve "ay sonu" (zamanlayıcı) kuralları ekrandan kuruldu',
-    `${slipInstalled} · ${probRule ? 'izleme var' : 'izleme yok'} · ${monthRule ? 'ay sonu var' : 'ay sonu yok'}`);
+  const slipCard = au.page.getByLabel('RECSlip.App v2 aylık süreç');
+  await slipCard.waitFor({ timeout: 20000 });
+  step(qmAvail === 1 && (await au.page.getByLabel('RECSlip hazır kuralları').count()) === 0,
+    'Otomasyonlar: RECQmind hazır kuralları açık; RECSlip v1 hazır kuralları kaldırıldı, yerine "RECSlip.App v2 aylık süreç" kartı var');
+  let pdlg;
 
-  // Yetkisiz kullanıcı: uzman otomasyonları ve hazır kuralları göremez/kuramaz
+  // Yetkisiz kullanıcı: uzman otomasyonları göremez, hazır kural ve RECSlip süreci kuramaz
+  const zero = '00000000-0000-0000-0000-000000000000';
   const mm = await session('member');
   const memList = await api(mm.page, `${T13}/automations`);
-  const memInst = await api(mm.page, `${T13}/automations/presets/recslip`, { method: 'POST', body: JSON.stringify({ connection_id: otConn.id, manager_actor_id: cfg.users.member.id }) });
+  const memInst = await api(mm.page, `${T13}/automations/presets/recqmind`, { method: 'POST', body: JSON.stringify({ connection_id: otConn.id, manager_actor_id: cfg.users.member.id }) });
+  const memSetup = await api(mm.page, `${T13}/recslip/setup`, { method: 'POST', body: JSON.stringify({ connection_id: zero, manager_actor_id: zero, report_agent_id: zero, report_approver_id: zero }) });
   await mm.ctx.close();
-  step(memList.status === 403 && memInst.status === 403, 'Yetkisiz kullanıcı (uzman) otomasyonları göremiyor ve hazır kural kuramıyor', `${memList.status}/${memInst.status}`);
+  step(memList.status === 403 && memInst.status === 403 && memSetup.status === 403,
+    'Yetkisiz kullanıcı (uzman) otomasyonları göremiyor, hazır kural ve RECSlip süreci kuramıyor', `${memList.status}/${memInst.status}/${memSetup.status}`);
 
-  // Masraf eşlemesi taslak eklendi: gerçek Odoo alanlarıyla yazmadan denenir, onaylanır (stüdyo akışı 12.3'te ekrandan denendi)
-  const slipMap = ((await api(au.page, `${T13}/mappings`)).body || []).find((m) => m.object_type === 'EXPENSE_RECEIPT' && m.connection_id === otConn.id);
-  made13.mappings.push(slipMap?.id);
-  const slipDry = (await api(au.page, `${T13}/mappings/${slipMap?.id}/dry-run`, { method: 'POST', body: '{}' })).body;
-  const slipAppr = await api(au.page, `${T13}/mappings/${slipMap?.id}/approve`, { method: 'POST' });
+  // ---------------------------------------------------------------- ADIM 14: RECSlip.App v2 aylık süreç
+  // Yalnızca v2'nin Odoo.sh TEST kopyası (staging-recorion); canlı v2'ye bağlanılmaz. Uzman = v2'de yönetici kullanıcısı,
+  // şirket yöneticisi = v2'de muhasebeci (Case yöneticisi). Test fişleri test kopyasında "RECOrion e2e" adıyla açılır.
+  const slipEnv = Object.fromEntries(envFile.split(/\r?\n/).filter((l) => l.startsWith('RECSLIP_V2_')).map((l) => [l.split('=')[0], l.slice(l.indexOf('=') + 1)]));
+  if (!/staging/.test(slipEnv.RECSLIP_V2_URL || '') || !/\.dev\.odoo\.com$/.test(slipEnv.RECSLIP_V2_URL || '')) throw new Error('RECSlip v2 test ortamı tanımlı değil (yalnızca staging).');
+  const v2Call = async (model, method, body) => {
+    const r = await fetch(`${slipEnv.RECSLIP_V2_URL}/json/2/${model}/${method}`, { method: 'POST',
+      headers: { Authorization: `bearer ${slipEnv.RECSLIP_V2_ADMIN_KEY}`, 'X-Odoo-Database': slipEnv.RECSLIP_V2_DB, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}) });
+    return r.json();
+  };
+  const v2Name = `RECSlip v2 test ${stamp13}`;
+  const v2Conn = (await api(au.page, `${T13}/integrations`, { method: 'POST', body: JSON.stringify({ connector: 'odoo', name: v2Name,
+    config: { url: slipEnv.RECSLIP_V2_URL, db: slipEnv.RECSLIP_V2_DB }, secrets: { api_key: slipEnv.RECSLIP_V2_ADMIN_KEY } }) })).body;
+  const made14 = { conn: v2Conn?.id, receipts: [] };
+  try {
+    // Uzman Bağlantılarım'dan kendi v2 anahtarını ekler (yanlış anahtar önce reddedilir); anahtar sayfada görünmez
+    const um = await session('member');
+    await um.page.getByRole('button', { name: 'Bağlantılarım' }).click();
+    const credCard = um.page.getByText('Şirket sistemlerindeki anahtarlarım');
+    await credCard.waitFor({ timeout: 20000 });
+    await um.page.getByRole('button', { name: 'Anahtar ekle' }).click();
+    let cdlg = um.page.getByRole('dialog');
+    await cdlg.locator('#pc-conn').selectOption({ label: v2Name });
+    await cdlg.locator('#pc-key').fill('yanlis-anahtar-123456');
+    await cdlg.getByRole('button', { name: 'Dene ve kaydet' }).click();
+    const badKey = await toastText(um.page, /denenemedi/, 30000);
+    await cdlg.locator('#pc-key').fill(slipEnv.RECSLIP_V2_YONETICI_KEY);
+    await cdlg.locator('#pc-agent').selectOption({ index: 1 });
+    await cdlg.locator('#pc-exp').fill(new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10));
+    await cdlg.getByRole('button', { name: 'Dene ve kaydet' }).click();
+    const goodKey = await toastText(um.page, /Kaydedildi: yonetici@recdx\.com/, 30000);
+    await um.page.getByRole('list', { name: 'Kişisel bağlantı anahtarları' }).getByText(v2Name).waitFor({ timeout: 10000 });
+    await shot(um.page, '34-recslip-baglantilarim');
+    const leaked = (await um.page.content()).includes(slipEnv.RECSLIP_V2_YONETICI_KEY);
+    await um.ctx.close();
+    step(!!badKey && !!goodKey && !leaked, 'RECSlip v2: uzman kendi Odoo anahtarını Bağlantılarım\'dan ekledi (yanlış anahtar reddedildi); anahtar sayfada görünmüyor',
+      `${badKey?.slice(0, 50)} · ${goodKey}`);
 
-  // 13.4 İzleme: ilk "Hemen çalıştır" başlangıç noktası; test Odoo'sunda VKN'siz, fişsiz masraf açılır; ikinci tur Case açar
-  await ruleRow(au.page, slipProb).getByRole('button', { name: 'Hemen çalıştır' }).click();
-  // izleyici (dakikada bir) kuralı bizden önce çalıştırmış olabilir: başlangıç ya da "yeni kayıt yok" ikisi de doğru
-  const baseToast = await toastText(au.page, /İlk tur|Yeni veya değişen kayıt yok|olay işlendi/);
-  const prod = (await odooCall('product.product', 'search_read', { domain: [['can_be_expensed', '=', true]], fields: ['id'], limit: 1 }))[0];
-  const exIds = await odooCall('hr.expense', 'create', { vals_list: [{ name: `RECOrion Test: otopark ${stamp13}`, employee_id: 1, product_id: prod?.id,
-    total_amount_currency: 175 + Number(stamp13.slice(-2)), payment_mode: 'own_account', date: new Date().toISOString().slice(0, 10) }] });
-  const expenseId = Array.isArray(exIds) ? exIds[0] : null;
-  await ruleRow(au.page, slipProb).getByRole('button', { name: 'Hemen çalıştır' }).click();
-  const runToast = await toastText(au.page, /olay işlendi|Yeni veya değişen/);
-  await ruleRow(au.page, slipProb).getByRole('button', { name: 'Günlük' }).click();
-  let ldlg = au.page.getByRole('dialog');
-  const expRow = ldlg.locator('tr', { hasText: `odoo:hr.expense:${expenseId}` }).first();
-  await expRow.waitFor({ timeout: 15000 }).catch(() => {});
-  const expRowText = (await expRow.innerText().catch(() => '')).replace(/\s+/g, ' ');
-  await shot(au.page, '31-otomasyon-gunluk');
-  await ldlg.getByRole('button', { name: 'Kapat', exact: true }).last().click();
-  const expLog = await waitLog(au.page, probRule?.id, (x) => x.external_ref === `odoo:hr.expense:${expenseId}` && x.outcome === 'DRAFTED');
-  const expProj = expLog ? (await api(au.page, `/api/v1/projects/${expLog.project_id}`)).body : null;
-  if (expLog) made13.projects.push(expLog.project_id);
-  step(slipDry?.ok === true && slipAppr.status === 200 && !!baseToast && !!expenseId && !!runToast && /Taslak açıldı/.test(expRowText)
-      && expProj?.source_label === `Odoo masraf #${expenseId}` && /VKN\/TCKN yok/.test(expProj?.requirements || ''),
-    'RECSlip: ilk tur başlangıç noktası; test Odoo\'sundaki VKN\'siz fiş "Sorunlu masraf fişi" Case\'ini açtı (günlükte, masrafa bağlı, sorun isterlerde)',
-    `masraf #${expenseId} · ${runToast} · ${expProj?.name || '-'} · ${expProj?.plan?.steps?.length || 0} adım`);
+    // Şirket yöneticisi (v2'de muhasebeci) kendi anahtarını ekler ve süreci Otomasyonlar kartından kurar: bu ayın Case'i açılır
+    await api(au.page, '/api/v1/me/credentials', { method: 'POST', body: JSON.stringify({ connection_id: v2Conn.id, api_key: slipEnv.RECSLIP_V2_MUHASEBECI_KEY }) });
+    await slipCard.getByRole('button', { name: 'Kur' }).click();
+    const sdlg = au.page.getByRole('dialog');
+    await sdlg.locator('#rs-conn').selectOption({ label: v2Name });
+    await sdlg.locator('#rs-manager').selectOption({ label: 'Canlı Test Şirket Yöneticisi' });
+    await sdlg.locator('#rs-agent option').nth(1).waitFor({ state: 'attached', timeout: 15000 });
+    await sdlg.locator('#rs-agent').selectOption({ index: 1 });
+    await sdlg.locator('#rs-approver').selectOption({ label: 'Canlı Test Yöneticisi' });
+    await sdlg.getByRole('button', { name: /Kur ve bu ayın/ }).click();
+    const setupToast = await toastText(au.page, /aylık süreci kuruldu/, 60000);
+    await slipCard.getByText('Çalışıyor').waitFor({ timeout: 20000 });
+    const status14 = (await api(au.page, `${T13}/recslip`)).body;
+    const case14 = (status14?.cases || []).find((c) => c.connection_id === v2Conn.id);
+    made13.projects.push(case14?.project_id);
+    step(!!setupToast && case14?.status === 'ACTIVE' && case14?.settings?.criteria?.manager?.max_amount === 2500,
+      'RECSlip v2: süreç Otomasyonlar kartından kuruldu; bu ayın "RECSlip masraf süreci" Case\'i açıldı, ayarlar önerilen varsayılanlarla',
+      `${case14?.name || '-'} · kesim ${case14?.calendar?.cutoff?.slice(0, 10)} · aktarım ${case14?.calendar?.export?.slice(0, 10)}`);
 
-  // Örnek olayla deneme (kullanıcı gibi): sorunlu örnek → "Deneme" (koşul sağlandı, hiçbir şey açılmadı); sorunsuz örneğe çevrilince "Koşul tutmadı"
-  await ruleRow(au.page, slipProb).getByRole('button', { name: 'Dene' }).click();
-  let tdlg = au.page.getByRole('dialog');
-  await tdlg.getByRole('button', { name: 'Dene', exact: true }).click();
-  await tdlg.getByLabel('Deneme sonucu').waitFor({ timeout: 20000 });
-  const tryBad = (await tdlg.getByLabel('Deneme sonucu').innerText()).replace(/\s+/g, ' ');
-  await tdlg.locator('#at-sample').fill(JSON.stringify({ id: 901, name: 'Yemek', total_amount: 300, nb_attachment: 1, rec_fld_vkn_tckn: '1234567890' }));
-  await tdlg.getByRole('button', { name: 'Dene', exact: true }).click();
-  await tdlg.getByLabel('Deneme sonucu').getByText('Koşul tutmadı').waitFor({ timeout: 20000 }).catch(() => {});
-  const tryOk = (await tdlg.getByLabel('Deneme sonucu').innerText()).replace(/\s+/g, ' ');
-  await tdlg.locator('#at-sample').fill('{ bozuk json');
-  await tdlg.getByRole('button', { name: 'Dene', exact: true }).click();
-  const badJson = await toastText(au.page, /geçerli JSON/, 10000);
-  await tdlg.getByRole('button', { name: 'Kapat', exact: true }).last().click();
-  step(/Deneme/.test(tryBad) && /hiçbir şey açılmadı/.test(tryBad) && /Koşul tutmadı/.test(tryOk) && !!badJson,
-    'Örnek olayla deneme: sorunlu fiş "Deneme" (iş açılmadı), sorunsuz fiş "Koşul tutmadı"; bozuk JSON anlaşılır uyarı verdi',
-    `${tryBad.slice(0, 90)} · ${tryOk.slice(0, 60)}`);
+    // Test kopyasında iki test fişi onaya gönderilir (çalışanın yöneticisi v2'deki "yonetici"; kural: muhasebeci = "muhasebeci")
+    const emp = (await v2Call('hr.employee', 'search_read', { domain: [['name', '=', 'RECOrion Test Çalışanı']], fields: ['id'] }))[0]?.id;
+    const acc = Object.fromEntries((await v2Call('account.account', 'search_read', { domain: [['code', 'in', ['770012']]], fields: ['id', 'code'] })).map((a) => [a.code, a.id]));
+    const receipt = async (label, amount) => {
+      const [eid] = await v2Call('hr.expense', 'create', { vals_list: [{ name: `RECOrion e2e ${label} ${stamp13}`, employee_id: emp, total_amount_currency: amount, rs_payment_method: 'nakit' }] });
+      await v2Call('recslip.expense.line', 'create', { vals_list: [{ expense_id: eid, name: `RECOrion e2e ${label}`, vat_rate: 20, amount_total: amount,
+        account_id: acc['770012'], match_source: 'memory', confidence: 95 }], context: { recslip_ai: true } });
+      await v2Call('hr.expense', 'write', { ids: [eid], vals: { rs_state: 'analyzed', rs_ai_read: true, rs_confidence: 95 } });
+      await v2Call('hr.expense', 'action_rs_submit', { ids: [eid] });
+      made14.receipts.push(eid);
+      return eid;
+    };
+    const small = await receipt('kahve', 120);
+    const big = await receipt('otel', 9000);
 
-  // Ay sonu kuralı ay sonunu beklemeden "Hemen çalıştır": Odoo'dan dönem özeti okunur, kapanış Case'i açılır
-  await ruleRow(au.page, slipMonth).getByRole('button', { name: 'Hemen çalıştır' }).click();
-  const monthLog = await waitLog(au.page, monthRule?.id, (x) => x.outcome === 'DRAFTED');
-  const monthToast = await toastText(au.page, /olay işlendi/);
-  const monthProj = monthLog ? (await api(au.page, `/api/v1/projects/${monthLog.project_id}`)).body : null;
-  if (monthLog) made13.projects.push(monthLog.project_id);
-  step(!!monthLog && /fiş, toplam/.test(monthProj?.requirements || '') && monthProj?.plan?.steps?.length === 4,
-    'Ay sonu kapanış kuralı hemen çalıştırıldı: test Odoo\'sunun dönem masraf özetiyle "Ay sonu masraf kapanışı" Case\'i açıldı',
-    `${monthProj?.name || '-'} · ${(monthProj?.requirements || '').split('\n')[1] || monthToast}`);
+    // "Şimdi çalıştır": yöneticinin AI personeli kriterlere uyan küçük fişi uzmanın anahtarıyla onaylar; büyük fiş uzmanın Onaylarım'ına düşer
+    await slipCard.getByRole('button', { name: 'Şimdi çalıştır' }).click();
+    const run1 = await toastText(au.page, /RECSlip: \d+ bekleyen adım/, 120000);
+    const stepsOf = async (eid) => v2Call('recslip.approval', 'search_read', { domain: [['expense_id', '=', eid]], fields: ['role', 'state', 'ai_approved', 'ai_agent', 'done_by_id'] });
+    const smallMgr = (await stepsOf(small)).find((x) => x.role === 'manager');
+    step(smallMgr?.state === 'approved' && smallMgr?.ai_approved === true && smallMgr?.done_by_id?.[1] === 'yonetici',
+      'RECSlip v2: yöneticinin AI personeli kriterlere uyan fişi (120 TL) kendi anahtarıyla onayladı; v2\'de "RECAi" bayrağı ve onaylayan yönetici',
+      `${run1} · ${smallMgr?.ai_agent || '-'} / ${smallMgr?.done_by_id?.[1] || '-'}`);
 
-  // Case kapanınca karar masrafa yazılır: proje yöneticisi Case'i kapanış özetiyle tamamlar (yürütme bu adımın konusu değil:
-  // Case veritabanında "aktif" yapılır, yalnızca test şirketi) → kapanış aktarımı kendiliğinden önerilir → onaylanır → Odoo'da iç not
-  const mg = await session('manager');
-  tamper(`UPDATE projects SET status = 'ACTIVE' WHERE id = '${expLog?.project_id}' AND tenant_id = '${cfg.tenant_id}'`);
-  const closeRes = await api(mg.page, `/api/v1/projects/${expLog?.project_id}/status`, { method: 'POST', body: JSON.stringify({ action: 'complete',
-    summary: `Otopark fişinin satıcısı VKN'siz; çalışandan e-arşiv belgesi istendi. Belge gelene kadar KDV indirimi yapılmayacak (${stamp13}).` }) });
-  let slipTr = null;
-  for (let i = 0; i < 60; i++) {
-    const rows = (await api(mg.page, `/api/v1/projects/${expLog?.project_id}/transfers`)).body || [];
-    if (rows.length && rows.every((x) => x.status !== 'EXTRACTING')) { [slipTr] = rows; break; }
-    await mg.page.waitForTimeout(3000);
+    const ua = await session('member');
+    await ua.page.getByRole('button', { name: /Onaylarım/ }).click();
+    const slipList = ua.page.getByRole('list', { name: 'Onay bekleyen RECSlip fişleri' });
+    await slipList.waitFor({ timeout: 30000 });
+    const bigCard = slipList.getByRole('listitem', { name: new RegExp(`RECOrion e2e otel ${stamp13}`) });
+    const bigText = (await bigCard.innerText()).replace(/\s+/g, ' ');
+    await shot(ua.page, '35-recslip-onaylarim');
+    await bigCard.getByRole('button', { name: 'Onayla' }).click();
+    const humanOk = await toastText(ua.page, /Fiş onaylandı/, 60000);
+    await ua.ctx.close();
+    const bigMgr = (await stepsOf(big)).find((x) => x.role === 'manager');
+    step(/sınırı/.test(bigText) && !!humanOk && bigMgr?.state === 'approved' && bigMgr?.ai_approved === false,
+      'RECSlip v2: sınırı aşan fiş (9.000 TL) gerekçesiyle uzmanın Onaylarım\'ına düştü; uzman onayladı (insan kararı, RECAi bayrağı yok)',
+      bigText.slice(0, 140));
+
+    // İkinci tur: muhasebe adımları; onaylı hafızadan gelen kalem güvenli → muhasebe AI personeli küçük fişi tamamlar, büyük fiş sınır dışı → insana
+    await slipCard.getByRole('button', { name: 'Şimdi çalıştır' }).click();
+    const run2 = await toastText(au.page, /RECSlip: \d+ bekleyen adım/, 120000);
+    const smallDone = (await v2Call('hr.expense', 'read', { ids: [small], fields: ['rs_state', 'rs_ai_approved'] }))[0];
+    const smallAcc = (await stepsOf(small)).find((x) => x.role === 'accountant');
+    const caseView = (await api(au.page, `/api/v1/projects/${case14?.project_id}/recslip`)).body;
+    step(smallDone?.rs_state === 'done' && smallDone?.rs_ai_approved && smallAcc?.ai_approved && smallAcc?.done_by_id?.[1] === 'muhasebeci'
+        && (caseView?.decisions || []).some((d) => d.expense_id === big && d.role === 'accountant' && d.status === 'PENDING'),
+      'RECSlip v2: muhasebe AI personeli onaylı hafızalı fişi tamamladı (v2\'de RECAi onaylı); sınırı aşan fiş muhasebecinin kararına düştü',
+      `${run2} · küçük: ${smallDone?.rs_state} · karar: ${(caseView?.decisions || []).length}`);
+
+    // Case'in RECSlip sekmesi: takvim, kriterler, AI kararları; ayar sınırlanır (5 dk altı takip olmaz)
+    const cs = await session('admin');
+    await cs.page.goto(`${APP}/#/workspace?project=${case14?.project_id}`);
+    await cs.page.reload();
+    await cs.page.getByRole('tab', { name: 'RECSlip' }).click();
+    await cs.page.getByRole('list', { name: 'RECSlip AI kararları' }).waitFor({ timeout: 20000 });
+    await cs.page.locator('#rs-export-time').fill('11:30');
+    await cs.page.getByRole('button', { name: 'Kaydet', exact: true }).first().click();
+    const saved14 = await toastText(cs.page, /RECSlip ayarları kaydedildi/, 20000);
+    await shot(cs.page, '36-recslip-case-sekmesi');
+    const after14 = (await api(cs.page, `/api/v1/projects/${case14?.project_id}/recslip`)).body;
+    await cs.ctx.close();
+    step(!!saved14 && after14?.settings?.export?.time === '11:30' && (after14?.decisions || []).length >= 3,
+      'RECSlip v2: Case\'in RECSlip sekmesinde takvim, onay kriterleri ve AI kararları görünüyor; aktarım saati ekrandan değiştirildi',
+      `${(after14?.decisions || []).length} karar · aktarım ${after14?.settings?.export?.time}`);
+  } finally {
+    // Temizlik: onayda kalan test fişi test kopyasında çalışana geri alınır; kişisel anahtarlar silinir, bağlantı kapatılır (Case aşağıda iptal edilir)
+    for (const eid of made14.receipts) await v2Call('hr.expense', 'action_rs_reset', { ids: [eid] }).catch(() => {});
+    if (made14.conn) tamper(`DELETE FROM personal_credentials WHERE connection_id = '${made14.conn}' AND tenant_id = '${cfg.tenant_id}'`);
+    if (made14.conn) await api(au.page, `${T13}/integrations/${made14.conn}`, { method: 'PUT', body: JSON.stringify({ status: 'DISABLED' }) }).catch(() => {});
   }
-  const slipDec = slipTr ? await api(mg.page, `/api/v1/transfers/${slipTr.id}/decision`, { method: 'POST', body: JSON.stringify({ approve: true, note: 'Canlı test' }) }) : null;
-  let slipDone = null;
-  for (let i = 0; i < 40 && slipTr; i++) {
-    slipDone = (await api(mg.page, `/api/v1/transfers/${slipTr.id}`)).body;
-    if (['DONE', 'FAILED'].includes(slipDone?.status)) break;
-    await mg.page.waitForTimeout(2000);
-  }
-  const slipNotes = expenseId ? await odooCall('mail.message', 'search_read', { domain: [['model', '=', 'hr.expense'], ['res_id', '=', expenseId],
-    ['body', 'ilike', 'RECOrion Case kararı']], fields: ['subtype_id'] }) : [];
-  const slipEx = expenseId ? (await odooCall('hr.expense', 'read', { ids: [expenseId], fields: ['name'] }))[0] : null;
-  await mg.ctx.close();
-  step(closeRes.status === 200 && slipTr?.trigger === 'PROJECT_CLOSED' && slipTr?.action === 'UPDATE' && (slipTr?.preview || []).every((p) => p.target === '(iç not)')
-      && slipDec?.status === 200 && slipDone?.status === 'DONE' && slipNotes.length === 1 && slipEx?.name?.startsWith('RECOrion Test'),
-    'Case kapanınca aktarım kendiliğinden önerildi (yalnızca iç not); yönetici onaylayınca karar test Odoo\'sundaki masrafa iç not olarak yazıldı',
-    `${slipTr?.trigger || '-'} · ${slipTr?.status || '-'} → ${slipDone?.status || '-'} ${slipDone?.error || ''} · not: ${slipNotes.length}`);
 
   // 13.3 RECQmind: yalnızca "İade" kuralı kurulur; test Odoo'sunda iade bileti açılır; izleme İade Case'ini açar (kaynak = bilet)
   await au.page.getByLabel('RECQmind hazır kuralları').getByRole('button', { name: 'Hazır kuralları kur' }).click();

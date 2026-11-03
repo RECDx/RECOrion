@@ -33,7 +33,7 @@ export default function RecslipSetup({ tenantId, people }) {
         <p><a href={caseLink(current.project_id)}>{current.name}</a> · aktarım {current.calendar?.export ? new Date(current.calendar.export).toLocaleDateString('tr-TR') : '—'}
           {' '}<Button size="sm" variant="secondary" icon={PlayCircle} disabled={busy} onClick={run}>Şimdi çalıştır</Button></p>
       ) : (
-        <Button size="sm" onClick={() => setSetup(true)} disabled={!data.connections.length}>Kur</Button>
+        <Button size="sm" onClick={() => load().then(() => setSetup(true))} disabled={!data.connections.length}>Kur</Button>
       )}
       {!data.connections.length && <p className="pj-hint">Önce Entegrasyonlar'da RECSlip.App v2 kurulu Odoo'yu bağlayın.</p>}
       {setup && <SetupModal tenantId={tenantId} data={data} people={people} onClose={() => setSetup(false)} onDone={() => { setSetup(false); load(); }} />}
