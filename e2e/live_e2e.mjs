@@ -1888,12 +1888,29 @@ try {
     step(!!svgRejected && !!logoSaved && logoImg.status === 200 && logoImg.type === 'image/png' && memberPut === 403 && navLogo > 0,
       'Şirket logosu: yönetici Şirket Profili\'nden yükledi (SVG reddedildi), kenar çubuğunda ve uzmanın Work Space\'inde görünüyor; uzman değiştiremiyor',
       `${svgRejected.slice(0, 40)} · ${logoSaved} · görsel ${logoImg.status} ${logoImg.type} · uzman ${memberPut} · üst çubukta ${navLogo}`);
+    // Ana Merkez (kullanıcı hatası 03.11.2026): şirket detayında "Logoyu değiştir" formu göndermemeli, pencere açık kalmalı, logo güncellenmeli
     const sl = await session('super');
     const saRow = ((await api(sl.page, '/api/v1/tenants')).body || []).find((t) => t.id === cfg.tenant_id);
+    await sl.page.getByTitle('Kayıtlı Şirketler').first().click({ timeout: 30000 });
+    await sl.page.getByPlaceholder('Şirket adı veya VKN ara...').fill('RECOrion Canlı Test');
+    await sl.page.locator('.super-admin-card', { hasText: 'RECOrion Canlı Test A.Ş.' }).first().getByRole('button', { name: /Detay & Yönetim/ }).click();
+    const saModal = sl.page.locator('.super-admin-modal-box');
+    const pickBtn = saModal.getByRole('button', { name: /Logoyu değiştir|Logo seç/ });
+    await pickBtn.waitFor({ timeout: 20000 });
+    const [chooser] = await Promise.all([sl.page.waitForEvent('filechooser', { timeout: 10000 }), pickBtn.click()]);
+    const savedWrongly = await toastText(sl.page, /şirket bilgileri başarıyla kaydedildi/, 3000);  // hata: form gönderiliyordu
+    await chooser.setFiles({ name: 'logo2.png', mimeType: 'image/png', buffer: LOGO_PNG });
+    const saSaved = await toastText(sl.page, /Şirket logosu kaydedildi/, 20000);
+    const modalOpen = await saModal.isVisible();
+    const saAfter = ((await api(sl.page, '/api/v1/tenants')).body || []).find((t) => t.id === cfg.tenant_id);
+    const modalSrc = await saModal.locator('img.tl-mark').getAttribute('src').catch(() => null);
+    await shot(sl.page, '38-ana-merkez-logo');
     const saDel = await api(sl.page, `/api/v1/company/${cfg.tenant_id}/logo`, { method: 'DELETE' });
     await sl.ctx.close();
-    step(saRow?.logo_url === logoSrc && saDel.status === 200 && saDel.body?.logo_url === null,
-      'Ana Merkez: şirket listesinde logo görünüyor; süper yönetici logoyu kaldırabiliyor', `${saRow?.logo_url ? 'listede var' : 'yok'} · kaldırma ${saDel.status}`);
+    step(saRow?.logo_url === logoSrc && !savedWrongly && !!saSaved && modalOpen && saAfter?.logo_url && modalSrc === saAfter.logo_url
+        && saDel.status === 200 && saDel.body?.logo_url === null,
+      'Ana Merkez: şirket listesinde logo var; şirket detayında logo seçilince pencere açık kalıyor ve logo güncelleniyor; süper yönetici kaldırabiliyor',
+      `${saRow?.logo_url ? 'listede var' : 'yok'} · ${saSaved || 'kaydedilmedi'} · pencere ${modalOpen ? 'açık' : 'KAPANDI'}${savedWrongly ? ' · FORM GÖNDERİLDİ' : ''} · kaldırma ${saDel.status}`);
   } finally {
     await api(lgo.page, `/api/v1/company/${cfg.tenant_id}/logo`, { method: 'DELETE' }).catch(() => {});
     await lgo.ctx.close();

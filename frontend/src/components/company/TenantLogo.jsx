@@ -34,7 +34,8 @@ export function TenantLogoMark({ url, name, size = 32, className = '' }) {
   return <img className={`tl-mark ${className}`} style={style} src={url} alt={name ? `${name} logosu` : 'Şirket logosu'} onError={() => setBroken(true)} />;
 }
 
-/** Önizleme + "Logo seç" + "Kaldır". onFile(file) seçilen geçerli dosyayla çağrılır. */
+/** Önizleme + "Logo seç" + "Kaldır". onFile(file) seçilen geçerli dosyayla çağrılır.
+ * Düğmeler type="button": formun içinde (Ana Merkez şirket düzenleme, kayıt) formu göndermesin. */
 export function LogoPicker({ url, name, onFile, onRemove, busy, id = 'tenant-logo-file' }) {
   const input = useRef(null);
   const pick = (e) => {
@@ -50,10 +51,10 @@ export function LogoPicker({ url, name, onFile, onRemove, busy, id = 'tenant-log
       <TenantLogoMark url={url} name={name} size={72} />
       <div className="tl-picker-actions">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button size="sm" variant="secondary" icon={ImagePlus} disabled={busy} onClick={() => input.current?.click()}>
+          <Button type="button" size="sm" variant="secondary" icon={ImagePlus} disabled={busy} onClick={() => input.current?.click()}>
             {url ? 'Logoyu değiştir' : 'Logo seç'}
           </Button>
-          {url && onRemove && <Button size="sm" variant="ghost" icon={Trash2} disabled={busy} onClick={onRemove}>Kaldır</Button>}
+          {url && onRemove && <Button type="button" size="sm" variant="ghost" icon={Trash2} disabled={busy} onClick={onRemove}>Kaldır</Button>}
         </div>
         <small className="pj-hint">{HINT}</small>
         <input id={id} ref={input} type="file" accept={LOGO_TYPES.join(',')} hidden onChange={pick} />
