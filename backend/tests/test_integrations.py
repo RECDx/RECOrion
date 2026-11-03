@@ -181,3 +181,16 @@ def test_agent_uses_tools_in_chat(client, db, world, fake_telegram, monkeypatch)
     seen["tools"].clear()
     client.post("/api/v1/chat/send", headers=w["admin"]["h"], json={"task_id": human, "content": "Durum?"})
     assert seen["tools"] and seen["tools"][0] == []
+
+
+def test_connection_list_is_readable_with_mapping_or_approval_permission(client, db, world):
+    """HATA #595: Entegrasyonlar menüsünü gören (eşleme / dış sisteme yazma onayı) kullanıcı listeyi okur, yönetemez."""
+    w, tid = world, world["tenant"]
+    url = f"/api/v1/company/{tid}/integrations"
+    assert client.get(url, headers=w["member"]["h"]).status_code == 403
+    for perm in ("integration:approve", "mapping:manage"):
+        _exec(db, "UPDATE actors SET extra_permissions = %s::jsonb WHERE id = %s", f'["{perm}"]', w["member"]["id"])
+        assert client.get(url, headers=w["member"]["h"]).status_code == 200, perm
+        assert client.put(f"{url}/{uuid.uuid4()}", headers=w["member"]["h"], json={"status": "DISABLED"}).status_code == 403
+        assert client.get(f"/api/v1/company/{tid}/tool-calls", headers=w["member"]["h"]).status_code == 403
+    _exec(db, "UPDATE actors SET extra_permissions = '[]'::jsonb WHERE id = %s", w["member"]["id"])

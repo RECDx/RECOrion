@@ -8,6 +8,7 @@ const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', mo
 const money = (v, c) => `${Number(v || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c || 'TRY'}`;
 const STATUS = { AUTO_DONE: ['AI onayladı', 'success'], PENDING: ['İnsan kararı bekliyor', 'warning'], HUMAN_APPROVED: ['İnsan onayladı', 'success'],
   HUMAN_REFUSED: ['İnsan reddetti', 'danger'], ELSEWHERE: ["Odoo'dan karar verildi", 'neutral'], FAILED: ['Hata', 'danger'] };
+const EXPORT_STATUS = { PENDING: 'Bekliyor', CREATED: 'Dosya hazır', POSTED: 'Muhasebeye işlendi', FAILED: 'Oluşturulamadı', CANCELLED: 'İptal edildi' };
 const RISK = [['none', 'Yok'], ['low', 'Düşük'], ['high', 'Yüksek']];
 const SOURCES = [['rule', 'Kural'], ['vendor', 'Tedarikçi hafızası'], ['exact', 'Tam eşleşme'], ['memory', 'Onaylı hafıza'], ['manual', 'Elle (muhasebeci)']];
 
@@ -53,7 +54,7 @@ export default function RecslipCaseTab({ project }) {
           <li><span>AI–insan uyumu</span><strong>{data.agreement == null ? 'henüz insan kararı yok' : `%${data.agreement}`}</strong></li>
           <li><span>Aktarım</span>{data.export ? (
             <small>{data.export.name || '—'} · {data.export.receipt_count ?? 0} fiş · {money(data.export.total)} · <Badge tone={data.export.status === 'POSTED' ? 'success'
-              : data.export.status === 'FAILED' ? 'danger' : 'info'}>{data.export.status}</Badge>{data.export.last_error ? ` · ${data.export.last_error}` : ''}</small>
+              : data.export.status === 'FAILED' ? 'danger' : 'info'}>{EXPORT_STATUS[data.export.status] || data.export.status}</Badge>{data.export.last_error ? ` · ${data.export.last_error}` : ''}</small>
           ) : <small>henüz yok</small>}</li>
         </ul>
       </Card>

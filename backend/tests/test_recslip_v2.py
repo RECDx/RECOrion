@@ -101,6 +101,9 @@ class FakeV2:
             return [{"id": eid, "rs_state": self.expenses[eid]["rs_state"]}]
         if (model, method) == ("hr.expense", "rs_external_export"):
             assert uid == 9
+            if getattr(self, "fail_export", 0):  # geçici hata (tekrar aralığı denemesi)
+                self.fail_export -= 1
+                raise ToolError("Odoo: geçici bağlantı hatası")
             for i in args[0]:
                 self.expenses[i]["rs_state"] = "exported"
             self.exports[77] = {"state": "exported"}
@@ -246,6 +249,56 @@ def test_settings_are_clamped_and_only_the_case_manager_changes_them(client, wor
     assert "uydurma" not in s and s["criteria"]["manager"]["max_amount"] == 2500
 
 
+def test_unsent_receipt_and_key_expiry_reminders(client, world, slip, v2, db, monkeypatch):
+    """HATA #591: okunup onaya gönderilmeyen fiş için Case yöneticisine N günde bir; anahtar bitişine 14 gün kala ve bitince birer kez."""
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from app.config import settings
+    from app.services import recslip as rs
+    from app.services import recslip_case as rc
+
+    sent = []
+
+    async def fake_notify(db_, actor_ids, text):
+        sent.append(([str(a) for a in actor_ids], text))
+    monkeypatch.setattr(rc, "_notify", fake_notify)
+    Session = async_sessionmaker(create_async_engine(settings.DATABASE_URL, poolclass=NullPool), expire_on_commit=False)
+
+    async def run(fn, at):
+        async with Session() as s:
+            from app.db.models import IntegrationConnection, Project
+            p = await s.get(Project, uuid.UUID(slip["case"]))
+            conn = await s.get(IntegrationConnection, uuid.UUID(slip["conn"]))
+            return await (rc.advance(s, conn, p, at) if fn == "advance" else rc.remind_keys(s, conn, p, at))
+
+    period = _exec(db, "SELECT settings->>'period' FROM projects WHERE id = %s", slip["case"])[0]
+    cal = rs.calendar_of(period, rs.DEFAULT_SETTINGS)
+    v2.add(401, 50.0, [], [], rs_state="analyzed")
+    t0 = cal["cutoff"] - timedelta(days=10)
+    asyncio.run(run("advance", t0))
+    unsent = [x for x in sent if "onaya gönderilmedi" in x[1]]
+    assert len(unsent) == 1 and "Fiş 401" in unsent[0][1] and unsent[0][0] == [w_id := world["admin"]["id"]]
+    asyncio.run(run("advance", t0 + timedelta(hours=5)))
+    assert len([x for x in sent if "onaya gönderilmedi" in x[1]]) == 1, "aralık dolmadan tekrar yok"
+    asyncio.run(run("advance", t0 + timedelta(days=2, minutes=1)))
+    assert len([x for x in sent if "onaya gönderilmedi" in x[1]]) == 2
+    v2.expenses[401]["rs_state"] = "approval"
+
+    # Anahtar bitişi: 14 gün kala bir kez, bitince bir kez
+    now = rs.now()
+    _exec(db, "UPDATE personal_credentials SET expires_at = %s WHERE connection_id = %s AND actor_id = %s",
+          now + timedelta(days=5), slip["conn"], w_id)
+    assert asyncio.run(run("keys", now)) == 1 and asyncio.run(run("keys", now + timedelta(hours=1))) == 0
+    assert asyncio.run(run("keys", now + timedelta(days=6))) == 1
+    keys = [x for x in sent if "anahtarınızın süresi" in x[1]]
+    assert len(keys) == 2 and "doluyor" in keys[0][1] and "doldu" in keys[1][1] and keys[0][0] == [w_id]
+    _exec(db, "UPDATE personal_credentials SET expires_at = %s WHERE connection_id = %s AND actor_id = %s",
+          now + timedelta(days=90), slip["conn"], w_id)
+
+
 def test_cutoff_and_export_submit_steps_and_attach_the_file(client, world, slip, v2, db):
     import asyncio
 
@@ -286,7 +339,15 @@ def test_cutoff_and_export_submit_steps_and_attach_the_file(client, world, slip,
     v2.add(301, 120.0, [], [{"id": 3011, "name": "KAHVE", "amount_total": 120, "account_id": [501, "770012"], "match_source": "memory"}])
     v2.expenses[301]["rs_state"] = "done"  # tamamlanmış fiş: aktarılacak
     export_at = rs.calendar_of(period, {**rs.DEFAULT_SETTINGS, "export": {"day": 28, "time": "10:00"}})["export"] + timedelta(minutes=1)
-    assert {"S2", "S3", "S5"} <= until(export_at, {"S2", "S3", "S5"})
+    # İlk deneme başarısız: tekrar aralığı (24 saat) dolmadan yeniden denenmez (HATA #590)
+    v2.fail_export = 1
+    assert {"S2", "S3"} <= until(export_at, {"S2", "S3"})
+    for _ in range(3):
+        assert "S5" not in asyncio.run(advance(export_at + timedelta(hours=1)))["done"]
+    assert _exec(db, "SELECT attempts FROM recslip_exports WHERE project_id = %s", slip["case"])[0] == 1
+    export_at += timedelta(hours=25)
+    assert "S5" in until(export_at, {"S5"})
+    assert _exec(db, "SELECT attempts FROM recslip_exports WHERE project_id = %s", slip["case"])[0] == 2
     exp = _exec(db, "SELECT status, name, artifact_id FROM recslip_exports WHERE project_id = %s", slip["case"])
     assert exp[0] == "CREATED" and exp[1].startswith("RECSlip_Luka") and exp[2], "dosya Case'e eklendi"
     assert any(v == b"<table>luka</table>" for v in v2.objects.values())

@@ -68,7 +68,7 @@ import DocumentLibrary from './docs/DocumentLibrary';
 import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
 import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck } from 'lucide-react';
-import { canOpenTab, roleLabel } from '../permissions';
+import { can, canOpenTab, roleLabel } from '../permissions';
 import CompanyProfile from './company/CompanyProfile';
 import { TenantLogoMark } from './company/TenantLogo';
 
@@ -5125,16 +5125,16 @@ export default function CompanyAdminConsole({
             <BrainPanel
               tenantId={tenantId}
               currentUser={currentUser}
-              canManage={currentUser?.is_super_admin || (currentUser?.permissions || []).includes('tenant:manage') || currentUser?.role === 'COMPANY_ADMIN'}
+              canManage={can(currentUser, 'brain:manage')}
             />
           )}
 
           {activeTab === 'DASHBOARD' && <CompanyDashboard tenantId={tenantId} departments={departments} />}
           {activeTab === 'COMPANY_PROFILE' && <CompanyProfile tenant={tenant} onLogoChanged={(url) => setTenant((prev) => ({ ...prev, logo_url: url }))} />}
-          {activeTab === 'INTEGRATIONS' && <IntegrationsPanel tenantId={tenantId} />}
+          {activeTab === 'INTEGRATIONS' && <IntegrationsPanel tenantId={tenantId} canManage={can(currentUser, 'integration:manage')} canMap={can(currentUser, 'mapping:manage')} />}
           {activeTab === 'AUTOMATIONS' && <div className="pj-steps"><Automations tenantId={tenantId} /></div>}
           {activeTab === 'REGULATIONS' && <CompanyRegulations tenantId={tenantId}
-            canManage={(currentUser?.permissions || []).includes('tenant:manage') || currentUser?.role === 'COMPANY_ADMIN'} />}
+            canManage={can(currentUser, 'regulation:manage')} />}
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
 
           <HireWizard

@@ -17,7 +17,7 @@ import base64
 import hashlib
 import logging
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -209,16 +209,21 @@ async def _store_artifact(db: AsyncSession, task: Task, name: str, data: bytes, 
     return art
 
 
-async def export_period(db: AsyncSession, conn: IntegrationConnection, p: Project, task: Task) -> RecslipExport:
-    """Dönemin aktarım dosyası (muhasebecinin anahtarıyla, v2'de); Case'e eklenir. Hata: tekrar zamanı ayarlanır."""
+async def export_period(db: AsyncSession, conn: IntegrationConnection, p: Project, task: Task,
+                        at: Optional[datetime] = None) -> RecslipExport:
+    """Dönemin aktarım dosyası (muhasebecinin anahtarıyla, v2'de); Case'e eklenir.
+    Hata: ayardaki tekrar aralığı kadar sonra yeniden denenir (HATA #590: önceden her turda deneniyordu); sayı dolunca FAILED."""
+    at = at or rs.now()
     s = rs.settings_of(p)
     period = (p.settings or {}).get("period")
     exp = (await db.execute(select(RecslipExport).where(RecslipExport.connection_id == conn.id, RecslipExport.period == period))).scalar_one_or_none()
     if not exp:
         exp = RecslipExport(tenant_id=conn.tenant_id, connection_id=conn.id, project_id=p.id, period=period, status="PENDING", attempts=0)
         db.add(exp)
-    if exp.status in ("CREATED", "POSTED"):
+    if exp.status in ("CREATED", "POSTED", "FAILED"):
         return exp
+    if exp.next_attempt_at and at < exp.next_attempt_at:
+        return exp  # tekrar zamanı gelmedi
     exp.attempts = (exp.attempts or 0) + 1
     try:
         cred = await _usable_cred(db, p.manager_actor_id, conn.id)
@@ -250,7 +255,7 @@ async def export_period(db: AsyncSession, conn: IntegrationConnection, p: Projec
         if exp.attempts > retry["count"]:
             exp.status = "FAILED"
         else:
-            exp.next_attempt_at = rs.now() + timedelta(hours=retry["interval_hours"])
+            exp.next_attempt_at = at + timedelta(hours=retry["interval_hours"])
     await db.commit()
     return exp
 
@@ -265,6 +270,62 @@ async def _notify(db: AsyncSession, actor_ids: List[Any], text: str) -> None:
             logger.warning("RECSlip bildirimi gönderilemedi: %s", exc)
 
 
+KEY_WARN_DAYS = 14  # Bağlantılarım'daki sarı rozetle aynı
+
+
+async def _remind_unsent(db: AsyncSession, conn: IntegrationConnection, p: Project, s: Dict[str, Any], st: Dict[str, Any],
+                         cal: Dict[str, datetime], at: datetime) -> None:
+    """HATA #591: okunmuş ama "Onaya gönderilmemiş fiş hatırlatması (gün)"den uzun süredir gönderilmemiş fişler; kesime kadar
+    her N günde bir Case yöneticisine (muhasebeci) liste gider. 0 = kapalı."""
+    from app.services import tool_gateway
+
+    days = int(s.get("submit_reminder_days") or 0)
+    if days <= 0 or at >= cal["cutoff"]:
+        return
+    last = datetime.fromisoformat(st["submit_reminded"]) if st.get("submit_reminded") else None
+    if last and at - last < timedelta(days=days):
+        return
+    st["submit_reminded"] = at.isoformat()
+    _save_state(p, st)
+    older = (at - timedelta(days=days)).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    rows = await rs._kw(tool_gateway.context(conn), "hr.expense", "search_read",
+                        [[["rs_state", "in", ["analyzed", "draft", "ai_error"]], ["create_date", "<=", older]]],
+                        {"fields": ["id", "name", "employee_id", "total_amount_currency"], "limit": 200}) or []
+    if rows:
+        names = ", ".join(f"{r.get('name')} ({(r.get('employee_id') or [None, '?'])[1]})" for r in rows[:10])
+        await _notify(db, [p.manager_actor_id], f"RECSlip {(p.settings or {}).get('period')}: {len(rows)} fiş okundu ama {days} günden uzun "
+                                                f"süredir onaya gönderilmedi: {names}{' …' if len(rows) > 10 else ''}. Çalışanlara hatırlatın; "
+                                                f"kesim {cal['cutoff'].astimezone(rs.TZ):%d.%m.%Y %H:%M}.")
+    await db.commit()
+
+
+async def remind_keys(db: AsyncSession, conn: IntegrationConnection, p: Project, at: datetime) -> int:
+    """HATA #591: kişisel Odoo anahtarının bitişine 14 gün kala ve bittiğinde sahibine birer kez hatırlatma (durum Case'te tutulur)."""
+    from app.db.models import PersonalCredential
+
+    st = _state(p)
+    sent = st.setdefault("key_reminders", {})
+    creds = (await db.execute(select(PersonalCredential).where(PersonalCredential.connection_id == conn.id,
+                                                               PersonalCredential.expires_at.isnot(None)))).scalars().all()
+    n = 0
+    for c in creds:
+        stage = "expired" if c.expires_at <= at else ("soon" if c.expires_at - at <= timedelta(days=KEY_WARN_DAYS) else None)
+        mark = f"{stage}:{c.expires_at.isoformat()}"
+        if not stage or sent.get(str(c.id)) == mark:
+            continue
+        sent[str(c.id)] = mark
+        day = c.expires_at.astimezone(rs.TZ).strftime("%d.%m.%Y")
+        text = (f"RECSlip: '{conn.name}' için Odoo anahtarınızın süresi doldu ({day}). AI personeliniz sizin adınıza onay yapamıyor; "
+                "Odoo'da yeni API anahtarı oluşturup Work Space › Bağlantılarım'dan güncelleyin." if stage == "expired" else
+                f"RECSlip: '{conn.name}' için Odoo anahtarınızın süresi {day} tarihinde doluyor. Odoo'da yeni API anahtarı oluşturup "
+                "Work Space › Bağlantılarım'dan güncelleyin; aksi halde onaylar size düşer.")
+        await _notify(db, [c.actor_id], text)
+        n += 1
+    _save_state(p, st)
+    await db.commit()
+    return n
+
+
 async def advance(db: AsyncSession, conn: IntegrationConnection, p: Project, at: Optional[datetime] = None) -> Dict[str, Any]:
     """Case'in zamana ve duruma bağlı adımlarını ilerletir (kesim, aktarım, işlendi kontrolü, tekrar)."""
     from app.services import notify, tool_gateway
@@ -276,6 +337,7 @@ async def advance(db: AsyncSession, conn: IntegrationConnection, p: Project, at:
     tasks = await _tasks(db, p)
     done: List[str] = []
     counts = await decision_counts(db, p)
+    await _remind_unsent(db, conn, p, s, st, cal, at)
     if at >= cal["cutoff"] and not st.get("S1"):
         if await _submit(db, p, tasks["S1"], "Dönem kesimine kadar onay adımları değerlendirildi. Yönetici: "
                                             f"{_counts_text(counts.get('manager', {}))}. Muhasebe: {_counts_text(counts.get('accountant', {}))}."):
@@ -308,7 +370,7 @@ async def advance(db: AsyncSession, conn: IntegrationConnection, p: Project, at:
                     st[key] = at.isoformat()
                     done.append(key)
     if at >= cal["export"] and not st.get("S5"):
-        exp = await export_period(db, conn, p, tasks["S5"])
+        exp = await export_period(db, conn, p, tasks["S5"], at)
         if exp.status == "CREATED":
             note = (f"Aktarım dosyası: {exp.name or 'dosya yok'} · {exp.receipt_count or 0} fiş · toplam {float(exp.total or 0):,.2f}"
                     + (f" · aktarılmayacak {exp.not_exported}" if exp.not_exported else "") + ".")
@@ -430,6 +492,7 @@ async def tick(db: AsyncSession, at: Optional[datetime] = None) -> Dict[str, Any
                 await db.commit()
             for c in cases:
                 await advance(db, conn, c, at)
+            await remind_keys(db, conn, newest, at)
         except Exception as exc:  # bir şirketin hatası diğerlerini durdurmaz
             await db.rollback()
             logger.error("RECSlip turu hatası (%s): %s", cid, exc)

@@ -50,7 +50,7 @@ function EntryModal({ entry, meta, connectors, onClose, onSaved }) {
     let preset;
     try { preset = JSON.parse(f.preset_text || '{}'); } catch { return toast.warning('Ön ayar geçerli JSON olmalı, ör. {"url": "https://..."}'); }
     const body = { code: f.code, title: f.title, vendor: f.vendor, category: f.category, method: f.method,
-      connector: f.method === 'PLANNED' ? null : f.connector, preset, description: f.description, keywords: f.keywords,
+      connector: f.method === 'PLANNED' ? null : f.connector, preset, description: f.description, keywords: f.keywords, requires_app: f.requires_app || null,
       setup_steps: f.steps_text.split('\n').map((s) => s.trim()).filter(Boolean), sort: Number(f.sort) || 100, status: status || f.status || 'ACTIVE' };
     setBusy(true);
     try {
@@ -91,6 +91,10 @@ function EntryModal({ entry, meta, connectors, onClose, onSaved }) {
           <textarea id="ca-steps" className="ui-input" rows={4} value={f.steps_text} onChange={set('steps_text')} /></div>
         <div className="pj-field"><label htmlFor="ca-kw">Arama kelimeleri</label>
           <input id="ca-kw" className="ui-input" value={f.keywords || ''} onChange={set('keywords')} /></div>
+        <div className="pj-field"><label htmlFor="ca-app">Yalnız bu RECDx uygulamasını kullanan şirketlere görünür</label>
+          <select id="ca-app" className="ui-input" value={f.requires_app || ''} onChange={set('requires_app')}>
+            <option value="">Tüm şirketler</option><option value="recqmind">RECQmind</option><option value="recslip">RECSlip</option>
+          </select></div>
         <div className="pj-field"><label htmlFor="ca-sort">Sıra</label>
           <input id="ca-sort" className="ui-input" type="number" value={f.sort} onChange={set('sort')} /></div>
       </div>

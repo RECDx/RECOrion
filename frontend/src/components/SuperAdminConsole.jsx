@@ -2445,6 +2445,7 @@ export default function SuperAdminConsole({
               {activeTab === 'EMAIL_TEMPLATES' && 'Kurumsal E-Posta Şablonları & HTML Editörü'}
               {activeTab === 'SCHEDULES' && 'Otomatik Zamanlayıcılar (Schedules)'}
               {activeTab === 'PERMISSIONS' && 'Sistem Yetki Kataloğu (RBAC)'}
+              {activeTab === 'ROLES' && 'Yetki Rolleri Yönetimi (RBAC)'}
               {activeTab === 'PLANS' && 'Kiralama Paketleri Yönetimi'}
               {activeTab === 'MODELS' && 'RECAi Adları ve EVREN Model Kataloğu'}
               {activeTab === 'LLM_PRICES' && 'LLM TL Fiyatları'}
@@ -3051,6 +3052,7 @@ export default function SuperAdminConsole({
                           <td colSpan="6" style={{ textAlign: 'center', padding: '36px', color: 'var(--nt-64748b)' }}>
                             {leadApprovalFilter === 'PENDING'
                               ? 'Şu anda onay bekleyen müşteri başvurusu bulunmuyor.'
+                              : leadApprovalFilter === 'REJECTED' ? 'Reddedilmiş müşteri başvurusu bulunmuyor.'
                               : 'Henüz onaylanmış müşteri başvurusu bulunmuyor.'}
                           </td>
                         </tr>
@@ -7223,7 +7225,7 @@ export default function SuperAdminConsole({
                   <span>Yeni Müşteri & Şirket Ekle (Süper Admin Kaydı)</span>
                 </h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)' }}>
-                  Şirket kartı oluşturulur, 1 yıllık kira paketi tanımlanır ve Hoş Geldiniz e-postası otomatik iletilir.
+                  Şirket kartı ve yöneticisi onay bekleyen olarak oluşturulur. Başvuru Onay Durum ekranında onaylandığında 1 yıllık paket başlar ve aktivasyon e-postası gider.
                 </p>
               </div>
               <button onClick={() => setNewTenantModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--nt-94a3b8)', cursor: 'pointer' }}>
@@ -7906,7 +7908,6 @@ export default function SuperAdminConsole({
                   >
                     <option value="ON_REGISTRATION">Müşteri Kayıt Olduğunda (Tek Sefer)</option>
                     <option value="BEFORE_EXPIRATION_INTERVAL">Paket Bitişine 3 Ay Kala (Periyodik)</option>
-                    <option value="CUSTOM_INTERVAL">Özel Gün Sıklığı</option>
                   </select>
                 </div>
 

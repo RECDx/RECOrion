@@ -32,7 +32,7 @@ function useOAuthReturn() {
 }
 
 /** Entegrasyonlar (ADIM 10.1, 12.1): bağlantı kataloğu, dış sistem bağlantıları, AI personel araç yetkileri, araç çağrı kaydı. */
-export default function IntegrationsPanel({ tenantId }) {
+export default function IntegrationsPanel({ tenantId, canManage = true, canMap = true }) {
   const [catalog, setCatalog] = useState(null);
   const [systems, setSystems] = useState(null);
   const [gallery, setGallery] = useState(false);
@@ -45,9 +45,10 @@ export default function IntegrationsPanel({ tenantId }) {
   const [token, setToken] = useState(null);
   const load = useCallback(() => Promise.all([
     api.getConnectors().then(setCatalog), api.getIntegrationCatalog().then(setSystems),
-    api.getIntegrations(tenantId).then(setConns), api.getToolCalls(tenantId).then(setCalls),
-    api.getCompanyAIAgents(tenantId).then((a) => setAgents(Array.isArray(a) ? a : a.agents || [])),
-  ]).catch((e) => toast.error(e.message)), [tenantId]);
+    api.getIntegrations(tenantId).then(setConns),
+    canManage ? api.getToolCalls(tenantId).then(setCalls) : Promise.resolve(),
+    canManage ? api.getCompanyAIAgents(tenantId).then((a) => setAgents(Array.isArray(a) ? a : a.agents || [])) : Promise.resolve(),
+  ]).catch((e) => toast.error(e.message)), [tenantId, canManage]);
   useEffect(() => { if (tenantId) load(); }, [tenantId, load]);
   useOAuthReturn();
 
@@ -82,7 +83,8 @@ export default function IntegrationsPanel({ tenantId }) {
   return (
     <div className="pj-steps">
       <Card title="Entegrasyonlar" subtitle="AI personelin dış sistemleri (ERP, mesajlaşma, iş takibi, kod deposu) kullanması. Okumalar anında; yazma işlemleri her zaman insan onayından geçer ve her çağrı kaydedilir."
-        actions={<Button icon={Plus} disabled={!catalog.vault_ready} onClick={() => setGallery(true)}>Bağlantı ekle</Button>}>
+        actions={canManage && <Button icon={Plus} disabled={!catalog.vault_ready} onClick={() => setGallery(true)}>Bağlantı ekle</Button>}>
+        {!canManage && <p className="pj-hint">Bağlantıları görüntülüyorsunuz; eklemek, düzenlemek ve AI personele yetki vermek için Bağlantı Yönetimi izni gerekir.</p>}
         {!catalog.vault_ready && <p className="ui-text-danger">Kimlik kasası yapılandırılmamış; bağlantı eklenemez. RECDx ile iletişime geçin.</p>}
         {conns.length === 0 ? <EmptyState icon={Plug} title="Henüz bağlantı yok" description="Bağlantı ekleyip AI personele araç yetkisi verin." /> : (
           <ul className="pj-list">
@@ -98,12 +100,14 @@ export default function IntegrationsPanel({ tenantId }) {
                 {c.oauth && c.status === 'ACTIVE' && <Button size="sm" icon={LogIn} onClick={() => login(c)}>{c.oauth.connected ? 'Yeniden giriş' : 'Giriş yap'}</Button>}
                 {c.oauth?.connected && <Button size="sm" variant="ghost" icon={LogOut} onClick={() => logout(c)}>Oturumu kapat</Button>}
                 {c.agent && <Badge tone={c.agent.online ? 'success' : 'warning'}>{c.agent.online ? 'Ajan çevrimiçi' : 'Ajan çevrimdışı'}</Badge>}
-                <Button size="sm" variant="secondary" icon={RefreshCw} onClick={() => test(c)}>Dene</Button>
-                {c.connector === 'edge' && <Button size="sm" variant="secondary" icon={KeyRound} onClick={() => newToken(c)}>Ajan anahtarı</Button>}
-                <Button size="sm" variant="secondary" onClick={() => setEditing(c)}>Düzenle</Button>
-                <Button size="sm" variant="ghost" onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Devre dışı bırak' : 'Etkinleştir'}</Button>
-                <Button size="sm" icon={ShieldCheck} onClick={() => setOpen(open === c.id ? null : c.id)}>Araçlar ve yetkiler</Button>
-                {['odoo', 'mcp', 'edge'].includes(c.connector) && <Button size="sm" variant="secondary" icon={Wand2} onClick={() => setStudio(c)}>Eşlemeler</Button>}
+                {canManage && <>
+                  <Button size="sm" variant="secondary" icon={RefreshCw} onClick={() => test(c)}>Dene</Button>
+                  {c.connector === 'edge' && <Button size="sm" variant="secondary" icon={KeyRound} onClick={() => newToken(c)}>Ajan anahtarı</Button>}
+                  <Button size="sm" variant="secondary" onClick={() => setEditing(c)}>Düzenle</Button>
+                  <Button size="sm" variant="ghost" onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Devre dışı bırak' : 'Etkinleştir'}</Button>
+                  <Button size="sm" icon={ShieldCheck} onClick={() => setOpen(open === c.id ? null : c.id)}>Araçlar ve yetkiler</Button>
+                </>}
+                {canMap && ['odoo', 'mcp', 'edge'].includes(c.connector) && <Button size="sm" variant="secondary" icon={Wand2} onClick={() => setStudio(c)}>Eşlemeler</Button>}
                 {open === c.id && <div style={{ flexBasis: '100%' }}><GrantsEditor tenantId={tenantId} conn={c} agents={agents} onSaved={load} /></div>}
               </li>
             ))}
@@ -111,9 +115,9 @@ export default function IntegrationsPanel({ tenantId }) {
         )}
       </Card>
 
-      <CompanyRecdxApps tenantId={tenantId} onChanged={load} />
+      {canManage && <CompanyRecdxApps tenantId={tenantId} onChanged={load} />}
       <TransferAdmin tenantId={tenantId} />
-      <Card title="Araç çağrı kaydı" subtitle="Silinemez kayıt: kim, hangi araç, hangi argümanla, sonuç ve onay.">
+      {canManage && <Card title="Araç çağrı kaydı" subtitle="Silinemez kayıt: kim, hangi araç, hangi argümanla, sonuç ve onay.">
         {calls.length === 0 ? <p className="pj-hint">Henüz araç çağrısı yok.</p> : (
           <div className="ui-table-scroll">
             <table className="ui-table">
@@ -135,7 +139,7 @@ export default function IntegrationsPanel({ tenantId }) {
             </table>
           </div>
         )}
-      </Card>
+      </Card>}
       {studio && <MappingStudio tenantId={tenantId} conn={studio} onClose={() => setStudio(null)} />}
       {gallery && <CatalogGallery tenantId={tenantId} catalog={systems} onClose={() => setGallery(false)} onPick={pick} />}
       {editing && <ConnectionModal tenantId={tenantId} catalog={catalog.connectors} conn={editing.id ? editing : null}

@@ -38,6 +38,13 @@ def _manage(user: CurrentUser, tenant_id: uuid.UUID) -> None:
         raise forbidden("Entegrasyonları yalnızca entegrasyon yönetimi yetkisi olanlar yönetebilir.")
 
 
+def _view(user: CurrentUser, tenant_id: uuid.UUID) -> None:
+    """Bağlantı listesini görme (HATA #595): yönetim, eşleme veya dış sisteme yazma onayı izni (gizli bilgiler maskeli)."""
+    ensure_tenant_content(user, tenant_id)
+    if not any(user.has(p) for p in ("integration:manage", "mapping:manage", "integration:approve")):
+        raise forbidden("Entegrasyonları görmek için entegrasyon, eşleme veya aktarım onayı yetkisi gerekir.")
+
+
 async def _conn(db: AsyncSession, user: CurrentUser, tenant_id: uuid.UUID, cid: uuid.UUID) -> IntegrationConnection:
     _manage(user, tenant_id)
     conn = await db.get(IntegrationConnection, cid)
@@ -118,7 +125,7 @@ def _check_fields(connector, config: Dict[str, Any], secrets: Dict[str, Any]) ->
 
 @router.get("/company/{tenant_id}/integrations")
 async def list_connections(tenant_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    _manage(user, tenant_id)
+    _view(user, tenant_id)
     rows = (await db.execute(select(IntegrationConnection).where(IntegrationConnection.tenant_id == tenant_id)
                              .order_by(IntegrationConnection.created_at))).scalars().all()
     return [conn_out(c) for c in rows]

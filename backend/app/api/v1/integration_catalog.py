@@ -126,6 +126,8 @@ async def admin_update(entry_id: uuid.UUID, payload: EntryIn, user: CurrentUser 
         data = cat.validate(payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    if "requires_app" not in payload.model_fields_set:  # HATA #596: gönderilmeyen bağ silinmez
+        data.pop("requires_app", None)
     for k, v in data.items():
         setattr(e, k, v)
     if payload.status:

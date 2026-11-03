@@ -150,6 +150,11 @@ def test_catalog_visible_and_managed_by_super_admin_only(client, db, world):
     assert r.json()["preset"]["auth_mode"] == "oauth"  # tek tık giriş kartında kimlik yöntemi zorunlu oauth
     assert client.post("/api/v1/system/integration-catalog", headers=sa, json=card).status_code == 409
     eid = r.json()["id"]
+    # Uygulamaya bağlı kart: düzenlemede alan gönderilmezse bağ korunur, açıkça boş gönderilirse kaldırılır (HATA #596)
+    url = f"/api/v1/system/integration-catalog/{eid}"
+    assert client.put(url, headers=sa, json={**card, "requires_app": "recslip"}).json()["requires_app"] == "recslip"
+    assert client.put(url, headers=sa, json={**card, "title": "Test ERP 2"}).json()["requires_app"] == "recslip"
+    assert client.put(url, headers=sa, json={**card, "requires_app": None}).json()["requires_app"] is None
     assert client.put(f"/api/v1/system/integration-catalog/{eid}", headers=sa, json={**card, "status": "ARCHIVED"}).status_code == 200
     codes = {e["code"] for e in client.get("/api/v1/integrations/catalog", headers=w["member"]["h"]).json()["entries"]}
     assert card["code"] not in codes

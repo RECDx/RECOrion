@@ -429,7 +429,7 @@ async def _notify_review(db: AsyncSession, dec: RecslipDecision, owner: Actor) -
     try:
         await notify.send(db, owner.id, f"RECSlip: '{dec.expense_name}' ({dec.amount} {dec.currency}) {STEP_ROLES.get(dec.role, dec.role).lower()} "
                                         f"onayınızı bekliyor. AI önerisi: {'; '.join(dec.reasons)[:300]}\n"
-                                        f"{settings.PUBLIC_APP_URL.rstrip('/')}/#/approvals")
+                                        f"{settings.PUBLIC_APP_URL.rstrip('/')}/#/workspace?view=approvals")
     except Exception as exc:
         logger.warning("RECSlip bildirimi gönderilemedi: %s", exc)
 

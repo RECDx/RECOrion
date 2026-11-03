@@ -91,7 +91,11 @@ export default function App() {
   // Work Space modu: HUB (proje listesi), PLANNER (proje planlama), WORK (görev sohbeti), INBOX (Onaylarım)
   // #/workspace?project=<id>&view=work bağlantısı doğrudan Çalışma Alanını açar (Adım 8.3)
   const [workspaceMode, setWorkspaceMode] = useState(() => {
-    if (typeof window === 'undefined' || !/^#\/workspace\?project=/.test(window.location.hash)) return 'HUB';
+    if (typeof window === 'undefined') return 'HUB';
+    // Bildirimdeki Onaylarım bağlantısı (#/workspace?view=approvals; eski RECSlip bildirimleri #/approvals)
+    if (/^#\/approvals$/.test(window.location.hash)) window.history.replaceState(null, '', '#/workspace?view=approvals');
+    if (/^#\/workspace\?view=approvals/.test(window.location.hash)) return 'INBOX';
+    if (!/^#\/workspace\?project=/.test(window.location.hash)) return 'HUB';
     return /[?&]view=work(&|$)/.test(window.location.hash) ? 'WORK' : 'PLANNER';
   });
   // Çalışma Alanı: adımların akış durumu/yetkileri/son çıktısı ve proje ekibi (Adım 8.3)
@@ -201,8 +205,9 @@ export default function App() {
   useEffect(() => {
     if (currentView !== 'WORKSPACE' || kvkkRestricted || !currentUser) return undefined;
     // İş adımı onayları + AI personelin onay bekleyen araç (yazma) işlemleri (Adım 10)
-    const load = () => Promise.all([api.getMyApprovals(), api.getMyToolApprovals().catch(() => [])])
-      .then(([r, t]) => setApprovalCount(r.length + t.length)).catch(() => {});
+    // ADIM 14 / HATA #592: RECSlip fişleri de sayılır
+    const load = () => Promise.all([api.getMyApprovals(), api.getMyToolApprovals().catch(() => []), api.getMyRecslipDecisions().catch(() => [])])
+      .then(([r, t, s]) => setApprovalCount(r.length + t.length + s.length)).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
