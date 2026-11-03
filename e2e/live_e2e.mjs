@@ -1858,6 +1858,46 @@ try {
     tamper(`UPDATE actors SET role_id = NULL, role = 'COMPANY_ADMIN' WHERE id = '${cfg.users.admin.id}' AND tenant_id = '${cfg.tenant_id}'`);
     await ad.ctx.close();
   }
+
+  // ---------------------------------------------------------------- İSTEK: şirketin resmi logosu
+  // Şirket yöneticisi Şirket Profili'nden yükler (SVG reddedilir); kenar çubuğunda ve Work Space'te görünür; uzman yükleyemez;
+  // Ana Merkez listesinde görünür ve süper yönetici kaldırabilir. Sonunda logo kaldırılır.
+  const LOGO_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAKAAAAAwCAYAAACWqXFuAAAAoUlEQVR42u3auw2AIABAQTCOoK1TOJaNk9g4llPYyg5YmTiAJoJ3FSWfF2gIAeCv4jWYxz2XNvllG6IjLFtjCxAgAgQBIkAQIAIEASJAECACBAEiQHhSW/sCu+nIjvlb0tpHNyCeYBAgAkSAIEAECAJEgCBABAgCRIAgQAQIAqQe1X9IvX9+xA0IAkSAIEAEiABBgAgQBIgAQYAIEAQI8J4TZ40J9HZwI4oAAAAASUVORK5CYII=', 'base64');
+  const lgo = await session('admin');
+  try {
+    // Şirket yöneticisi doğrudan Şirket Yönetimi'nde açılır
+    await lgo.page.getByRole('button', { name: 'Şirket Profili' }).click({ timeout: 30000 });
+    const logoInput = lgo.page.locator('#tenant-logo-file');
+    await logoInput.setInputFiles({ name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') });
+    const svgRejected = await toastText(lgo.page, /SVG kabul edilmez/, 10000);
+    await logoInput.setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: LOGO_PNG });
+    const logoSaved = await toastText(lgo.page, /Şirket logosu kaydedildi/, 20000);
+    const sideLogo = lgo.page.locator('aside img.tl-mark');
+    await sideLogo.waitFor({ timeout: 10000 });
+    const logoSrc = await sideLogo.getAttribute('src');
+    const logoImg = await lgo.page.evaluate(async (u) => { const r = await fetch(u); return { status: r.status, type: r.headers.get('content-type') }; }, logoSrc);
+    await shot(lgo.page, '37-sirket-logosu');
+    const mbLogo = await session('member');
+    const memberPut = await mbLogo.page.evaluate(async ([u, tid]) => {
+      const fd = new FormData(); fd.append('file', new Blob([new Uint8Array(8)], { type: 'image/png' }), 'x.png');
+      const r = await fetch(`/api/v1/company/${tid}/logo`, { method: 'PUT', body: fd, headers: { Authorization: `Bearer ${sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token') || ''}` } });
+      return r.status;
+    }, [logoSrc, cfg.tenant_id]);
+    const navLogo = await mbLogo.page.locator('img.tl-mark').count();
+    await mbLogo.ctx.close();
+    step(!!svgRejected && !!logoSaved && logoImg.status === 200 && logoImg.type === 'image/png' && memberPut === 403 && navLogo > 0,
+      'Şirket logosu: yönetici Şirket Profili\'nden yükledi (SVG reddedildi), kenar çubuğunda ve uzmanın Work Space\'inde görünüyor; uzman değiştiremiyor',
+      `${svgRejected.slice(0, 40)} · ${logoSaved} · görsel ${logoImg.status} ${logoImg.type} · uzman ${memberPut} · üst çubukta ${navLogo}`);
+    const sl = await session('super');
+    const saRow = ((await api(sl.page, '/api/v1/tenants')).body || []).find((t) => t.id === cfg.tenant_id);
+    const saDel = await api(sl.page, `/api/v1/company/${cfg.tenant_id}/logo`, { method: 'DELETE' });
+    await sl.ctx.close();
+    step(saRow?.logo_url === logoSrc && saDel.status === 200 && saDel.body?.logo_url === null,
+      'Ana Merkez: şirket listesinde logo görünüyor; süper yönetici logoyu kaldırabiliyor', `${saRow?.logo_url ? 'listede var' : 'yok'} · kaldırma ${saDel.status}`);
+  } finally {
+    await api(lgo.page, `/api/v1/company/${cfg.tenant_id}/logo`, { method: 'DELETE' }).catch(() => {});
+    await lgo.ctx.close();
+  }
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

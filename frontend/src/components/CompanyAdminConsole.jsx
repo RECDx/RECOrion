@@ -69,11 +69,14 @@ import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
 import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck } from 'lucide-react';
 import { canOpenTab, roleLabel } from '../permissions';
+import CompanyProfile from './company/CompanyProfile';
+import { TenantLogoMark } from './company/TenantLogo';
 
 // Şirket Yönetimi sol menüsü (Ana Kontrol Merkezi düzeni); gruplar açılıp kapanabilir
 const COMPANY_NAV = [
   { key: 'GENEL', label: 'Genel', items: [
     { tab: 'DASHBOARD', label: 'Genel Bakış', icon: LayoutDashboard, color: 'var(--ac-38bdf8)' },
+    { tab: 'COMPANY_PROFILE', label: 'Şirket Profili', icon: Building2, color: 'var(--ac-38bdf8)' },
   ] },
   { key: 'PERSONEL', label: 'Personel', items: [
     { tab: 'USERS', label: 'Kullanıcı Yönetimi', icon: Users, color: 'var(--ac-818cf8)' },
@@ -1909,9 +1912,10 @@ export default function CompanyAdminConsole({
         <div className="super-admin-sidebar-header" style={{ padding: sidebarCollapsed ? '16px 8px' : '16px 14px' }}>
           {sidebarCollapsed ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
-              <div className="super-admin-logo-box" title={tenant?.name || 'Şirket Yönetimi'} style={{ width: 38, height: 38 }}>
-                <Building2 size={18} color="#ffffff" />
-              </div>
+              {tenant?.logo_url ? <TenantLogoMark url={tenant.logo_url} name={tenant.name} size={38} /> : (
+                <div className="super-admin-logo-box" title={tenant?.name || 'Şirket Yönetimi'} style={{ width: 38, height: 38 }}>
+                  <Building2 size={18} color="#ffffff" />
+                </div>)}
               <button type="button" onClick={() => setSidebarCollapsed(false)} className="super-admin-sidebar-toggle-btn" title="Menüyü genişlet"
                 style={{ margin: '0 auto', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <PanelLeftOpen style={{ width: 16, height: 16 }} />
@@ -1920,7 +1924,8 @@ export default function CompanyAdminConsole({
           ) : (
             <div className="super-admin-logo-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
-                <div className="super-admin-logo-box" title={tenant?.name || 'Şirket Yönetimi'}><Building2 size={18} color="#ffffff" /></div>
+                {tenant?.logo_url ? <TenantLogoMark url={tenant.logo_url} name={tenant.name} size={38} />
+                  : <div className="super-admin-logo-box" title={tenant?.name || 'Şirket Yönetimi'}><Building2 size={18} color="#ffffff" /></div>}
                 <div style={{ overflow: 'hidden' }}>
                   <div className="super-admin-brand-name">
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tenant?.name || 'Şirket'}</span>
@@ -5125,6 +5130,7 @@ export default function CompanyAdminConsole({
           )}
 
           {activeTab === 'DASHBOARD' && <CompanyDashboard tenantId={tenantId} departments={departments} />}
+          {activeTab === 'COMPANY_PROFILE' && <CompanyProfile tenant={tenant} onLogoChanged={(url) => setTenant((prev) => ({ ...prev, logo_url: url }))} />}
           {activeTab === 'INTEGRATIONS' && <IntegrationsPanel tenantId={tenantId} />}
           {activeTab === 'AUTOMATIONS' && <div className="pj-steps"><Automations tenantId={tenantId} /></div>}
           {activeTab === 'REGULATIONS' && <CompanyRegulations tenantId={tenantId}

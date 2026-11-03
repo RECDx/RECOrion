@@ -8,6 +8,7 @@ export const can = (user, ...codes) => {
 // Şirket Yönetimi menüleri: sekme -> açan izinlerden biri
 export const MENU_PERMISSIONS = {
   DASHBOARD: ['dashboard:view'],
+  COMPANY_PROFILE: ['tenant:manage'],
   USERS: ['user:invite', 'user:manage'],
   AI_AGENTS: ['agent:hire', 'agent:configure', 'agent:quarantine'],
   DEPARTMENTS: ['org:manage'],

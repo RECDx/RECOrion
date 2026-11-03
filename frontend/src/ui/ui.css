@@ -267,3 +267,11 @@
 
   .ui-toast-stack { top: auto; bottom: 14px; right: 14px; left: 14px; width: auto; }
 }
+
+/* Şirket logosu (components/company/TenantLogo.jsx): koyu ve açık temada logolar açık zemin üzerinde okunur */
+:root { --logo-backdrop: #ffffff; }
+.tl-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;
+  object-fit: contain; background: var(--logo-backdrop); border: 1px solid var(--border-subtle); padding: 2px; box-sizing: border-box; }
+.tl-mark-empty { background: rgb(var(--rgb-ov) / 0.06); color: var(--text-muted); }
+.tl-picker { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tl-picker-actions { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }

@@ -61,6 +61,7 @@ import {
   Route,
 } from 'lucide-react';
 import { api } from '../api';
+import { NewTenantLogoField, TenantLogoEditor, TenantLogoMark } from './company/TenantLogo';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
 import OdooProductPicker from './OdooProductPicker';
@@ -379,7 +380,8 @@ export default function SuperAdminConsole({
     admin_password: '',
     plan_id: '',
     sectors: [],
-    nace_codes: []
+    nace_codes: [],
+    logo_data_url: null
   });
   const [newTenantNaceSearch, setNewTenantNaceSearch] = useState('');
   const [newTenantNaceResults, setNewTenantNaceResults] = useState([]);
@@ -3266,9 +3268,10 @@ export default function SuperAdminConsole({
                       <div>
                         {/* Üst Kısım: Logo & Onay Durum Rozeti (Madde 10) */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          {t.logo_url ? <TenantLogoMark url={t.logo_url} name={t.name} size={40} /> : (
                           <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, rgba(113,52,226,0.4), rgba(20,108,235,0.4))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: 'var(--nt-ffffff)', border: '1px solid rgb(var(--rgb-ov) / 0.1)' }}>
                             {t.name.slice(0, 2).toUpperCase()}
-                          </div>
+                          </div>)}
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             {/* Satın Alma Onay İkonu */}
@@ -3643,7 +3646,8 @@ export default function SuperAdminConsole({
 
                             {/* 2. Firma Adı, Slug & Sektörler (Madde 1) */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              <div style={{ fontWeight: 800, color: 'var(--nt-ffffff)' }}>{t.name}</div>
+                              <div style={{ fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {t.logo_url && <TenantLogoMark url={t.logo_url} name={t.name} size={24} />}{t.name}</div>
                               <div style={{ fontSize: '0.68rem', color: 'var(--ac-38bdf8)', fontFamily: 'monospace' }}>
                                 URL: {t.slug}
                               </div>
@@ -5800,6 +5804,16 @@ export default function SuperAdminConsole({
                     </div>
                   </div>
 
+                  {/* Resmi logo: seçilince hemen kaydedilir */}
+                  {selectedTenantDetails?.tenant && <div style={{ padding: 10, borderRadius: 8, border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                    <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-94a3b8)', marginBottom: 6 }}>Şirket Logosu</label>
+                    <TenantLogoEditor tenantId={selectedTenantDetails.tenant.id} url={selectedTenantDetails.tenant.logo_url} name={selectedTenantDetails.tenant.name}
+                      onChanged={(url) => {
+                        setSelectedTenantDetails((prev) => (prev ? { ...prev, tenant: { ...prev.tenant, logo_url: url } } : prev));
+                        setTenants((prev) => prev.map((x) => (x.id === selectedTenantDetails.tenant.id ? { ...x, logo_url: url } : x)));
+                      }} />
+                  </div>}
+
                   {/* Paket & Kira Bitiş Tarihi & Hatırlatıcı Mail (Maddeler 7, 10, 14) */}
                   <div className="ui-grid-3" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 10, padding: 10, borderRadius: 8, background: 'rgb(var(--rgb-ov) / 0.03)', border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
                     <div>
@@ -7290,6 +7304,11 @@ export default function SuperAdminConsole({
                     className="super-admin-input"
                   />
                 </div>
+              </div>
+
+              <div style={{ padding: 10, borderRadius: 8, border: '1px solid rgb(var(--rgb-ov) / 0.06)' }}>
+                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--nt-cbd5e1)', marginBottom: 6 }}>Şirket Logosu (isteğe bağlı)</label>
+                <NewTenantLogoField id="new-tenant-logo-file" value={newTenantForm.logo_data_url} onChange={(v) => setNewTenantForm((f) => ({ ...f, logo_data_url: v }))} />
               </div>
 
               {/* Paket & Yönetici Bilgileri */}

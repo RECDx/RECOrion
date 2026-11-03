@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, session } from '../api';
+import { NewTenantLogoField } from './company/TenantLogo';
 import RecdxAppsChoice from './integrations/RecdxAppsChoice';
 import AdminLeadsModal from './AdminLeadsModal';
 import ThemeToggle from '../ui/ThemeToggle';
@@ -59,6 +60,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   const [taxOffice, setTaxOffice] = useState('');
   const [phone, setPhone] = useState('');
   const [website, setWebsite] = useState('');
+  const [logoDataUrl, setLogoDataUrl] = useState(null);  // resmi logo (isteğe bağlı)
   const [address, setAddress] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -116,6 +118,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setTaxOffice('');
     setPhone('');
     setWebsite('');
+    setLogoDataUrl(null);
     setAddress('');
     setContactName('');
     setContactEmail('');
@@ -281,6 +284,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         phone: phone,
         website: website || null,
         address: address || null,
+        logo_data_url: logoDataUrl || null,
         contact_name: contactName,
         contact_email: contactEmail,
         password: password,
@@ -758,6 +762,11 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           className="purchase-input-field-3d"
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="purchase-label-3d"><span>Şirket Logosu (isteğe bağlı)</span></label>
+                      <NewTenantLogoField id="input-logo" value={logoDataUrl} onChange={setLogoDataUrl} />
                     </div>
 
                     <div>

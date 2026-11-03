@@ -80,6 +80,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/tenants/purchase-request"): PUBLIC,
     ("POST", f"{P}/tenants/purchase-request/send-code"): PUBLIC,
     ("GET", f"{P}/public/stats"): PUBLIC,
+    ("GET", f"{P}/public/tenant-logo/{{tenant_id}}"): PUBLIC,  # resmi logo: şirketin kamuya açık kimliği
     ("GET", f"{P}/sectors/"): PUBLIC,
     ("GET", f"{P}/sectors/{{code}}"): PUBLIC,
     ("GET", f"{P}/professions/"): PUBLIC,
@@ -243,6 +244,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("DELETE", f"{AGENT}"): TENANT("agent:quarantine"),
     ("GET", f"{C}/agent-quota"): TENANT("tenant:view"),
     ("POST", f"{C}/ai-agents/deep-search-sector-title"): TENANT("agent:hire"),
+    ("PUT", f"{C}/logo"): TENANT("tenant:manage"),  # yönetim verisi: süper admin de değiştirebilir
+    ("DELETE", f"{C}/logo"): TENANT("tenant:manage"),
     ("PUT", f"{C}/manifesto"): TENANT("manifesto:manage"),
     ("POST", f"{C}/generate-manifesto"): TENANT("manifesto:manage"),
     ("GET", f"{C}/user-quota"): TENANT("tenant:view"),

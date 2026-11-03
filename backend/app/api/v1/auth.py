@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services import tenant_logo
 from app.config import settings
 from app.core.security import (
     CurrentUser, create_access_token, get_current_user, hash_password, load_current_user,
@@ -44,6 +45,7 @@ class UserProfileResponse(BaseModel):
     tenant_id: uuid.UUID
     tenant_name: str
     tenant_slug: str
+    tenant_logo_url: Optional[str] = None
     is_super_admin: bool = False
     permissions: List[str] = []
 
@@ -125,6 +127,7 @@ async def _profile(db: AsyncSession, actor: Actor, user: Optional[CurrentUser] =
         tenant_id=actor.tenant_id,
         tenant_name=tenant.name if tenant else "",
         tenant_slug=tenant.slug if tenant else "",
+        tenant_logo_url=tenant_logo.url_of(tenant),
         is_super_admin=user.is_super_admin,
         permissions=sorted(user.permissions),
     )

@@ -7,12 +7,12 @@ import uuid
 import re
 from app.db.session import get_db
 from app.db.models import Tenant, Plan, Actor, TenantLead, EmailTemplate, Sector, Profession
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.config import settings
 from app.core.security import CurrentUser, get_current_user, get_optional_user
 from app.core.tokens import hit_rate_limit, issue_email_code, verify_email_code, EMAIL_CODE_TTL_MINUTES
 from app.services import customer_lifecycle as lifecycle
-from app.services import recdx_apps
+from app.services import recdx_apps, tenant_logo
 from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/tenants", tags=["Tenants (Şirketler)"])
@@ -126,6 +126,7 @@ class AdminTenantCreate(BaseModel):
     admin_password: Optional[str] = None
     activate_package: bool = True
     send_welcome_email: bool = True
+    logo_data_url: Optional[str] = Field(None, max_length=3_000_000)  # resmi logo (data:image/...;base64), isteğe bağlı
 
 class ManifestoRequest(BaseModel):
     company_name: str
@@ -166,6 +167,7 @@ class TenantResponse(BaseModel):
     admin_name: Optional[str] = None
     admin_email: Optional[str] = None
     is_active: bool
+    logo_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -418,7 +420,8 @@ async def list_tenants(db: AsyncSession = Depends(get_db)):
             "is_warning_3_months": is_warn,
             "admin_name": admin_actor.display_name if admin_actor else None,
             "admin_email": admin_actor.email if admin_actor else t.contact_email,
-            "is_active": t.is_active
+            "is_active": t.is_active,
+            "logo_url": tenant_logo.url_of(t),
         })
     return enriched
 
@@ -659,7 +662,8 @@ async def get_tenant_details(tenant_id: uuid.UUID, db: AsyncSession = Depends(ge
             "package_expiry_date": tenant.package_expiry_date.isoformat() if tenant.package_expiry_date else None,
             "last_reminder_sent_at": tenant.last_reminder_sent_at.isoformat() if tenant.last_reminder_sent_at else None,
             "is_active": tenant.is_active,
-            "created_at": tenant.created_at.isoformat() if tenant.created_at else None
+            "created_at": tenant.created_at.isoformat() if tenant.created_at else None,
+            "logo_url": tenant_logo.url_of(tenant),
         },
         "plan": {
             "id": str(plan_obj.id) if plan_obj else None,
@@ -994,6 +998,7 @@ class PurchaseRequest(BaseModel):
     nace_codes: List[str] = []
     # ADIM 13.1: Odoo ve RECDx uygulamaları tercihi (isteğe bağlı): {"has_odoo": true, "apps": {"recqmind": "USING", "recslip": "INTERESTED"}}
     recdx_apps: Optional[Dict[str, Any]] = None
+    logo_data_url: Optional[str] = Field(None, max_length=3_000_000)  # resmi logo (data:image/...;base64), isteğe bağlı
 
 
 class SendCodeRequest(BaseModel):
@@ -1126,6 +1131,8 @@ async def submit_purchase_request(
     payload.tax_id = validate_tax_id(payload.tax_id)
     if len((payload.password or "").strip()) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"Şifre en az {MIN_PASSWORD_LENGTH} karakter olmalıdır.")
+    logo_raw = tenant_logo.decode_data_url(payload.logo_data_url)
+    logo_png = tenant_logo.normalize(logo_raw) if logo_raw else None
     if not await verify_email_code(email, payload.email_code):
         raise HTTPException(status_code=400, detail="E-posta doğrulama kodu hatalı veya süresi dolmuş. Lütfen yeni kod isteyin.")
 
@@ -1156,6 +1163,8 @@ async def submit_purchase_request(
         recdx_apps.store(tenant, prefs, plan=plan)
     db.add(tenant)
     await db.flush()
+    if logo_png:
+        await tenant_logo.save(tenant, logo_png)
     db.add(Actor(
         tenant_id=tenant.id, actor_type="HUMAN", display_name=payload.contact_name.strip(),
         email=email, phone=payload.phone, address=payload.address, role="COMPANY_ADMIN",
@@ -1327,6 +1336,8 @@ async def admin_create_tenant(
     password = (payload.admin_password or "").strip()
     if password and len(password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"Yönetici şifresi en az {MIN_PASSWORD_LENGTH} karakter olmalıdır.")
+    logo_raw = tenant_logo.decode_data_url(payload.logo_data_url)
+    logo_png = tenant_logo.normalize(logo_raw) if logo_raw else None
 
     await validate_unique_tax_info(db, payload.tax_id, payload.tax_office)
     await validate_unique_admin_email(db, email)
@@ -1343,6 +1354,8 @@ async def admin_create_tenant(
     )
     db.add(tenant)
     await db.flush()
+    if logo_png:
+        await tenant_logo.save(tenant, logo_png)
     admin_name = (payload.admin_name or "").strip() or f"{name} Yöneticisi"
     admin_actor = Actor(
         tenant_id=tenant.id, actor_type="HUMAN", display_name=admin_name, email=email, phone=payload.phone,

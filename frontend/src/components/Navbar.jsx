@@ -10,6 +10,7 @@ import {
   Layers,
   ChevronDown
 } from 'lucide-react';
+import { TenantLogoMark } from './company/TenantLogo';
 import AdminLeadsModal from './AdminLeadsModal';
 import { canOpenCompanyConsole, roleLabel } from '../permissions';
 
@@ -59,7 +60,7 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
           border: '1px solid var(--border-subtle)',
           fontSize: '0.825rem'
         }}>
-          <Layers size={14} color="#06b6d4" />
+          {tenant?.logo_url ? <TenantLogoMark url={tenant.logo_url} name={tenant.name} size={22} /> : <Layers size={14} color="#06b6d4" />}
           <span style={{ color: 'var(--text-muted)' }}>Kurum:</span>
           <span style={{ fontWeight: '600', color: 'var(--nt-f8fafc)' }}>
             {tenant?.name || 'RECOrion Teknoloji A.Ş.'}

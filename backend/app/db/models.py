@@ -293,6 +293,8 @@ class Tenant(Base):
     last_reminder_sent_at = Column(DateTime(timezone=True))
     brain_model_code = Column(String(128))  # şirketin Beyin AI (organizatör) modeli
     brain_tier = Column(String(16))  # #349: Beyin AI'nin RECAi adı
+    logo_key = Column(String(255))  # resmi logo (MinIO); adres sürümlü: services/tenant_logo.url_of
+    logo_updated_at = Column(DateTime(timezone=True))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
