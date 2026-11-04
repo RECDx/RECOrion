@@ -62,6 +62,8 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { NewTenantLogoField, TenantLogoEditor, TenantLogoMark } from './company/TenantLogo';
+import HelpButton from '../help/HelpButton';
+import { setHelpScreen } from '../help/helpBus';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
 import OdooProductPicker from './OdooProductPicker';
@@ -179,6 +181,14 @@ export default function SuperAdminConsole({
       }
     }
   };
+
+  // ADIM 15: F1 / Yardım bu sekmenin anlatımını açar; RECAi "Ekrana git" sekmeyi değiştirir
+  useEffect(() => { setHelpScreen(`super/${activeTab}`); }, [activeTab]);
+  useEffect(() => {
+    const go = (e) => { if (e.detail?.tab && TAB_SLUG_MAP[e.detail.tab]) switchTab(e.detail.tab); };
+    window.addEventListener('recorion:super-tab', go);
+    return () => window.removeEventListener('recorion:super-tab', go);
+  });
 
   // Tarayıcı İleri/Geri Butonlarını Dinle ve Sekmeyi Senkronize Et
   useEffect(() => {
@@ -2465,6 +2475,7 @@ export default function SuperAdminConsole({
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
             <ThemeToggle className="ui-hide-mobile" />
             <ThemeToggle compact className="ui-show-mobile-only" />
+            <HelpButton />
             <button
               onClick={loadAllData}
               disabled={loading}

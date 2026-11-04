@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { setHelpScreen } from '../../help/helpBus';
 import { ArrowLeft, LayoutTemplate, MessagesSquare, Pause, Play, Save } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card } from '../../ui/components';
@@ -45,6 +46,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
   const [actors, setActors] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [tab, setTab] = useState('info');
+  useEffect(() => { setHelpScreen(`workspace/project/${tab}`); }, [tab]);  // ADIM 15: F1 bu sekmenin anlatımı
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);

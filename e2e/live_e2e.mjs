@@ -1922,6 +1922,65 @@ try {
     await api(lgo.page, `/api/v1/company/${cfg.tenant_id}/logo`, { method: 'DELETE' }).catch(() => {});
     await lgo.ctx.close();
   }
+
+  // ---------------------------------------------------------------- ADIM 15: Yardım (Bilgi Birikimi) ve RECAi Yardım Asistanı
+  // Şirket yöneticisi Otomasyonlar'da F1'e basar: o ekranın anlatımı açılır; pencere açıkken F1 pencerenin bölümüne gider.
+  // RECAi'ye soru sorar: yetkili bölümlerden yanıt + kaynak + "Ekrana git". Uzman yetki dışı soruda "cevap veremiyorum" alır;
+  // içindekilerde Merkez Yönetim yok, Merkez sayfası 403.
+  const hp = await session('admin');
+  try {
+    await hp.page.getByRole('button', { name: /^Otomasyonlar/ }).click({ timeout: 30000 });
+    await hp.page.waitForTimeout(1500);
+    await hp.page.keyboard.press('F1');
+    const hpTitle = hp.page.locator('aside.hp-panel h2.hp-title');
+    await hpTitle.waitFor({ timeout: 20000 });
+    const f1Page = await hpTitle.innerText();
+    await hp.page.getByRole('button', { name: 'Yardımı kapat' }).click();
+    await hp.page.getByRole('button', { name: /^Yeni kural$/ }).click();
+    await hp.page.getByRole('dialog').waitFor({ timeout: 10000 });
+    await hp.page.keyboard.press('F1');
+    await hpTitle.waitFor({ timeout: 20000 });
+    const f1Dialog = await hp.page.locator('aside.hp-panel .hp-md h5:visible, aside.hp-panel .hp-md h6:visible').count();
+    await hp.page.getByRole('button', { name: 'Yardımı kapat' }).click();
+    await hp.page.keyboard.press('Escape');  // pencereyi kapat
+    await hp.page.getByRole('button', { name: 'Yardım (F1)' }).first().click();
+    await hp.page.getByRole('tab', { name: /RECAi'ye sor/ }).click();
+    await hp.page.getByLabel("RECAi'ye soru").fill('RECSlip aylık sürecini nasıl kurarım?');
+    const tAsk = Date.now();
+    await hp.page.getByRole('button', { name: 'Sor', exact: true }).click();
+    const lastA = hp.page.locator('.hp-a').last();
+    await lastA.locator('.hp-md').waitFor({ timeout: 360000 });
+    const aText = await lastA.innerText();
+    const goBtn = await lastA.getByRole('button', { name: 'Ekrana git' }).count();
+    await shot(hp.page, '40-yardim-recai');
+    step(f1Page === 'Otomasyonlar' && /Kur/.test(aText) && /Dayandığı yardım sayfaları/.test(aText) && !/cevap veremiyorum/.test(aText),
+      'Yardım: F1 bulunulan ekranın (Otomasyonlar) anlatımını açtı; RECAi RECSlip kurulumunu kılavuzdan adım adım yanıtladı, kaynak ve "Ekrana git" verdi',
+      `F1: ${f1Page} · pencerede F1: ${f1Dialog ? 'açıldı' : '-'} · RECAi ${Math.round((Date.now() - tAsk) / 1000)} sn · ekrana git ${goBtn} · ${/RECAi şu anda yanıt veremiyor/.test(aText) ? 'yedek liste' : 'yanıt'}`);
+    if (goBtn) {
+      await lastA.getByRole('button', { name: 'Ekrana git' }).click();
+      await hp.page.waitForTimeout(1500);
+    }
+    // Uzman: yetki dışı soru ve içindekiler
+    const hm = await session('member');
+    await hm.page.getByRole('button', { name: 'Yardım (F1)' }).click();
+    await hm.page.getByRole('tab', { name: /RECAi'ye sor/ }).click();
+    await hm.page.getByLabel("RECAi'ye soru").fill('LLM TL fiyatlarını ve EVREN model kataloğunu nasıl güncellerim?');
+    await hm.page.getByRole('button', { name: 'Sor', exact: true }).click();
+    const mA = hm.page.locator('.hp-a').last();
+    await mA.locator('.hp-md').waitFor({ timeout: 360000 });
+    const mText = await mA.innerText();
+    await hm.page.getByRole('tab', { name: /İçindekiler/ }).click();
+    await hm.page.locator('.hp-toc summary').first().waitFor({ timeout: 15000 });
+    const toc = (await hm.page.locator('.hp-toc summary').allInnerTexts()).join(' | ');
+    const merkez = await api(hm.page, '/api/v1/help/page?slug=merkez/musteriler/kayitli-sirketler');
+    await shot(hm.page, '41-yardim-yetki-disi');
+    await hm.ctx.close();
+    step(/cevap veremiyorum/.test(mText) && !/Merkez/.test(toc) && /Work Area/.test(toc) && merkez.status === 403,
+      'Yardım: uzman yetki dışı soruda "cevap veremiyorum" aldı; içindekilerde Merkez Yönetim yok, Merkez sayfası açılmıyor',
+      `${mText.replace(/\s+/g, ' ').slice(0, 70)} · içindekiler: ${toc} · Merkez sayfası ${merkez.status}`);
+  } finally {
+    await hp.ctx.close();
+  }
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);

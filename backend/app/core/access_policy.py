@@ -81,6 +81,13 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/tenants/purchase-request/send-code"): PUBLIC,
     ("GET", f"{P}/public/stats"): PUBLIC,
     ("GET", f"{P}/public/tenant-logo/{{tenant_id}}"): PUBLIC,  # resmi logo: şirketin kamuya açık kimliği
+    # --- Yardım (ADIM 15): giriş yapmış herkes; sayfalar kitleye ve izne göre uç içinde süzülür ---
+    ("GET", f"{P}/help/tree"): AUTH,
+    ("GET", f"{P}/help/page"): AUTH,
+    ("GET", f"{P}/help/context"): AUTH,
+    ("GET", f"{P}/help/search"): AUTH,
+    ("POST", f"{P}/help/ask"): AUTH,
+    ("GET", f"{P}/help/assets/{{name}}"): AUTH,
     ("GET", f"{P}/sectors/"): PUBLIC,
     ("GET", f"{P}/sectors/{{code}}"): PUBLIC,
     ("GET", f"{P}/professions/"): PUBLIC,

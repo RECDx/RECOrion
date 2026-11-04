@@ -70,6 +70,8 @@ import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBu
 import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck } from 'lucide-react';
 import { can, canOpenTab, roleLabel } from '../permissions';
 import CompanyProfile from './company/CompanyProfile';
+import { setHelpScreen } from '../help/helpBus';
+import HelpButton from '../help/HelpButton';
 import { TenantLogoMark } from './company/TenantLogo';
 
 // Şirket Yönetimi sol menüsü (Ana Kontrol Merkezi düzeni); gruplar açılıp kapanabilir
@@ -126,6 +128,13 @@ export default function CompanyAdminConsole({
   useEffect(() => {
     if (firstTab && !canOpenTab(currentUser, activeTab)) setActiveTab(firstTab);
   }, [activeTab, firstTab, currentUser]);
+  // ADIM 15: F1 / Yardım bu sekmenin anlatımını açar; RECAi'nin "Ekrana git" önerisi sekmeyi değiştirir (izin varsa)
+  useEffect(() => { setHelpScreen(`company/${activeTab}`); }, [activeTab]);
+  useEffect(() => {
+    const go = (e) => { const t = e.detail?.tab; if (t && canOpenTab(currentUser, t)) setActiveTab(t); };
+    window.addEventListener('recorion:company-tab', go);
+    return () => window.removeEventListener('recorion:company-tab', go);
+  }, [currentUser]);
   // Sol menü: daraltılabilir, gruplar açılıp kapanabilir (tercih bu tarayıcıda hatırlanır); tablet/telefonda çekmece
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -1991,6 +2000,7 @@ export default function CompanyAdminConsole({
         <div className="company-admin-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <ThemeToggle className="ui-hide-mobile" />
           <ThemeToggle compact className="ui-show-mobile-only" />
+          <HelpButton />
           {/* Çalışma Alanına Geçiş Butonu */}
           {onSwitchToWorkspace && (
             <button

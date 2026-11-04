@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ThemeToggle from '../ui/ThemeToggle';
+import HelpButton from '../help/HelpButton';
 import { 
   Sparkles, 
   Activity, 
@@ -92,6 +93,7 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
       {/* Right: User Profile */}
       <div className="navbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <ThemeToggle compact />
+        <HelpButton compact />
 
         {/* Official Web & Paketler Butonu */}
         {onGoToOfficialSite && (

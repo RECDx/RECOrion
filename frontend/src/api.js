@@ -223,6 +223,17 @@ export const api = {
   getRecslipCase: (projectId) => request(`/projects/${projectId}/recslip`),
   saveRecslipSettings: (projectId, settings) => request(`/projects/${projectId}/recslip`, { method: 'PUT', body: JSON.stringify({ settings }) }),
   getMyRecslipDecisions: () => request('/me/recslip-decisions'),
+  // ADIM 15: Yardım (Bilgi Birikimi) ve RECAi Yardım Asistanı
+  getHelpTree: () => request('/help/tree'),
+  getHelpPage: (slug) => request(`/help/page?slug=${encodeURIComponent(slug)}`),
+  getHelpContext: (screen, title) => request(`/help/context?screen=${encodeURIComponent(screen || '')}${title ? `&title=${encodeURIComponent(title)}` : ''}`),
+  searchHelp: (q) => request(`/help/search?q=${encodeURIComponent(q)}`),
+  askHelp: (data) => request('/help/ask', { method: 'POST', body: JSON.stringify(data) }),
+  getHelpAsset: async (name) => {
+    const res = await fetch(`${BASE_URL}/help/assets/${encodeURIComponent(name)}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Görsel yüklenemedi (${res.status})`);
+    return res.blob();
+  },
   decideRecslip: (id, data) => request(`/recslip-decisions/${id}/decide`, { method: 'POST', body: JSON.stringify(data) }),
   // RECDx uygulamaları (ADIM 13.1)
   getPublicRecdxApps: (planCode) => request(`/recdx-apps${planCode ? `?plan_code=${planCode}` : ''}`),

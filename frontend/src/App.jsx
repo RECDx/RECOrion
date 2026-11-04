@@ -18,6 +18,7 @@ import { can } from './permissions';
 import { mergeMessages, useProjectLive } from './live';
 import CompanyDashboard from './components/dashboard/CompanyDashboard';
 import { confirmDialog, notify, promptDialog, toast } from './ui/feedback';
+import { setHelpScreen } from './help/helpBus';
 
 // Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
 function loadSavedUser() {
@@ -200,6 +201,31 @@ export default function App() {
     }
     initPlatform();
   }, []);
+
+  // ADIM 15: F1 / Yardım için bulunulan Work Space modu (proje ekranı kendi sekmesini bildirir)
+  useEffect(() => {
+    if (currentView === 'WORKSPACE' && workspaceMode !== 'PLANNER') setHelpScreen(`workspace/${workspaceMode}`);
+  }, [currentView, workspaceMode]);
+  // RECAi Yardım Asistanı "Ekrana git": super/<SEKME>, company/<SEKME>, workspace/<MOD>; konsol sekmeyi izne göre açar
+  useEffect(() => {
+    const go = (e) => {
+      const [area, a] = String(e.detail?.key || '').split('/');
+      if (area === 'super' && currentUser?.is_super_admin) {
+        setCurrentView('SUPER_ADMIN_CONSOLE');
+        setTimeout(() => window.dispatchEvent(new CustomEvent('recorion:super-tab', { detail: { tab: a } })), 50);
+      } else if (area === 'company') {
+        setCurrentView('COMPANY_ADMIN_CONSOLE');
+        window.location.hash = '#/company-admin';
+        setTimeout(() => window.dispatchEvent(new CustomEvent('recorion:company-tab', { detail: { tab: a } })), 50);
+      } else if (area === 'workspace') {
+        setCurrentView('WORKSPACE');
+        if (window.location.hash.startsWith('#/super-admin') || window.location.hash === '#/company-admin') window.location.hash = '#/workspace';
+        setWorkspaceMode(a === 'project' ? 'HUB' : (['HUB', 'INBOX', 'WORK', 'PANO', 'LINKS'].includes(a) ? a : 'HUB'));
+      }
+    };
+    window.addEventListener('recorion:navigate', go);
+    return () => window.removeEventListener('recorion:navigate', go);
+  }, [currentUser]);
 
   // Onaylarım sayacı: Work Space açıkken periyodik yenilenir
   useEffect(() => {

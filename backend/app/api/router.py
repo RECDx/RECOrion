@@ -37,6 +37,7 @@ from app.api.v1.automations import router as automations_router
 from app.api.v1.meetings import router as meetings_router
 from app.api.v1.model_router import router as model_router_router
 from app.api.v1.tenant_logo import router as tenant_logo_router
+from app.api.v1.help import router as help_router
 from app.core.access_policy import enforce_access_policy
 
 # Tüm uçlar merkezi erişim politikasından geçer (app/core/access_policy.py)
@@ -80,3 +81,4 @@ api_router.include_router(model_router_router)
 api_router.include_router(credentials_router)
 api_router.include_router(recslip_router)
 api_router.include_router(tenant_logo_router)
+api_router.include_router(help_router)

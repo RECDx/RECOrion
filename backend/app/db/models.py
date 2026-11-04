@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Text, Boolean, Integer, Numeric, DateTime, Date, ForeignKey, Index, UniqueConstraint
+    Column, Computed, String, Text, Boolean, Integer, Numeric, DateTime, Date, ForeignKey, Index, UniqueConstraint
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -1251,3 +1251,27 @@ class RecslipExport(Base):
     posted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class HelpPage(Base):
+    """Yardım (Bilgi Birikimi) sayfası (ADIM 15.2): kullanım kılavuzlarından (app/help_content) her açılışta eşitlenir.
+    audience: RECDX (yalnız RECDx süper yöneticileri) | CUSTOMER; permissions: görmek için izinlerden biri (boş = kitledeki herkes);
+    screen_keys: F1 / "Bu ekran" eşlemesi (ör. company/AUTOMATIONS). search: Türkçe tam metin dizini (başlık ağırlıklı)."""
+    __tablename__ = "help_pages"
+    __table_args__ = (Index("ix_help_pages_search", "search", postgresql_using="gin"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slug = Column(String(255), unique=True, nullable=False)
+    guide = Column(String(16), nullable=False)
+    title = Column(String(255), nullable=False)
+    parent_slug = Column(String(255))
+    sort = Column(Integer, nullable=False, default=0)
+    level = Column(Integer, nullable=False, default=2)
+    section = Column(String(255))
+    body = Column(Text, nullable=False, default="")
+    audience = Column(String(16), nullable=False, default="CUSTOMER")
+    screen_keys = Column(JSONB, nullable=False, default=list)
+    permissions = Column(JSONB, nullable=False, default=list)
+    search = Column(TSVECTOR, Computed("setweight(to_tsvector('turkish', coalesce(title, '')), 'A') || "
+                                       "setweight(to_tsvector('turkish', coalesce(section, '')), 'B') || "
+                                       "setweight(to_tsvector('turkish', coalesce(body, '')), 'C')", persisted=True))

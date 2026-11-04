@@ -22,6 +22,15 @@ async def lifespan(app: FastAPI):
     logger.info(f"   Qdrant Vektör: {settings.QDRANT_HOST}:{settings.QDRANT_PORT}")
     logger.info(f"   Redis Stream: {settings.REDIS_HOST}:{settings.REDIS_PORT}")
     logger.info("=" * 60)
+    try:  # ADIM 15.2: yardım sayfaları kılavuz dosyalarından (değiştiyse) yeniden kurulur
+        from app.db.session import AsyncSessionLocal
+        from app.services import help_center
+        async with AsyncSessionLocal() as db:
+            n = await help_center.sync(db)
+        if n:
+            logger.info("Yardım sayfaları güncellendi: %s sayfa", n)
+    except Exception as exc:  # yardım içeriği açılışı engellemez
+        logger.error("Yardım sayfaları kurulamadı: %s", exc)
     scheduler_task = None
     if settings.SCHEDULER_ENABLED:
         import asyncio
