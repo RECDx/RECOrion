@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from app.services import llm_gateway
+from app.services import help_assistant, llm_gateway
 from tests.test_lifecycle import super_headers, tag  # noqa: F401  (fikstür)
 from tests.test_workflow import world  # noqa: F401  (fikstür)
 
@@ -134,6 +134,18 @@ def test_recai_answers_from_permitted_pages_and_refuses_the_rest(client, world, 
     fake.fail = True
     r = ask(w["member"]["h"], "Onaylarım ekranında RECSlip fişini nasıl onaylarım?")
     assert r.get("degraded") and r["sources"] and not r["denied"]
+    # EVREN sırada bekletirse kullanıcı dakikalarca beklemez: üst süre dolunca yine sayfalar listelenir
+    fake.fail = False
+    slow = fake.chat
+
+    async def stuck(ctx, messages, **kw):
+        await asyncio.sleep(5)
+        return await slow(ctx, messages, **kw)
+    monkeypatch.setattr(llm_gateway, "chat", stuck)
+    monkeypatch.setattr(help_assistant, "DEADLINE", 0.2)
+    r = ask(w["member"]["h"], "Onaylarım ekranında RECSlip fişini nasıl onaylarım?")
+    assert r.get("degraded") and r["sources"]
+    monkeypatch.setattr(llm_gateway, "chat", slow)
     # Süper yönetici Merkez Yönetim konusunu sorabilir
     fake.fail = False
     fake.reply = {"cevap": "Kartta **Pasife Al**'a basın.", "kaynaklar": ["merkez/musteriler/kayitli-sirketler"], "ekran": "super/TENANTS"}

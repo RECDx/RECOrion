@@ -9,6 +9,7 @@ hiç gidilmez ve "yetkiniz dahilinde değil, cevap veremiyorum" denir. Yetkisiz 
 yalnız müşteri kılavuzlarına aitse söylenir (Merkez Yönetim içeriği müşteriye hiç anılmaz).
 Tüm model çağrıları llm_gateway üzerinden, meşgul modelde yedek modelle (fallback=True).
 """
+import asyncio
 import json
 import logging
 import re
@@ -25,6 +26,7 @@ DENY = ("Bu konu yetkiniz dahilindeki modüllerin dışında kaldığı için ce
         "yöneticinizden ilgili yetkiyi isteyebilirsiniz.")
 NOT_FOUND = ("Kılavuzda bu soruyla ilgili bir bölüm bulamadım. Soruyu ekran veya menü adıyla (ör. \"Otomasyonlar ekranında RECSlip "
              "nasıl kurulur?\") yeniden sorabilirsiniz.")
+DEADLINE = 150.0  # sn; EVREN sırada beklettiğinde kullanıcı dakikalarca beklemesin, yardım sayfalarıyla dönülür
 DENY_RATIO = 2.0  # en iyi yetkisiz eşleşme, en iyi yetkili eşleşmeden bu kat güçlüyse konu yetki dışı sayılır
 MAX_PAGES, MAX_CHARS = 4, 3500
 
@@ -102,9 +104,11 @@ async def ask(db: AsyncSession, user: CurrentUser, question: str, history: Optio
             msgs.append({"role": h["role"], "content": str(h["content"])[:1500]})
     msgs.append({"role": "user", "content": question})
     try:
-        result = await llm_gateway.chat(LLMContext(tenant_id=user.tenant_id, purpose="BRAIN", task_type="WRITING"), msgs,
-                                        temperature=0.2, max_tokens=1200, timeout=120, fallback=True)
-    except LLMError as exc:
+        result = await asyncio.wait_for(
+            llm_gateway.chat(LLMContext(tenant_id=user.tenant_id, purpose="BRAIN", task_type="WRITING"), msgs,
+                             temperature=0.2, max_tokens=1200, timeout=120, fallback=True),
+            timeout=DEADLINE)
+    except (LLMError, asyncio.TimeoutError) as exc:
         logger.warning("Yardım asistanı yanıt alamadı: %s", exc)
         return {"answer": "RECAi şu anda yanıt veremiyor. Sorunuzla ilgili yardım sayfaları aşağıda.",
                 "sources": [_src(p) for p in pages], "navigate": None, "denied": False, "degraded": True}

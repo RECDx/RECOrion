@@ -161,6 +161,42 @@ Menü sayaçları: **Kullanıcı Yönetimi** yanında aktif kullanıcı sayısı
 9. **Mevzuat Paketleri:** ilgili paketleri açın.
 10. **Kredi ve Kullanım:** ilk haftadan sonra kredi tüketimini kontrol edin.
 
+## Yardım ve RECAi'ye sor
+
+**Bu ne işe yarar?** Bu kılavuzun tamamı RECOrion'un içinde de vardır. Bir ekranda takıldığınızda kılavuzu aramanıza gerek kalmaz: **F1** tuşuna basın veya üst çubuktaki **Yardım** düğmesine tıklayın. Sağdan bir yardım paneli açılır; çalıştığınız ekran kapanmaz.
+
+**Kimler görür?** Giriş yapmış herkes. Panelde yalnız sizin yetkiniz dahilindeki ekranların anlatımı görünür. Örneğin Kullanıcı Yönetimi izni olmayan bir uzman, Kullanıcı Yönetimi sayfasını içindekilerde görmez ve RECAi ona bu konuda yanıt vermez.
+
+**Panelin sekmeleri:**
+
+| Sekme | Ne işe yarar |
+|---|---|
+| **RECAi'ye sor** | Sorunuzu kendi cümlenizle yazarsınız; RECAi kılavuzdan, adım adım yanıt verir. Yanıtın altında dayandığı yardım sayfaları ve gerekiyorsa **Ekrana git** düğmesi çıkar. Aynı konuda ek soru sorabilirsiniz; RECAi önceki soruları hatırlar. |
+| **Bu ekran** | Bulunduğunuz ekranın anlatımını açar. Bir pencere açıkken F1'e basarsanız o pencerenin bölümüne gider. **Bu ekranı aç** düğmesi anlatılan ekrana götürür. |
+| **İçindekiler** | Görebildiğiniz kılavuzların bölüm ve sayfa listesi. Bir sayfaya tıklayınca açılır; sayfadaki görselleri büyütmek için üzerine tıklayın. |
+
+[[EKRAN: ca-yardim-recai | Otomasyonlar ekranında açılmış Yardım paneli: RECAi'ye sor sekmesinde soru, adım adım yanıt, Ekrana git düğmesi ve dayandığı yardım sayfaları | Herhangi bir Şirket Yönetimi ekranında F1'e basın veya üst çubuktaki Yardım düğmesine tıklayın; RECAi'ye sor sekmesine sorunuzu yazıp Sor'a basın]]
+
+**Düğmeler:**
+
+| Düğme | Ne yapar | Dikkat |
+|---|---|---|
+| **Yardım** (üst çubuk) / **F1** | Paneli bulunduğunuz ekranın anlatımıyla açar. | Telefonda panel tam ekran açılır. |
+| **Sor** | Sorunuzu RECAi'ye gönderir (Enter da gönderir; Shift+Enter yeni satır). | Yanıt birkaç saniye ile birkaç dakika sürebilir; yoğunlukta RECAi yedek modelle yanıtlar. |
+| **Ekrana git** / **Bu ekranı aç** | Yanıtın veya sayfanın anlattığı ekranı açar. | Yalnız yetkiniz olan ekranlara götürür. |
+| **Genişlet** / **Daralt** | Paneli genişletir veya daraltır. | — |
+| **✕** | Paneli kapatır (Esc de kapatır). | — |
+
+**RECAi ne zaman yanıt vermez?**
+
+- **Yetkiniz dışındaki konular:** Sorduğunuz konu göremediğiniz bir ekranla ilgiliyse RECAi "Bu konu yetkiniz dahilindeki modüllerin dışında kaldığı için cevap veremiyorum" der. O ekranın içeriğini RECAi de görmez; bilgi sızmaz. Gerekirse şirket yöneticinizden yetki isteyin.
+- **Kılavuzda olmayan konular:** RECAi uydurmaz; "Kılavuzda bu soruyla ilgili bir bölüm bulamadım" der. Soruyu menü veya ekran adıyla yeniden sorun.
+- **RECAi meşgulse:** "RECAi şu anda yanıt veremiyor" uyarısıyla birlikte sorunuzla ilgili yardım sayfaları listelenir; bu sayfalardan okuyabilirsiniz.
+
+> **Örnek:** Ayşe Yılmaz **Otomasyonlar** ekranında F1'e basar; panelde Otomasyonlar ekranının anlatımı açılır. Ardından **RECAi'ye sor** sekmesine "RECSlip aylık sürecini nasıl kurarım?" yazar. RECAi kurulum adımlarını ve ön koşulları sıralar, kaynak olarak **Şirket Yönetimi Kılavuzu › Otomasyonlar** sayfasını gösterir ve **Ekrana git** düğmesiyle Otomasyonlar ekranını açar.
+
+> **İpucu:** RECAi yardım soruları kılavuz bilgisiyle yanıtlanır; projelerinizin, fişlerinizin veya kullanıcılarınızın verisini okumaz. "Kaç projem var?" gibi veri soruları için ilgili ekranı açın.
+
 # Menü ağacı
 
 ## Menüler ve ekranlar

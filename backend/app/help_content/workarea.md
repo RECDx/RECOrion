@@ -135,6 +135,42 @@ Ekibinde olmadığınız bir projenin bağlantısını açarsanız **"Bağlantı
 
 RECDx yöneticileri, destek amacıyla şirketinizin Work Space'ine geçse bile projelerinizi, görevlerinizi, sohbetlerinizi, kurum hafızanızı ve kişisel anahtarlarınızı göremez. Bu durumda ekranın üstünde sarı bir **"KVKK Koruma Modu"** şeridi görünür ve mod düğmeleri kapalıdır. Siz bu şeridi normalde görmezsiniz.
 
+## Yardım ve RECAi'ye sor
+
+**Bu ne işe yarar?** Bu kılavuzun tamamı RECOrion'un içinde de vardır. Bir ekranda takıldığınızda kılavuzu aramanıza gerek kalmaz: **F1** tuşuna basın veya üst çubuktaki **Yardım** düğmesine tıklayın. Sağdan bir yardım paneli açılır; çalıştığınız ekran kapanmaz.
+
+**Kimler görür?** Giriş yapmış herkes. Panelde yalnız sizin yetkiniz dahilindeki ekranların anlatımı görünür. Şirket Yönetimi sayfaları yalnız o menüleri görebilen kullanıcılara görünür; RECDx'in Merkez Yönetim sayfaları müşteri kullanıcılarına hiç görünmez.
+
+**Panelin sekmeleri:**
+
+| Sekme | Ne işe yarar |
+|---|---|
+| **RECAi'ye sor** | Sorunuzu kendi cümlenizle yazarsınız; RECAi kılavuzdan, adım adım yanıt verir. Yanıtın altında dayandığı yardım sayfaları ve gerekiyorsa **Ekrana git** düğmesi çıkar. Aynı konuda ek soru sorabilirsiniz; RECAi önceki soruları hatırlar. |
+| **Bu ekran** | Bulunduğunuz ekranın anlatımını açar. Bir pencere açıkken F1'e basarsanız o pencerenin bölümüne gider. **Bu ekranı aç** düğmesi anlatılan ekrana götürür. |
+| **İçindekiler** | Görebildiğiniz kılavuzların bölüm ve sayfa listesi. Bir sayfaya tıklayınca açılır; sayfadaki görselleri büyütmek için üzerine tıklayın. |
+
+[[EKRAN: wa-yardim-icindekiler | Work Space'te açılmış Yardım paneli, İçindekiler sekmesi: kullanıcının görebildiği kılavuzlar ve sayfa listesi | Work Space'te F1'e basın veya üst çubuktaki Yardım simgesine tıklayın; panelde İçindekiler sekmesini seçin]]
+
+**Düğmeler:**
+
+| Düğme | Ne yapar | Dikkat |
+|---|---|---|
+| **Yardım** (üst çubuk) / **F1** | Paneli bulunduğunuz ekranın anlatımıyla açar. | Telefonda panel tam ekran açılır. |
+| **Sor** | Sorunuzu RECAi'ye gönderir (Enter da gönderir; Shift+Enter yeni satır). | Yanıt birkaç saniye ile birkaç dakika sürebilir; yoğunlukta RECAi yedek modelle yanıtlar. |
+| **Ekrana git** / **Bu ekranı aç** | Yanıtın veya sayfanın anlattığı ekranı açar. | Yalnız yetkiniz olan ekranlara götürür. |
+| **Genişlet** / **Daralt** | Paneli genişletir veya daraltır. | — |
+| **✕** | Paneli kapatır (Esc de kapatır). | — |
+
+**RECAi ne zaman yanıt vermez?**
+
+- **Yetkiniz dışındaki konular:** Sorduğunuz konu göremediğiniz bir ekranla ilgiliyse RECAi "Bu konu yetkiniz dahilindeki modüllerin dışında kaldığı için cevap veremiyorum" der. O ekranın içeriğini RECAi de görmez; bilgi sızmaz. Gerekirse şirket yöneticinizden yetki isteyin.
+- **Kılavuzda olmayan konular:** RECAi uydurmaz; "Kılavuzda bu soruyla ilgili bir bölüm bulamadım" der. Soruyu menü veya ekran adıyla yeniden sorun.
+- **RECAi meşgulse:** "RECAi şu anda yanıt veremiyor" uyarısıyla birlikte sorunuzla ilgili yardım sayfaları listelenir; bu sayfalardan okuyabilirsiniz.
+
+> **Örnek:** Can Öztürk **Onaylarım** ekranında bir RECSlip fişi görür ve F1'e basar; panel Onaylarım ekranının anlatımını açar. "Önerilen hesap düzeltmesini nasıl uygularım?" diye sorar; RECAi **Onaylarken düzeltmeleri uygula** kutusunu ve **Onayla** düğmesini anlatır. Can sonra "Kayıtlı şirketleri nasıl pasife alırım?" diye sorar; bu RECDx'in yönetim ekranı olduğu için RECAi "cevap veremiyorum" der.
+
+> **İpucu:** RECAi yardım soruları kılavuz bilgisiyle yanıtlanır; projelerinizin, fişlerinizin veya kullanıcılarınızın verisini okumaz. "Kaç projem var?" gibi veri soruları için ilgili ekranı açın.
+
 # Menü ağacı
 
 Aşağıdaki harita, girişten önceki ekranları ve Work Space'in tamamını tek bakışta gösterir. Parantez içinde kimlerin gördüğü yazılıdır.
