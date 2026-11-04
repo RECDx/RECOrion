@@ -224,7 +224,7 @@ body {
 
 /* Top Navigation Bar */
 .top-navbar {
-  height: 58px;
+  height: 66px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -239,7 +239,7 @@ body {
 .tri-pane-container {
   display: grid;
   grid-template-columns: 310px 1fr 340px;
-  height: calc(100vh - 58px);
+  height: calc(100vh - 66px);
   overflow: hidden;
   gap: 1px;
   background: var(--border-subtle);
@@ -368,7 +368,7 @@ body {
 }
 
 .landing-header {
-  height: 70px;
+  height: 84px;
   display: flex;
   align-items: center;
   justify-content: space-between;

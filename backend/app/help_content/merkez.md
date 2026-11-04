@@ -8,7 +8,7 @@ Sürüm: 03.11.2026 · Kaynak: RECOrion'un güncel ekranları
 
 ## Kimin için?
 
-Bu kılavuz, RECOrion'un **Merkez Yönetim** bölümünü (ekranda adı **Ana Kontrol Merkezi**, sol menüde **RECOrion SÜPER**) kullanacak RECDx çalışanları içindir. Bu bölümü yalnızca **RECDx süper yöneticileri** açabilir. Müşteri şirketlerinin çalışanları bu ekranları hiç görmez.
+Bu kılavuz, RECOrion'un **Merkez Yönetim** bölümünü (ekranda adı **Ana Kontrol Merkezi**, sol menünün üstünde RECOrion logosu) kullanacak RECDx çalışanları içindir. Bu bölümü yalnızca **RECDx süper yöneticileri** açabilir. Müşteri şirketlerinin çalışanları bu ekranları hiç görmez.
 
 Merkez Yönetim'de şunları yaparsınız:
 
@@ -140,7 +140,7 @@ Ekran üç parçadan oluşur:
 
 ## Sol menü
 
-Sol menünün en üstünde RECOrion logosu, **RECOrion** yazısı, **SÜPER** etiketi ve "Operational Reasoning Intelligence Orchestration Network" alt yazısı vardır.
+Sol menünün en üstünde yazılı RECOrion logosu vardır; menü daraltılınca yalnız logonun simgesi kalır.
 
 Menü altı gruba ayrılır: **Genel**, **Müşteriler**, **Katalog**, **Ticari & Yetki**, **İletişim & Otomasyon**, **Yapay Zeka**. Grup başlığına tıklayınca grup kapanır ya da açılır. Hangi grupları kapattığınız bu tarayıcıda hatırlanır.
 

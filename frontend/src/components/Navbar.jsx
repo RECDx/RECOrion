@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ThemeToggle from '../ui/ThemeToggle';
 import HelpButton from '../help/HelpButton';
-import { RecorionMark } from '../ui/Brand';
+import { RecorionLogo } from '../ui/Brand';
 import {
   Activity,
   Database, 
@@ -22,20 +22,7 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
   return (
     <header className="top-navbar">
       {/* Brand & Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <RecorionMark size={42} />
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontWeight: '800', fontSize: '1.15rem', letterSpacing: '-0.02em' }}>
-              REC<span className="brand-gradient-text">Orion</span>
-            </span>
-            <span className="badge badge-ai" style={{ fontSize: '0.65rem' }}>v2.4 OTONOM</span>
-          </div>
-          <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', margin: 0 }}>
-            Çoklu Ajan ve Kolektif Hafıza Platformu
-          </p>
-        </div>
-      </div>
+      <RecorionLogo height={60} className="rx-header-logo" />
 
       {/* Center: Tenant & Infrastructure Indicators */}
       <div className="navbar-center" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>

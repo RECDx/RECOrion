@@ -73,6 +73,7 @@ import CompanyProfile from './company/CompanyProfile';
 import { setHelpScreen } from '../help/helpBus';
 import HelpButton from '../help/HelpButton';
 import { TenantLogoMark } from './company/TenantLogo';
+import { RecorionLogo, RecorionMark } from '../ui/Brand';
 
 // Şirket Yönetimi sol menüsü (Ana Kontrol Merkezi düzeni); gruplar açılıp kapanabilir
 const COMPANY_NAV = [
@@ -1984,6 +1985,10 @@ export default function CompanyAdminConsole({
             <span>Başka şirketler ve RECDx yöneticileri proje, sohbet ve hafıza içeriğinize erişemez (KVKK).</span>
           </div>
         )}
+        {/* RECOrion logosu: menü açıkken yazılı, daraltılınca yazısız */}
+        <div className={`rx-sidebar-foot ${sidebarCollapsed ? 'collapsed' : ''}`}>
+          {sidebarCollapsed ? <RecorionMark size={36} /> : <RecorionLogo height={64} className="rx-sidebar-logo" />}
+        </div>
       </aside>
 
       <main className="super-admin-main">

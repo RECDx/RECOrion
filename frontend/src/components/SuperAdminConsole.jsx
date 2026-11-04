@@ -66,7 +66,7 @@ import HelpButton from '../help/HelpButton';
 import { setHelpScreen } from '../help/helpBus';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
-import { RecorionMark } from '../ui/Brand';
+import { RecorionLogo, RecorionMark } from '../ui/Brand';
 import OdooProductPicker from './OdooProductPicker';
 import PlanAppOffers from './integrations/PlanAppOffers';
 import CatalogAdmin from './catalog/CatalogAdmin';
@@ -2000,18 +2000,7 @@ export default function SuperAdminConsole({
             </div>
           ) : (
             <div className="super-admin-logo-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
-                <RecorionMark size={44} title="RECOrion Süper Yönetim" />
-                <div style={{ overflow: 'hidden' }}>
-                  <div className="super-admin-brand-name">
-                    <span>RECOrion</span>
-                    <span className="super-admin-brand-tag">SÜPER</span>
-                  </div>
-                  <div className="super-admin-brand-sub">
-                    Operational Reasoning Intelligence Orchestration Network
-                  </div>
-                </div>
-              </div>
+              <RecorionLogo height={78} className="rx-sidebar-logo" alt="RECOrion Süper Yönetim" />
               <button
                 onClick={() => setSidebarCollapsed(true)}
                 className="super-admin-sidebar-toggle-btn"

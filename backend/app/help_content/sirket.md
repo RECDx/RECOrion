@@ -107,7 +107,7 @@ Konsoldan Work Space'e dönmek için konsolun üst çubuğundaki **💻 Çalış
 
 Ekran üç parçadan oluşur:
 
-1. **Sol menü:** Üstte şirket logonuz (yüklediyseniz; yoksa bina simgesi), şirket adınız ve altında "Şirket Yönetimi" yazısı. Altında menü grupları. En altta veri gizliliği kutusu.
+1. **Sol menü:** Üstte şirket logonuz (yüklediyseniz; yoksa bina simgesi), şirket adınız ve altında "Şirket Yönetimi" yazısı. Altında menü grupları. En altta veri gizliliği kutusu ve RECOrion logosu (menü daraltılınca yalnız simgesi).
 2. **Üst çubuk:** Hangi ekranda olduğunuz, tema seçici, Çalışma Alanı'na geçiş, site bağlantısı, kullanıcı bilginiz ve çıkış.
 3. **Ana alan:** Seçtiğiniz menünün ekranı.
 

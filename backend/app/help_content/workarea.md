@@ -203,7 +203,7 @@ Aşağıdaki harita, girişten önceki ekranları ve Work Space'in tamamını te
 
 **Ekranın bölümleri (yukarıdan aşağı):**
 
-1. **Üst başlık:** RECOrion adı, "Powered by RECDx Bilişim", tema düğmesi ve giriş/oturum düğmeleri.
+1. **Üst başlık:** solda yazılı RECOrion logosu, sağda tema düğmesi ve giriş/oturum düğmeleri.
 2. **Tanıtım:** "🚀 Yeni Nesil Kurumsal Otonom Ekosistem" rozeti, "Yapay Zeka Personellerinizle Şirketinizi Otonom Yönetin" başlığı ve kısa açıklama.
 3. **Sayaç kartları:** Yerli yapay zeka modeli sayısı, **Resmi Faaliyet Sektörü** sayısı, **Meslek Grubu (T.C. Ticaret Bakanlığı)** sayısı ve **%100 Dark DB Veri Yalıtımı** (verilerinizin diğer şirketlerden tamamen ayrı tutulduğu).
 4. **Abonelik & Kiralama Paketleri:** "Şirketinizin ölçeğine ve hedeflerine en uygun yapay zeka operasyon gücünü seçin." Her paket bir karttır.
@@ -492,7 +492,7 @@ Sayfanın altında: **"Bu bağlantı yalnızca size özeldir ve tek kullanımlı
 
 | Bölüm | Ne gösterir |
 |---|---|
-| Marka | "RECOrion", **v2.4 OTONOM** rozeti ve "Çoklu Ajan ve Kolektif Hafıza Platformu". |
+| Marka | Yazılı RECOrion logosu. |
 | **Kurum:** | Şirketinizin logosu ve adı. Logo yüklenmemişse yerinde küçük bir simge görünür. Logoyu şirket yöneticiniz Şirket Yönetimi › Genel › Şirket Profili'nden yükler. |
 | Sağlık noktaları | **Postgres** (veritabanı), **Qdrant** (hafıza arama altyapısı), **Redis** (canlı akış altyapısı). Yeşil nokta sağlıklı, kırmızı nokta sorun var demektir. Tablette gizlenir. |
 | Tema düğmesi | Koyu / Açık / Sistem görünümü. |

@@ -358,13 +358,9 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     <div className="official-landing-container">
       {/* ÜST HEADER / NAVBAR */}
       <header className="landing-header">
-        <div className="landing-brand">
-          <RecorionMark size={52} className="brand-logo-icon" />
-          <div>
-            <h1 className="brand-title">RECOrion</h1>
-            <span className="brand-subtitle">Powered by RECDx Bilişim</span>
-          </div>
-        </div>
+        <h1 className="landing-brand" style={{ margin: 0 }}>
+          <RecorionLogo height={74} className="rx-header-logo" />
+        </h1>
         <div className="landing-nav-actions">
           <ThemeToggle compact />
           {currentUser ? (

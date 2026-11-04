@@ -275,6 +275,13 @@
 .rx-logo.hero-logo { margin: 0 auto 22px; filter: drop-shadow(0 8px 28px rgb(99 102 241 / 0.28)); }
 @media (max-width: 640px) { .rx-logo.hero-logo { height: 96px !important; } }
 .rx-mark.brand-logo-icon { filter: drop-shadow(0 0 10px rgb(99 102 241 / 0.45)); }
+.rx-sidebar-logo { max-width: calc(100% - 40px); }
+
+@media (max-width: 640px) { .rx-logo.rx-header-logo { height: 52px !important; } }
+.rx-sidebar-foot { display: flex; justify-content: center; align-items: center; padding: 10px 12px 14px;
+  border-top: 1px solid var(--border-subtle); flex-shrink: 0; }
+.rx-sidebar-foot .rx-sidebar-logo { max-width: 100%; }
+.rx-sidebar-foot.collapsed { padding: 10px 4px 12px; }
 
 /* Şirket logosu (components/company/TenantLogo.jsx): koyu ve açık temada logolar açık zemin üzerinde okunur */
 :root { --logo-backdrop: #ffffff; }
