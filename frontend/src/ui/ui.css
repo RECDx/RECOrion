@@ -268,6 +268,14 @@
   .ui-toast-stack { top: auto; bottom: 14px; right: 14px; left: 14px; width: auto; }
 }
 
+/* RECOrion marka logosu (ui/Brand.jsx): şeffaf, zemin gerektirmez */
+.rx-mark { display: block; flex-shrink: 0; object-fit: contain; user-select: none; }
+.rx-logo { display: block; max-width: 100%; object-fit: contain; user-select: none; }
+.rx-brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rx-logo.hero-logo { margin: 0 auto 22px; filter: drop-shadow(0 8px 28px rgb(99 102 241 / 0.28)); }
+@media (max-width: 640px) { .rx-logo.hero-logo { height: 96px !important; } }
+.rx-mark.brand-logo-icon { filter: drop-shadow(0 0 10px rgb(99 102 241 / 0.45)); }
+
 /* Şirket logosu (components/company/TenantLogo.jsx): koyu ve açık temada logolar açık zemin üzerinde okunur */
 :root { --logo-backdrop: #ffffff; }
 .tl-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px;

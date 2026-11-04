@@ -3,6 +3,7 @@ import { KeyRound, CheckCircle2 } from 'lucide-react';
 import { api } from '../api';
 import { Button, Card } from '../ui/components';
 import ThemeToggle from '../ui/ThemeToggle';
+import { RecorionLogo } from '../ui/Brand';
 
 function tokenFromHash() {
   const query = (window.location.hash.split('?')[1] || '');
@@ -35,8 +36,9 @@ export default function ResetPassword({ onDone }) {
   };
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 16 }}>
       <div style={{ position: 'fixed', top: 16, right: 16 }}><ThemeToggle compact /></div>
+      <RecorionLogo height={80} />
       <Card style={{ width: 'min(100%, 420px)' }} title={doneEmail ? 'Şifreniz belirlendi' : 'Şifrenizi belirleyin'}
             subtitle={doneEmail ? `${doneEmail} hesabı için yeni şifreniz kaydedildi.` : 'RECOrion hesabınız için yeni bir şifre oluşturun.'}>
         {doneEmail ? (

@@ -66,6 +66,7 @@ import HelpButton from '../help/HelpButton';
 import { setHelpScreen } from '../help/helpBus';
 import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
+import { RecorionMark } from '../ui/Brand';
 import OdooProductPicker from './OdooProductPicker';
 import PlanAppOffers from './integrations/PlanAppOffers';
 import CatalogAdmin from './catalog/CatalogAdmin';
@@ -1987,13 +1988,7 @@ export default function SuperAdminConsole({
         <div className="super-admin-sidebar-header" style={{ padding: sidebarCollapsed ? '16px 8px' : '16px 14px' }}>
           {sidebarCollapsed ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
-              <div 
-                className="super-admin-logo-box" 
-                title="RECOrion Süper Yönetim"
-                style={{ width: 38, height: 38, fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)' }}
-              >
-                🪐
-              </div>
+              <RecorionMark size={40} title="RECOrion Süper Yönetim" />
               <button
                 onClick={() => setSidebarCollapsed(false)}
                 className="super-admin-sidebar-toggle-btn"
@@ -2006,7 +2001,7 @@ export default function SuperAdminConsole({
           ) : (
             <div className="super-admin-logo-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
-                <div className="super-admin-logo-box" title="RECOrion Süper Yönetim">🪐</div>
+                <RecorionMark size={44} title="RECOrion Süper Yönetim" />
                 <div style={{ overflow: 'hidden' }}>
                   <div className="super-admin-brand-name">
                     <span>RECOrion</span>

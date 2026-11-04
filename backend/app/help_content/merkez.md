@@ -140,7 +140,7 @@ Ekran üç parçadan oluşur:
 
 ## Sol menü
 
-Sol menünün en üstünde 🪐 simgesi, **RECOrion** yazısı, **SÜPER** etiketi ve "Operational Reasoning Intelligence Orchestration Network" alt yazısı vardır.
+Sol menünün en üstünde RECOrion logosu, **RECOrion** yazısı, **SÜPER** etiketi ve "Operational Reasoning Intelligence Orchestration Network" alt yazısı vardır.
 
 Menü altı gruba ayrılır: **Genel**, **Müşteriler**, **Katalog**, **Ticari & Yetki**, **İletişim & Otomasyon**, **Yapay Zeka**. Grup başlığına tıklayınca grup kapanır ya da açılır. Hangi grupları kapattığınız bu tarayıcıda hatırlanır.
 

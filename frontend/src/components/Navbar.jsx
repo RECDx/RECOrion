@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import ThemeToggle from '../ui/ThemeToggle';
 import HelpButton from '../help/HelpButton';
-import { 
-  Sparkles, 
-  Activity, 
+import { RecorionMark } from '../ui/Brand';
+import {
+  Activity,
   Database, 
   Cpu, 
   Server, 
@@ -22,19 +22,8 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
   return (
     <header className="top-navbar">
       {/* Brand & Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        <div style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: '10px',
-          background: 'linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 0 15px rgba(99, 102, 241, 0.5)'
-        }}>
-          <Sparkles size={20} color="#ffffff" />
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <RecorionMark size={42} />
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontWeight: '800', fontSize: '1.15rem', letterSpacing: '-0.02em' }}>

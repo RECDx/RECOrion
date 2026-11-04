@@ -4,6 +4,7 @@ import { NewTenantLogoField } from './company/TenantLogo';
 import RecdxAppsChoice from './integrations/RecdxAppsChoice';
 import AdminLeadsModal from './AdminLeadsModal';
 import ThemeToggle from '../ui/ThemeToggle';
+import { RecorionLogo, RecorionMark } from '../ui/Brand';
 import { RECAI_CAPABILITIES, recaiTierName } from './recai/names';
 import { notify, promptDialog, toast } from '../ui/feedback';
 import { 
@@ -358,7 +359,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
       {/* ÜST HEADER / NAVBAR */}
       <header className="landing-header">
         <div className="landing-brand">
-          <div className="brand-logo-icon">🪐</div>
+          <RecorionMark size={52} className="brand-logo-icon" />
           <div>
             <h1 className="brand-title">RECOrion</h1>
             <span className="brand-subtitle">Powered by RECDx Bilişim</span>
@@ -395,6 +396,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
       {/* HERO SECTION */}
       <section className="landing-hero">
+        <RecorionLogo height={150} className="hero-logo" />
         <div className="hero-badge">🚀 Yeni Nesil Kurumsal Otonom Ekosistem</div>
         <h2 className="hero-title">
           Yapay Zeka Personellerinizle <br />
@@ -1349,7 +1351,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
             <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid rgb(var(--rgb-ov) / 0.08)' }}>
               <div>
                 <h3 className="modal-title" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>🔐 RECOrion Şirket Girişi</span>
+                  <RecorionMark size={34} /><span>RECOrion Şirket Girişi</span>
                 </h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', margin: '4px 0 0 0' }}>
                   Yönetim veya çalışma alanı paneline güvenli erişim sağlayın.

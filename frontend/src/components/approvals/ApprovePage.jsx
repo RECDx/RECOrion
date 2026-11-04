@@ -3,6 +3,7 @@ import { CheckCircle2, RotateCcw, ShieldCheck } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card } from '../../ui/components';
 import ThemeToggle from '../../ui/ThemeToggle';
+import { RecorionLogo } from '../../ui/Brand';
 import SimpleMarkdown from '../ai/SimpleMarkdown';
 import '../projects/projects.css';
 
@@ -42,6 +43,7 @@ export default function ApprovePage({ onDone }) {
     <div style={{ minHeight: '100dvh', padding: '32px 16px', display: 'flex', justifyContent: 'center', background: 'var(--bg-dark)' }}>
       <div style={{ position: 'fixed', top: 16, right: 16 }}><ThemeToggle compact /></div>
       <div style={{ width: 'min(100%, 860px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <RecorionLogo height={64} />
         <div className="pj-sub"><ShieldCheck size={16} /> RECOrion · İş adımı onayı</div>
         {done ? (
           <Card title={done === 'approved' ? 'Onaylandı' : 'Revizyon istendi'}>

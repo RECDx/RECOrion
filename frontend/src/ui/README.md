@@ -25,3 +25,8 @@ Tarayıcının `alert/confirm/prompt` pencereleri kullanılmaz.
 Kesme noktaları: ≤1280 küçük masaüstü · ≤1024 tablet · ≤640 telefon (`src/ui/responsive.css`).
 Yardımcı sınıflar: `ui-hide-tablet`, `ui-hide-mobile`, `ui-show-tablet`, `ui-show-mobile-only`,
 `ui-grid-2`, `ui-grid-3` (tablette 2, telefonda 1 sütun).
+
+## Marka logosu
+`ui/Brand.jsx`: `<RecorionMark size={40} />` (yazısız simge) ve `<RecorionLogo height={64} />` (simge + RECOrion yazısı).
+Dosyalar `public/brand/` (şeffaf webp; sekme simgesi `favicon-32.png`, `apple-touch-icon.png`). Kaynak: proje kökündeki `Logo/` klasörü.
+Şirket (kiracı) logosu için `components/company/TenantLogo.jsx` kullanılır; ikisi karıştırılmaz.
