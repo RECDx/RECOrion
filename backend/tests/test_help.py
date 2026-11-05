@@ -9,10 +9,11 @@ ADIM 15: Yardım (Bilgi Birikimi) ve RECAi Yardım Asistanı.
 """
 import asyncio
 import json
+import re
 
 import pytest
 
-from app.services import help_assistant, llm_gateway
+from app.services import help_assistant, help_center, llm_gateway
 from tests.test_lifecycle import super_headers, tag  # noqa: F401  (fikstür)
 from tests.test_workflow import world  # noqa: F401  (fikstür)
 
@@ -54,7 +55,9 @@ def test_tree_and_pages_follow_audience_and_permissions(client, world, super_hea
     assert client.get("/api/v1/help/page", params={"slug": merkez}, headers=w["admin"]["h"]).status_code == 403
     r = client.get("/api/v1/help/page", params={"slug": otomasyon}, headers=w["admin"]["h"]).json()
     assert "RECSlip.App v2 aylık süreç" in r["body"] and "company/AUTOMATIONS" in r["screens"]
-    img = next(x for x in r["body"].split("(") if x.split(")")[0].endswith(".webp")).split(")")[0]
+    # Görsel adresi içerik sürümü taşır (ad.webp?v=8 karakter): görsel yenilenince tarayıcı önbelleği eskiyi göstermez
+    img = next(x for x in r["body"].split("(") if re.match(r"[a-z0-9_-]+\.webp\?v=[0-9a-f]{8}\)", x)).split(")")[0]
+    assert img.split("?v=")[1] == help_center.img_version(img.split("?v=")[0])
     assert client.get(f"/api/v1/help/assets/{img}", headers=w["member"]["h"]).headers["content-type"] == "image/webp"
     assert client.get("/api/v1/help/assets/sy-kayitli-sirketler.webp", headers=w["admin"]["h"]).status_code == 403
     assert client.get("/api/v1/help/assets/sy-kayitli-sirketler.webp", headers=super_headers).status_code == 200

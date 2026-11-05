@@ -104,6 +104,21 @@ EXTRA_N = {(g, norm(t)): v for (g, t), v in EXTRA_PERMS.items()}
 SHOT = re.compile(r"^\s*\[\[EKRAN:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(\|[^\]]*)?\]\]\s*$")
 
 
+_VER: Dict[str, Tuple[float, int, str]] = {}
+
+
+def img_version(name: str) -> str:
+    """Görselin içerik özeti (8 karakter). Adrese ?v= olarak eklenir: görsel değişince tarayıcı önbelleği eskiyi göstermez."""
+    f = IMG / name
+    st = f.stat()
+    cached = _VER.get(name)
+    if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+        return cached[2]
+    v = hashlib.md5(f.read_bytes()).hexdigest()[:8]
+    _VER[name] = (st.st_mtime, st.st_size, v)
+    return v
+
+
 def _body(lines: List[str]) -> str:
     """İşaretleri görsele çevirir: [[EKRAN: ad | açıklama | ...]] -> ![açıklama](ad.webp) (+ devam parçaları); görseli yoksa atlanır."""
     out = []
@@ -115,7 +130,8 @@ def _body(lines: List[str]) -> str:
         name, cap = m.group(1), m.group(2)
         for i, suffix in enumerate(["", "__2", "__3"]):
             if (IMG / f"{name}{suffix}.webp").exists():
-                out.append(f"![{cap}{' (devamı)' if i else ''}]({name}{suffix}.webp)")
+                ver = img_version(f"{name}{suffix}.webp")
+                out.append(f"![{cap}{' (devamı)' if i else ''}]({name}{suffix}.webp?v={ver})")
     return "\n".join(out).strip()
 
 
@@ -212,7 +228,8 @@ def load_all() -> Tuple[List[Page], str]:
         t = f.read_text(encoding="utf-8")
         h.update(t.encode())
         pages += parse(guide, t, audience)
-    h.update(",".join(sorted(p.name for p in IMG.glob("*.webp"))).encode() if IMG.exists() else b"")
+    # Görsel adları ve içerik özetleri: aynı adla yenilenen görsel de sayfaları yeniden kurdurur (?v= değişir)
+    h.update(",".join(sorted(f"{p.name}:{img_version(p.name)}" for p in IMG.glob("*.webp"))).encode() if IMG.exists() else b"")
     return pages, h.hexdigest()[:16]
 
 

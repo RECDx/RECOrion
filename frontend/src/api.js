@@ -230,7 +230,9 @@ export const api = {
   searchHelp: (q) => request(`/help/search?q=${encodeURIComponent(q)}`),
   askHelp: (data) => request('/help/ask', { method: 'POST', body: JSON.stringify(data) }),
   getHelpAsset: async (name) => {
-    const res = await fetch(`${BASE_URL}/help/assets/${encodeURIComponent(name)}`, { headers: authHeaders() });
+    // "ad.webp?v=özet": sürüm, görsel yenilenince tarayıcı önbelleğini aşar
+    const [file, ver] = String(name).split('?v=');
+    const res = await fetch(`${BASE_URL}/help/assets/${encodeURIComponent(file)}${ver ? `?v=${encodeURIComponent(ver)}` : ''}`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Görsel yüklenemedi (${res.status})`);
     return res.blob();
   },
