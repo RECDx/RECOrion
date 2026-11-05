@@ -507,6 +507,7 @@ try {
 
   // 8.5 Kod deposu: onaylanan adımlar ana dala birleşti; onay gerektirmeyen son adımı yönetici birleştirir; dosya görüntülenir
   await page.getByRole('tab', { name: 'Kod Deposu' }).click();
+  await page.getByRole('radio', { name: 'Adımlar' }).click();  // ADIM 16.1: sekme varsayılan olarak Kod Gezgini ile açılır
   await page.locator('.pj-steps .ui-badge', { hasText: /Ana dala birleşti|Onay bekliyor/ }).first().waitFor({ timeout: 30000 });
   const lastCard = page.locator('.ui-card', { hasText: lastTitle }).filter({ has: page.getByRole('button', { name: 'Ana dala birleştir' }) });
   let manualMerge = 'gerekmedi';
@@ -522,13 +523,26 @@ try {
   step(merged >= titles.length && paths.some((x) => x.startsWith('docs/adimlar/')) && manualMerge !== 'birleştirilemedi',
     'Onaylanan adımlar ana dala birleşti; onay gerektirmeyen adım yönetici tarafından birleştirildi',
     `${merged}/${titles.length} birleşti · son adım: ${manualMerge} · ${paths.length} dosya (${codeFiles.length} kod/yapılandırma: ${codeFiles.slice(0, 4).join(', ') || '—'})`);
-  await page.locator('.pj-list li').filter({ hasText: codeFiles[0] || 'docs/adimlar/' }).first().getByRole('button').click();
-  const fileModal = page.getByRole('dialog');
-  await fileModal.locator('pre').waitFor({ timeout: 20000 });
-  const fileText = await fileModal.locator('pre').innerText();
-  step(fileText.trim().length > 0, 'Depodaki dosya RECOrion içinden görüntülendi', `${codeFiles[0] || 'doküman'} · ${fileText.length} karakter`);
+  // ADIM 16.1 Kod Gezgini: adımın dosyası VS Code benzeri görüntüleyicide açılır; dosya ağacı, arama ve fark görünümü
+  await page.locator('.pj-list li').filter({ hasText: codeFiles[0] || 'docs/adimlar/' }).first().getByRole('button', { name: /Kod Gezgini'nde aç/ }).click();
+  const viewer = page.getByRole('region', { name: 'Kod görüntüleyici' });
+  await viewer.locator('.monaco-editor .view-lines').waitFor({ timeout: 60000 });
+  await page.waitForTimeout(1000);
+  const fileText = await viewer.locator('.monaco-editor .view-lines').innerText();
+  const treeItems = await page.getByRole('tree', { name: 'Depo dosya ağacı' }).getByRole('treeitem').count();
+  await page.getByRole('searchbox', { name: 'Depoda ara' }).or(page.getByLabel('Depoda ara')).first().fill('adim');
+  await page.getByLabel('Depoda ara').press('Enter');
+  const hits = await page.getByRole('complementary', { name: 'Dosyalar' }).locator('li').count().catch(() => 0);
   await shot(page, '06b-kod-deposu');
-  await fileModal.getByRole('button', { name: 'Kapat' }).click();
+  await page.getByRole('radio', { name: 'Adımlar' }).click();
+  await page.locator('.pj-list li').filter({ hasText: codeFiles[0] || 'docs/adimlar/' }).first().getByRole('button', { name: /farkını gör/ }).click();
+  const diffDlg = page.getByRole('dialog');
+  await diffDlg.locator('.monaco-diff-editor').waitFor({ timeout: 60000 });
+  await shot(page, '06c-kod-fark');
+  await page.keyboard.press('Escape');
+  step(fileText.trim().length > 0 && treeItems > 0 && hits > 0,
+    'Kod Gezgini: adımın dosyası VS Code benzeri görüntüleyicide açıldı (dosya ağacı, arama, fark görünümü)',
+    `${codeFiles[0] || 'doküman'} · ağaçta ${treeItems} öğe · arama ${hits} sonuç`);
 
   // 7.5 Maliyet: rapor, bütçe, belgeli kalem, Excel, kapanış özeti ve kapanış kilidi
   await page.getByRole('tab', { name: /^Maliyet/ }).click();
@@ -1921,6 +1935,71 @@ try {
   } finally {
     await api(lgo.page, `/api/v1/company/${cfg.tenant_id}/logo`, { method: 'DELETE' }).catch(() => {});
     await lgo.ctx.close();
+  }
+
+  // ---------------------------------------------------------------- ADIM 16: Kod Gezgini ve Kod Çalıştırma Ortamı
+  // Proje yöneticisi deposu açık bir projede (depoya küçük bir Python projesi konur: 2 test geçer, 1 kalır) Testler
+  // sekmesinden testleri çalıştırır: kod gerçek yalıtılmış kapta çalışır, sonuç (geçen/kalan, kalan testin adı) görünür.
+  {
+    const envG = fs.readFileSync(path.resolve('..', '.env'), 'utf8');
+    const gToken = (envG.split(/\r?\n/).find((l) => l.startsWith('GITEA_TOKEN=')) || '').slice('GITEA_TOKEN='.length).trim();
+    const gUrl = process.env.GITEA_URL || 'http://localhost:3000';
+    const pm = await session('manager');
+    let pid16 = null;
+    try {
+      const name16 = `Canlı Test Kod ${NAME.slice(-5)}`;
+      const created = await api(pm.page, '/api/v1/projects', { method: 'POST', body: JSON.stringify({ tenant_id: cfg.tenant_id, name: name16,
+        requirements: 'Kod Çalıştırma Ortamı denemesi' }) });
+      pid16 = created.body?.id;
+      const repo16 = await api(pm.page, `/api/v1/projects/${pid16}/repository`, { method: 'PUT', body: JSON.stringify({ mode: 'RECORION' }) });
+      const [owner16, name16r] = (repo16.body?.url || '').replace(/\/$/, '').split('/').slice(-2);
+      const b64 = (t) => Buffer.from(t, 'utf8').toString('base64');
+      const files = {
+        'requirements.txt': '',
+        'conftest.py': 'import os, sys\nsys.path.insert(0, os.path.dirname(__file__))\n',
+        'randevu.py': 'def cakisiyor_mu(a, b):\n    return a[0] < b[1] and b[0] < a[1]\n\ndef sure(a):\n    return a[1] - a[0]\n',
+        'tests/test_randevu.py': 'from randevu import cakisiyor_mu, sure\n\ndef test_cakisma():\n    assert cakisiyor_mu((9, 10), (9.5, 11))\n\n'
+          + 'def test_ayri():\n    assert not cakisiyor_mu((9, 10), (10, 11))\n\ndef test_sure_hatali():\n    assert sure((9, 10)) == 2\n',
+      };
+      const put = await fetch(`${gUrl}/api/v1/repos/${owner16}/${name16r}/contents`, { method: 'POST',
+        headers: { Authorization: `token ${gToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: 'main', message: 'Canlı test: örnek proje', files: Object.entries(files).map(([p, c]) => ({ operation: 'create', path: p, content: b64(c) })) }) });
+      step(repo16.status === 200 && put.status === 201, 'Kod Çalıştırma Ortamı: deposu açık test projesi hazırlandı (2 geçen, 1 kalan pytest testi)', `${owner16}/${name16r}`);
+
+      await pm.page.getByRole('button', { name: 'Projeler' }).first().click();
+      await pm.page.getByRole('button', { name: 'Tüm projeler' }).click();
+      await pm.page.locator('.pj-card', { hasText: name16 }).filter({ hasNotText: 'İptal edildi' }).first().click({ timeout: 20000 });
+      await pm.page.getByRole('heading', { name: name16 }).waitFor({ timeout: 15000 });
+      await pm.page.getByRole('tab', { name: 'Testler' }).click();
+      const t16 = Date.now();
+      await pm.page.getByRole('button', { name: 'Testleri çalıştır' }).click();
+      const badge = pm.page.locator('.ui-card .ui-badge', { hasText: /^(Geçti|Kaldı|Test bulunamadı|Çalıştırılamadı)$/ }).first();
+      await badge.waitFor({ timeout: 600000 });
+      const verdict = await badge.innerText();
+      await pm.page.getByRole('button', { name: 'Ayrıntı' }).first().click();
+      const card = await pm.page.locator('.pj-steps .ui-card').nth(1).innerText();
+      await shot(pm.page, '42-testler');
+      step(verdict === 'Kaldı' && /2 geçti · 1 kaldı/.test(card) && /test_sure_hatali/.test(card),
+        'Kod Çalıştırma Ortamı: proje yöneticisi testleri çalıştırdı; kod yalıtılmış kapta çalıştı, 2 geçen 1 kalan test ve kalan testin adı Testler sekmesinde',
+        `${verdict} · ${Math.round((Date.now() - t16) / 1000)} sn`);
+      // Kod Gezgini: aynı kod VS Code benzeri görüntüleyicide; dosya ağacından açılır
+      await pm.page.getByRole('tab', { name: 'Kod Deposu' }).click();
+      const tree16 = pm.page.getByRole('tree', { name: 'Depo dosya ağacı' });
+      await tree16.getByRole('treeitem', { name: /randevu\.py/ }).first().waitFor({ timeout: 30000 });
+      await tree16.getByText('randevu.py', { exact: true }).click();
+      const v16 = pm.page.getByRole('region', { name: 'Kod görüntüleyici' }).locator('.monaco-editor .view-lines');
+      await v16.waitFor({ timeout: 60000 });
+      await pm.page.waitForTimeout(800);
+      const src16 = await v16.innerText();
+      await shot(pm.page, '43-kod-gezgini');
+      step(/cakisiyor_mu/.test(src16.replace(/ /g, ' ')), 'Kod Gezgini: depodaki dosya ağaçtan açıldı, kod renklendirilmiş salt okuma görüntüleyicide', 'randevu.py');
+    } catch (e) {
+      await shot(pm.page, '42-testler-hata').catch(() => {});
+      throw e;
+    } finally {
+      if (pid16) await api(pm.page, `/api/v1/projects/${pid16}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel', summary: 'Canlı test bitti' }) });
+      await pm.ctx.close();
+    }
   }
 
   // ---------------------------------------------------------------- ADIM 15: Yardım (Bilgi Birikimi) ve RECAi Yardım Asistanı

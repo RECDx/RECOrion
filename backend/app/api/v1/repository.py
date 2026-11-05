@@ -5,11 +5,12 @@ Proje kod deposu uçları (ADIM 8.5).
 - PUT  /projects/{id}/repository                       proje yöneticisi: depoyu aç (RECORION) / kullanma (NONE)
 - GET  /projects/{id}/repository/file?ref=&path=       ekip: dosya içeriği (dal veya main)
 - POST /projects/{id}/repository/steps/{task_id}/merge proje yöneticisi: onay gerektirmeyen/birleşemeyen adımı birleştir
+- GET  /projects/{id}/repository/refs|tree|archive|search  ekip: Kod Gezgini (ADIM 16.1) dallar, dosya ağacı, zip, arama
 """
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,6 +74,55 @@ async def repository_file(project_id: uuid.UUID, path: str = Query(..., max_leng
         raise HTTPException(status_code=404, detail="Bu projenin kod deposu yok.")
     try:
         return await code_repo.read_file(project, ref, path)
+    except RepoError as exc:
+        _fail(exc)
+
+
+# ---------------------------------------------------------------- Kod Gezgini (ADIM 16.1, #609): ekip salt okuma
+async def _repo_project(db: AsyncSession, user: CurrentUser, project_id):
+    project = await psvc.load(db, user, project_id)
+    if not (project.repo_owner and project.repo_name):
+        raise HTTPException(status_code=404, detail="Bu projenin kod deposu yok.")
+    return project
+
+
+@router.get("/{project_id}/repository/refs")
+async def repository_refs(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    project = await _repo_project(db, user, project_id)
+    try:
+        return await code_repo.refs(project, await _tasks(db, project.id))
+    except RepoError as exc:
+        _fail(exc)
+
+
+@router.get("/{project_id}/repository/tree")
+async def repository_tree(project_id: uuid.UUID, ref: str = Query("main", max_length=120),
+                          user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    project = await _repo_project(db, user, project_id)
+    try:
+        return await code_repo.tree(project, ref)
+    except RepoError as exc:
+        _fail(exc)
+
+
+@router.get("/{project_id}/repository/archive")
+async def repository_archive(project_id: uuid.UUID, ref: str = Query("main", max_length=120),
+                             user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    project = await _repo_project(db, user, project_id)
+    try:
+        data = await code_repo.archive(project, ref)
+    except RepoError as exc:
+        _fail(exc)
+    name = f"{project.repo_name}-{code_repo.slug(ref, 60)}.zip"
+    return Response(content=data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.get("/{project_id}/repository/search")
+async def repository_search(project_id: uuid.UUID, q: str = Query(..., max_length=100), ref: str = Query("main", max_length=120),
+                            user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    project = await _repo_project(db, user, project_id)
+    try:
+        return await code_repo.search(project, ref, q)
     except RepoError as exc:
         _fail(exc)
 

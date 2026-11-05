@@ -1,18 +1,23 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Copy, FileCode2, GitBranch, GitMerge } from 'lucide-react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Copy, FileCode2, FolderTree, GitBranch, GitCompare, GitMerge, ListChecks } from 'lucide-react';
 import { api } from '../../api';
-import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
+import { Badge, Button, Card, EmptyState } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 
 const STATE = { OPEN: ['Onay bekliyor', 'warning'], MERGED: ['Ana dala birleşti', 'success'], CLOSED: ['Kapatıldı', 'neutral'] };
 const FILE = { added: 'eklendi', modified: 'değişti', deleted: 'silindi', changed: 'değişti' };
+// Kod Gezgini (ADIM 16.1): Monaco yalnız bu görünüm açılınca yüklenir
+const CodeExplorer = lazy(() => import('./CodeExplorer'));
+const DiffModal = lazy(() => import('./CodeExplorer').then((m) => ({ default: m.DiffModal })));
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 /** Kod Deposu (ADIM 8.5): RECOrion Gitea deposu; AI personel adım dalına çalışır, ana dala birleştirme insan onayıyla. */
 export default function CodeRepoTab({ project }) {
   const [repo, setRepo] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [viewing, setViewing] = useState(null);
+  const [view, setView] = useState('explorer');
+  const [explorerAt, setExplorerAt] = useState(null);
+  const [diff, setDiff] = useState(null);
   const closed = ['COMPLETED', 'CANCELLED'].includes(project.status);
   const load = useCallback(() => api.getProjectRepository(project.id).then(setRepo).catch((e) => toast.error(e.message)), [project.id]);
   useEffect(() => { load(); }, [load]);
@@ -63,7 +68,22 @@ export default function CodeRepoTab({ project }) {
 
       {on && <MirrorCard project={project} repo={repo} closed={closed} onChange={(r) => setRepo({ ...r, can_manage: repo.can_manage })} />}
 
-      {on && (steps.length === 0 ? (
+      {on && (
+        <div className="ui-segmented" role="radiogroup" aria-label="Kod deposu görünümü" style={{ alignSelf: 'flex-start' }}>
+          {[['explorer', 'Kod Gezgini', FolderTree], ['steps', 'Adımlar', ListChecks]].map(([v, label, Icon]) => (
+            <button key={v} type="button" role="radio" aria-checked={view === v} className={`ui-segmented-item${view === v ? ' active' : ''}`}
+              onClick={() => setView(v)}><Icon size={14} /><span>{label}</span></button>
+          ))}
+        </div>
+      )}
+
+      {on && view === 'explorer' && (
+        <Suspense fallback={<p className="pj-hint">Kod Gezgini yükleniyor…</p>}>
+          <CodeExplorer project={project} initial={explorerAt} />
+        </Suspense>
+      )}
+
+      {on && view === 'steps' && (steps.length === 0 ? (
         <EmptyState icon={FileCode2} title="Henüz commit yok" description="AI personel bir iş adımının çıktısını ürettiğinde değişiklikler burada görünür." />
       ) : steps.map((s) => {
         const [label, tone] = STATE[s.state] || ['—', 'neutral'];
@@ -78,9 +98,13 @@ export default function CodeRepoTab({ project }) {
                 <li key={f.path}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{f.path}</span>
                   <small className="pj-hint">{FILE[f.status] || f.status}{f.additions ? ` · +${f.additions}` : ''}</small>
+                  {(s.base_sha || s.head_sha) && (
+                    <button type="button" className="ui-icon-btn" aria-label={`${f.path} farkını gör`} title="Farkı gör"
+                      onClick={() => setDiff({ path: f.path, status: f.status, base: s.base_sha, head: s.head_sha || s.branch, title: s.title })}><GitCompare size={14} /></button>
+                  )}
                   {f.status !== 'deleted' && (
-                    <button type="button" className="ui-icon-btn" aria-label={`${f.path} dosyasını gör`}
-                      onClick={() => setViewing({ path: f.path, ref: s.state === 'MERGED' ? repo.base : s.branch })}><FileCode2 size={14} /></button>
+                    <button type="button" className="ui-icon-btn" aria-label={`${f.path} dosyasını Kod Gezgini'nde aç`} title="Kod Gezgini'nde aç"
+                      onClick={() => { setExplorerAt({ path: f.path, ref: s.state === 'MERGED' ? repo.base : s.branch }); setView('explorer'); }}><FileCode2 size={14} /></button>
                   )}
                 </li>
               ))}
@@ -94,24 +118,8 @@ export default function CodeRepoTab({ project }) {
           </Card>
         );
       }))}
-      {viewing && <FileModal project={project} file={viewing} onClose={() => setViewing(null)} />}
+      {diff && <Suspense fallback={null}><DiffModal project={project} file={diff} onClose={() => setDiff(null)} /></Suspense>}
     </div>
-  );
-}
-
-function FileModal({ project, file, onClose }) {
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    api.getRepositoryFile(project.id, file.ref, file.path).then(setData).catch((e) => { toast.error(e.message); onClose(); });
-  }, [project.id, file.ref, file.path, onClose]);
-  return (
-    <Modal open onClose={onClose} title={file.path} size="lg">
-      <p className="pj-hint" style={{ fontFamily: 'var(--font-mono)' }}>{file.ref}{data ? ` · ${data.size} bayt` : ''}</p>
-      {!data ? <p className="pj-hint">Yükleniyor…</p> : (
-        <pre style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', whiteSpace: 'pre-wrap', background: 'var(--bg-dark)',
-          border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12, maxHeight: '60vh', overflow: 'auto' }}>{data.content}</pre>
-      )}
-    </Modal>
   );
 }
 

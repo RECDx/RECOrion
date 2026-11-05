@@ -21,6 +21,7 @@ from app.api.v1.pricing import router as pricing_router
 from app.api.v1.cost_items import router as cost_items_router
 from app.api.v1.live import router as live_router
 from app.api.v1.repository import router as repository_router
+from app.api.v1.test_runs import router as test_runs_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.credentials import router as credentials_router
 from app.api.v1.recslip import router as recslip_router
@@ -65,6 +66,7 @@ api_router.include_router(pricing_router)
 api_router.include_router(cost_items_router)
 api_router.include_router(live_router)
 api_router.include_router(repository_router)
+api_router.include_router(test_runs_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(integrations_router)
 api_router.include_router(edge_router)

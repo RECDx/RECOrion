@@ -1,0 +1,49 @@
+/* Kod Gezgini (ADIM 16.1): VS Code benzeri salt okuma görünüm. Renkler yalnız tema değişkenleri. */
+.cx-root { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--bg-card); padding: 10px; }
+.cx-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cx-ref { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cx-ref select { max-width: 320px; }
+.cx-search { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 220px; }
+.cx-search input { flex: 1; min-width: 0; }
+
+.cx-body { display: grid; grid-template-columns: minmax(200px, 280px) 1fr; gap: 10px; min-height: 0; }
+.cx-side { border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-surface); overflow: auto; max-height: calc(100vh - 300px); min-height: 420px; }
+.cx-pad { padding: 10px; }
+.cx-tree, .cx-tree ul, .cx-hitlist { list-style: none; margin: 0; padding: 0; }
+.cx-tree { padding: 4px 0; }
+.cx-node { display: flex; align-items: center; gap: 5px; width: 100%; border: none; background: transparent; color: var(--text-main); font-family: var(--font-sans);
+  font-size: 0.8rem; padding: 3px 8px; cursor: pointer; text-align: left; white-space: nowrap; }
+.cx-node:hover { background: rgb(var(--rgb-ov) / 0.06); }
+.cx-node.active { background: rgb(var(--rgb-ov) / 0.12); font-weight: 600; }
+.cx-node svg { flex-shrink: 0; color: var(--text-muted); }
+.cx-node-pad { display: inline-block; width: 13px; flex-shrink: 0; }
+.cx-node-name { overflow: hidden; text-overflow: ellipsis; }
+
+.cx-results-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border-subtle); }
+.cx-hit { display: flex; flex-direction: column; gap: 2px; width: 100%; border: none; background: transparent; color: var(--text-main); text-align: left;
+  padding: 6px 10px; cursor: pointer; font-size: 0.78rem; font-family: var(--font-sans); }
+.cx-hit:hover { background: rgb(var(--rgb-ov) / 0.06); }
+.cx-hit > svg { display: none; }
+.cx-hit-path { font-family: var(--font-mono); color: var(--text-muted); font-size: 0.72rem; }
+.cx-hit-text { font-family: var(--font-mono); white-space: pre; overflow: hidden; text-overflow: ellipsis; font-size: 0.74rem; }
+
+.cx-main { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border-subtle); border-radius: 10px; overflow: hidden; background: var(--bg-surface); }
+.cx-tabs { display: flex; align-items: stretch; gap: 0; overflow-x: auto; border-bottom: 1px solid var(--border-subtle); min-height: 34px; }
+.cx-tab { display: flex; align-items: center; border-right: 1px solid var(--border-subtle); color: var(--text-muted); }
+.cx-tab.active { background: var(--bg-card); color: var(--text-main); box-shadow: inset 0 -2px 0 var(--border-highlight); }
+.cx-tab-name { border: none; background: transparent; color: inherit; font-family: var(--font-mono); font-size: 0.76rem; padding: 6px 4px 6px 12px; cursor: pointer; white-space: nowrap; display: flex; gap: 6px; align-items: baseline; }
+.cx-tab-ref { color: var(--text-dim); font-size: 0.66rem; }
+.cx-tab-close { border: none; background: transparent; color: inherit; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; }
+.cx-tab-close:hover { color: var(--text-main); }
+.cx-tab-info { margin-left: auto; padding: 0 10px; display: flex; align-items: center; gap: 6px; white-space: nowrap; font-family: var(--font-mono); }
+.cx-editor-wrap { position: relative; flex: 1; }
+.cx-editor { height: calc(100vh - 340px); min-height: 420px; }
+.cx-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg-surface); padding: 20px; }
+.cx-diff { height: 60vh; min-height: 320px; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+
+@media (max-width: 1024px) {
+  .cx-body { grid-template-columns: 1fr; }
+  .cx-side { max-height: 240px; min-height: 0; }
+  .cx-editor { height: 60vh; min-height: 320px; }
+  .cx-tab-info { display: none; }
+}

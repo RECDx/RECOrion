@@ -1120,6 +1120,29 @@ class ToolCall(Base):
     executed_at = Column(DateTime(timezone=True))
 
 
+class TestRun(Base):
+    """Kod Çalıştırma Ortamı koşusu (ADIM 16.2): projenin deposundaki kod yalıtılmış kapta kurulur ve testleri çalışır.
+    AI Test Uzmanı'nın adımında kendiliğinden ya da proje yöneticisi tarafından elle başlatılır; sonuç Work Area'da görünür."""
+    __tablename__ = "test_runs"
+    __test__ = False  # pytest bu sınıfı test sınıfı sanmasın
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"))
+    ref = Column(String(120), nullable=False)
+    commit_sha = Column(String(64))
+    status = Column(String(16), nullable=False, default="RUNNING")  # RUNNING, PASSED, FAILED, NO_TESTS, ERROR
+    passed = Column(Integer, nullable=False, default=0)
+    failed = Column(Integer, nullable=False, default=0)
+    skipped = Column(Integer, nullable=False, default=0)
+    result = Column(JSONB)
+    error = Column(Text)
+    started_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    finished_at = Column(DateTime(timezone=True))
+
+
 class AutomationRule(Base):
     """Otomasyon kuralı (ADIM 13.2): ne olunca (WEBHOOK/POLL/SCHEDULE) + koşul + ne yapılsın (Case/proje aç, bildir)."""
     __tablename__ = "automation_rules"

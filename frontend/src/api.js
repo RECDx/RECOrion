@@ -255,7 +255,15 @@ export const api = {
   // Proje kod deposu (Adım 8.5)
   getProjectRepository: (projectId) => request(`/projects/${projectId}/repository`),
   setProjectRepository: (projectId, mode) => request(`/projects/${projectId}/repository`, { method: 'PUT', body: JSON.stringify({ mode }) }),
+  // Kod Çalıştırma Ortamı (ADIM 16.2)
+  getTestRuns: (projectId) => request(`/projects/${projectId}/test-runs`),
+  startTestRun: (projectId, ref) => request(`/projects/${projectId}/test-runs`, { method: 'POST', body: JSON.stringify({ ref }) }),
   getRepositoryFile: (projectId, ref, path) => request(`/projects/${projectId}/repository/file?${new URLSearchParams({ ref, path }).toString()}`),
+  // Kod Gezgini (ADIM 16.1): dallar, ağaç, arama, zip
+  getRepositoryRefs: (projectId) => request(`/projects/${projectId}/repository/refs`),
+  getRepositoryTree: (projectId, ref) => request(`/projects/${projectId}/repository/tree?${new URLSearchParams({ ref }).toString()}`),
+  searchRepository: (projectId, ref, q) => request(`/projects/${projectId}/repository/search?${new URLSearchParams({ ref, q }).toString()}`),
+  downloadRepositoryArchive: (projectId, ref) => downloadFile(`/projects/${projectId}/repository/archive?${new URLSearchParams({ ref }).toString()}`, `depo-${ref}.zip`),
   mergeRepositoryStep: (projectId, taskId) => request(`/projects/${projectId}/repository/steps/${taskId}/merge`, { method: 'POST' }),
   getMirrorTargets: (projectId) => request(`/projects/${projectId}/repository/mirror-targets`),
   setRepositoryMirror: (projectId, connectionId, repo) => request(`/projects/${projectId}/repository/mirror`, { method: 'PUT', body: JSON.stringify({ connection_id: connectionId, repo }) }),

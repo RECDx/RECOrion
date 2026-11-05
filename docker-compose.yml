@@ -7,6 +7,10 @@ networks:
   recorion_net:
     name: ${DOCKER_NETWORK_NAME:-recorion_net}
     driver: bridge
+  # Kod Çalıştırma Ortamı (ADIM 16.2): yalnız backend ↔ sandbox; dışarı çıkışı yok
+  sandbox_net:
+    name: recorion_sandbox_net
+    internal: true
 
 volumes:
   postgres_data:
@@ -237,6 +241,7 @@ services:
       - GITEA_URL=http://gitea:3000
       - GITEA_PUBLIC_URL=${GITEA_PUBLIC_URL:-http://localhost:3000}
       - GITEA_TOKEN=${GITEA_TOKEN:-}
+      - SANDBOX_URL=${SANDBOX_URL:-http://sandbox:8100}
       - RECORION_VAULT_KEY=${RECORION_VAULT_KEY:-}
       - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY .env dosyasinda tanimli olmali}
@@ -248,6 +253,24 @@ services:
       - ./edge_agent:/edge_agent:ro
     networks:
       - recorion_net
+      - sandbox_net
+
+  # ----------------------------------------------------------------------------
+  # Kod Çalıştırma Ortamı (ADIM 16.2): AI personelin yazdığı kodu her koşuda yeni açılan, sınırlı ve root olmayan
+  # bir kapta çalıştırır (kurulumdan sonra ağ kesilir), sonucu backend'e döner, kabı siler. Yalnız sandbox_net'te.
+  # ----------------------------------------------------------------------------
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    container_name: recorion_sandbox
+    restart: unless-stopped
+    environment:
+      - SANDBOX_PARALLEL=${SANDBOX_PARALLEL:-2}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - sandbox_net
 
   # ----------------------------------------------------------------------------
   # 8. React + Vite Frontend (Work Area Tri-Pane Modern Arayüz)

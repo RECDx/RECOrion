@@ -257,6 +257,8 @@ async def overview(project: Project, tasks: List[Task]) -> Dict[str, Any]:
             try:
                 _, pr = await _call("GET", f"/repos/{owner}/{repo}/pulls/{t.repo_pr_number}")
                 step["state"] = "MERGED" if pr.get("merged") else ("OPEN" if pr.get("state") == "open" else "CLOSED")
+                # Fark görünümü (ADIM 16.1): adımın ayrıldığı nokta ve dalın son hâli
+                step["base_sha"], step["head_sha"] = pr.get("merge_base"), (pr.get("head") or {}).get("sha")
                 _, files = await _call("GET", f"/repos/{owner}/{repo}/pulls/{t.repo_pr_number}/files")
                 step["files"] = [{"path": f.get("filename"), "status": f.get("status"), "additions": f.get("additions")} for f in files or []]
             except RepoError as exc:
@@ -276,6 +278,107 @@ async def read_file(project: Project, ref: str, path: str) -> Dict[str, Any]:
     if len(raw) > MAX_FILE_BYTES:
         raise HTTPException(status_code=413, detail="Dosya ekranda gösterilemeyecek kadar büyük.")
     return {"path": path, "ref": ref, "size": len(raw), "content": raw.decode("utf-8", "replace")}
+
+
+# ---------------------------------------------------------------- Kod Gezgini (ADIM 16.1, #609): salt okuma
+TREE_LIMIT = 2000
+ARCHIVE_MAX_BYTES = 25 * 1024 * 1024
+SEARCH_LIMIT = 200
+REF_RE = re.compile(r"[\w./-]{1,120}")
+
+
+def _ref(ref: str) -> str:
+    if not ref or not REF_RE.fullmatch(ref) or ".." in ref:
+        raise HTTPException(status_code=422, detail="Geçersiz dal.")
+    return ref
+
+
+async def refs(project: Project, tasks: List[Task]) -> List[Dict[str, Any]]:
+    """Depo dalları; adım dalları görev başlığıyla eşlenir. main önce, sonra adım sırası."""
+    _, branches = await _call("GET", f"/repos/{project.repo_owner}/{project.repo_name}/branches", params={"limit": 100})
+    by_branch = {t.repo_branch: t for t in tasks if t.repo_branch}
+    out = []
+    for b in branches or []:
+        c, t = b.get("commit") or {}, by_branch.get(b.get("name"))
+        out.append({"name": b.get("name"), "sha": c.get("id"), "date": c.get("timestamp"), "message": (c.get("message") or "").strip()[:200],
+                    "task_id": str(t.id) if t else None, "task_title": t.title if t else None, "order_index": t.order_index if t else None})
+    out.sort(key=lambda r: (r["name"] != BASE_BRANCH, r["order_index"] if r["order_index"] is not None else 10 ** 6, r["name"]))
+    return out
+
+
+async def tree(project: Project, ref: str) -> Dict[str, Any]:
+    ref = _ref(ref)
+    entries, page = [], 1
+    while True:
+        try:
+            _, data = await _call("GET", f"/repos/{project.repo_owner}/{project.repo_name}/git/trees/{ref}",
+                                  params={"recursive": "true", "per_page": 1000, "page": page})
+        except RepoError as exc:
+            if exc.status in (400, 404):
+                raise HTTPException(status_code=404, detail="Dal bulunamadı.")
+            raise
+        for e in (data or {}).get("tree") or []:
+            entries.append({"path": e.get("path"), "type": "tree" if e.get("type") == "tree" else "blob", "size": e.get("size") or 0})
+        if not (data or {}).get("truncated") or len(entries) >= TREE_LIMIT:
+            break
+        page += 1
+    return {"ref": ref, "sha": (data or {}).get("sha"), "entries": entries[:TREE_LIMIT], "truncated": len(entries) > TREE_LIMIT}
+
+
+async def archive(project: Project, ref: str) -> bytes:
+    """Dalın zip arşivi (Gitea); sınırı aşan arşiv indirilmez."""
+    ref = _ref(ref)
+    if not enabled():
+        raise RepoError("Kod deposu sunucusu yapılandırılmamış (GITEA_TOKEN).", 503)
+    url = f"/repos/{project.repo_owner}/{project.repo_name}/archive/{ref}.zip"
+    try:
+        async with httpx.AsyncClient(base_url=settings.GITEA_URL.rstrip("/") + "/api/v1", timeout=60,
+                                     headers={"Authorization": f"token {settings.GITEA_TOKEN}"}) as c:
+            async with c.stream("GET", url) as r:
+                if r.status_code == 404:
+                    raise HTTPException(status_code=404, detail="Dal bulunamadı.")
+                if r.status_code != 200:
+                    raise RepoError(f"Arşiv alınamadı ({r.status_code}).", r.status_code)
+                buf = bytearray()
+                async for chunk in r.aiter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) > ARCHIVE_MAX_BYTES:
+                        raise HTTPException(status_code=413, detail="Depo arşivi indirilemeyecek kadar büyük (25 MB üstü).")
+                return bytes(buf)
+    except httpx.HTTPError as exc:
+        raise RepoError(f"Kod deposu sunucusuna ulaşılamadı ({exc.__class__.__name__}).", 503)
+
+
+async def search(project: Project, ref: str, q: str) -> Dict[str, Any]:
+    """Dosya adı ve içerik araması (büyük/küçük harf duyarsız); arşiv bellekte açılır, ikili ve büyük dosyalar atlanır."""
+    import io
+    import zipfile
+
+    needle = (q or "").strip().casefold()
+    if not 2 <= len(needle) <= 100:
+        raise HTTPException(status_code=422, detail="Arama 2–100 karakter olmalı.")
+    data = await archive(project, ref)
+    files, hits = [], []
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        for info in z.infolist():
+            if info.is_dir():
+                continue
+            path = info.filename.split("/", 1)[1] if "/" in info.filename else info.filename  # kök klasör (<repo>/) atılır
+            if not path:
+                continue
+            if needle in path.casefold():
+                files.append(path)
+            if len(hits) >= SEARCH_LIMIT or info.file_size > MAX_FILE_BYTES:
+                continue
+            raw = z.read(info)
+            if b"\x00" in raw[:8000]:
+                continue
+            for no, line in enumerate(raw.decode("utf-8", "replace").splitlines(), 1):
+                if needle in line.casefold():
+                    hits.append({"path": path, "line": no, "text": line.strip()[:240]})
+                    if len(hits) >= SEARCH_LIMIT:
+                        break
+    return {"ref": ref, "q": q, "files": files[:SEARCH_LIMIT], "matches": hits, "truncated": len(hits) >= SEARCH_LIMIT}
 
 
 # ---------------------------------------------------------------- müşterinin hesabına yansıtma (ADIM 10.3, #297)

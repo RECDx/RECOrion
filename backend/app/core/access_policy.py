@@ -429,6 +429,15 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/projects/{{project_id}}/repository"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/repository/file"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/repository/steps/{{task_id}}/merge"): HANDLER(),
+    # Kod Gezgini (ADIM 16.1, #609): proje ekibi salt okuma (psvc.load)
+    ("GET", f"{P}/projects/{{project_id}}/repository/refs"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/repository/tree"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/repository/archive"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/repository/search"): HANDLER(),
+    # Kod Çalıştırma Ortamı (ADIM 16.2, #610): ekip okur (psvc.load), proje yöneticisi çalıştırır (manage=True)
+    ("GET", f"{P}/projects/{{project_id}}/test-runs"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/test-runs/{{run_id}}"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/test-runs"): HANDLER(),
     # Müşterinin GitHub/Gitea hesabına yansıtma (ADIM 10.3, #297): proje yöneticisi (psvc.load manage=True)
     ("GET", f"{P}/projects/{{project_id}}/repository/mirror-targets"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}/repository/mirror"): HANDLER(),

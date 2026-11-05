@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, Artifact, ChatMessage, Project, Task, Tenant
-from app.services import code_repo, knowledge, live, llm_gateway, model_router, storage, task_flow
+from app.services import code_repo, knowledge, live, llm_gateway, model_router, sandbox, storage, task_flow
 from app.services.llm_gateway import LLMContext, LLMError
 
 logger = logging.getLogger("recorion.agent_work")
@@ -91,11 +91,22 @@ async def _load(db: AsyncSession, task_id):
     return task, project, tenant
 
 
-def _system(actor: Actor, tenant: Tenant, has_repo: bool = False) -> str:
+TEST_INSTRUCTIONS = (
+    "\n\nSen bu projenin test uzmanısın ve RECOrion Kod Çalıştırma Ortamı'nı kullanıyorsun (ADIM 16.2): çıktını teslim ettiğin anda "
+    "adımın dalı (önceki adımlarda ana dala birleşen kod + senin dosyaların) yalıtılmış bir kapta GERÇEKTEN çalıştırılır ve sonuçları "
+    "sana gösterilir. Bu yüzden çalıştırılabilir testler yaz: Python için tests/ altında pytest dosyaları (gerekirse "
+    "requirements.txt'e test bağımlılığı ekle); JavaScript için package.json'daki \"test\" betiğiyle çalışan testler "
+    "(ör. node --test). Mevcut kodu depodaki yollarıyla içe aktar; var olmayan modül uydurma. Testler internetsiz çalışır: dış "
+    "servise, gerçek veritabanı sunucusuna bağlanma (SQLite/bellek içi kullan). İstersen kökte scripts/recorion_test.sh betiği "
+    "yazabilirsin; varsa o da çalıştırılır. Test planını ve hangi testin neyi doğruladığını dokümanda kısaca anlat.")
+
+
+def _system(actor: Actor, tenant: Tenant, has_repo: bool = False, test_runner: bool = False) -> str:
     base = actor.system_prompt or f"Sen {tenant.name} şirketinin {actor.role} unvanlı AI personelisin."
     repo = ("\n\nBu projenin kod deposu var (ADIM 8.5): yazdığın her kaynak kod veya yapılandırma dosyasını ayrı bir kod "
             "bloğunda ver ve bloğun açılış satırına dili ve depodaki dosya yolunu yaz (ör. ```python src/app/main.py). "
             "Bu dosyalar adımın dalına commit edilir; yol belirtmediğin kod blokları yalnızca dokümanda kalır.") if has_repo else ""
+    repo += TEST_INSTRUCTIONS if (has_repo and test_runner) else ""
     return (f"{base}\n\nRECOrion iş akışında sana atanan bir iş adımını yürütüyorsun. Çıktın doğrudan teslim edilecek iş "
             "ürünüdür (doküman, analiz, kod, plan vb.): eksiksiz, uygulanabilir ve Markdown biçiminde yaz. Odaklı ol: gereksiz "
             "tekrar ve dolgu yazma; çoğu iş adımı için 600-1500 kelime yeterlidir. Bilmediğin bilgiyi "
@@ -150,7 +161,8 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
         content, result, parts, credits, fallback_from, tool_calls = await _generate(
             LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id,
                        task_type=model_router.classify(task.title, task.description, task.acceptance_criteria, job_title=agent.role)),
-            [{"role": "system", "content": _system(agent, tenant, code_repo.active(project))}, {"role": "user", "content": prompt}],
+            [{"role": "system", "content": _system(agent, tenant, code_repo.active(project), _runs_tests(project, agent))},
+             {"role": "user", "content": prompt}],
             tooling=(db, agent, project, task))
     except LLMError as exc:
         return {"ok": False, "error": exc.message}
@@ -176,8 +188,45 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
                          "fallback_used": bool(fallback_from),
                          "tool_calls": [{"id": str(c.id), "tool": c.tool, "status": c.status} for c in tool_calls]})
     await code_repo.after_output(db, project, task, version, content, agent.display_name)  # depo varsa adımın dalına commit
+    if _runs_tests(project, agent) and task.repo_branch:
+        # Test Uzmanı: dal Kod Çalıştırma Ortamı'nda gerçekten çalışır; sonuç ve AI değerlendirmesi çıktıya eklenir
+        extra = await _with_test_run(db, project, task, tenant, agent)
+        content = f"{content}\n\n{extra}"
+        data = content.encode("utf-8")
+        await storage.put_object(key, data, "text/markdown; charset=utf-8")
+        art.content_hash = hashlib.sha256(data).hexdigest()
+        # Görev sohbeti yalnız eklemeli: sonuç ayrı mesaj olarak düşer
+        db.add(ChatMessage(tenant_id=tenant.id, project_id=project.id, task_id=task.id, sender_actor_id=agent.id, role="assistant",
+                           content=extra, message_type="CHAT"))
     await db.commit()
     return {"ok": True, "artifact_id": str(art.id), "version": version, "actor_id": str(agent.id)}
+
+
+def _runs_tests(project: Project, agent: Actor) -> bool:
+    return sandbox.enabled() and code_repo.active(project) and sandbox.is_test_role(agent.role)
+
+
+async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant: Tenant, agent: Actor) -> str:
+    await live.thought(project.id, task.id, "ANALYSIS", f"{agent.display_name}: testler Kod Çalıştırma Ortamı'nda çalıştırılıyor…")
+    run = await sandbox.start(db, project, task.repo_branch, agent.id, task)
+    await db.commit()  # koşu Testler sekmesinde "Çalışıyor" görünsün
+    run = await sandbox.finish(db, project, run, task)
+    facts = sandbox.report_md(run)
+    await live.thought(project.id, task.id, "WRITING", f"{agent.display_name} gerçek test sonuçlarını değerlendiriyor…")
+    try:
+        res = await llm_gateway.chat(
+            LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id, task_type="ANALYSIS"),
+            [{"role": "system", "content": _system(agent, tenant)},
+             {"role": "user", "content": f"Yazdığın testler RECOrion Kod Çalıştırma Ortamı'nda çalıştırıldı. Gerçek sonuç:\n\n{facts}\n\n"
+                                         "Bu sonuca göre kısa bir test değerlendirmesi yaz (150-400 kelime, Markdown, başlık kullanma): neler "
+                                         "doğrulandı, kalan testlerin olası nedeni (uygulama hatası mı test hatası mı), geliştiriciye somut "
+                                         "düzeltme önerileri ve son satırda 'Karar: Kabul' ya da 'Karar: Düzeltme gerekli'. Sonucu olduğundan "
+                                         "iyi gösterme; çalıştırılamadıysa bunu açıkça yaz."}],
+            temperature=0.2, max_tokens=1500, timeout=240, fallback=True)
+        evaluation = (res.content or "").strip()
+    except LLMError as exc:
+        evaluation = f"_Değerlendirme yazılamadı: {exc.message}_"
+    return f"{facts}\n\n## Test Uzmanı değerlendirmesi (gerçek koşuya göre)\n\n{evaluation}"
 
 
 REVIEW_MAX_TOKENS = 3000

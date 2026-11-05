@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     GITEA_URL: str = "http://gitea:3000"
     GITEA_PUBLIC_URL: str = "http://localhost:3000"
     GITEA_TOKEN: str = ""  # .env üzerinden verilir; boşsa kod deposu özelliği kapalıdır
+    # Kod Çalıştırma Ortamı (ADIM 16.2): yalnız iç ağdaki sandbox servisi; boşsa AI test koşusu kapalıdır
+    SANDBOX_URL: str = ""
 
     # Entegrasyon kimlik kasası (ADIM 10.1): base64 32 bayt AES-256-GCM anahtarı. Boşsa bağlantı eklenemez.
     RECORION_VAULT_KEY: str = ""

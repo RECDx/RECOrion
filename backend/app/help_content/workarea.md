@@ -183,7 +183,7 @@ Aşağıdaki harita, girişten önceki ekranları ve Work Space'in tamamını te
 | Giriş öncesi | E-postadaki bağlantılar | Şifre belirleme sayfası · Onay bağlantısı sayfası | Bağlantıyı alan kişi |
 | Work Space | Üst çubuk | Kurum (logo), Resmi Web & Paketler, Şirket Yönetimi, kullanıcı kartı, Çıkış | Herkes (Şirket Yönetimi düğmesi yalnız yönetim izni olanlarda) |
 | Work Space | **Projeler** | Projeler ve Case'ler listesi · Yeni Proje / Case · Şablondan proje oluştur · Toplantıdan proje oluştur | Herkes (oluşturma düğmeleri yalnız **Proje / Case Açma** izni olanlarda) |
-| Work Space | Projeler › Proje ekranı | Bilgiler & İsterler · Proje Ekleri · Beyin AI Planlama · Ekip & Simülasyon · Hazırlık & Bildirim · İş Akışı · Maliyet · Kod Deposu · RECSlip · Kapanış · Şablon olarak kaydet | Projenin ekibi; **Maliyet** yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar; **RECSlip** yalnız RECSlip Case'lerinde |
+| Work Space | Projeler › Proje ekranı | Bilgiler & İsterler · Proje Ekleri · Beyin AI Planlama · Ekip & Simülasyon · Hazırlık & Bildirim · İş Akışı · Maliyet · Kod Deposu · Testler · RECSlip · Kapanış · Şablon olarak kaydet | Projenin ekibi; **Maliyet** yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar; **RECSlip** yalnız RECSlip Case'lerinde |
 | Work Space | **Onaylarım** | RECSlip masraf fişleri · Dış sisteme aktarımlar · Araç işlemleri (yazma) · İş adımı onayları ve karantinadakiler | Herkes (yalnız kendi kararını bekleyenler) |
 | Work Space | **Çalışma Alanı** | Sol: Proje & Görevler · Orta: Sohbet · Sağ: Kalite Kapısı & Kurum Hafızası · Yeni İş Akışı Görevi Oluştur | Herkes (yalnız ekibinde olduğu projeler) |
 | Work Space | **Pano** | Şirket veya departman göstergeleri | **Şirket Geneli Pano** veya **Departman Panosu** izni olanlar |
@@ -703,7 +703,7 @@ Pencerede not: "Plan taslak olarak gelir: unvanı uyan AI personel adımlara ata
 
 1. **Başlık:** **← Projeler** (listeye döner), proje adı, durum rozeti, tür, "Yönetici: <ad>", tarih aralığı.
 2. **Durum düğmeleri** (sağda; duruma göre değişir).
-3. **Sekme çubuğu:** **Bilgiler & İsterler** · **Proje Ekleri** · **Beyin AI Planlama** · **Ekip & Simülasyon** · **Hazırlık & Bildirim** · **İş Akışı** · **Maliyet** · **Kod Deposu** · **RECSlip** · **Kapanış**. Bazı sekmelerin yanında sayı vardır: Proje Ekleri = ek sayısı, Beyin AI Planlama = plandaki adım sayısı, Ekip & Simülasyon = ekip üye sayısı.
+3. **Sekme çubuğu:** **Bilgiler & İsterler** · **Proje Ekleri** · **Beyin AI Planlama** · **Ekip & Simülasyon** · **Hazırlık & Bildirim** · **İş Akışı** · **Maliyet** · **Kod Deposu** · **Testler** · **RECSlip** · **Kapanış**. Bazı sekmelerin yanında sayı vardır: Proje Ekleri = ek sayısı, Beyin AI Planlama = plandaki adım sayısı, Ekip & Simülasyon = ekip üye sayısı.
 
 Hangi sekmeyle açılır? Aktif veya Duraklatıldı projede **İş Akışı**; şablondan veya toplantıdan gelmiş, planı henüz onaylanmamış projede **Beyin AI Planlama**; diğerlerinde **Bilgiler & İsterler**.
 
@@ -1090,7 +1090,13 @@ Altta **Tutar: <miktar × birim fiyat>** hesaplanır. Düğmeler: **Vazgeç**, *
 
 1. **Kod deposu** ("AI personel her iş adımında kendi dalına çalışır; adım onaylanınca değişiklikler ana dala (main) birleştirilir."): **RECOrion deposu açık** rozeti ve depo adresi ya da **Depo yok**. Açıklama: kod dosyaları AI çıktısında yolu belirtilmiş kod bloklarından oluşur; her adımın dokümanı ayrı bir klasöre yazılır. "Depo özeldir; dosyalar bu ekrandan görüntülenir".
 2. **Şirket hesabına yansıtma** ("Ana depo RECOrion'da kalır; her commit şirketin GitHub/Gitea deposuna da gönderilir."): **Yansıtılıyor** / **Gönderim hatası** rozeti, "Son gönderim: …". Yansıtma yoksa: "Yansıtma yok. Proje yöneticisi şirketin GitHub/Gitea bağlantısıyla kurabilir."
-3. **Adım kartları:** "<n>. <adım>", "<dal> → main · istek #n", rozet **Onay bekliyor** / **Ana dala birleşti** / **Kapatıldı**, "Birleştirildi: …", dosya listesi (yol, "eklendi/değişti/silindi · +n").
+3. **Görünüm seçimi:** **Kod Gezgini** (varsayılan) | **Adımlar**.
+4. **Kod Gezgini** (VS Code benzeri, salt okuma): solda deponun dosya ağacı; ortada açılan dosyalar sekmeler hâlinde, renklendirilmiş kod, satır numarası ve küçük harita. Üstte **Dal** seçimi (ana dal veya bir iş adımının dalı, adım adıyla), **Depoda ara** kutusu (dosya adı ve kod içinde arar; sonuca tıklayınca dosya o satırda açılır) ve **Zip indir** (seçili dalın tüm dosyaları). Tema RECOrion'un açık/koyu seçimini izler.
+5. **Adımlar:** "<n>. <adım>", "<dal> → main · istek #n", rozet **Onay bekliyor** / **Ana dala birleşti** / **Kapatıldı**, "Birleştirildi: …", dosya listesi (yol, "eklendi/değişti/silindi · +n"). Her dosyada **Farkı gör** (adım başlamadan önceki hâl ile adımın son hâli yan yana) ve **Kod Gezgini'nde aç** simgeleri vardır.
+
+[[EKRAN: wa-kod-gezgini | Kod Deposu sekmesinde Kod Gezgini: solda dosya ağacı, ortada renklendirilmiş kod, üstte dal seçimi, arama ve Zip indir | Deposu açık bir projede "Kod Deposu" sekmesine basın; Kod Gezgini görünümünde bir dosya açın]]
+
+> **İpucu:** Kod Gezgini salt okunurdur; kod yalnız AI personelin iş adımlarıyla değişir. Böylece hangi kodu hangi adımın yazdığı izlenebilir.
 
 Commit yoksa: **"Henüz commit yok"** — "AI personel bir iş adımının çıktısını ürettiğinde değişiklikler burada görünür."
 
@@ -1105,10 +1111,45 @@ Commit yoksa: **"Henüz commit yok"** — "AI personel bir iş adımının çık
 | **Kullanma** | Depo kullanımını kapatır: **"Kod deposu kullanımı kapatıldı."** | **"Kod deposu kullanılmasın mı? Depo ve geçmişi silinmez; yeni çıktılar artık commit edilmez."** |
 | **Yansıt** | Yansıtmayı kurar ("Kuruluyor…"): **"Yansıtma kuruldu; her commit hedef depoya da gönderilir."** | — |
 | **Kaldır** | Yansıtmayı kaldırır: **"Yansıtma kaldırıldı."** | **"Yansıtma kaldırılsın mı? Hedef depodaki kod silinmez; yeni commitler artık gönderilmez."** |
-| **<yol> dosyasını gör** (simge) | Dosya içeriği penceresini açar (başlık dosya yolu; dal · bayt). | — |
+| **<yol> farkını gör** (simge, Adımlar) | **Fark: <yol>** penceresini açar: solda adım başlamadan önceki, sağda adımın son hâli. | Yeni eklenen dosyada sol taraf boştur. |
+| **<yol> dosyasını Kod Gezgini'nde aç** (simge, Adımlar) | Dosyayı Kod Gezgini'nde, adımın dalında (birleştiyse ana dalda) açar. | — |
+| **Zip indir** (Kod Gezgini) | Seçili dalın tüm dosyalarını zip olarak indirir. | 25 MB üstü depolar indirilemez. |
 | **Ana dala birleştir** | Tamamlanmış ama birleşmemiş adımı ana dala birleştirir: **"Ana dala birleştirildi."** Kartta: "Bu adım onay gerektirmediği veya birleştirme yapılamadığı için bekliyor." | **"'<adım>' adımının değişiklikleri ana dala (main) birleştirilsin mi?"** |
 
 **Mesajlar:** **"Kod deposu sunucusu bu kurulumda yapılandırılmamış. RECDx ile iletişime geçin."** · **"Şirketin GitHub/Gitea bağlantısı yok. Şirket yöneticisi Şirket Yönetimi › Entegrasyonlar ekranından ekler."**
+
+### Testler sekmesi
+
+[[EKRAN: wa-testler | Testler sekmesi: Kod Çalıştırma Ortamı kartı (Dal seçimi, Testleri çalıştır) ve bir test koşusu: Kaldı rozeti, "2 geçti · 1 kaldı", kalan testin adı ve mesajı | Deposu açık ve testleri olan bir projede "Testler" sekmesine basın; Testleri çalıştır'a basıp sonucun gelmesini bekleyin, Ayrıntı'yı açın]]
+
+**Bu ekran ne işe yarar?** AI personelin yazdığı kodu RECOrion içinde gerçekten çalıştırır. Kod, her koşuda yeniden açılan yalıtılmış bir kapta (Kod Çalıştırma Ortamı) kurulur ve testleri çalışır; sonuç burada ve iş adımının çıktısında görünür. Kod RECOrion'un verilerine ve gizli bilgilerine erişemez; bağımlılıklar kurulduktan sonra internet bağlantısı kesilir; koşu bitince kap silinir.
+
+**Ne zaman kullanırım?** Yazılım projelerinde. **AI Test Uzmanı** (unvanında "Test", "QA" veya "Kalite Güvence" geçen AI personel) deposu açık bir projede iş adımını teslim ettiğinde testler **kendiliğinden** çalışır: test uzmanı önce test kodunu yazar, sistem adımın dalını çalıştırır, sonuç ("Gerçek test koşusu") ve test uzmanının bu sonuca göre yazdığı değerlendirme ("Karar: Kabul" / "Karar: Düzeltme gerekli") adımın çıktısına ve görev sohbetine eklenir. Proje yöneticisi istediği dalda testleri elle de çalıştırabilir.
+
+**Kimler görür / çalıştırır?** Projenin ekibi sonuçları görür. **Testleri çalıştır** düğmesini yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar görür ("Testleri elle proje yöneticisi başlatır; AI Test Uzmanı'nın koşuları kendiliğinden yapılır.").
+
+**Hangi testler çalışır?** Depoda kökte veya en fazla iki alt klasörde bulunan projeler:
+- **Python** (requirements.txt veya pyproject.toml): bağımlılıklar kurulur, **pytest** çalışır.
+- **JavaScript** (package.json): `npm install`, ardından package.json'daki **test** betiği (`npm test`).
+- Kökte **scripts/recorion_test.sh** varsa o da çalışır.
+Her aşamanın üst süresi 5 dakikadır.
+
+**Ekranın bölümleri:**
+
+1. **Kod Çalıştırma Ortamı** kartı: **Dal** seçimi (ana dal ve birleşmemiş adım dalları) ve **Testleri çalıştır**. Koşu sürerken düğme "Koşu sürüyor…" olur.
+2. **Koşu kartları** (en yeni üstte): dal · commit, tarih, "AI Test Uzmanı adımı" veya "elle başlatıldı", sonuç rozeti ve "<n> geçti · <n> kaldı · <n> atlandı · <süre> sn". **Ayrıntı** ile her alt proje için sonuç, kalan testlerin adı ve hata mesajı, kurulum hatası ve **Test çıktısı** açılır.
+
+| Rozet | Anlamı |
+|---|---|
+| **Çalışıyor** | Kod kuruluyor veya testler çalışıyor; ekran 5 saniyede bir yenilenir. |
+| **Geçti** | Bütün testler geçti. |
+| **Kaldı** | En az bir test kaldı, süre doldu veya bağımlılıklar kurulamadı. |
+| **Test bulunamadı** | Depoda çalıştırılacak test yok. |
+| **Çalıştırılamadı** | Dal bulunamadı veya çalıştırma ortamına ulaşılamadı (kartta nedeni yazar). |
+
+**Mesajlar:** **"Test koşusu başladı; sonuç birkaç dakika içinde burada görünür."** · **"Bu projede süren bir test koşusu var; bitmesini bekleyin."** · **"Önce projenin kod deposunu açın."** · **"Kod çalıştırma ortamı bu kurulumda yapılandırılmamış; RECDx ile iletişime geçin."**
+
+> **Örnek:** Diş kliniği CRM projesinde Yazılım Geliştirici (Backend) randevu modülünü yazar, adım onaylanınca kod ana dala birleşir. Test Uzmanı adımında AI, çakışan randevuları sınayan pytest testleri yazar; sistem testleri çalıştırır: "3 geçti · 1 kaldı — test_randevu_cakisma: çakışan randevu kabul edildi". Test uzmanı değerlendirmesinde hatanın uygulamada olduğunu yazar ve "Karar: Düzeltme gerekli" der; proje yöneticisi adımı düzeltmeye gönderir.
 
 ### RECSlip sekmesi
 
@@ -1782,6 +1823,8 @@ Yalnız Case yöneticisi (ve **Tüm Projeleri Yönetme** izni olanlar) **Ayarlar
 | Çıktıyı Odoo'ya aktarmak | **İş Akışı** › **Sisteme aktar** |
 | Bütçe girmek, gider eklemek | Proje ekranı › **Maliyet** |
 | Kod deposu açmak | Proje ekranı › **Kod Deposu** |
+| AI'ın yazdığı kodu görmek | Proje ekranı › **Kod Deposu** › **Kod Gezgini** |
+| Testleri çalıştırmak, sonuçlarını görmek | Proje ekranı › **Testler** |
 | Projeyi kapatmak, ekleri kurum hafızasına aktarmak | Proje ekranı › **Kapanış** |
 | Projeyi şablon yapmak | Proje ekranı › **Şablon olarak kaydet** |
 | AI personelle görev üzerinde konuşmak | **Çalışma Alanı** › soldan adım seçin |
