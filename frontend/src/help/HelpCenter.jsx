@@ -30,10 +30,16 @@ export default function HelpCenter() {
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef(null);
   const pageRef = useRef(null);
+  // Kullanıcı sekme seçtikten sonra geç gelen "Bu ekran" yüklemesi sekmeyi değiştirmesin (RECAi yanıtı gizlenmesin)
+  const seqRef = useRef(0);
+  const pickTab = useCallback((t) => { seqRef.current += 1; setTab(t); }, []);
 
-  const loadPage = useCallback(async (slug, anc = null, push = true) => {
+  const loadPage = useCallback(async (slug, anc = null, push = true, seq = null) => {
+    if (seq === null) seqRef.current += 1;  // kullanıcının açtığı sayfa: bekleyen bağlam yüklemesi geçersiz
+    const mine = seq === null ? seqRef.current : seq;
     try {
       const p = await api.getHelpPage(slug);
+      if (seqRef.current !== mine) return;
       if (push && pageRef.current) setTrail((t) => [...t, pageRef.current.slug]);
       pageRef.current = p;
       setPage(p);
@@ -44,11 +50,14 @@ export default function HelpCenter() {
 
   const openContext = useCallback(async () => {
     const screen = getHelpScreen();
+    seqRef.current += 1;
+    const my = seqRef.current;
     try {
       const c = await api.getHelpContext(screen, openDialogTitle());
-      await loadPage(c.page.slug, c.anchor, false);
-      setTrail([]);
-    } catch { setTab(tree ? 'toc' : 'ask'); }
+      if (seqRef.current !== my) return;
+      await loadPage(c.page.slug, c.anchor, false, my);
+      if (seqRef.current === my) setTrail([]);
+    } catch { if (seqRef.current === my) setTab(tree ? 'toc' : 'ask'); }
   }, [loadPage, tree]);
 
   useEffect(() => {
@@ -56,8 +65,8 @@ export default function HelpCenter() {
       const d = e.detail || {};
       setOpen(true);
       if (d.slug) loadPage(d.slug, d.anchor, false);
-      else if (d.tab === 'ask') setTab('ask');
-      else if (d.tab === 'toc') setTab('toc');
+      else if (d.tab === 'ask') pickTab('ask');
+      else if (d.tab === 'toc') pickTab('toc');
       else openContext();
       if (d.question) setQ(d.question);
     };
@@ -68,7 +77,7 @@ export default function HelpCenter() {
     window.addEventListener('recorion:help', onHelp);
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('recorion:help', onHelp); window.removeEventListener('keydown', onKey); };
-  }, [open, openContext, loadPage]);
+  }, [open, openContext, loadPage, pickTab]);
 
   useEffect(() => { if (open && !tree) api.getHelpTree().then(setTree).catch(() => setTree({ guides: [] })); }, [open, tree]);
   useEffect(() => {
@@ -105,9 +114,9 @@ export default function HelpCenter() {
         </span>
       </header>
       <nav className="hp-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === 'ask'} className={tab === 'ask' ? 'active' : ''} onClick={() => setTab('ask')}><Sparkles size={14} /> RECAi'ye sor</button>
+        <button type="button" role="tab" aria-selected={tab === 'ask'} className={tab === 'ask' ? 'active' : ''} onClick={() => pickTab('ask')}><Sparkles size={14} /> RECAi'ye sor</button>
         <button type="button" role="tab" aria-selected={tab === 'page'} className={tab === 'page' ? 'active' : ''} onClick={openContext}><Compass size={14} /> Bu ekran</button>
-        <button type="button" role="tab" aria-selected={tab === 'toc'} className={tab === 'toc' ? 'active' : ''} onClick={() => setTab('toc')}><BookOpen size={14} /> İçindekiler</button>
+        <button type="button" role="tab" aria-selected={tab === 'toc'} className={tab === 'toc' ? 'active' : ''} onClick={() => pickTab('toc')}><BookOpen size={14} /> İçindekiler</button>
       </nav>
 
       <div className="hp-body" ref={bodyRef}>
