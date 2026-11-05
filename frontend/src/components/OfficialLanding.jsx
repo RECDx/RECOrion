@@ -359,7 +359,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
       {/* ÜST HEADER / NAVBAR */}
       <header className="landing-header">
         <h1 className="landing-brand" style={{ margin: 0 }}>
-          <RecorionLogo height={74} className="rx-header-logo" />
+          <RecorionLogo height={96} className="rx-header-logo" />
         </h1>
         <div className="landing-nav-actions">
           <ThemeToggle compact />
@@ -392,7 +392,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
 
       {/* HERO SECTION */}
       <section className="landing-hero">
-        <RecorionLogo height={150} className="hero-logo" />
+        <RecorionLogo height={210} className="hero-logo" />
         <div className="hero-badge">🚀 Yeni Nesil Kurumsal Otonom Ekosistem</div>
         <h2 className="hero-title">
           Yapay Zeka Personellerinizle <br />

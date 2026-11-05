@@ -273,7 +273,7 @@
 .rx-logo { display: block; max-width: 100%; object-fit: contain; user-select: none; }
 .rx-brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .rx-logo.hero-logo { margin: 0 auto 22px; filter: drop-shadow(0 8px 28px rgb(99 102 241 / 0.28)); }
-@media (max-width: 640px) { .rx-logo.hero-logo { height: 96px !important; } }
+@media (max-width: 640px) { .rx-logo.hero-logo { height: auto !important; width: 100% !important; } }
 .rx-mark.brand-logo-icon { filter: drop-shadow(0 0 10px rgb(99 102 241 / 0.45)); }
 .rx-sidebar-logo { max-width: calc(100% - 40px); }
 
