@@ -39,7 +39,7 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
         }}>
           {tenant?.logo_url ? <TenantLogoMark url={tenant.logo_url} name={tenant.name} size={22} /> : <Layers size={14} color="#06b6d4" />}
           <span style={{ color: 'var(--text-muted)' }}>Kurum:</span>
-          <span style={{ fontWeight: '600', color: 'var(--nt-f8fafc)' }}>
+          <span style={{ fontWeight: '600', color: 'var(--nt-f8fafc)' }} title={tenant?.name || ''}>
             {tenant?.name || 'RECOrion Teknoloji A.Ş.'}
           </span>
         </div>

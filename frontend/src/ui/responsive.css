@@ -89,6 +89,27 @@ img, video, canvas, iframe { max-width: 100%; }
 .ws-mode button.active { background: var(--gradient-brand); color: #ffffff; }
 .ws-mode button:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* Work Space üst çubuğu: logo büyüdüğünde düğmeler ve kurum adı satır kaydırmaz (05.11.2026) */
+.top-navbar { gap: 12px; }
+.top-navbar .rx-header-logo { flex-shrink: 0; }
+.top-navbar .navbar-actions button, .top-navbar .navbar-center > div { white-space: nowrap; flex-shrink: 0; }
+.top-navbar .navbar-center { min-width: 0; }
+.top-navbar .navbar-center > div:first-child { flex-shrink: 1; min-width: 0; overflow: hidden; }
+.top-navbar .navbar-center > div:first-child > span { white-space: nowrap; }
+.top-navbar .navbar-center > div:first-child > span:last-child { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.top-navbar .navbar-actions > div { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 1600px) {
+  .top-navbar .navbar-center .ui-hide-tablet { display: none !important; }
+  .top-navbar .navbar-actions { gap: 10px !important; }
+}
+@media (max-width: 1366px) {
+  .top-navbar .navbar-center > div:first-child > span:first-of-type { display: none; }  /* "Kurum:" etiketi */
+}
+@media (max-width: 1280px) {
+  .top-navbar .navbar-actions > .ui-hide-mobile > div:last-child { display: none; }  /* kullanıcı kartında yalnız baş harf */
+  .top-navbar .navbar-center > div:first-child > span:last-child { max-width: 160px; }
+}
+
 @media (max-width: 1280px) {
   .tri-pane-container { grid-template-columns: 270px 1fr 300px; }
 }
