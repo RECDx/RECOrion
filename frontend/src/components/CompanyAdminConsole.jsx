@@ -1987,7 +1987,7 @@ export default function CompanyAdminConsole({
         )}
         {/* RECOrion logosu: menü açıkken yazılı, daraltılınca yazısız */}
         <div className={`rx-sidebar-foot ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          {sidebarCollapsed ? <RecorionMark size={36} /> : <RecorionLogo height={64} className="rx-sidebar-logo" />}
+          {sidebarCollapsed ? <RecorionMark size={36} /> : <RecorionLogo height={80} className="rx-sidebar-logo" />}
         </div>
       </aside>
 

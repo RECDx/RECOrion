@@ -22,7 +22,7 @@ export default function Navbar({ health, tenant, onGoToOfficialSite, currentUser
   return (
     <header className="top-navbar">
       {/* Brand & Logo */}
-      <RecorionLogo height={60} className="rx-header-logo" />
+      <RecorionLogo height={70} className="rx-header-logo" />
 
       {/* Center: Tenant & Infrastructure Indicators */}
       <div className="navbar-center" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>

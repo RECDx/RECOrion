@@ -224,7 +224,7 @@ body {
 
 /* Top Navigation Bar */
 .top-navbar {
-  height: 66px;
+  height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -239,7 +239,7 @@ body {
 .tri-pane-container {
   display: grid;
   grid-template-columns: 310px 1fr 340px;
-  height: calc(100vh - 66px);
+  height: calc(100vh - 76px);
   overflow: hidden;
   gap: 1px;
   background: var(--border-subtle);

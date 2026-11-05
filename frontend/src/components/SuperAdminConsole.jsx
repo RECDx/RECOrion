@@ -2000,7 +2000,7 @@ export default function SuperAdminConsole({
             </div>
           ) : (
             <div className="super-admin-logo-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-              <RecorionLogo height={78} className="rx-sidebar-logo" alt="RECOrion Süper Yönetim" />
+              <RecorionLogo height={80} className="rx-sidebar-logo" alt="RECOrion Süper Yönetim" />
               <button
                 onClick={() => setSidebarCollapsed(true)}
                 className="super-admin-sidebar-toggle-btn"
