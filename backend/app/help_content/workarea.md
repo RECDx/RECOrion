@@ -114,7 +114,7 @@ Ayrıntılar için Work Space bölümündeki **Üst çubuk ve mod çubuğu** ba�
 
 ## Telefonda ve tablette
 
-- Üst çubuktaki sistem sağlık noktaları tablette gizlenir; kullanıcı kartı telefonda gizlenir.
+- Üst çubuktaki sistem sağlık noktaları yalnız geniş ekranlarda görünür; kullanıcı kartı dar ekranlarda baş harfe iner, telefonda gizlenir.
 - Çalışma Alanı'ndaki üç bölme aynı anda sığmaz. Üstte bir bölme seçici çıkar: **Proje & Görevler**, **Sohbet**, **Çıktı & Hafıza**. Bunlara dokunarak bölmeler arasında geçersiniz.
 - Tablolar telefonda kart görünümüne geçer; her satırın başlığı solda yazar.
 
@@ -492,11 +492,11 @@ Sayfanın altında: **"Bu bağlantı yalnızca size özeldir ve tek kullanımlı
 
 | Bölüm | Ne gösterir |
 |---|---|
-| Marka | Yazılı RECOrion logosu. |
-| **Kurum:** | Şirketinizin logosu ve adı. Logo yüklenmemişse yerinde küçük bir simge görünür. Logoyu şirket yöneticiniz Şirket Yönetimi › Genel › Şirket Profili'nden yükler. |
-| Sağlık noktaları | **Postgres** (veritabanı), **Qdrant** (hafıza arama altyapısı), **Redis** (canlı akış altyapısı). Yeşil nokta sağlıklı, kırmızı nokta sorun var demektir. Tablette gizlenir. |
+| Marka | Yazılı RECOrion logosu ve altında ORION'un açılımı (Operational Reasoning Intelligence Orchestration Network). |
+| **Kurum:** | Şirketinizin logosu ve adı. Logo yüklenmemişse yerinde küçük bir simge görünür. Logoyu şirket yöneticiniz Şirket Yönetimi › Genel › Şirket Profili'nden yükler. Dar ekranlarda "Kurum:" etiketi gizlenir, uzun şirket adı kısaltılır; tam ad üzerine gelince görünür. |
+| Sağlık noktaları | **Postgres** (veritabanı), **Qdrant** (hafıza arama altyapısı), **Redis** (canlı akış altyapısı). Yeşil nokta sağlıklı, kırmızı nokta sorun var demektir. Yalnız geniş ekranlarda (1600 pikselden geniş) görünür. |
 | Tema düğmesi | Koyu / Açık / Sistem görünümü. |
-| Kullanıcı kartı | Adınızın baş harfi, adınız ve rolünüz (ör. "Proje Yöneticisi"). Telefonda gizlenir. |
+| Kullanıcı kartı | Adınızın baş harfi, adınız ve rolünüz (ör. "Proje Yöneticisi"). Dizüstü gibi dar ekranlarda yalnız baş harf görünür; telefonda gizlenir. |
 
 **Düğmeler:**
 
