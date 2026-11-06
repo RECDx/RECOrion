@@ -65,7 +65,7 @@ def test_catalog_matches_database(db):
         rows = {c: (m, n) for c, m, n in cur.fetchall()}
         cur.execute("SELECT name, base_role, permissions FROM tenant_roles WHERE tenant_id IS NULL")
         roles = {n: (b, p) for n, b, p in cur.fetchall()}
-    assert set(pc.CODES) <= set(rows)
+    assert set(pc.CODES) == set(rows)  # kaldırılan izin veritabanında kalmaz (0046)
     for code, module, name, _ in pc.PERMISSIONS:
         assert rows[code] == (module, name)
         assert module in pc.MODULES
@@ -91,7 +91,8 @@ def test_platform_role_hidden_from_customers(client, w):
     mods = client.get("/api/v1/system/permission-modules", headers=w["ah"]).json()
     assert [m["code"] for m in mods] == list(pc.MODULES)
     perms = client.get("/api/v1/system/permissions", headers=w["ah"]).json()
-    assert {p["code"]: p["enforced"] for p in perms}["billing:topup"] is False
+    assert all(p["enforced"] for p in perms)  # #611-#613: işleve bağlı olmayan izin kalmadı
+    assert not {"billing:topup", "chat:export"} & {p["code"] for p in perms}
     assert all(p["module_name"] for p in perms)
 
 
@@ -147,3 +148,41 @@ def test_role_permissions_are_exact(client, w):
     assert set(me["permissions"]) == set(w["roles"]["Güvenlik ve Uyum Denetçisi"]["permissions"])
     assert client.post("/api/v1/me/personal-tokens", headers=h, json={"name": "Claude"}).status_code == 403
     assert client.get(f"/api/v1/company/{w['t']}/dashboard", headers=h).status_code == 200
+
+
+def test_tenant_role_create_edit_delete_without_escalation(client, w):
+    """#612: şirkete özel rol oluşturulur, düzenlenir, silinir; RECDx'e özel izin verilemez; şirket yöneticisi olmayan kişi
+    kendisinde olmayan izni role ekleyemez; ad benzersiz; sistem rolü buradan değiştirilemez; kullanılan rol silinmez."""
+    base = f"/api/v1/tenants/{w['t']}/roles"
+    ah = w["ah"]
+    for bad in (["*"], ["system:admin"], ["billing:topup"]):
+        assert client.post(base, headers=ah, json={"name": f"Kötü {bad[0]}", "permissions": bad}).status_code == 400
+    assert client.post(base, headers=ah, json={"name": "proje yöneticisi", "permissions": []}).status_code == 400  # sistem rolü adı
+    r = client.post(base, headers=ah, json={"name": "Rol Sorumlusu", "permissions": ["role:create", "role:edit", "role:delete", "user:invite"]})
+    assert r.status_code == 200, r.text
+    rid = r.json()["id"]
+    assert client.post(base, headers=ah, json={"name": "ROL SORUMLUSU", "permissions": []}).status_code == 400
+    r = client.put(f"{base}/{rid}", headers=ah, json={"description": "Rolleri yönetir", "permissions": ["role:create", "role:edit", "role:delete", "user:invite", "user:manage"]})
+    assert r.status_code == 200 and "user:manage" in r.json()["permissions"]
+    # Role bağlı kullanıcı: izinleri rolden gelir; kendisinde olmayan izni role ekleyemez
+    email = f"rolsor_{w['tag']}@yetki-test.com.tr"
+    r = client.post(f"/api/v1/company/{w['t']}/users", headers=ah, json={"display_name": "Rol Sorumlusu", "email": email, "password": PASSWORD, "role_id": rid})
+    assert r.status_code == 200, r.text
+    h = _h(client, email)
+    assert "role:edit" in client.get("/api/v1/auth/me", headers=h).json()["permissions"]
+    r = client.post(base, headers=h, json={"name": "Kaçak Entegrasyon", "permissions": ["integration:manage"]})
+    assert r.status_code == 403 and "integration:manage" in r.json()["detail"]
+    r = client.post(base, headers=h, json={"name": "Davet Eden", "permissions": ["user:invite"]})
+    assert r.status_code == 200, r.text
+    other = r.json()["id"]
+    assert client.put(f"{base}/{other}", headers=h, json={"permissions": ["user:invite", "dashboard:view"]}).status_code == 403
+    assert client.put(f"{base}/{w['roles']['Proje Yöneticisi']['id']}", headers=ah, json={"name": "X"}).status_code == 404
+    assert client.delete(f"{base}/{w['roles']['Proje Yöneticisi']['id']}", headers=ah).status_code == 404
+    # Uzman kullanıcı (rol izni yok) düzenleyemez/silemez
+    _, uh = _user(client, w, "rolsuz", "Uzman Kullanıcı")
+    assert client.put(f"{base}/{other}", headers=uh, json={"name": "Y"}).status_code == 403
+    assert client.delete(f"{base}/{other}", headers=uh).status_code == 403
+    # Kullanılan rol silinmez; kullanılmayan silinir
+    assert client.delete(f"{base}/{rid}", headers=ah).status_code == 409
+    assert client.delete(f"{base}/{other}", headers=h).status_code == 200
+    assert other not in {r["id"] for r in client.get(base, headers=ah).json()}

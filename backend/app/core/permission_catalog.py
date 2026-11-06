@@ -51,7 +51,7 @@ PERMISSIONS = [
 
     ("org:manage", "ORG", "Departman Yönetimi", "Departman oluşturma, katalogdan ekleme, düzenleme ve silme."),
 
-    ("manifesto:manage", "INTELLIGENCE", "Sektörel Manifesto Yönetimi", "Sektörler, NACE kodları ve kurumsal manifestoyu düzenleme, RECAi'ye yazdırma."),
+    ("manifesto:manage", "INTELLIGENCE", "Sektörel Manifesto Yönetimi", "Şirketin sektör ve meslek bilgilerini ve kurumsal manifestoyu düzenleme, RECAi'ye yazdırma."),
     ("brain:manage", "INTELLIGENCE", "Beyin AI Ayarları", "Planlamada kullanılacak RECAi kademesini seçme."),
     ("regulation:manage", "INTELLIGENCE", "Mevzuat Paketlerini Açma/Kapatma", "Şirkete mevzuat bilgi paketlerini açma ve kapatma."),
 
@@ -63,7 +63,6 @@ PERMISSIONS = [
      "Aktarım ve araç çağrısı onayı (ikinci onay dahil), aktarım günlüğü, başarısız aktarımı yeniden deneme."),
 
     ("billing:view", "BILLING", "Kredi ve Kullanımı Görme", "Kredi ve Kullanım ekranı: aylık hak, kullanılan, ek kredi bakiyesi, kullanım dökümü."),
-    ("billing:topup", "BILLING", "Ek Kredi ve Paket Talebi", "RECDx'ten ek kredi veya paket değişikliği talep etme."),
 
     ("project:create", "PROJECTS", "Proje / Case Açma", "Yeni proje veya Case; şablondan ve toplantıdan proje oluşturma."),
     ("project:manage", "PROJECTS", "Tüm Projeleri Yönetme",
@@ -75,7 +74,6 @@ PERMISSIONS = [
 
     ("chat:participate", "CHAT", "Sohbet ve Görev İletişimi", "Görev sohbetine ve Beyin AI sohbetine yazma, dosya ekleme."),
     ("chat:view_a2a", "CHAT", "Ajanlar Arası Konuşmaları İzleme", "AI personelin kendi aralarındaki konuşmaları görme."),
-    ("chat:export", "CHAT", "Sohbeti Dışa Aktarma", "Sohbet ve düşünce akışını dışa aktarma."),
 
     ("memory:search", "MEMORY", "Kurum Hafızasında Arama", "Onaylı kurum hafızasında arama."),
     ("memory:promote", "MEMORY", "Kurum Hafızasına Ekleme ve Onaylama", "Onaylanan çıktı ve proje bilgisini kurum hafızasına aktarma, bekleyenleri onaylama veya reddetme."),
@@ -88,7 +86,7 @@ PLATFORM_ONLY = {"*", "system:admin"}
 CUSTOMER_CODES = [c for c in CODES if c not in PLATFORM_ONLY]
 
 # Kodda denetlenmeyen izinler (ekranda "henüz bir işleme bağlı değil" uyarısıyla gösterilir)
-NOT_ENFORCED = {"role:edit", "role:delete", "billing:topup", "chat:export", "chat:view_a2a"}
+NOT_ENFORCED: set = set()  # 06.11.2026 (#611-#613): hepsi işleve bağlandı veya katalogdan çıkarıldı
 
 STANDARD = ["tenant:view", "task:create", "chat:participate", "memory:search", "token:manage"]
 PROJECT_MANAGER = STANDARD + ["department:dashboard", "agent:hire", "project:create", "project:manage", "template:manage",
@@ -117,7 +115,7 @@ SYSTEM_ROLES = [
         "integration:manage", "mapping:manage", "automation:manage", "integration:approve"],
      "description": "Dış sistem bağlantıları, eşlemeler, otomasyon kuralları ve dış sisteme yazma onaylarından sorumludur (BT)."},
     {"name": "Finans ve Raporlama Sorumlusu", "permissions": STANDARD + [
-        "dashboard:view", "department:dashboard", "cost:view", "billing:view", "billing:topup", "integration:approve"],
+        "dashboard:view", "department:dashboard", "cost:view", "billing:view", "integration:approve"],
      "description": "Şirket panosu, maliyet ve bütçe, kredi kullanımı; tutar eşiğini aşan aktarımların onayı."},
     {"name": "Kalite ve Onay Sorumlusu", "permissions": STANDARD + [
         "task:approve", "task:reject", "chat:view_a2a", "memory:promote", "memory:revoke"],
@@ -128,8 +126,8 @@ SYSTEM_ROLES = [
      "description": "Şirket ayarları, pano, kredi ve operasyonel projelerin genel yönetimi."},
     {"name": "Güvenlik ve Uyum Denetçisi", "permissions": [
         "tenant:view", "memory:search", "dashboard:view", "department:dashboard", "cost:view", "billing:view",
-        "chat:view_a2a", "chat:export"],
-     "description": "Salt okunur denetim: panolar, maliyet ve kredi, ajanlar arası konuşmalar, sohbet dışa aktarma."},
+        "chat:view_a2a"],
+     "description": "Salt okunur denetim: panolar, maliyet ve kredi, ajanlar arası konuşmalar."},
 ]
 
 # Eski rol adları (0041 öncesi) -> yeni ad; bu rollere bağlı kullanıcılar korunur

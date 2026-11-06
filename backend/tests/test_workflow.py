@@ -16,7 +16,7 @@ import pytest
 
 from app.core.security import hash_password
 from app.services import storage
-from app.services.evren_client import ChatResult, EvrenError, evren_client
+from app.services.evren_client import ChatResult, EmbeddingResult, EvrenError, evren_client
 
 PASSWORD = "Akis-Testi-Sifresi-2026"
 
@@ -98,9 +98,16 @@ def ai(monkeypatch):
         return objects[key]
 
     monkeypatch.setattr(evren_client, "chat", fake.chat)
+    monkeypatch.setattr(evren_client, "embed", fake_embed)
     monkeypatch.setattr(storage, "put_object", put_object)
     monkeypatch.setattr(storage, "get_object", get_object)
     return fake
+
+
+async def fake_embed(text, model_code):
+    """EVREN embedding yerine sabit vektör: iş akışı testleri EVREN'in o anki yoğunluğuna bağlı kalmaz (gündüz 11-16 sn/çağrı)."""
+    seed = sum(map(ord, text or "")) % 97 + 1
+    return EmbeddingResult(vector=[((i * seed) % 101) / 101.0 for i in range(4096)], tokens_in=max(1, len(text or "") // 4))
 
 
 def _ready_project(client, w, name, reviewer=False):

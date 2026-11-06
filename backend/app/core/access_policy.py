@@ -221,6 +221,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/tenants/{{tenant_id}}/credits/topup"): SUPER_ADMIN,
     ("GET", f"{P}/tenants/{{tenant_id}}/roles"): TENANT("tenant:view"),
     ("POST", f"{P}/tenants/{{tenant_id}}/roles"): TENANT("role:create"),
+    ("PUT", f"{P}/tenants/{{tenant_id}}/roles/{{role_id}}"): TENANT("role:edit"),  # #612
+    ("DELETE", f"{P}/tenants/{{tenant_id}}/roles/{{role_id}}"): TENANT("role:delete"),
 
     # --- Müşteri Yönetim Merkezi (yönetim verisi: süper admin de erişebilir) ---
     ("GET", f"{C}/departments"): TENANT("tenant:view"),

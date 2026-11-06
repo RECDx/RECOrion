@@ -229,13 +229,13 @@ Menü sayaçları: **Kullanıcı Yönetimi** yanında aktif kullanıcı sayısı
 | | Maliyet ve Bütçe Bilgilerini Görme | Panolardaki parasal göstergeler: token maliyeti, maliyet dağılımı, tahmini tasarruf, bütçe ve gerçekleşen. |
 | Kullanıcılar & Roller | Kullanıcı Ekleme | Yeni kullanıcı tanımlama. |
 | | Kullanıcı Düzenleme ve Silme | Departman, ünvan, rol, ek izin ve durum değiştirme, silme; kişinin günlük maliyetini görme. |
-| | Şirkete Özel Rol Tanımlama, Rol Düzenleme, Rol Silme | Şirkete özel rol. Bu sürümde Şirket Yönetimi'nde şirkete özel rol ekranı yoktur; roller RECDx'in sistem rolleridir. |
+| | Şirkete Özel Rol Tanımlama, Rol Düzenleme, Rol Silme | Kullanıcı Yönetimi ekranının altındaki **Şirkete özel roller** kartında rol oluşturma, düzenleme ve silme. |
 | AI Personel | AI Personel İşe Alma | İşe alım sihirbazı ve RECAi ile ünvan araştırması. |
 | | AI Personel Ayarları ve Bilgi Kaynakları | AI personelin bilgilerini ve rol promptunu düzenleme; doküman, web ve video kaynağı ekleme, onaylama. |
 | | AI Personeli İşten Çıkarma | İşten çıkarma, yeniden işe alma ve silme. |
 | | Ünvan Tanımlama | Ünvan ve rol promptu oluşturma, düzenleme, silme. |
 | Organizasyon | Departman Yönetimi | Departman oluşturma, katalogdan ekleme, düzenleme, silme. |
-| Kurum Zekâsı | Sektörel Manifesto Yönetimi | Sektör, NACE kodu ve manifesto düzenleme, RECAi'ye yazdırma. |
+| Kurum Zekâsı | Sektörel Manifesto Yönetimi | Sektör ve meslek bilgileri ile manifestoyu düzenleme, RECAi'ye yazdırma. |
 | | Beyin AI Ayarları | Beyin AI'nın RECAi kademesini seçme. |
 | | Mevzuat Paketlerini Açma/Kapatma | Mevzuat paketlerini şirkete açma ve kapatma. |
 | Entegrasyon & Otomasyon | Bağlantı Yönetimi | Bağlantı ekleme, deneme, AI personele araç yetkisi verme, aktarım kuralları; RECSlip.App v2 sürecini kurma ve hemen çalıştırma. |
@@ -243,9 +243,8 @@ Menü sayaçları: **Kullanıcı Yönetimi** yanında aktif kullanıcı sayısı
 | | Otomasyon Kuralları | Otomasyon kuralı ve hazır kural kurma, sınama, durdurma, günlük. |
 | | Dış Sisteme Yazma Onayı | Aktarım ve araç çağrısı onayı (ikinci onay dahil), aktarım günlüğü, başarısız aktarımı yeniden deneme. |
 | Kredi & Kullanım | Kredi ve Kullanımı Görme | Kredi ve Kullanım ekranı. |
-| | Ek Kredi ve Paket Talebi | RECDx'ten ek kredi veya paket değişikliği talebi. |
 | Projeler & İş Akışı | Proje / Case Açma; Tüm Projeleri Yönetme; Şirket Şablonlarını Yönetme; İş Adımı Ekleme; İş Adımı Onaylama (Vekâleten); Revizyon İsteme (Vekâleten) | Work Space işleri (Work Area Kılavuzu). |
-| Sohbet & İletişim | Sohbet ve Görev İletişimi; Ajanlar Arası Konuşmaları İzleme; Sohbeti Dışa Aktarma | Görev sohbeti ve Beyin AI sohbeti. |
+| Sohbet & İletişim | Sohbet ve Görev İletişimi; Ajanlar Arası Konuşmaları İzleme | Görev sohbeti ve Beyin AI sohbeti. Çalışma Alanı'ndaki "Ajanlar arası" görünümü ve AI personelin kendi aralarındaki mesajları yalnız Ajanlar Arası Konuşmaları İzleme izni olana görünür. |
 | Kurum Hafızası | Kurum Hafızasında Arama; Kurum Hafızasına Ekleme ve Onaylama; Kurum Hafızasından Geri Alma | Hafıza işlemleri. Beyin AI ekranındaki onay kuyruğu "Ekleme ve Onaylama" izniyle kullanılır. |
 | Bağlantılarım | Kişisel Erişim Anahtarı | Work Space › Bağlantılarım'da kişisel erişim anahtarı oluşturma. |
 
@@ -558,7 +557,25 @@ Başlık altında "Bu işlem geri alınamaz". Metin: "<Ad> (<e-posta>) kullanıc
 
 - *Kullanıcı şifresini unuttu, ne yaparım?* Kişinin kartında **Düzenle** → **🔑 Güçlü Şifre Oluştur** → **Güncelle**; yeni şifreyi kişiye iletin.
 - *Bir kişiye yalnızca bir menüyü nasıl açarım?* Rolünü değiştirmeden **İzin Kataloğundan Ek İzinler**'de o menünün iznini işaretleyin (menü-izin eşlemesi **Menü ağacı** bölümündedir).
-- *Kendi şirketimize özel rol tanımlayabilir miyim?* Bu sürümde hayır; RECDx'in sistem rollerinden seçer, gerekirse ek izin eklersiniz.
+- *Kendi şirketimize özel rol tanımlayabilir miyim?* Evet; ekranın altındaki **Şirkete özel roller** kartını kullanın (aşağıda).
+
+### Şirkete özel roller
+
+**Bu bölüm ne işe yarar?** Sistem rolleri ihtiyacınızı tam karşılamadığında şirketinize özel bir izin paketi (ör. "Muhasebe Onaylayıcı") tanımlarsınız. Tanımladığınız rol, kullanıcı formundaki rol listesinde **Şirkete özel roller** başlığı altında görünür ve kullanıcıya atanır.
+
+**Kimler görür / değiştirir?** Kart Kullanıcı Yönetimi ekranının altındadır. **Yeni rol** için "Şirkete Özel Rol Tanımlama", düzenleme (kalem simgesi) için "Rol Düzenleme", silme (çöp kutusu simgesi) için "Rol Silme" izni gerekir. Varsayılan olarak üçü de yalnız Şirket Yöneticisi'ndedir.
+
+| Alan | Ne işe yarar | Nasıl doldurulur | Örnek | Zorunlu |
+|---|---|---|---|---|
+| **Rol adı** | Listede görünen ad | En fazla 64 karakter; şirket rolleri ve sistem rolleri arasında benzersiz (büyük/küçük harf fark etmez) | Muhasebe Onaylayıcı | Evet |
+| **Açıklama** | Rolün amacı | Kısa bir cümle | RECSlip ve iş adımı onayları | Hayır |
+| **İzinler** | Rolün açtığı işlemler | Modüllere göre gruplanmış listeden işaretleyin | İş Adımı Onaylama (Vekâleten), Kredi ve Kullanımı Görme | Hayır |
+
+> **Dikkat:** Şirket Yöneticisi olmayan biri, kendisinde olmayan bir izni role ekleyemez; o izinler listede soluk ve seçilemez görünür ("Sizde olmayan izinleri role ekleyemezsiniz"). RECDx'e özel izinler hiçbir şirket rolüne verilemez.
+
+> **Dikkat:** Atanmış kullanıcısı olan rol silinmez ("Bu role atanmış N kullanıcı var. Silmeden önce kullanıcıların rolünü değiştirin."). Rolün izinlerini değiştirdiğinizde role bağlı kullanıcıların izinleri bir sonraki işlemlerinde yeni hâline göre hesaplanır.
+
+**Mesajlar:** **"Rol oluşturuldu."** · **"Rol güncellendi."** · **"Rol silindi."** · **"'<ad>' adında bir rol zaten var."**
 
 ## AI Ajan İşe Alım
 

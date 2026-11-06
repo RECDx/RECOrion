@@ -1347,14 +1347,14 @@ Silinemeyen pakette "⚠️ KİRALAMA PAKETİ SİLİNEMEZ! '<ad>' (<kod>) kirala
 | Kullanıcılar & Roller | Kullanıcı Ekleme | Kullanıcı Yönetimi'nde yeni kullanıcı tanımlama (şifre belirleme e-postası gider). | Evet |
 | Kullanıcılar & Roller | Kullanıcı Düzenleme ve Silme | Kullanıcının departman, ünvan, rol, ek izin ve durumunu değiştirme, silme; kişi günlük maliyetini görme. | Evet |
 | Kullanıcılar & Roller | Şirkete Özel Rol Tanımlama | Şirkete özel yetki rolü oluşturma. | Evet |
-| Kullanıcılar & Roller | Rol Düzenleme | Şirkete özel rollerin izinlerini değiştirme. | Hayır |
-| Kullanıcılar & Roller | Rol Silme | Şirkete özel rolleri silme. | Hayır |
+| Kullanıcılar & Roller | Rol Düzenleme | Şirkete özel rollerin adını, açıklamasını ve izinlerini değiştirme. | Evet |
+| Kullanıcılar & Roller | Rol Silme | Şirkete özel rolleri silme (rol atanmış kullanıcı yoksa). | Evet |
 | AI Personel | AI Personel İşe Alma | AI Personel İşe Al sihirbazı ve RECAi ile ünvan araştırması. | Evet |
 | AI Personel | AI Personel Ayarları ve Bilgi Kaynakları | AI personelin bilgilerini, rol promptunu düzenleme; bilgi dokümanı, web ve video kaynağı ekleme, onaylama. | Evet |
 | AI Personel | AI Personeli İşten Çıkarma | AI personeli işten çıkarma, yeniden işe alma ve silme. | Evet |
 | AI Personel | Ünvan Tanımlama | Şirket ünvanlarını ve rol promptlarını oluşturma, düzenleme, silme. | Evet |
 | Organizasyon | Departman Yönetimi | Departman oluşturma, katalogdan ekleme, düzenleme ve silme. | Evet |
-| Kurum Zekâsı | Sektörel Manifesto Yönetimi | Sektörler, NACE kodları ve kurumsal manifestoyu düzenleme, RECAi'ye yazdırma. | Evet |
+| Kurum Zekâsı | Sektörel Manifesto Yönetimi | Şirketin sektör ve meslek bilgilerini ve kurumsal manifestoyu düzenleme, RECAi'ye yazdırma. | Evet |
 | Kurum Zekâsı | Beyin AI Ayarları | Planlamada kullanılacak RECAi kademesini seçme. | Evet |
 | Kurum Zekâsı | Mevzuat Paketlerini Açma/Kapatma | Şirkete mevzuat bilgi paketlerini açma ve kapatma. | Evet |
 | Entegrasyon & Otomasyon | Bağlantı Yönetimi | Dış sistem bağlantısı ekleme, deneme, AI personele araç yetkisi verme, aktarım kurallarını belirleme (RECSlip v2 aylık süreç kurulumu da bu izni ister). | Evet |
@@ -1362,7 +1362,6 @@ Silinemeyen pakette "⚠️ KİRALAMA PAKETİ SİLİNEMEZ! '<ad>' (<kod>) kirala
 | Entegrasyon & Otomasyon | Otomasyon Kuralları | Otomasyon kuralı ve hazır kural kurma, sınama, durdurma, çalışma günlüğü. | Evet |
 | Entegrasyon & Otomasyon | Dış Sisteme Yazma Onayı | Aktarım ve araç çağrısı onayı (ikinci onay dahil), aktarım günlüğü, başarısız aktarımı yeniden deneme. | Evet |
 | Kredi & Kullanım | Kredi ve Kullanımı Görme | Kredi ve Kullanım ekranı: aylık hak, kullanılan, ek kredi bakiyesi, kullanım dökümü. | Evet |
-| Kredi & Kullanım | Ek Kredi ve Paket Talebi | RECDx'ten ek kredi veya paket değişikliği talep etme. | Hayır |
 | Projeler & İş Akışı | Proje / Case Açma | Yeni proje veya Case; şablondan ve toplantıdan proje oluşturma. | Evet |
 | Projeler & İş Akışı | Tüm Projeleri Yönetme | Şirketin bütün projelerini görme ve yönetme (yönetici olmadığı projeler dahil): planlama, ekip, başlatma, kapanış. | Evet |
 | Projeler & İş Akışı | Şirket Şablonlarını Yönetme | Projeyi şablon olarak kaydetme ve başkasının şirket şablonunu düzenleme. | Evet |
@@ -1370,14 +1369,13 @@ Silinemeyen pakette "⚠️ KİRALAMA PAKETİ SİLİNEMEZ! '<ad>' (<kod>) kirala
 | Projeler & İş Akışı | İş Adımı Onaylama (Vekâleten) | Erişebildiği projelerde, onaylayıcısı olmasa da onay bekleyen adımı onaylama. | Evet |
 | Projeler & İş Akışı | Revizyon İsteme (Vekâleten) | Erişebildiği projelerde, onaylayıcısı olmasa da adım için revizyon isteme. | Evet |
 | Sohbet & İletişim | Sohbet ve Görev İletişimi | Görev sohbetine ve Beyin AI sohbetine yazma, dosya ekleme. | Evet |
-| Sohbet & İletişim | Ajanlar Arası Konuşmaları İzleme | AI personelin kendi aralarındaki konuşmaları görme. | Hayır |
-| Sohbet & İletişim | Sohbeti Dışa Aktarma | Sohbet ve düşünce akışını dışa aktarma. | Hayır |
+| Sohbet & İletişim | Ajanlar Arası Konuşmaları İzleme | AI personelin kendi aralarındaki konuşmaları görme (Çalışma Alanı'ndaki "Ajanlar arası" görünümü). | Evet |
 | Kurum Hafızası | Kurum Hafızasında Arama | Onaylı kurum hafızasında arama. | Evet |
 | Kurum Hafızası | Kurum Hafızasına Ekleme ve Onaylama | Onaylanan çıktı ve proje bilgisini kurum hafızasına aktarma, bekleyenleri onaylama veya reddetme. | Evet |
 | Kurum Hafızası | Kurum Hafızasından Geri Alma | Onaylanmış kurum hafızası bilgisini geri alma. | Evet |
 | Bağlantılarım | Kişisel Erişim Anahtarı | Bağlantılarım: Claude, Cursor gibi MCP istemcileri için kişisel erişim anahtarı oluşturma. | Evet |
 
-"İşleme bağlı: Hayır" olan izinler rol listelerinde görünür ama sistemde henüz bir şeyi açmaz.
+Katalogdaki bütün izinler bir işleme bağlıdır. Yeni bir izin eklenirse kodda denetlenene kadar "İşleme bağlı: Hayır" olarak görünür ve sistemde bir şeyi açmaz.
 
 | Düğme | Ne yapar | Dikkat |
 |---|---|---|
@@ -1434,10 +1432,10 @@ Düğmeler: **Vazgeç**, **Kaydet** ("✓ '<ad>' yetkisi eklendi." / "✓ '<ad>'
 | **Personel ve Organizasyon Yöneticisi** | Yok | İnsan kullanıcıları, AI personeli, departman ve ünvanları yönetir | Temel izinler + Departman Panosu, Kullanıcı Ekleme, Kullanıcı Düzenleme ve Silme, AI Personel İşe Alma, AI Personel Ayarları ve Bilgi Kaynakları, AI Personeli İşten Çıkarma, Ünvan Tanımlama, Departman Yönetimi |
 | **Yapay Zeka ve Ajan Lideri** | Yok | AI personelin işe alımı, eğitimi ve kalitesinden; manifesto, Beyin AI ve mevzuat ayarlarından sorumludur | Temel izinler + AI Personel İşe Alma, AI Personel Ayarları ve Bilgi Kaynakları, AI Personeli İşten Çıkarma, Ünvan Tanımlama, Sektörel Manifesto Yönetimi, Beyin AI Ayarları, Mevzuat Paketlerini Açma/Kapatma, Tüm Projeleri Yönetme, Ajanlar Arası Konuşmaları İzleme, Kurum Hafızasına Ekleme ve Onaylama, Kurum Hafızasından Geri Alma |
 | **Entegrasyon Yöneticisi** | Yok | Dış sistem bağlantıları, eşlemeler, otomasyon kuralları ve dış sisteme yazma onaylarından sorumludur (BT) | Temel izinler + Bağlantı Yönetimi, Eşleme Stüdyosu, Otomasyon Kuralları, Dış Sisteme Yazma Onayı |
-| **Finans ve Raporlama Sorumlusu** | Yok | Şirket panosu, maliyet ve bütçe, kredi kullanımı; tutar eşiğini aşan aktarımların onayı (muhasebe ekibi için) | Temel izinler + Şirket Geneli Pano, Departman Panosu, Maliyet ve Bütçe Bilgilerini Görme, Kredi ve Kullanımı Görme, Ek Kredi ve Paket Talebi, Dış Sisteme Yazma Onayı |
+| **Finans ve Raporlama Sorumlusu** | Yok | Şirket panosu, maliyet ve bütçe, kredi kullanımı; tutar eşiğini aşan aktarımların onayı (muhasebe ekibi için) | Temel izinler + Şirket Geneli Pano, Departman Panosu, Maliyet ve Bütçe Bilgilerini Görme, Kredi ve Kullanımı Görme, Dış Sisteme Yazma Onayı |
 | **Kalite ve Onay Sorumlusu** | Yok | Erişebildiği projelerde adım çıktılarını onaylar veya revizyon ister; kurum hafızasını denetler | Temel izinler + İş Adımı Onaylama (Vekâleten), Revizyon İsteme (Vekâleten), Ajanlar Arası Konuşmaları İzleme, Kurum Hafızasına Ekleme ve Onaylama, Kurum Hafızasından Geri Alma |
 | **Operasyon Yöneticisi** | Yok | Şirket ayarları, pano, kredi ve operasyonel projelerin genel yönetimi | Temel izinler + Şirket Ayarlarını Yönetme, Şirket Geneli Pano, Departman Panosu, Maliyet ve Bütçe Bilgilerini Görme, Kredi ve Kullanımı Görme, Sektörel Manifesto Yönetimi, Mevzuat Paketlerini Açma/Kapatma, Departman Yönetimi, Proje / Case Açma, Tüm Projeleri Yönetme |
-| **Güvenlik ve Uyum Denetçisi** | Yok | Salt okunur denetim: panolar, maliyet ve kredi, ajanlar arası konuşmalar, sohbet dışa aktarma | Şirket Bilgilerini Görüntüleme, Kurum Hafızasında Arama, Şirket Geneli Pano, Departman Panosu, Maliyet ve Bütçe Bilgilerini Görme, Kredi ve Kullanımı Görme, Ajanlar Arası Konuşmaları İzleme, Sohbeti Dışa Aktarma |
+| **Güvenlik ve Uyum Denetçisi** | Yok | Salt okunur denetim: panolar, maliyet ve kredi, ajanlar arası konuşmalar | Şirket Bilgilerini Görüntüleme, Kurum Hafızasında Arama, Şirket Geneli Pano, Departman Panosu, Maliyet ve Bütçe Bilgilerini Görme, Kredi ve Kullanımı Görme, Ajanlar Arası Konuşmaları İzleme |
 
 **Temel izinler** (Güvenlik ve Uyum Denetçisi dışındaki tüm müşteri rollerinde bulunur): Şirket Bilgilerini Görüntüleme, İş Adımı Ekleme, Sohbet ve Görev İletişimi, Kurum Hafızasında Arama, Kişisel Erişim Anahtarı.
 

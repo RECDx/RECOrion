@@ -16,7 +16,7 @@ const FILTERS = [['ALL', 'Tüm ekip'], ['MY', 'Benim'], ['A2A', 'Ajanlar arası'
 /** Çalışma Alanı sol bölmesi (Adım 8.3): proje seçimi, gerçek ilerleme, iş adımları ve proje ekibi. */
 export default function LeftPane({
   project, projects = [], onSelectProject, members = [], flowTasks = {}, canManage,
-  tasks, selectedTask, onSelectTask, chatFilter, onSetChatFilter, onCreateTaskModal,
+  tasks, selectedTask, onSelectTask, chatFilter, onSetChatFilter, onCreateTaskModal, canSeeA2A = false,
 }) {
   const done = tasks?.filter((t) => t.status === 'DONE').length || 0;
   const total = tasks?.length || 0;
@@ -61,7 +61,7 @@ export default function LeftPane({
         <div>
           <div className="wa-section-title"><Filter size={12} />Sohbet görünümü</div>
           <div className="ui-segmented" role="tablist" aria-label="Sohbet görünümü" style={{ width: '100%' }}>
-            {FILTERS.map(([k, l]) => (
+            {FILTERS.filter(([k]) => k !== 'A2A' || canSeeA2A).map(([k, l]) => (
               <button key={k} type="button" role="tab" aria-selected={chatFilter === k}
                 className={`ui-segmented-item ${chatFilter === k ? 'active' : ''}`} style={{ flex: 1 }} onClick={() => onSetChatFilter(k)}>{l}</button>
             ))}

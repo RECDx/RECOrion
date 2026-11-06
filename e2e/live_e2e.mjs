@@ -2002,6 +2002,57 @@ try {
     }
   }
 
+  // ---------------------------------------------------------------- ADIM 16.3: Şirkete özel roller ve ajanlar arası görünüm (#611, #612)
+  // Şirket yöneticisi Kullanıcı Yönetimi'nde şirkete özel rol oluşturur, düzenler, siler; rol kullanıcı formunda seçilebilir.
+  // Uzman (chat:view_a2a yok) Çalışma Alanı'nda "Ajanlar arası" görünümünü görmez, sunucu da A2A süzgecini 403 ile reddeder.
+  {
+    const ra = await session('admin');
+    try {
+      const roleName = `Muhasebe Onaylayıcı ${NAME.slice(-5)}`;
+      await ra.page.locator('nav.super-admin-nav').getByText('Kullanıcı Yönetimi').click({ timeout: 30000 });
+      const card = ra.page.locator('.ui-card', { hasText: 'Şirkete özel roller' });
+      await card.getByRole('button', { name: 'Yeni rol' }).click({ timeout: 20000 });
+      const dlg = ra.page.getByRole('dialog');
+      await dlg.getByLabel('Rol adı').fill(roleName);
+      await dlg.getByLabel('Açıklama').fill('RECSlip ve iş adımı onayları');
+      await dlg.getByLabel(/İş Adımı Onaylama \(Vekâleten\)/).check();
+      await dlg.getByLabel(/Kredi ve Kullanımı Görme/).check();
+      await dlg.getByRole('button', { name: 'Kaydet' }).click();
+      const row = card.getByRole('listitem').filter({ hasText: roleName });
+      await row.waitFor({ timeout: 20000 });
+      const created = await row.innerText();
+      await row.getByRole('button', { name: `${roleName} rolünü düzenle` }).click();
+      await dlg.getByLabel(/Revizyon İsteme \(Vekâleten\)/).check();
+      await dlg.getByRole('button', { name: 'Kaydet' }).click();
+      await row.getByText('3 izin').waitFor({ timeout: 20000 });
+      await shot(ra.page, '44-sirket-rolleri');
+      const inForm = await ra.page.locator('option', { hasText: roleName }).count();
+      await row.getByRole('button', { name: `${roleName} rolünü sil` }).click();
+      await dialogOk(ra.page);
+      await row.waitFor({ state: 'detached', timeout: 20000 });
+      step(/2 izin/.test(created),
+        'Şirkete özel rol: yönetici rolü oluşturdu (2 izin), düzenledi (3 izin) ve sildi',
+        `${roleName} · kullanıcı formu listesinde: ${inForm ? 'var' : 'form kapalı'}`);
+    } catch (e) {
+      await shot(ra.page, '44-sirket-rolleri-hata').catch(() => {});
+      throw e;
+    } finally {
+      await ra.ctx.close();
+    }
+    const um = await session('member');
+    try {
+      await um.page.waitForTimeout(2000);
+      const tabs = (await um.page.getByRole('tab').allInnerTexts()).join(' | ');
+      const myProj = (await api(um.page, '/api/v1/projects/?scope=mine')).body?.[0];
+      const a2a = myProj ? await api(um.page, `/api/v1/chat/project/${myProj.id}?message_type=AGENT_TO_AGENT`) : { status: 0 };
+      step(!/Ajanlar arası/.test(tabs) && (a2a.status === 403 || !myProj),
+        'Ajanlar arası konuşmalar: izni olmayan uzman "Ajanlar arası" görünümünü görmüyor, sunucu da reddediyor',
+        `görünümler: ${tabs.slice(0, 60) || '—'} · A2A isteği ${a2a.status}`);
+    } finally {
+      await um.ctx.close();
+    }
+  }
+
   // ---------------------------------------------------------------- ADIM 15: Yardım (Bilgi Birikimi) ve RECAi Yardım Asistanı
   // Şirket yöneticisi Otomasyonlar'da F1'e basar: o ekranın anlatımı açılır; pencere açıkken F1 pencerenin bölümüne gider.
   // RECAi'ye soru sorar: yetkili bölümlerden yanıt + kaynak + "Ekrana git". Uzman yetki dışı soruda "cevap veremiyorum" alır;

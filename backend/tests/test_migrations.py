@@ -36,7 +36,7 @@ def test_reference_data_seeded(db):
     assert _scalar(db, "SELECT count(*) FROM llm_providers WHERE code = 'EVREN'") == 1
     assert _scalar(db, "SELECT count(*) FROM llm_models") == 15
     assert _scalar(db, "SELECT count(*) FROM plans") == 3
-    assert _scalar(db, "SELECT count(*) FROM system_permissions") == 38  # 0041: müşteri menülerine göre yeni katalog (#353)
+    assert _scalar(db, "SELECT count(*) FROM system_permissions") == 36  # 0041 katalog (#353); 0046: işleve bağlı olmayan 2 izin çıktı (#613)
     assert _scalar(db, "SELECT count(*) FROM system_permissions WHERE code = 'department:dashboard'") == 1
     assert _scalar(db, "SELECT count(*) FROM email_templates WHERE code IN ('WELCOME_CUSTOMER', 'PACKAGE_EXPIRATION_REMINDER')") == 2
     assert _scalar(db, "SELECT count(*) FROM notification_schedules") == 2

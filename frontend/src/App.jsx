@@ -666,6 +666,7 @@ export default function App() {
           actors={actors}
           chatFilter={chatFilter}
           onSetChatFilter={setChatFilter}
+          canSeeA2A={can(currentUser, 'chat:view_a2a')}
           onCreateTaskModal={() => setIsModalOpen(true)}
         />
 

@@ -51,6 +51,8 @@ def coder(monkeypatch):
             return ChatResult(json.dumps({"passed": True, "score": 95, "issues": [], "summary": "Uygun"}), None, 100, 20, {})
         return ChatResult(CODE, None, 800, 300, {})
     monkeypatch.setattr(evren_client, "chat", chat)
+    from tests.test_workflow import fake_embed
+    monkeypatch.setattr(evren_client, "embed", fake_embed)  # EVREN yoğunluğundan bağımsız
     monkeypatch.setattr(storage, "put_object", put_object)
     monkeypatch.setattr(storage, "get_object", get_object)
 

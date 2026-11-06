@@ -155,10 +155,20 @@ async def get_chat_history(
         stmt = stmt.where(ChatMessage.is_private == False)
     if actor_id:
         stmt = stmt.where(ChatMessage.sender_actor_id == actor_id)
+    stmt = _a2a_filter(stmt, user)
 
     stmt = stmt.order_by(ChatMessage.created_at.asc())
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+A2A = "AGENT_TO_AGENT"
+
+
+def _a2a_filter(stmt, user: CurrentUser):
+    """Ajanlar arası konuşmalar yalnız 'Ajanlar Arası Konuşmaları İzleme' (chat:view_a2a) izni olana görünür (#611)."""
+    from sqlalchemy import func
+    return stmt if user.has("chat:view_a2a") else stmt.where(func.coalesce(ChatMessage.message_type, "CHAT") != A2A)
 
 
 @router.get("/project/{project_id}", response_model=List[ChatMessageResponse])
@@ -174,11 +184,14 @@ async def get_project_chat_history(
     Projedeki tüm insan-AI ve AI-AI diyaloglarını kronolojik olarak listeler.
     """
     await psvc.load(db, user, project_id)
+    if message_type and message_type.upper() == A2A and not user.has("chat:view_a2a"):
+        raise HTTPException(status_code=403, detail="Ajanlar arası konuşmaları görme yetkiniz yok.")
     stmt = select(ChatMessage).where(ChatMessage.project_id == project_id, ChatMessage.is_private == False)
     if actor_id:
         stmt = stmt.where(ChatMessage.sender_actor_id == actor_id)
     if message_type:
         stmt = stmt.where(ChatMessage.message_type == message_type.upper())
+    stmt = _a2a_filter(stmt, user)
 
     stmt = stmt.order_by(ChatMessage.created_at.asc())
     result = await db.execute(stmt)

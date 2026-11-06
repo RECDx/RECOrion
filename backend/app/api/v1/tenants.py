@@ -1269,36 +1269,103 @@ async def retry_lead_odoo_sync(lead_id: uuid.UUID, db: AsyncSession = Depends(ge
             "odoo_order_name": lead.odoo_order_name, "odoo_sync_error": lead.odoo_sync_error}
 
 
+async def _check_tenant_role(db: AsyncSession, user: CurrentUser, tenant_id: uuid.UUID, name: Optional[str],
+                             permissions: Optional[List[str]], role_id: Optional[uuid.UUID] = None) -> Optional[str]:
+    """Şirkete özel rol doğrulaması (#612): yalnız müşteri izinleri (RECDx'e özel '*' / system:admin verilemez); şirket yöneticisi
+    olmayan kişi kendisinde olmayan izni role ekleyemez (yetki yükseltme olmaz); ad şirket ve sistem rolleri içinde benzersiz."""
+    from app.core import permission_catalog as pc
+    from app.db.models import TenantRole
+    if permissions is not None:
+        invalid = sorted({p for p in permissions if p not in pc.CUSTOMER_CODES})
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"Bu izinler şirket rollerine verilemez: {', '.join(invalid)}")
+        if not (user.is_super_admin or user.actor.role == "COMPANY_ADMIN"):
+            lacking = sorted({p for p in permissions if not user.has(p)})
+            if lacking:
+                raise HTTPException(status_code=403, detail=f"Sizde olmayan izinleri role ekleyemezsiniz: {', '.join(lacking)}")
+    if name is None:
+        return None
+    cleaned = name.strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Rol adı boş bırakılamaz.")
+    q = select(TenantRole.id).where(func.lower(TenantRole.name) == cleaned.lower(),
+                                    or_(TenantRole.tenant_id == tenant_id, TenantRole.tenant_id.is_(None)))
+    if role_id:
+        q = q.where(TenantRole.id != role_id)
+    if (await db.execute(q)).first():
+        raise HTTPException(status_code=400, detail=f"'{cleaned}' adında bir rol zaten var.")
+    return cleaned
+
+
 @router.post("/{tenant_id}/roles", response_model=RoleResponse)
-async def create_tenant_role(tenant_id: uuid.UUID, payload: RoleCreate, db: AsyncSession = Depends(get_db)):
+async def create_tenant_role(tenant_id: uuid.UUID, payload: RoleCreate, user: CurrentUser = Depends(get_current_user),
+                             db: AsyncSession = Depends(get_db)):
     """
     Müşteri Şirket Yöneticisi (D Maddesi):
     Şirket içi özel rol oluşturur ve izin kataloğundaki yetkileri atar.
     """
-    from app.db.models import TenantRole, SystemPermission
+    from app.db.models import TenantRole
     tenant = await db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
-
-    # İzin kodlarını doğrula
-    if payload.permissions:
-        perms_res = await db.execute(select(SystemPermission.code))
-        valid_codes = set(perms_res.scalars().all())
-        invalid = [p for p in payload.permissions if p not in valid_codes and p != "*"]
-        if invalid:
-            raise HTTPException(status_code=400, detail=f"Geçersiz izin kodları: {invalid}")
+    name = await _check_tenant_role(db, user, tenant.id, payload.name, payload.permissions)
 
     role = TenantRole(
         tenant_id=tenant.id,
-        name=payload.name,
+        name=name,
         description=payload.description,
-        permissions=payload.permissions,
+        permissions=sorted(set(payload.permissions)),
         is_system=False
     )
     db.add(role)
     await db.commit()
     await db.refresh(role)
     return role
+
+
+class TenantRoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    permissions: Optional[List[str]] = None
+
+
+async def _own_role(db: AsyncSession, tenant_id: uuid.UUID, role_id: uuid.UUID):
+    from app.db.models import TenantRole
+    role = await db.get(TenantRole, role_id)
+    if not role or role.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Şirkete özel rol bulunamadı. Sistem rolleri buradan değiştirilemez.")
+    return role
+
+
+@router.put("/{tenant_id}/roles/{role_id}", response_model=RoleResponse)
+async def update_tenant_role(tenant_id: uuid.UUID, role_id: uuid.UUID, payload: TenantRoleUpdate,
+                             user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Şirkete özel rolün adını, açıklamasını ve izinlerini değiştirir (#612, role:edit). Role bağlı kullanıcıların
+    izinleri bir sonraki isteklerinde yeni hâline göre hesaplanır."""
+    role = await _own_role(db, tenant_id, role_id)
+    name = await _check_tenant_role(db, user, tenant_id, payload.name, payload.permissions, role.id)
+    if name:
+        role.name = name
+    if payload.description is not None:
+        role.description = payload.description.strip() or None
+    if payload.permissions is not None:
+        role.permissions = sorted(set(payload.permissions))
+    await db.commit()
+    await db.refresh(role)
+    return role
+
+
+@router.delete("/{tenant_id}/roles/{role_id}")
+async def delete_tenant_role(tenant_id: uuid.UUID, role_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Şirkete özel rolü siler (#612, role:delete). Role atanmış kullanıcı varsa silinmez."""
+    role = await _own_role(db, tenant_id, role_id)
+    used = (await db.execute(select(func.count(Actor.id)).where(Actor.role_id == role.id))).scalar() or 0
+    if used:
+        raise HTTPException(status_code=409, detail=f"Bu role atanmış {used} kullanıcı var. Silmeden önce kullanıcıların rolünü değiştirin.")
+    name = role.name
+    await db.delete(role)
+    await db.commit()
+    return {"success": True, "message": f"'{name}' rolü silindi."}
 
 
 @router.get("/{tenant_id}/roles", response_model=List[RoleResponse])

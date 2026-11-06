@@ -70,6 +70,7 @@ import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBu
 import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck } from 'lucide-react';
 import { can, canOpenTab, roleLabel } from '../permissions';
 import CompanyProfile from './company/CompanyProfile';
+import TenantRolesCard from './company/TenantRolesCard';
 import { setHelpScreen } from '../help/helpBus';
 import HelpButton from '../help/HelpButton';
 import { TenantLogoMark } from './company/TenantLogo';
@@ -187,6 +188,7 @@ export default function CompanyAdminConsole({
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [systemRoles, setSystemRoles] = useState([]);
+  const [tenantRoles, setTenantRoles] = useState([]);
   const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   const [systemPermissions, setSystemPermissions] = useState([]);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
@@ -615,6 +617,13 @@ export default function CompanyAdminConsole({
     }
   };
 
+  // Şirkete özel roller (#612): kullanıcı formundaki rol listesine eklenir
+  const loadTenantRoles = async () => {
+    const tid = getActiveTenantId();
+    if (!tid) return;
+    try { setTenantRoles((await api.getRoles(tid)) || []); } catch { /* liste boş kalır */ }
+  };
+
   // Sistem Yetki Rollerini Çek (Süper Yöneticinin Tanımladığı)
   const loadSystemRoles = async () => {
     if (systemRoles.length > 0) return;
@@ -668,6 +677,7 @@ export default function CompanyAdminConsole({
       loadDepartments();
       loadJobTitles();
       loadSystemRoles();
+      loadTenantRoles();
       loadSystemPermissions();
     } else if (activeTab === 'DEPARTMENTS') {
       loadDepartments();
@@ -2877,6 +2887,9 @@ export default function CompanyAdminConsole({
                   </table>
                 </div>
               )}
+              <div style={{ marginTop: 20 }}>
+                <TenantRolesCard tenantId={getActiveTenantId()} currentUser={currentUser} onChanged={loadTenantRoles} />
+              </div>
             </div>
           )}
 
@@ -6266,16 +6279,23 @@ export default function CompanyAdminConsole({
                   }}
                 >
                   <option value="">Standart Kullanıcı Rolü...</option>
-                  {systemRoles.map(r => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} {r.is_system ? '(Sistem Rolü)' : ''}
-                    </option>
-                  ))}
+                  <optgroup label="Sistem rolleri">
+                    {systemRoles.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} {r.is_system ? '(Sistem Rolü)' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {tenantRoles.length > 0 && (
+                    <optgroup label="Şirkete özel roller">
+                      {tenantRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </optgroup>
+                  )}
                 </select>
 
                 {/* Seçili Rolün Detay Kutusu */}
                 {(() => {
-                  const selectedRole = systemRoles.find(r => r.id === userForm.role_id);
+                  const selectedRole = [...systemRoles, ...tenantRoles].find(r => r.id === userForm.role_id);
                   if (!selectedRole) return null;
                   return (
                     <div style={{

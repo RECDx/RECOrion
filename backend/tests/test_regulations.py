@@ -89,6 +89,8 @@ def test_regulation_packs_review_publish_and_use(client, db, world, monkeypatch)
         systems.append(messages[0]["content"])
         return ChatResult("İşe başlamadan önce bildirilir (SGK paketi).", None, 50, 10, {})
     monkeypatch.setattr(evren_client, "chat", chat)
+    from tests.test_workflow import fake_embed
+    monkeypatch.setattr(evren_client, "embed", fake_embed)  # EVREN yoğunluğundan bağımsız
     r = client.post("/api/v1/chat/send", headers=admin, json={"task_id": task, "content": q})
     assert r.status_code == 200, r.text
     assert "Mevzuat bilgi paketleri" in systems[0] and "Sigortalı işe giriş bildirgesi" in systems[0]

@@ -434,6 +434,8 @@ export const api = {
   retryLeadOdooSync: (leadId) => request(`/tenants/leads/${leadId}/odoo-sync`, { method: 'POST' }),
   getRoles: (tenantId) => request(`/tenants/${tenantId}/roles`),
   createRole: (tenantId, data) => request(`/tenants/${tenantId}/roles`, { method: 'POST', body: JSON.stringify(data) }),
+  updateRole: (tenantId, roleId, data) => request(`/tenants/${tenantId}/roles/${roleId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteRole: (tenantId, roleId) => request(`/tenants/${tenantId}/roles/${roleId}`, { method: 'DELETE' }),
   createCustomJobTitle: (data) => request('/actors/job-titles', { method: 'POST', body: JSON.stringify(data) }),
 
   // E-Posta Şablonları (Madde 1)
