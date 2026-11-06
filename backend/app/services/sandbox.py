@@ -147,6 +147,78 @@ def report_md(run: TestRun) -> str:
     return "\n".join(lines)
 
 
+MAX_FIX_ROUNDS = 2
+FIX_PREFIX = re.compile(r"^(Test düzeltmesi|Yeniden test) \d+: ")
+
+
+def _base_title(title: str) -> str:
+    while FIX_PREFIX.match(title or ""):
+        title = FIX_PREFIX.sub("", title, count=1)
+    return title
+
+
+async def schedule_fix_loop(db: AsyncSession, project: Project, test_task: Task, run: TestRun) -> Optional[str]:
+    """Testler kaldıysa geri gönderme döngüsü: kodu yazan AI personele "Test düzeltmesi N" (test adımı onaylanınca başlar),
+    ardından test uzmanına "Yeniden test N" adımı eklenir. En fazla MAX_FIX_ROUNDS tur; sonrası proje yöneticisine kalır.
+    Proje akışı yeni adımları bağımlılıkları kapanınca kendiliğinden başlatır. Dönen metin adım çıktısına eklenir."""
+    from sqlalchemy import func, select
+
+    from app.db.models import Actor
+    if run.status != "FAILED":
+        return None
+    tasks = (await db.execute(select(Task).where(Task.project_id == project.id).order_by(Task.order_index))).scalars().all()
+    rounds = sum(1 for t in tasks if (t.title or "").startswith("Test düzeltmesi "))
+    if rounds >= MAX_FIX_ROUNDS:
+        await task_flow.log(db, project, test_task, "TEST_FIX_LIMIT", None, f"{MAX_FIX_ROUNDS} düzeltme turundan sonra testler hâlâ kalıyor.")
+        return (f"_Sistem: {MAX_FIX_ROUNDS} düzeltme turundan sonra testler hâlâ kalıyor; yeni düzeltme adımı açılmadı. "
+                "Karar proje yöneticisinde._")
+    dev = None
+    for t in tasks:  # test adımından önceki, kod deposuna yazmış son AI personel adımı (test uzmanı değil)
+        if t.id == test_task.id or (t.order_index or 0) > (test_task.order_index or 0) or not t.assignee_actor_id or not t.repo_branch:
+            continue
+        a = await db.get(Actor, t.assignee_actor_id)
+        if a and a.actor_type == "AI_AGENT" and not is_test_role(a.role):
+            dev = (t, a)
+    if not dev:
+        await task_flow.log(db, project, test_task, "TEST_FIX_SKIPPED", None, "Kodu yazan AI personel adımı bulunamadı.")
+        return "_Sistem: kodu yazan AI personel adımı bulunamadığı için düzeltme adımı açılamadı; karar proje yöneticisinde._"
+    dev_task, dev_agent = dev
+    n = rounds + 1
+    last = (await db.execute(select(func.coalesce(func.max(Task.order_index), 0)).where(Task.project_id == project.id))).scalar()
+    failures = report_md(run)[:3500]
+    fix = Task(project_id=project.id, title=f"Test düzeltmesi {n}: {_base_title(dev_task.title)}"[:255], status="BACKLOG",
+               description=(f"'{test_task.title}' adımında RECOrion Kod Çalıştırma Ortamı'nda çalışan testler kaldı. Kalan testleri inceleyip "
+                            "kodu düzelt. Hata testteyse (test yanlış beklenti kuruyorsa) testi düzelt ve gerekçesini yaz. Yalnız gereken "
+                            f"dosyaları depodaki yollarıyla ver.\n\n{failures}"),
+               acceptance_criteria="Kalan testler geçecek şekilde kod (veya hatalı test) düzeltildi; değişiklik ve gerekçe yazıldı.",
+               assignee_actor_id=dev_agent.id, depends_on=[str(test_task.id)], order_index=last + 1,
+               department_id=dev_task.department_id, job_title_id=dev_task.job_title_id, reviewer_actor_id=dev_task.reviewer_actor_id,
+               approver_actor_id=dev_task.approver_actor_id, requires_approval=dev_task.requires_approval, estimated_effort=1)
+    db.add(fix)
+    await db.flush()
+    retest = Task(project_id=project.id, title=f"Yeniden test {n}: {_base_title(test_task.title)}"[:255], status="BACKLOG",
+                  description=(f"'{fix.title}' adımındaki düzeltmeden sonra testleri yeniden çalıştır. Önceki turda kalan testler:\n\n{failures}\n\n"
+                               "Testler depoda duruyor; gerekirse güncelle ya da yeni test ekle."),
+                  acceptance_criteria="Testler Kod Çalıştırma Ortamı'nda yeniden çalıştırıldı ve sonuç değerlendirildi.",
+                  assignee_actor_id=test_task.assignee_actor_id, depends_on=[str(fix.id)], order_index=last + 2,
+                  department_id=test_task.department_id, job_title_id=test_task.job_title_id, reviewer_actor_id=test_task.reviewer_actor_id,
+                  approver_actor_id=test_task.approver_actor_id, requires_approval=test_task.requires_approval, estimated_effort=1)
+    db.add(retest)
+    await db.flush()
+    await task_flow.log(db, project, test_task, "TEST_FIX_LOOP", None,
+                        f"Tur {n}: '{fix.title}' → {dev_agent.display_name}; ardından '{retest.title}'.",
+                        {"fix_task_id": str(fix.id), "retest_task_id": str(retest.id), "round": n})
+    if project.manager_actor_id:
+        try:
+            await task_flow.notify(db, project.manager_actor_id,
+                                   f"{project.name}: testler kaldı ({run.passed} geçti, {run.failed} kaldı). Test adımını onayladığınızda "
+                                   f"'{fix.title}' {dev_agent.display_name}'e açılacak, ardından testler yeniden çalışacak.")
+        except Exception:  # bildirim akışı durdurmaz
+            logger.warning("Düzeltme döngüsü bildirimi gönderilemedi", exc_info=True)
+    return (f"_Sistem: kalan testler için **{fix.title}** adımı {dev_agent.display_name}'e açıldı (bu adım onaylanınca başlar); "
+            f"ardından **{retest.title}** çalışacak (en fazla {MAX_FIX_ROUNDS} tur)._")
+
+
 def view(run: TestRun) -> Dict[str, Any]:
     return {"id": str(run.id), "task_id": str(run.task_id) if run.task_id else None, "ref": run.ref, "commit_sha": run.commit_sha,
             "status": run.status, "status_label": STATUS_TR.get(run.status, run.status), "passed": run.passed, "failed": run.failed,

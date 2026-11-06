@@ -226,7 +226,8 @@ async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant:
         evaluation = (res.content or "").strip()
     except LLMError as exc:
         evaluation = f"_Değerlendirme yazılamadı: {exc.message}_"
-    return f"{facts}\n\n## Test Uzmanı değerlendirmesi (gerçek koşuya göre)\n\n{evaluation}"
+    loop = await sandbox.schedule_fix_loop(db, project, task, run)  # kalan testler → geliştiriciye düzeltme + yeniden test
+    return f"{facts}\n\n## Test Uzmanı değerlendirmesi (gerçek koşuya göre)\n\n{evaluation}" + (f"\n\n{loop}" if loop else "")
 
 
 REVIEW_MAX_TOKENS = 3000

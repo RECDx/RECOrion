@@ -1126,6 +1126,12 @@ Commit yoksa: **"Henüz commit yok"** — "AI personel bir iş adımının çık
 
 **Ne zaman kullanırım?** Yazılım projelerinde. **AI Test Uzmanı** (unvanında "Test", "QA" veya "Kalite Güvence" geçen AI personel) deposu açık bir projede iş adımını teslim ettiğinde testler **kendiliğinden** çalışır: test uzmanı önce test kodunu yazar, sistem adımın dalını çalıştırır, sonuç ("Gerçek test koşusu") ve test uzmanının bu sonuca göre yazdığı değerlendirme ("Karar: Kabul" / "Karar: Düzeltme gerekli") adımın çıktısına ve görev sohbetine eklenir. Proje yöneticisi istediği dalda testleri elle de çalıştırabilir.
 
+**Testler kalınca ne olur? (geri gönderme döngüsü)** Sistem iş akışına kendiliğinden iki adım ekler:
+1. **Test düzeltmesi <n>: <kod adımı>**: kodu yazan AI personele (test adımından önceki, depoya kod yazmış son AI personel adımı) atanır; kalan testler ve hata mesajları açıklamasındadır. Test adımını onayladığınızda başlar.
+2. **Yeniden test <n>: <test adımı>**: düzeltme onaylanınca test uzmanına açılır; testler yeniden çalışır.
+
+Döngü en fazla **2 tur** döner. Sonrasında yeni adım açılmaz, çıktıda "karar proje yöneticisinde" yazar. Proje yöneticisine bildirim gider; İş Akışı geçmişinde **"Testler kaldı: düzeltme ve yeniden test adımı açıldı"** olayı görünür. İstemediğiniz düzeltme adımını iptal edebilirsiniz.
+
 **Kimler görür / çalıştırır?** Projenin ekibi sonuçları görür. **Testleri çalıştır** düğmesini yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar görür ("Testleri elle proje yöneticisi başlatır; AI Test Uzmanı'nın koşuları kendiliğinden yapılır.").
 
 **Hangi testler çalışır?** Depoda kökte veya en fazla iki alt klasörde bulunan projeler:
@@ -1149,7 +1155,7 @@ Her aşamanın üst süresi 5 dakikadır.
 
 **Mesajlar:** **"Test koşusu başladı; sonuç birkaç dakika içinde burada görünür."** · **"Bu projede süren bir test koşusu var; bitmesini bekleyin."** · **"Önce projenin kod deposunu açın."** · **"Kod çalıştırma ortamı bu kurulumda yapılandırılmamış; RECDx ile iletişime geçin."**
 
-> **Örnek:** Diş kliniği CRM projesinde Yazılım Geliştirici (Backend) randevu modülünü yazar, adım onaylanınca kod ana dala birleşir. Test Uzmanı adımında AI, çakışan randevuları sınayan pytest testleri yazar; sistem testleri çalıştırır: "3 geçti · 1 kaldı — test_randevu_cakisma: çakışan randevu kabul edildi". Test uzmanı değerlendirmesinde hatanın uygulamada olduğunu yazar ve "Karar: Düzeltme gerekli" der; proje yöneticisi adımı düzeltmeye gönderir.
+> **Örnek:** Diş kliniği CRM projesinde Yazılım Geliştirici (Backend) randevu modülünü yazar, adım onaylanınca kod ana dala birleşir. Test Uzmanı adımında AI, çakışan randevuları sınayan pytest testleri yazar; sistem testleri çalıştırır: "3 geçti · 1 kaldı — test_randevu_cakisma: çakışan randevu kabul edildi". Test uzmanı değerlendirmesinde hatanın uygulamada olduğunu yazar ve "Karar: Düzeltme gerekli" der. Sistem "Test düzeltmesi 1: Randevu modülü" adımını Yazılım Geliştirici'ye, ardından "Yeniden test 1" adımını test uzmanına açar; proje yöneticisi test adımını onaylayınca düzeltme başlar.
 
 ### RECSlip sekmesi
 

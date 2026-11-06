@@ -116,6 +116,49 @@ def test_ai_test_specialist_step_runs_tests(client, world, coder, fake_sandbox, 
         _cleanup(client, admin, pid, base)
 
 
+def test_failed_tests_send_back_to_developer(client, world, db, coder, fake_sandbox):  # noqa: F811
+    """Testler kalınca: geliştiriciye 'Test düzeltmesi 1' (test adımı onaylanınca başlar) + test uzmanına 'Yeniden test 1';
+    yeniden test de kalırsa 2. tur açılır; akış yeni adımları kendiliğinden yürütür."""
+    from datetime import date, timedelta
+
+    from tests.test_workflow import _exec
+    w = world
+    admin = w["admin"]["h"]
+    _exec(db, "UPDATE actors SET role = 'Test Uzmanı' WHERE id = %s", w["reviewer"])
+    pid = client.post("/api/v1/projects", headers=admin, json={"tenant_id": w["tenant"], "name": "Düzeltme Döngüsü", "requirements": "Kod + test"}).json()["id"]
+    base = f"/api/v1/projects/{pid}/repository"
+    try:
+        steps = [{"key": "S1", "title": "Randevu modülü", "estimated_days": 1, "agent_id": w["agent"]},
+                 {"key": "S2", "title": "Testler", "estimated_days": 1, "agent_id": w["reviewer"], "depends_on": ["S1"]}]
+        assert client.put(f"/api/v1/projects/{pid}/plan", headers=admin, json={"summary": "s", "steps": steps}).status_code == 200
+        assert client.post(f"/api/v1/projects/{pid}/plan/approve", headers=admin).status_code == 200
+        start = date.today()
+        client.put(f"/api/v1/projects/{pid}", headers=admin, json={"start_date": start.isoformat(), "end_date": (start + timedelta(days=10)).isoformat()})
+        assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "mark_ready"}).status_code == 200
+        assert client.put(base, headers=admin, json={"mode": "RECORION"}).status_code == 200
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "start"})
+        approve = lambda tid: client.post(f"/api/v1/tasks/{tid}/decision", headers=admin, json={"approve": True})  # noqa: E731
+
+        t, _ = _wait(client, admin, pid, lambda t, f: t["Randevu modülü"]["status"] == "WAITING_APPROVAL", "geliştirici adımı onaya gelmeli", 90)
+        assert approve(t["Randevu modülü"]["id"]).status_code == 200
+        t, f = _wait(client, admin, pid, lambda t, f: t["Testler"]["status"] == "WAITING_APPROVAL", "test adımı onaya gelmeli", 90)
+        fix, retest = t.get("Test düzeltmesi 1: Randevu modülü"), t.get("Yeniden test 1: Testler")
+        assert fix and retest, list(t)
+        assert fix["assignee"]["id"] == w["agent"] and fix["depends_on"] == [t["Testler"]["id"]] and fix["status"] in ("BACKLOG", "READY")
+        assert retest["assignee"]["id"] == w["reviewer"] and retest["depends_on"] == [fix["id"]]
+        assert any(e["kind"] == "TEST_FIX_LOOP" for e in f["events"])
+        # Test adımı onaylanınca düzeltme kendiliğinden başlar, ardından yeniden test; o da kalınca 2. tur açılır
+        assert approve(t["Testler"]["id"]).status_code == 200
+        t, _ = _wait(client, admin, pid, lambda t, f: t["Test düzeltmesi 1: Randevu modülü"]["status"] == "WAITING_APPROVAL", "düzeltme adımı çalışmalı", 90)
+        assert approve(t["Test düzeltmesi 1: Randevu modülü"]["id"]).status_code == 200
+        t, _ = _wait(client, admin, pid, lambda t, f: "Test düzeltmesi 2: Randevu modülü" in t, "2. düzeltme turu açılmalı", 90)
+        assert t["Yeniden test 2: Testler"]["assignee"]["id"] == w["reviewer"]
+        assert len([r for r in client.get(f"/api/v1/projects/{pid}/test-runs", headers=admin).json()["runs"]]) == 2
+    finally:
+        _exec(db, "UPDATE actors SET role = 'Uzman' WHERE id = %s", w["reviewer"])
+        _cleanup(client, admin, pid, base)
+
+
 def _sandbox_up() -> bool:
     try:
         return httpx.get(settings.SANDBOX_URL.rstrip("/") + "/health", timeout=5).json().get("ok") is True
