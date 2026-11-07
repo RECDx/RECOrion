@@ -222,13 +222,14 @@ async def export_period(db: AsyncSession, conn: IntegrationConnection, p: Projec
         db.add(exp)
     if exp.status in ("CREATED", "POSTED", "FAILED"):
         return exp
-    if exp.next_attempt_at and at < exp.next_attempt_at:
-        return exp  # tekrar zamanı gelmedi
     if exp.odoo_export_id:
-        # Dosya v2'de zaten oluşmuş (önceki denemede yalnız Case'e alma adımı kalmıştı): yeniden aktarım yapılmaz (#658)
+        # Dosya v2'de zaten oluşmuş (önceki denemede yalnız Case'e alma adımı kalmıştı): beklemeden tamamlanır,
+        # yeniden aktarım yapılmaz (#658)
         exp.status, exp.last_error, exp.next_attempt_at = "CREATED", None, None
         await db.commit()
         return exp
+    if exp.next_attempt_at and at < exp.next_attempt_at:
+        return exp  # tekrar zamanı gelmedi
     exp.attempts = (exp.attempts or 0) + 1
     try:
         cred = await _usable_cred(db, p.manager_actor_id, conn.id)
