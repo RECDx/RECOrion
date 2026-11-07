@@ -82,6 +82,7 @@ import LlmPricing from './ai/LlmPricing';
 import ModelRouterPanel from './ai/ModelRouterPanel';
 import RecaiTiersAdmin from './recai/RecaiTiersAdmin';
 import PlanRecaiPicker from './recai/PlanRecaiPicker';
+import TenantCustomTitles from './company/TenantCustomTitles';
 import { PERMISSION_MODULES, moduleName } from '../permissions';
 
 const TAB_SLUG_MAP = {
@@ -275,6 +276,7 @@ export default function SuperAdminConsole({
   // Temel Veriler
   const [leads, setLeads] = useState([]);
   const [tenants, setTenants] = useState([]);
+  const [coreLoaded, setCoreLoaded] = useState(false);  // F12: veri gelene kadar sayaçlar "…"
   const [permissions, setPermissions] = useState([]);
   const [models, setModels] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -540,9 +542,11 @@ export default function SuperAdminConsole({
     setLoading(true);
     setActionFeedback(null);
     try {
+      // F10: başvuru/şirket listesi alınamazsa sessizce boş liste gösterilmez; kullanıcı uyarılır
+      const failed = [];
       const [lData, tData, pData, rData, mData, plData, sData, etData, scData, secData, profData] = await Promise.all([
-        api.getLeads().catch(() => []),
-        api.getTenants().catch(() => []),
+        api.getLeads().catch(() => { failed.push('başvurular'); return null; }),
+        api.getTenants().catch(() => { failed.push('şirketler'); return null; }),
         api.getPermissions().catch(() => []),
         api.getSystemRoles().catch(() => []),
         api.getModels().catch(() => []),
@@ -554,8 +558,12 @@ export default function SuperAdminConsole({
         api.getProfessions().catch(() => [])
       ]);
 
-      setLeads(lData || []);
-      setTenants(tData || []);
+      if (lData) setLeads(lData);
+      if (tData) setTenants(tData);
+      if (lData && tData) setCoreLoaded(true);
+      if (failed.length) {
+        setActionFeedback({ type: 'error', text: `Sunucuya ulaşılamadığı için ${failed.join(' ve ')} yüklenemedi; liste eksik olabilir. Birkaç saniye sonra "Verileri Yenile" ile tekrar deneyin.` });
+      }
       setPermissions(pData || []);
       setRoles(rData || []);
       setModels(mData || []);
@@ -592,6 +600,17 @@ export default function SuperAdminConsole({
   useEffect(() => {
     loadAllData();
   }, []);
+
+  // F10/F12: pano ve başvuru masası açıkken başvuru ve şirket sayıları 60 sn'de bir sessizce tazelenir (yeni başvuru kaçmasın)
+  useEffect(() => {
+    if (!['DASHBOARD', 'LEADS', 'TENANTS'].includes(activeTab)) return undefined;
+    const t = setInterval(() => {
+      Promise.all([api.getLeads(), api.getTenants()])
+        .then(([l, ts]) => { setLeads(l || []); setTenants(ts || []); setCoreLoaded(true); })
+        .catch(() => { /* bir sonraki turda yeniden denenir */ });
+    }, 60000);
+    return () => clearInterval(t);
+  }, [activeTab]);
 
   const copyToClipboard = (text, key) => {
     navigator.clipboard.writeText(text);
@@ -2549,7 +2568,7 @@ export default function SuperAdminConsole({
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--nt-ffffff)', lineHeight: 1 }}>
-                      {leads.filter(l => l.status === 'PENDING').length}
+                      {coreLoaded ? leads.filter(l => l.status === 'PENDING').length : '…'}
                     </span>
                     <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 700 }}>
                       Başvuru Onay Bekliyor
@@ -2603,10 +2622,10 @@ export default function SuperAdminConsole({
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontSize: '2.2rem', fontWeight: 900, color: 'var(--nt-ffffff)', lineHeight: 1 }}>
-                      {tenants.length}
+                      {coreLoaded ? tenants.length : '…'}
                     </span>
                     <span style={{ fontSize: '0.8rem', color: 'var(--ac-c084fc)', fontWeight: 700 }}>
-                      Kayıtlı Kurum / Şirket
+                      Kayıtlı Kurum / Şirket (tümü)
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: 'var(--nt-cbd5e1)', marginTop: 4 }}>
@@ -5836,6 +5855,9 @@ export default function SuperAdminConsole({
                         className="super-admin-input"
                       />
                     </div>
+
+                    <TenantCustomTitles key={selectedTenantDetails.tenant.id} tenant={selectedTenantDetails.tenant}
+                      plan={plans.find((p) => p.id === selectedTenantDetails.tenant.plan_id)} />
 
                     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 6 }}>
                       {/* Hoş Geldin Maili Gönder (Madde 1) */}

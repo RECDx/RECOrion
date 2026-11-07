@@ -10,28 +10,33 @@ const REQ = { NEW: 'işleniyor', ORDERED: 'Odoo siparişine eklendi', OPPORTUNIT
   DONE: 'tamamlandı', CANCELLED: 'iptal', FAILED: 'RECDx ekibi ilgileniyor', SKIPPED: 'RECDx ekibi ilgileniyor' };
 
 /** Şirket Yönetimi > Entegrasyonlar: Odoo ve RECDx uygulamaları (ADIM 13.1). Seçime göre entegrasyon açılır veya teklif/sipariş iletilir. */
-export default function CompanyRecdxApps({ tenantId, onChanged }) {
+export default function CompanyRecdxApps({ tenantId, onChanged, reloadKey = '' }) {
   const [data, setData] = useState(null);
   const [choice, setChoice] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(null);  // F30: sunucudaki seçim; ekrandaki seçim farklıysa "kaydedilmemiş" uyarısı
   const load = useCallback(() => api.getCompanyRecdxApps(tenantId).then((d) => {
     setData(d);
-    setChoice({ has_odoo: d.has_odoo ?? null, apps: Object.fromEntries(d.apps.filter((a) => a.choice).map((a) => [a.code, a.choice])) });
+    const c = { has_odoo: d.has_odoo ?? null, apps: Object.fromEntries(d.apps.filter((a) => a.choice).map((a) => [a.code, a.choice])) };
+    setChoice(c);
+    setSaved(JSON.stringify(c));
   }).catch((e) => toast.error(e.message)), [tenantId]);
-  useEffect(() => { load(); }, [load]);
+  // F30: Odoo bağlantısı eklenip/silinince durum ("Odoo bağlantısı gerekli" → "Entegrasyon açık") kendiliğinden tazelenir
+  useEffect(() => { load(); }, [load, reloadKey]);
   if (!data || !choice) return null;
   const save = async () => {
     setBusy(true);
     try {
       const d = await api.setCompanyRecdxApps(tenantId, choice);
       setData(d);
+      setSaved(JSON.stringify(choice));
       toast.success('Tercihiniz kaydedildi.');
       onChanged?.();
     } catch (e) { toast.error(e.message); } finally { setBusy(false); }
   };
   return (
     <Card title="RECDx uygulamaları (Odoo)" subtitle={`RECQmind ve RECSlip, Odoo'nuzda çalışır ve RECOrion ile birlikte iş yürütür. Paketiniz: ${data.plan_name || '—'}.`}
-      actions={<Button icon={Save} disabled={busy} onClick={save}>{busy ? 'Kaydediliyor…' : 'Kaydet'}</Button>}>
+      actions={<Button icon={Save} disabled={busy} onClick={save}>{busy ? 'Kaydediliyor…' : 'Tercihleri kaydet'}</Button>}>
       <div className="pj-meta" style={{ marginBottom: 8 }}>
         {data.apps.map((a) => {
           const [label, tone] = STATE[a.state] || [a.state, 'neutral'];
@@ -39,6 +44,9 @@ export default function CompanyRecdxApps({ tenantId, onChanged }) {
         })}
       </div>
       <RecdxAppsChoice apps={data.apps} value={choice} onChange={setChoice} idPrefix="co" />
+      {saved !== null && saved !== JSON.stringify(choice) && (
+        <p className="pj-hint" role="status" style={{ marginTop: 8 }}><Badge tone="warning">Kaydedilmemiş değişiklik var</Badge> Seçiminizin geçerli olması için "Tercihleri kaydet"e basın.</p>
+      )}
     </Card>
   );
 }

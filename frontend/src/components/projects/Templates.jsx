@@ -110,7 +110,7 @@ export function SaveTemplateModal({ project, onClose }) {
   };
   return (
     <Modal open onClose={onClose} title="Şablon olarak kaydet" size="md"
-      footer={<><Button variant="secondary" onClick={onClose}>Vazgeç</Button><Button onClick={save} disabled={busy || form.name.trim().length < 2}>{busy ? 'Kaydediliyor…' : 'Kaydet'}</Button></>}>
+      footer={<><Button variant="secondary" onClick={onClose}>Vazgeç</Button><Button onClick={save} disabled={busy || form.name.trim().length < 2}>{busy ? 'Kaydediliyor…' : 'Şablonu kaydet'}</Button></>}>
       <div className="pj-form">
         <div className="pj-field">
           <label htmlFor="st-name">Şablon adı *</label>

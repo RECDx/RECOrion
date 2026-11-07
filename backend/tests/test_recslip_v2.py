@@ -348,9 +348,16 @@ def test_cutoff_and_export_submit_steps_and_attach_the_file(client, world, slip,
     export_at += timedelta(hours=25)
     assert "S5" in until(export_at, {"S5"})
     assert _exec(db, "SELECT attempts FROM recslip_exports WHERE project_id = %s", slip["case"])[0] == 2
-    exp = _exec(db, "SELECT status, name, artifact_id FROM recslip_exports WHERE project_id = %s", slip["case"])
-    assert exp[0] == "CREATED" and exp[1].startswith("RECSlip_Luka") and exp[2], "dosya Case'e eklendi"
-    assert any(v == b"<table>luka</table>" for v in v2.objects.values())
+    exp = _exec(db, "SELECT status, name, artifact_id, odoo_export_id FROM recslip_exports WHERE project_id = %s", slip["case"])
+    # #658 (kullanıcı kararı): dosya RECOrion'a alınmaz; RECSlip'te kalır, Case adını ve v2 kaydını tutar
+    assert exp[0] == "CREATED" and exp[1].startswith("RECSlip_Luka") and exp[2] is None and exp[3]
+    assert not any(v == b"<table>luka</table>" for v in v2.objects.values()), "dosya içeriği RECOrion'a çekilmez"
+    case = client.get(f"/api/v1/projects/{slip['case']}/recslip", headers=w["admin"]["h"]).json()
+    assert case["export"]["odoo_link"].endswith(f"/odoo/recslip.export/{exp[3]}")
+    path = r"C:\Muhasebe\RECSlip\RECSlip_Luka_1.xls"
+    assert client.put(f"/api/v1/projects/{slip['case']}/recslip/export-path", headers=w["member"]["h"], json={"local_path": path}).status_code in (403, 404)
+    r = client.put(f"/api/v1/projects/{slip['case']}/recslip/export-path", headers=w["admin"]["h"], json={"local_path": path})
+    assert r.status_code == 200 and r.json()["export"]["local_path"] == path, r.text
     v2.export_state = "posted"
     assert "S6" in until(export_at + timedelta(hours=1), {"S6"})
     desc = _exec(db, "SELECT description FROM tasks WHERE project_id = %s AND order_index = 7", slip["case"])[0]

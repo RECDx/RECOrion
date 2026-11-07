@@ -242,6 +242,7 @@ services:
       - GITEA_PUBLIC_URL=${GITEA_PUBLIC_URL:-http://localhost:3000}
       - GITEA_TOKEN=${GITEA_TOKEN:-}
       - SANDBOX_URL=${SANDBOX_URL:-http://sandbox:8100}
+      - ALLOW_FREE_EMAIL_SIGNUP=${ALLOW_FREE_EMAIL_SIGNUP:-false}
       - RECORION_VAULT_KEY=${RECORION_VAULT_KEY:-}
       - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY .env dosyasinda tanimli olmali}

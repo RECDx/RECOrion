@@ -144,7 +144,7 @@ export default function PlanTab({ project, agents, humans = [], onChanged }) {
                 placeholder="Örn. test adımını ayrı tut, tasarım için iki gün yeterli…" />
               <div className="pj-actions">
                 <Button icon={Brain} onClick={() => suggest(false)} disabled={!!busy}>{busy === 'suggest' ? 'Öneri hazırlanıyor…' : plan ? 'Yeniden öner' : 'Beyin AI plan önersin'}</Button>
-                {plan && <Button variant="secondary" icon={Save} onClick={save} disabled={!!busy || !dirty}>Kaydet</Button>}
+                {plan && <Button variant="secondary" icon={Save} onClick={save} disabled={!!busy || !dirty}>Planı kaydet</Button>}
                 {plan && <Button variant="success" icon={CheckCircle2} onClick={approve} disabled={!!busy || !steps.length}>Onayla ve iş adımlarına dönüştür</Button>}
               </div>
             </div>

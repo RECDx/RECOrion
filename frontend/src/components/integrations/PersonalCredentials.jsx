@@ -63,20 +63,23 @@ function CredentialForm({ data, cred, onClose, onSaved }) {
   const [agent, setAgent] = useState(cred?.agent_actor_id || '');
   const [expires, setExpires] = useState(cred?.expires_at ? cred.expires_at.slice(0, 10) : '');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');  // F33: hata yalnız kısa bildirimde değil formda da kalır
   const save = async () => {
     setBusy(true);
+    setErr('');
     const body = { api_key: key.trim() || null, agent_actor_id: agent || null, expires_at: expires ? `${expires}T23:59:00+03:00` : null };
     try {
       const r = cred ? await api.updateCredential(cred.id, body) : await api.addCredential({ connection_id: conn, ...body });
       toast.success(`Kaydedildi: ${r.external_login}`);
       onSaved();
-    } catch (e) { toast.error(e.message); } finally { setBusy(false); }
+    } catch (e) { setErr(e.message); toast.error(e.message); } finally { setBusy(false); }
   };
   return (
     <Modal open onClose={onClose} title={cred ? 'Anahtarı düzenle' : 'Anahtar ekle'} size="md"
       footer={<><Button variant="secondary" onClick={onClose}>Vazgeç</Button>
         <Button disabled={busy || (!cred && (!conn || key.trim().length < 8))} onClick={save}>{busy ? 'Deneniyor…' : 'Dene ve kaydet'}</Button></>}>
       <div className="pj-form">
+        {err && <p className="ui-text-danger pj-field full" role="alert" style={{ fontSize: '0.82rem', margin: 0 }}>{err}</p>}
         {!cred && (
           <div className="pj-field full"><label htmlFor="pc-conn">Sistem</label>
             <select id="pc-conn" className="ui-input" value={conn} onChange={(e) => setConn(e.target.value)}>

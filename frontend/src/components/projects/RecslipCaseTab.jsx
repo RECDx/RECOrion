@@ -13,6 +13,32 @@ const RISK = [['none', 'Yok'], ['low', 'Düşük'], ['high', 'Yüksek']];
 const SOURCES = [['rule', 'Kural'], ['vendor', 'Tedarikçi hafızası'], ['exact', 'Tam eşleşme'], ['memory', 'Onaylı hafıza'], ['manual', 'Elle (muhasebeci)']];
 
 /** RECSlip.App v2 aylık Case'i (ADIM 14): takvim, ayarlar ve onay kriterleri (Case yöneticisi değiştirir), AI kararları, aktarım. */
+/** Aktarım dosyası (#658): dosya RECOrion'a alınmaz, RECSlip'te kalır; buradan RECSlip kaydına gidilir ve muhasebeci
+ *  dosyayı bilgisayarına indirdiyse yolunu not eder (ileride AI muhasebeci RECRobo ile bu yoldan bulup işleyecek). */
+function ExportFile({ project, exp, ro, onSaved }) {
+  const [path, setPath] = useState(exp.local_path || '');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try { onSaved(await api.saveRecslipExportPath(project.id, path)); toast.success('Dosya yolu kaydedildi.'); }
+    catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="pj-form" style={{ marginTop: 12 }}>
+      <p className="pj-hint">
+        Aktarım dosyası <strong>{exp.name}</strong> RECSlip'te duruyor; RECOrion'a alınmaz.{' '}
+        {exp.odoo_link && <a href={exp.odoo_link} target="_blank" rel="noreferrer">RECSlip'te aç / indir</a>}
+      </p>
+      <div className="pj-field">
+        <label htmlFor="rs-local-path">Bilgisayardaki yolu (indirdiyseniz)</label>
+        <input id="rs-local-path" className="ui-input" disabled={ro} maxLength={500} value={path} placeholder="ör. C:\\Muhasebe\\RECSlip\\2026-11\\RECSlip_Luka_1.xls"
+          onChange={(e) => setPath(e.target.value)} />
+      </div>
+      {!ro && <div className="pj-actions"><Button size="sm" disabled={busy || path === (exp.local_path || '')} onClick={save} aria-label="Aktarım dosyası yolunu kaydet">{busy ? 'Kaydediliyor…' : 'Yolu kaydet'}</Button></div>}
+    </div>
+  );
+}
+
 export default function RecslipCaseTab({ project }) {
   const [data, setData] = useState(null);
   const [s, setS] = useState(null);
@@ -57,10 +83,11 @@ export default function RecslipCaseTab({ project }) {
               : data.export.status === 'FAILED' ? 'danger' : 'info'}>{EXPORT_STATUS[data.export.status] || data.export.status}</Badge>{data.export.last_error ? ` · ${data.export.last_error}` : ''}</small>
           ) : <small>henüz yok</small>}</li>
         </ul>
+        {data.export?.name && <ExportFile project={project} exp={data.export} ro={ro} onSaved={(d) => setData((prev) => ({ ...prev, export: d.export }))} />}
       </Card>
 
       <Card title="Ayarlar ve onay kriterleri" subtitle={ro ? 'Yalnızca Case yöneticisi değiştirebilir.' : 'Sonraki ayın Case\'i bu ayarlarla açılır.'}
-        actions={!ro && <Button icon={Save} disabled={busy} onClick={save}>Kaydet</Button>}>
+        actions={!ro && <Button icon={Save} disabled={busy} onClick={save} aria-label="RECSlip ayarlarını kaydet">{busy ? "Kaydediliyor…" : "Ayarları kaydet"}</Button>}>
         <div className="pj-form" aria-label="RECSlip ayarları">
           <div className="pj-field"><label>Fiş ve onay takibi (dakika)</label>{num(['poll_minutes'], { min: 5, max: 1440 })}</div>
           <div className="pj-field"><label>Onaya gönderilmemiş fiş hatırlatması (gün)</label>{num(['submit_reminder_days'], { min: 0 })}</div>

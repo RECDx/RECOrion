@@ -293,6 +293,8 @@ class Tenant(Base):
     last_reminder_sent_at = Column(DateTime(timezone=True))
     brain_model_code = Column(String(128))  # şirketin Beyin AI (organizatör) modeli
     brain_tier = Column(String(16))  # #349: Beyin AI'nin RECAi adı
+    # Şirkete özel ünvan istisnası (#636, Merkez): None = paket ayarı geçerli, True = açık, False = kapalı
+    custom_titles_override = Column(Boolean)
     logo_key = Column(String(255))  # resmi logo (MinIO); adres sürümlü: services/tenant_logo.url_of
     logo_updated_at = Column(DateTime(timezone=True))
     is_active = Column(Boolean, default=True)
@@ -1272,6 +1274,7 @@ class RecslipExport(Base):
     next_attempt_at = Column(DateTime(timezone=True))
     last_error = Column(Text)
     posted_at = Column(DateTime(timezone=True))
+    local_path = Column(String(500))  # #658: dosya RECOrion'a alınmaz; muhasebecinin indirdiği yer (isteğe bağlı)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -35,6 +35,7 @@ class PlanResponse(BaseModel):
     odoo_product_id: Optional[int] = None
     recdx_apps: Dict[str, Any] = {}  # ADIM 13.1: RECQmind/RECSlip teklifi (yok/indirimli/dahil + Odoo ürünü)
     recai_tiers: List[str] = []  # #349: paketteki seçilebilir RECAi adları
+    can_create_custom_titles: bool = False  # #654 (F41): eksikti; Merkez her zaman "Hayır" gösteriyordu
     is_active: bool
 
     class Config:
@@ -168,6 +169,7 @@ class TenantResponse(BaseModel):
     admin_email: Optional[str] = None
     is_active: bool
     logo_url: Optional[str] = None
+    custom_titles_override: Optional[bool] = None  # #636: None paket, True açık, False kapalı
 
     class Config:
         from_attributes = True
@@ -561,6 +563,9 @@ def validate_corporate_email(email: Optional[str], field_name: str = "E-posta") 
         raise HTTPException(status_code=400, detail=f"Geçerli bir {field_name.lower()} adresi giriniz.")
     
     domain = parts[1].strip().lower()
+    # Yalnız yerel canlı test için kapatılabilir (ADIM 17 senaryosu, #615); varsayılan açık, üretimde değiştirilmez
+    if settings.ALLOW_FREE_EMAIL_SIGNUP:
+        return clean_email
     if domain in PUBLIC_EMAIL_DOMAINS or any(domain == d or domain.endswith("." + d) for d in PUBLIC_EMAIL_DOMAINS):
         raise HTTPException(
             status_code=400,
@@ -664,6 +669,7 @@ async def get_tenant_details(tenant_id: uuid.UUID, db: AsyncSession = Depends(ge
             "is_active": tenant.is_active,
             "created_at": tenant.created_at.isoformat() if tenant.created_at else None,
             "logo_url": tenant_logo.url_of(tenant),
+            "custom_titles_override": tenant.custom_titles_override,  # #636
         },
         "plan": {
             "id": str(plan_obj.id) if plan_obj else None,
@@ -676,6 +682,27 @@ async def get_tenant_details(tenant_id: uuid.UUID, db: AsyncSession = Depends(ge
         "lead_status": lead_obj.status if lead_obj else ("APPROVED" if tenant.is_active else "PENDING"),
         "odoo_order_name": lead_obj.odoo_order_name if lead_obj else None
     }
+
+class CustomTitlesIn(BaseModel):
+    mode: str = Field(..., pattern="^(PLAN|ON|OFF)$")  # PLAN: paket ayarı geçerli; ON/OFF: bu şirkete istisna
+
+
+@router.put("/{tenant_id}/custom-titles")
+async def set_custom_titles(tenant_id: uuid.UUID, payload: CustomTitlesIn, user: CurrentUser = Depends(get_current_user),
+                            db: AsyncSession = Depends(get_db)):
+    """Merkez: şirkete özel ünvan iznini paketten bağımsız aç/kapat ya da paket ayarına bırak (#636, kullanıcı kararı 07.11.2026)."""
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Şirket bulunamadı.")
+    tenant.custom_titles_override = {"PLAN": None, "ON": True, "OFF": False}[payload.mode]
+    await db.commit()
+    from app.core.audit import write_audit_event
+    await write_audit_event(action="TENANT_CUSTOM_TITLES", actor_id=user.actor_id, tenant_id=tenant.id, target_type="tenant",
+                            target_id=str(tenant.id), payload={"mode": payload.mode})
+    plan = await db.get(Plan, tenant.plan_id) if tenant.plan_id else None
+    return {"mode": payload.mode, "override": tenant.custom_titles_override,
+            "effective": tenant.custom_titles_override if tenant.custom_titles_override is not None else bool(plan and plan.can_create_custom_titles)}
+
 
 @router.put("/{tenant_id}")
 async def update_tenant(tenant_id: uuid.UUID, payload: TenantUpdate, db: AsyncSession = Depends(get_db)):
@@ -989,7 +1016,8 @@ class PurchaseRequest(BaseModel):
     phone: str
     website: Optional[str] = None
     contact_name: str
-    contact_email: str
+    contact_email: str  # yönetici e-postası: doğrulama kodu ve giriş buna
+    company_email: Optional[str] = None  # #633 (F19): şirketin kurumsal e-postası (yoksa yönetici e-postası)
     password: str
     email_code: str  # e-posta doğrulama kodu (/purchase-request/send-code)
     company_fax: Optional[str] = None  # bot tuzağı: gerçek kullanıcılar bu alanı görmez, boş gönderir
@@ -1153,7 +1181,8 @@ async def submit_purchase_request(
         slug=await lifecycle.unique_slug(db, payload.company_name),
         name=payload.company_name.strip(),
         tax_id=payload.tax_id, tax_office=payload.tax_office, phone=payload.phone,
-        address=payload.address, website=payload.website, contact_email=email,
+        address=payload.address, website=payload.website,
+        contact_email=validate_corporate_email(payload.company_email, "Şirket e-posta") if (payload.company_email or "").strip() else email,
         plan_id=plan.id, sectors=payload.sectors or [], professions=payload.professions or [],
         sector_manifesto=manifesto_data["manifesto"],
         package_start_date=None, package_expiry_date=None, is_active=False,

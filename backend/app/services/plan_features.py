@@ -61,7 +61,8 @@ async def entitlements(db: AsyncSession, tenant: Tenant, user: Optional[CurrentU
         plan_name=plan.name if plan else None,
         can_change_llm=bypass or bool(f["can_change_llm"]),
         can_edit_role_prompt=bypass or bool(f["can_edit_role_prompt"]),
-        can_create_custom_titles=bypass or bool(plan and plan.can_create_custom_titles),
+        can_create_custom_titles=bypass or (tenant.custom_titles_override if tenant.custom_titles_override is not None
+                                            else bool(plan and plan.can_create_custom_titles)),  # #636: Merkez istisnası önce
         can_upload_title_documents=bypass or bool(f["can_upload_title_documents"]),
         ocr_enabled=bypass or bool(f["ocr_enabled"]),
         max_documents_per_agent=int(f["max_documents_per_agent"] or 0),

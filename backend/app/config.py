@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     TEMPORAL_TASK_QUEUE: str = "recorion-main"
     # Web başvurusu kötüye kullanım sınırları (IP başına, saatlik)
     PURCHASE_IP_LIMIT_PER_HOUR: int = 5
+    # Ücretsiz e-posta (gmail vb.) ile başvuru: yalnız yerel canlı test için .env ile açılır; varsayılan kapalı (kurumsal e-posta zorunlu)
+    ALLOW_FREE_EMAIL_SIGNUP: bool = False
     EMAIL_CODE_IP_LIMIT_PER_HOUR: int = 20
 
     # PostgreSQL

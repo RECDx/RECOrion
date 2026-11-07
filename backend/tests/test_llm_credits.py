@@ -158,7 +158,8 @@ def test_evren_failure_returns_503_without_charge(client, db, company, fake_evre
     assert r.status_code == 503
     after = _exec(db, "SELECT COUNT(*) FROM credit_ledger WHERE tenant_id = %s AND entry_type = 'USAGE'", company["id"])[0]
     assert after == before + 1  # yalnızca vektörleme (hafıza araması) ücretlendi, sohbet değil
-    assert _exec(db, "SELECT COUNT(*) FROM llm_calls WHERE tenant_id = %s AND status = 'FAILED'", company["id"])[0] == 1
+    # Asıl model ve yedek model (F18: Beyin AI sohbeti de yanıtsızda yedeğe geçer) kaydedildi; ikisi de ücretlendirilmedi
+    assert _exec(db, "SELECT COUNT(*) FROM llm_calls WHERE tenant_id = %s AND status = 'FAILED'", company["id"])[0] in (1, 2)
 
 
 def test_exhausted_credits_return_402(client, db, tag, fake_evren):

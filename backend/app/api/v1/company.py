@@ -771,6 +771,7 @@ Lütfen doğrudan sistem promptu (persona yönergesi) olarak kullanılacak markd
     result = await llm_gateway.chat(
         LLMContext(tenant_id=tenant.id, purpose="ROLE_PROMPT"), messages,
         model_code=payload.model_code, temperature=0.7, max_tokens=6144, timeout=120,
+        fallback=True,  # F50: yanıtsız modelde yedek
     )
     return {
         "success": True,
@@ -2060,6 +2061,22 @@ async def _assignable_role(db: AsyncSession, current: CurrentUser, tenant_id: uu
     return r
 
 
+async def _send_invite(db: AsyncSession, user: Actor, tenant_id: uuid.UUID) -> None:
+    """Yeni kullanıcıya davet: şifre belirleme bağlantısı (72 saat). Gönderim hatası kullanıcı kaydını bozmaz."""
+    if user.status == "DISABLED" or not user.email:
+        return
+    try:
+        from app.services.customer_lifecycle import ACTIVATION_LINK_HOURS, set_password_link
+        from app.services.notification_service import NotificationService
+        tenant = await db.get(Tenant, tenant_id)
+        link = await set_password_link(user, hours=ACTIVATION_LINK_HOURS)
+        await NotificationService.send_by_code(db, "USER_INVITED", user.email, {
+            "contact_name": user.display_name, "company_name": tenant.name if tenant else "", "email": user.email,
+            "reset_url": link, "valid_hours": ACTIVATION_LINK_HOURS})
+    except Exception:
+        logging.getLogger("recorion.company").warning("Kullanıcı daveti e-postası gönderilemedi (%s)", user.email, exc_info=True)
+
+
 async def _ensure_other_admin(db: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID) -> None:
     """Şirkette en az bir aktif şirket yöneticisi kalmalıdır."""
     others = (await db.execute(select(func.count(Actor.id)).where(
@@ -2180,6 +2197,7 @@ async def create_company_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    await _send_invite(db, user, tenant_id)  # #635 (F21): kişiye şifre belirleme bağlantılı davet e-postası
 
     effective_p = list(set(role_perms + extra_p))
 

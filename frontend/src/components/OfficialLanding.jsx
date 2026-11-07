@@ -65,6 +65,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
   const [address, setAddress] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');  // F19: şirket e-postası (yönetici e-postasından ayrı)
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   // E-posta doğrulama kodu (başvuru göndermeden önce zorunlu)
@@ -123,6 +124,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     setAddress('');
     setContactName('');
     setContactEmail('');
+    setCompanyEmail('');
     setPassword('');
     setShowPassword(false);
     setEmailCode('');
@@ -249,17 +251,11 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
     e.preventDefault();
     setErrorMessage('');
 
-    // Madde 3: Kurumsal / Official e-posta zorunluluğu (Gmail, Hotmail vb. engelleme)
-    const publicMailDomains = [
-      'gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.com.tr', 'outlook.com', 
-      'outlook.com.tr', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.com.tr', 'ymail.com', 
-      'yandex.com', 'yandex.com.tr', 'ya.ru', 'icloud.com', 'mail.ru', 'proton.me', 
-      'protonmail.com', 'zoho.com', 'gmx.com', 'aol.com'
-    ];
-    const emailParts = (contactEmail || '').trim().toLowerCase().split('@');
-    const domain = (emailParts[1] || '').trim();
-    if (!domain || publicMailDomains.includes(domain) || publicMailDomains.some(d => domain.endsWith('.' + d))) {
-      setErrorMessage(`⚠️ Kurumsal / Official E-Posta Zorunluluğu: RECOrion kurumsal abonelik başvurularında şirket uzantılı resmi (official) e-posta adresi zorunludur. Genel ve ücretsiz sağlayıcılar (${domain || 'geçersiz e-posta'}) kabul edilmemektedir. Lütfen 'info@sirketiniz.com' veya 'yonetici@sirketiniz.com' gibi kurumsal bir alan adı giriniz.`);
+    // Madde 3: Kurumsal e-posta zorunluluğunu sunucu denetler (doğrulama kodu gönderiminde ve başvuruda; #615):
+    // kural tek yerde, ön yüz sunucunun mesajını gösterir. Burada yalnız biçim denetlenir.
+    const domain = ((contactEmail || '').trim().toLowerCase().split('@')[1] || '').trim();
+    if (!domain) {
+      setErrorMessage('Geçerli bir kurumsal e-posta adresi giriniz.');
       return;
     }
 
@@ -288,6 +284,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
         logo_data_url: logoDataUrl || null,
         contact_name: contactName,
         contact_email: contactEmail,
+        company_email: companyEmail.trim() || null,
         password: password,
         email_code: emailCode.trim(),
         company_fax: companyFax || null,
@@ -719,10 +716,8 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                           type="email" 
                           required 
                           placeholder="info@sirketiniz.com" 
-                          value={contactEmail}
-                          onChange={(e) => {
-                            setContactEmail(e.target.value);
-                          }}
+                          value={companyEmail}
+                          onChange={(e) => setCompanyEmail(e.target.value)}
                           className="purchase-input-field-3d"
                         />
                         <div style={{ fontSize: '0.68rem', color: 'var(--nt-94a3b8)', marginTop: 4 }}>

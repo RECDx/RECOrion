@@ -176,5 +176,6 @@ KURALLAR
             {"role": "user", "content": prompt},
         ],
         model_code=model_code, temperature=0.6, max_tokens=8192, timeout=180,
+        fallback=True,  # F18: zaman aşımı/meşgulde yedek modelle bir kez daha (senaryo ADIM 17)
     )
     return {"manifesto": result.content.strip(), "model_code": result.public_model, "credits": result.credits}

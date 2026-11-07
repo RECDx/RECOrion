@@ -1349,7 +1349,7 @@ Silinemeyen pakette "⚠️ KİRALAMA PAKETİ SİLİNEMEZ! '<ad>' (<kod>) kirala
 | Kullanıcılar & Roller | Şirkete Özel Rol Tanımlama | Şirkete özel yetki rolü oluşturma. | Evet |
 | Kullanıcılar & Roller | Rol Düzenleme | Şirkete özel rollerin adını, açıklamasını ve izinlerini değiştirme. | Evet |
 | Kullanıcılar & Roller | Rol Silme | Şirkete özel rolleri silme (rol atanmış kullanıcı yoksa). | Evet |
-| AI Personel | AI Personel İşe Alma | AI Personel İşe Al sihirbazı ve RECAi ile ünvan araştırması. | Evet |
+| AI Personel | AI Personel İşe Alma | AI Personel İşe Al sihirbazı; işe alınan personel için sektör ve ünvan Deep Search araştırması (Kaynaklar sekmesi). | Evet |
 | AI Personel | AI Personel Ayarları ve Bilgi Kaynakları | AI personelin bilgilerini, rol promptunu düzenleme; bilgi dokümanı, web ve video kaynağı ekleme, onaylama. | Evet |
 | AI Personel | AI Personeli İşten Çıkarma | AI personeli işten çıkarma, yeniden işe alma ve silme. | Evet |
 | AI Personel | Ünvan Tanımlama | Şirket ünvanlarını ve rol promptlarını oluşturma, düzenleme, silme. | Evet |

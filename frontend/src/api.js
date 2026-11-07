@@ -222,6 +222,7 @@ export const api = {
   runRecslip: (tenantId) => request(`/company/${tenantId}/recslip/run`, { method: 'POST' }),
   getRecslipCase: (projectId) => request(`/projects/${projectId}/recslip`),
   saveRecslipSettings: (projectId, settings) => request(`/projects/${projectId}/recslip`, { method: 'PUT', body: JSON.stringify({ settings }) }),
+  saveRecslipExportPath: (projectId, localPath) => request(`/projects/${projectId}/recslip/export-path`, { method: 'PUT', body: JSON.stringify({ local_path: localPath }) }),
   getMyRecslipDecisions: () => request('/me/recslip-decisions'),
   // ADIM 15: Yardım (Bilgi Birikimi) ve RECAi Yardım Asistanı
   getHelpTree: () => request('/help/tree'),
@@ -415,6 +416,7 @@ export const api = {
   // Şirketler & Detay Yönetimi
   getTenantDetails: (tenantId) => request(`/tenants/${tenantId}/details`),
   updateTenant: (tenantId, data) => request(`/tenants/${tenantId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  setTenantCustomTitles: (tenantId, mode) => request(`/tenants/${tenantId}/custom-titles`, { method: 'PUT', body: JSON.stringify({ mode }) }),
   uploadTenantLogo: (tenantId, file) => { const fd = new FormData(); fd.append('file', file); return request(`/company/${tenantId}/logo`, { method: 'PUT', body: fd }); },
   deleteTenantLogo: (tenantId) => request(`/company/${tenantId}/logo`, { method: 'DELETE' }),
   toggleTenantStatus: (tenantId) => request(`/tenants/${tenantId}/toggle-status`, { method: 'POST' }),

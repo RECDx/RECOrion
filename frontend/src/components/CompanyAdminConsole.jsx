@@ -164,7 +164,8 @@ export default function CompanyAdminConsole({
   // =========================================================================
   const [users, setUsers] = useState([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
-  const [userQuota, setUserQuota] = useState({ active_users: 0, total_users: 0, max_users: 5, plan_name: '', is_limit_reached: false });
+  // F15/F25: kota sunucudan gelene kadar sınır bilinmez (null → "…"); sabit 5 varsayılanı yanlış kota gösteriyordu
+  const [userQuota, setUserQuota] = useState({ active_users: 0, total_users: 0, max_users: null, plan_name: '', is_limit_reached: false });
   const [userSearch, setUserSearch] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState('ALL'); // ALL | ACTIVE | DISABLED
   const [userDeptFilter, setUserDeptFilter] = useState('ALL');
@@ -214,6 +215,7 @@ export default function CompanyAdminConsole({
   // MADDE 2: ŞİRKET ÜNVANLARI & RECAi KONTROL MOTORU STATE
   // =========================================================================
   const [jobTitles, setJobTitles] = useState([]);
+  const [titlesLoaded, setTitlesLoaded] = useState(false);  // F25: ilk yüklemede "ünvan yok" uyarısı yanlış çıkmasın
   const [isLoadingTitles, setIsLoadingTitles] = useState(false);
   const [titleSearch, setTitleSearch] = useState('');
   const [titleViewMode, setTitleViewMode] = useState('CARDS'); // CARDS | LIST
@@ -260,7 +262,7 @@ export default function CompanyAdminConsole({
   const [availableModels, setAvailableModels] = useState([]); // #349: RECAi adları (MERGEN/HIZLI/DERIN)
   const [recaiCaps, setRecaiCaps] = useState([]); // #349: RECAi Görsel/Ses/Okur ve pakette olup olmadığı
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [agentQuota, setAgentQuota] = useState({ active_agents: 0, max_agents: 5, plan_name: '', is_limit_reached: false });
+  const [agentQuota, setAgentQuota] = useState({ active_agents: 0, max_agents: null, plan_name: '', is_limit_reached: false });
 
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
@@ -332,6 +334,7 @@ export default function CompanyAdminConsole({
   const [manifestoModel, setManifestoModel] = useState('');
   const [manifestoInstructions, setManifestoInstructions] = useState('');
   const [isGeneratingManifesto, setIsGeneratingManifesto] = useState(false);
+  const [manifestoAiError, setManifestoAiError] = useState('');  // F18
   const [isSavingManifesto, setIsSavingManifesto] = useState(false);
 
   // ESC Tuşu ile Açık Olan Detay / Düzenleme Modalını Kaydetmeden Kapatma (Madde 1)
@@ -412,7 +415,10 @@ export default function CompanyAdminConsole({
   }, [entitlementTenantId]);
   const canChangeLlm = !entitlements || entitlements.can_change_llm;
   // #349: RECAi kodu (MERGEN/HIZLI/DERIN) → müşteriye görünen ad
-  const recaiName = (code) => availableModels.find((m) => m.model_code === code)?.display_name || (code ? 'RECAi' : 'RECAi Mergen');
+  // F50: model seçilmemişse sunucu şirketin varsayılan RECAi'sini kullanır; burada "Mergen" diye varsaymak hata mesajıyla çelişiyordu
+  const recaiName = (code) => availableModels.find((m) => m.model_code === code)?.display_name || 'RECAi';
+  // F18/F50: RECAi üretim hataları anlaşılır mesajla (ham "RECAi Derin yanıt veremiyor" yerine seçilen ad)
+  const recaiFailText = (code) => `${recaiName(code)} şu anda yanıt veremedi (EVREN yoğun). Biraz sonra tekrar deneyin veya metni elle yazın.`;
   const canEditRolePrompt = !entitlements || entitlements.can_edit_role_prompt;
   const canCreateCustomTitles = !entitlements || entitlements.can_create_custom_titles;
   const planLabel = entitlements?.plan_name || 'Mevcut';
@@ -523,6 +529,7 @@ export default function CompanyAdminConsole({
       showToast(err.message || "Ünvanlar yüklenemedi", "error");
     } finally {
       setIsLoadingTitles(false);
+      setTitlesLoaded(true);
     }
   };
 
@@ -1084,10 +1091,12 @@ export default function CompanyAdminConsole({
           ...prev,
           base_role_prompt: res.role_prompt
         }));
+      } else {
+        setTitleFormError(recaiFailText(titleForm.recommended_model_code));  // boş yanıt da sessiz kalmaz (F50)
       }
     } catch (err) {
       console.error("AI Rol Promptu üretilemedi:", err);
-      setTitleFormError("AI Rol Promptu oluşturulurken hata: " + (err.message || ''));
+      setTitleFormError(recaiFailText(titleForm.recommended_model_code));
     } finally {
       setIsGeneratingTitlePrompt(false);
     }
@@ -1311,10 +1320,12 @@ export default function CompanyAdminConsole({
           ...prev,
           system_prompt: res.role_prompt
         }));
+      } else {
+        setAgentFormError(recaiFailText(agentForm.model_code));
       }
     } catch (err) {
       console.error("Ajan promptu üretilemedi:", err);
-      setAgentFormError("Bu ajana özel AI promptu oluşturulurken hata: " + (err.message || ''));
+      setAgentFormError(recaiFailText(agentForm.model_code));
     } finally {
       setIsGeneratingAgentPrompt(false);
     }
@@ -1904,18 +1915,22 @@ export default function CompanyAdminConsole({
       });
       if (res?.manifesto) {
         setManifestoText(res.manifesto);
-        showToast(`Kurumsal manifesto ${res.model_code || recaiName(manifestoModel)} ile hazırlandı!`, "success");
+        setManifestoAiError('');
+        showToast(`Kurumsal manifesto ${recaiName(res.model_code || manifestoModel)} ile hazırlandı!`, "success");
+      } else {
+        setManifestoAiError(recaiFailText(manifestoModel));
       }
     } catch (err) {
       console.error("Manifesto üretilirken hata:", err);
-      showToast(err.message || "Manifesto üretilemedi.", "error");
+      setManifestoAiError(recaiFailText(manifestoModel));  // F18: kalıcı, anlaşılır hata (kısa bildirim de gider)
+      showToast(recaiFailText(manifestoModel), "error");
     } finally {
       setIsGeneratingManifesto(false);
     }
   };
 
   const navCounts = {
-    USERS: userQuota ? `${userQuota.active_users} / ${userQuota.max_users}` : null,
+    USERS: userQuota && userQuota.max_users != null ? `${userQuota.active_users} / ${userQuota.max_users}` : null,
     DEPARTMENTS: departments.length,
     JOB_TITLES: jobTitles.length,
   };
@@ -2249,10 +2264,10 @@ export default function CompanyAdminConsole({
                       {userQuota.active_users}
                     </span>
                     <span style={{ fontSize: '1rem', color: 'var(--nt-64748b)', fontWeight: '600' }}>
-                      / {userQuota.max_users} Kullanıcı
+                      / {userQuota.max_users ?? '…'} Kullanıcı
                     </span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--nt-94a3b8)', marginLeft: '12px' }}>
-                      (Kalan Kontenjan: <strong style={{ color: userQuota.is_limit_reached ? '#ef4444' : '#10b981' }}>{Math.max(0, userQuota.max_users - userQuota.active_users)}</strong>)
+                      (Kalan Kontenjan: <strong style={{ color: userQuota.is_limit_reached ? '#ef4444' : '#10b981' }}>{userQuota.max_users == null ? '…' : Math.max(0, userQuota.max_users - userQuota.active_users)}</strong>)
                     </span>
                   </div>
 
@@ -2298,7 +2313,7 @@ export default function CompanyAdminConsole({
                     <>
                       <CheckCircle2 size={24} color="var(--ac-34d399)" style={{ flexShrink: 0 }} />
                       <div style={{ fontSize: '0.78rem', color: 'var(--ac-86efac)', lineHeight: 1.35 }}>
-                        <strong>Kota Uygun:</strong> Satın aldığınız paket kapsamında {Math.max(0, userQuota.max_users - userQuota.active_users)} adet daha kullanıcı tanımlayabilirsiniz.
+                        <strong>Kota Uygun:</strong> Satın aldığınız paket kapsamında {userQuota.max_users == null ? '…' : Math.max(0, userQuota.max_users - userQuota.active_users)} adet daha kullanıcı tanımlayabilirsiniz.
                       </div>
                     </>
                   )}
@@ -4258,7 +4273,7 @@ export default function CompanyAdminConsole({
                       {agentQuota.is_limit_reached ? '⚠️ Paket Kotası Doldu:' : '📊 Paket Kotası:'}
                     </span>
                     <span style={{ color: 'var(--nt-ffffff)', fontWeight: '800' }}>
-                      {agentQuota.active_agents} / {agentQuota.max_agents} Ajan
+                      {agentQuota.max_agents == null ? '…' : `${agentQuota.active_agents} / ${agentQuota.max_agents}`} Ajan
                     </span>
                     <span style={{ color: 'var(--nt-94a3b8)', fontSize: '0.72rem' }}>
                       ({agentQuota.plan_name || 'Paket'})
@@ -4562,8 +4577,8 @@ export default function CompanyAdminConsole({
                 </div>
               </div>
 
-              {/* Ünvan Tanımlanmamışsa Uyarı Kutusu */}
-              {jobTitles.length === 0 && (
+              {/* Ünvan Tanımlanmamışsa Uyarı Kutusu (yükleme bitmeden gösterilmez) */}
+              {titlesLoaded && jobTitles.length === 0 && (
                 <div style={{
                   background: 'rgba(245, 158, 11, 0.1)',
                   border: '1px solid rgba(245, 158, 11, 0.35)',
@@ -5812,10 +5827,13 @@ export default function CompanyAdminConsole({
                       }}
                     >
                       <Sparkles size={16} className={isGeneratingManifesto ? 'spin' : ''} />
-                      <span>{isGeneratingManifesto ? 'AI Hazırlıyor...' : '✨ Seçili AI ile Manifestoyu Düzenle'}</span>
+                      <span>{isGeneratingManifesto ? `${recaiName(manifestoModel)} yazıyor… (1-3 dk sürebilir)` : '✨ Seçili AI ile Manifestoyu Düzenle'}</span>
                     </button>
                   </div>
                 </div>
+                {manifestoAiError && !isGeneratingManifesto && (
+                  <p className="ui-text-danger" role="alert" style={{ fontSize: '0.8rem', margin: '10px 0 0' }}>{manifestoAiError}</p>
+                )}
               </div>
 
               {/* DÜZENLENEBİLİR MANİFESTO EDİTÖRÜ */}
@@ -7504,11 +7522,14 @@ export default function CompanyAdminConsole({
                     <Sparkles size={13} color={isGeneratingTitlePrompt ? 'var(--nt-e2e8f0)' : 'var(--ac-d8b4fe)'} />
                     <span>
                       {isGeneratingTitlePrompt
-                        ? 'AI Promptu Yazıyor...'
+                        ? `${recaiName(titleForm.recommended_model_code)} yazıyor… (1-3 dk sürebilir)`
                         : `✨ ${recaiName(titleForm.recommended_model_code)} ile Prompt Yazdır`}
                     </span>
                   </button>
                 </div>
+                {titleFormError && !isGeneratingTitlePrompt && (
+                  <p className="ui-text-danger" role="alert" style={{ fontSize: '0.78rem', margin: '0 0 8px' }}>{titleFormError}</p>
+                )}
 
                 <textarea
                   placeholder="Ajanın veya personelin kimliğini, görev tanımını, kalite kapılarını ve çıktı standartlarını tanımlayan Sistem Rol Promptunu buraya yazınız veya yukarıdaki AI butonuyla otomatik yazdırınız..."
@@ -8219,7 +8240,7 @@ export default function CompanyAdminConsole({
                     >
                       <Sparkles size={12} color="var(--ac-c084fc)" />
                       <span>
-                        {isGeneratingAgentPrompt ? 'Yazıyor...' : '✨ Hızlı Prompt'}
+                        {isGeneratingAgentPrompt ? 'RECAi yazıyor… (1-3 dk sürebilir)' : '✨ Hızlı Prompt'}
                       </span>
                     </button>
                   </div>

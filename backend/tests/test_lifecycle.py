@@ -69,8 +69,12 @@ def register(client, email):
 # ---------------------------------------------------------------------------
 # Web başvurusu
 # ---------------------------------------------------------------------------
-def test_send_code_rejects_public_email(client):
+def test_send_code_rejects_public_email(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "ALLOW_FREE_EMAIL_SIGNUP", False)  # yerel canlı testte açılabilen istisna bu testi etkilemesin
     assert client.post("/api/v1/tenants/purchase-request/send-code", json={"email": "biri@gmail.com"}).status_code == 400
+    monkeypatch.setattr(settings, "ALLOW_FREE_EMAIL_SIGNUP", True)  # #615: yalnız ayarla açılır
+    assert client.post("/api/v1/tenants/purchase-request/send-code", json={"email": "biri2@gmail.com"}).status_code == 200
 
 
 def test_send_code_is_rate_limited_per_email(client, tag):

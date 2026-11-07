@@ -1727,7 +1727,7 @@ try {
       await cs.page.locator('#rs-export-time').fill('11:30');
       await cs.page.waitForTimeout(500);
     }
-    await cs.page.getByRole('button', { name: 'Kaydet', exact: true }).first().click();
+    await cs.page.getByRole('button', { name: 'RECSlip ayarlarını kaydet' }).click();
     const saved14 = await toastText(cs.page, /RECSlip ayarları kaydedildi/, 20000);
     await shot(cs.page, '36-recslip-case-sekmesi');
     const after14 = (await api(cs.page, `/api/v1/projects/${case14?.project_id}/recslip`)).body;

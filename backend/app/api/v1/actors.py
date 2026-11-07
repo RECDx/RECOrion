@@ -225,7 +225,7 @@ Yalnızca doğrudan ajanın sistem promptu olarak kullanılacak metni Türkçe o
     # Platform (RECDx) maliyeti. Hata olursa mevcut prompt korunur; önceden genel şablon
     # ünvanın kayıtlı promptunun üzerine yazılıyordu.
     result = await llm_gateway.chat(LLMContext(tenant_id=None, purpose="ROLE_PROMPT"), messages,
-                                    temperature=0.7, max_tokens=6144, timeout=120)
+                                    temperature=0.7, max_tokens=6144, timeout=120, fallback=True)
     job_title.base_role_prompt = result.content.strip()
     await db.commit()
     await db.refresh(job_title)

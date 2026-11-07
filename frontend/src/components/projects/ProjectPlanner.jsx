@@ -155,7 +155,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
 
       {tab === 'info' && (
         <Card title="Bilgiler & İsterler" subtitle={editable ? 'Proje başlayana kadar düzenlenebilir.' : 'Başlamış veya kapanmış projenin temel bilgileri değiştirilemez.'}
-          actions={editable && <Button icon={Save} onClick={saveInfo} disabled={busy || !dirty}>Kaydet</Button>}>
+          actions={editable && <Button icon={Save} onClick={saveInfo} disabled={busy || !dirty}>Bilgileri kaydet</Button>}>
           <div className="pj-form">
             <ProjectFields form={form} set={set} humans={humans} departments={departments} disabled={!editable} />
           </div>

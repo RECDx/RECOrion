@@ -230,7 +230,7 @@ Menü sayaçları: **Kullanıcı Yönetimi** yanında aktif kullanıcı sayısı
 | Kullanıcılar & Roller | Kullanıcı Ekleme | Yeni kullanıcı tanımlama. |
 | | Kullanıcı Düzenleme ve Silme | Departman, ünvan, rol, ek izin ve durum değiştirme, silme; kişinin günlük maliyetini görme. |
 | | Şirkete Özel Rol Tanımlama, Rol Düzenleme, Rol Silme | Kullanıcı Yönetimi ekranının altındaki **Şirkete özel roller** kartında rol oluşturma, düzenleme ve silme. |
-| AI Personel | AI Personel İşe Alma | İşe alım sihirbazı ve RECAi ile ünvan araştırması. |
+| AI Personel | AI Personel İşe Alma | İşe alım sihirbazı; işe alınan personel için sektör ve ünvan Deep Search araştırması (Kaynaklar sekmesi). |
 | | AI Personel Ayarları ve Bilgi Kaynakları | AI personelin bilgilerini ve rol promptunu düzenleme; doküman, web ve video kaynağı ekleme, onaylama. |
 | | AI Personeli İşten Çıkarma | İşten çıkarma, yeniden işe alma ve silme. |
 | | Ünvan Tanımlama | Ünvan ve rol promptu oluşturma, düzenleme, silme. |

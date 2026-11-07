@@ -50,11 +50,14 @@ class DecideIn(BaseModel):
     apply_corrections: bool = True
 
 
-def _export_out(e: RecslipExport) -> Dict[str, Any]:
+def _export_out(e: RecslipExport, odoo_url: Optional[str] = None) -> Dict[str, Any]:
+    # #658: dosya RECSlip'te (v2) kalır; Case adını, v2 kaydının bağlantısını ve (varsa) bilgisayardaki yolunu gösterir
+    link = f"{odoo_url.rstrip('/')}/odoo/recslip.export/{e.odoo_export_id}" if (odoo_url and e.odoo_export_id) else None
     return {"id": str(e.id), "period": e.period, "name": e.name, "software": e.software, "receipt_count": e.receipt_count,
             "total": float(e.total or 0), "not_exported": e.not_exported, "status": e.status, "attempts": e.attempts,
             "next_attempt_at": e.next_attempt_at, "last_error": e.last_error, "posted_at": e.posted_at,
-            "artifact_id": str(e.artifact_id) if e.artifact_id else None}
+            "artifact_id": str(e.artifact_id) if e.artifact_id else None, "odoo_export_id": e.odoo_export_id,
+            "odoo_link": link, "local_path": e.local_path}
 
 
 async def _case_out(db: AsyncSession, p: Project) -> Dict[str, Any]:
@@ -62,9 +65,11 @@ async def _case_out(db: AsyncSession, p: Project) -> Dict[str, Any]:
     period = (p.settings or {}).get("period")
     cal = rs.calendar_of(period, s) if period else {}
     exp = (await db.execute(select(RecslipExport).where(RecslipExport.project_id == p.id))).scalars().first()
+    conn = await db.get(IntegrationConnection, uuid.UUID(p.settings["connection_id"])) if (p.settings or {}).get("connection_id") else None
+    odoo_url = ((conn.config or {}).get("url") if conn else None)
     return {"project_id": str(p.id), "name": p.name, "status": p.status, "period": period, "settings": s,
             "state": (p.settings or {}).get("state") or {}, "calendar": cal, "counts": await rc.decision_counts(db, p),
-            "agreement": await rc.agreement(db, p), "export": _export_out(exp) if exp else None,
+            "agreement": await rc.agreement(db, p), "export": _export_out(exp, odoo_url) if exp else None,
             "connection_id": (p.settings or {}).get("connection_id"), "manager_actor_id": str(p.manager_actor_id)}
 
 
@@ -125,6 +130,25 @@ async def case_detail(project_id: uuid.UUID, user: CurrentUser = Depends(get_cur
         Actor.id.in_({r.approver_actor_id for r in rows if r.approver_actor_id} | {r.agent_actor_id for r in rows if r.agent_actor_id} or {uuid.uuid4()})))).scalars()}
     return {**await _case_out(db, p), "decisions": [rs.decision_out(r, actors.get(r.approver_actor_id), actors.get(r.agent_actor_id)) for r in rows],
             "can_edit": user.has("project:manage") or p.manager_actor_id == user.actor_id}
+
+
+class ExportPathIn(BaseModel):
+    local_path: str = Field("", max_length=500)
+
+
+@router.put("/projects/{project_id}/recslip/export-path")
+async def case_export_path(project_id: uuid.UUID, payload: ExportPathIn, user: CurrentUser = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db)):
+    """Muhasebecinin aktarım dosyasını bilgisayarına indirdiği yol (#658): dosya RECOrion'a alınmaz, yalnız yolu not edilir."""
+    p = await _case(db, user, project_id)
+    if not (user.has("project:manage") or p.manager_actor_id == user.actor_id):
+        raise forbidden("Aktarım dosyası yolunu Case yöneticisi yazar.")
+    exp = (await db.execute(select(RecslipExport).where(RecslipExport.project_id == p.id))).scalars().first()
+    if not exp or not exp.name:
+        raise HTTPException(status_code=409, detail="Bu dönemin aktarım dosyası henüz oluşmadı.")
+    exp.local_path = payload.local_path.strip() or None
+    await db.commit()
+    return await _case_out(db, p)
 
 
 @router.put("/projects/{project_id}/recslip")

@@ -268,7 +268,7 @@ async def _converse(db: AsyncSession, ctx: LLMContext, tenant_id: uuid.UUID, act
     messages = [{"role": "system", "content": system_prompt}]
     messages += [{"role": m.role, "content": m.content} for m in previous]
     messages.append({"role": "user", "content": content})
-    result = await llm_gateway.chat(ctx, messages, temperature=0.4, max_tokens=4096, timeout=120)
+    result = await llm_gateway.chat(ctx, messages, temperature=0.4, max_tokens=4096, timeout=120, fallback=True)
 
     now = datetime.utcnow()
     question = ChatMessage(tenant_id=tenant_id, sender_actor_id=actor_id, role="user", content=content,

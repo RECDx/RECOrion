@@ -224,6 +224,11 @@ async def export_period(db: AsyncSession, conn: IntegrationConnection, p: Projec
         return exp
     if exp.next_attempt_at and at < exp.next_attempt_at:
         return exp  # tekrar zamanı gelmedi
+    if exp.odoo_export_id:
+        # Dosya v2'de zaten oluşmuş (önceki denemede yalnız Case'e alma adımı kalmıştı): yeniden aktarım yapılmaz (#658)
+        exp.status, exp.last_error, exp.next_attempt_at = "CREATED", None, None
+        await db.commit()
+        return exp
     exp.attempts = (exp.attempts or 0) + 1
     try:
         cred = await _usable_cred(db, p.manager_actor_id, conn.id)
@@ -243,11 +248,8 @@ async def export_period(db: AsyncSession, conn: IntegrationConnection, p: Projec
         res = await rs._kw(ctx, "hr.expense", "rs_external_export", [ids])
         exp.odoo_export_id, exp.name, exp.software = res.get("export_id") or None, res.get("name"), res.get("software")
         exp.receipt_count, exp.total, exp.not_exported = res.get("receipt_count"), res.get("total"), len(res.get("not_exported_ids") or [])
-        if res.get("attachment_id"):
-            att = (await rs._kw(ctx, "ir.attachment", "read", [[res["attachment_id"]]], {"fields": ["datas", "name"]}) or [{}])[0]
-            data = base64.b64decode(att.get("datas") or b"")
-            art = await _store_artifact(db, task, att.get("name") or exp.name or f"RECSlip_{period}", data, p.manager_actor_id)
-            exp.artifact_id = art.id
+        # Kullanıcı kararı (07.11.2026, #658): aktarım dosyası RECOrion'a alınmaz; RECSlip'te (v2) kalır, Case dosyanın adını,
+        # v2 kaydını ve indirme bağlantısını tutar. Muhasebeci indirdiyse bilgisayardaki yolunu Case'e yazabilir (local_path).
         exp.status, exp.last_error, exp.next_attempt_at = "CREATED", None, None
     except (ToolError, rs.RecslipError) as exc:
         exp.last_error = str(exc)[:1000]

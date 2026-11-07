@@ -43,7 +43,7 @@ PERMISSIONS = [
     ("role:edit", "RBAC", "Rol Düzenleme", "Şirkete özel rollerin izinlerini değiştirme."),
     ("role:delete", "RBAC", "Rol Silme", "Şirkete özel rolleri silme."),
 
-    ("agent:hire", "AGENTS", "AI Personel İşe Alma", "AI Personel İşe Al sihirbazı ve RECAi ile ünvan araştırması."),
+    ("agent:hire", "AGENTS", "AI Personel İşe Alma", "AI Personel İşe Al sihirbazı; işe alınan personel için sektör ve ünvan Deep Search araştırması (Kaynaklar sekmesi)."),
     ("agent:configure", "AGENTS", "AI Personel Ayarları ve Bilgi Kaynakları",
      "AI personelin bilgilerini, rol promptunu düzenleme; bilgi dokümanı, web ve video kaynağı ekleme, onaylama."),
     ("agent:quarantine", "AGENTS", "AI Personeli İşten Çıkarma", "AI personeli işten çıkarma, yeniden işe alma ve silme."),

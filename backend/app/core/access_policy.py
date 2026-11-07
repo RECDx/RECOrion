@@ -211,6 +211,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/tenants/leads/{{lead_id}}/odoo-sync"): SUPER_ADMIN,
     ("GET", f"{P}/tenants/{{tenant_id}}/details"): TENANT("tenant:view"),
     ("PUT", f"{P}/tenants/{{tenant_id}}"): SUPER_ADMIN,
+    ("PUT", f"{P}/tenants/{{tenant_id}}/custom-titles"): SUPER_ADMIN,  # #636 şirkete özel ünvan istisnası
     ("DELETE", f"{P}/tenants/{{tenant_id}}"): SUPER_ADMIN,
     ("POST", f"{P}/tenants/{{tenant_id}}/toggle-status"): SUPER_ADMIN,
     ("PUT", f"{P}/tenants/{{tenant_id}}/admin-user"): SUPER_ADMIN,
@@ -416,6 +417,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{C}/recslip/run"): HANDLER("integration:manage"),
     ("GET", f"{P}/projects/{{project_id}}/recslip"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}/recslip"): HANDLER(),
+    ("PUT", f"{P}/projects/{{project_id}}/recslip/export-path"): HANDLER(),  # #658 aktarım dosyası yolu
     ("GET", f"{P}/me/recslip-decisions"): AUTH,
     ("POST", f"{P}/recslip-decisions/{{decision_id}}/decide"): HANDLER(),
     ("POST", f"{P}/system/integration-catalog"): SUPER_ADMIN,

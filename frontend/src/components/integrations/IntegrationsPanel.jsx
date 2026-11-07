@@ -115,7 +115,8 @@ export default function IntegrationsPanel({ tenantId, canManage = true, canMap =
         )}
       </Card>
 
-      {canManage && <CompanyRecdxApps tenantId={tenantId} onChanged={load} />}
+      {canManage && <CompanyRecdxApps tenantId={tenantId} onChanged={load}
+        reloadKey={(conns || []).map((c) => `${c.id}:${c.status}`).join(',')} />}
       <TransferAdmin tenantId={tenantId} />
       {canManage && <Card title="Araç çağrı kaydı" subtitle="Silinemez kayıt: kim, hangi araç, hangi argümanla, sonuç ve onay.">
         {calls.length === 0 ? <p className="pj-hint">Henüz araç çağrısı yok.</p> : (
