@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Actor, LLMCall, Project, ProjectCostItem, Task
+from app.db.models import Actor, JobTitle, LLMCall, Project, ProjectCostItem, Task, Tenant
 
 CATEGORIES = {"MATERYAL": "Materyal", "DANISMANLIK": "Danışmanlık", "EGITIM": "Eğitim", "LISANS": "Lisans / yazılım",
               "SEYAHAT": "Seyahat", "DONANIM": "Donanım", "DIGER": "Diğer"}
@@ -96,7 +96,17 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
             b["unpriced_calls"] += unpriced
             b["credits"] += _d(credits)
 
+    # #664: kredinin TL karşılığı (paket bazlı) ve insan eşdeğeri (ünvan referans maaşı × planlanan iş günü)
+    from app.services import human_equivalent as he
+
+    cfg = await he.settings(db)
+    tenant = await db.get(Tenant, project.tenant_id)
+    unit = await he.tenant_credit_unit(db, tenant) if tenant else None
+    jt_ids = {t.job_title_id or (actors[t.assignee_actor_id].job_title_id if t.assignee_actor_id in actors else None) for t in tasks}
+    titles = {j.id: j for j in (await db.execute(select(JobTitle).where(JobTitle.id.in_([i for i in jt_ids if i] or [project.id])))).scalars()}
     rows, totals = [], {"labor": ZERO, "labor_planned": ZERO, "token": ZERO, "unpriced_calls": 0, "credits": ZERO}
+    he_tot = {"human_days": ZERO, "human_cost": ZERO}
+    starts, ends = [], []
     for t in tasks:
         assignee = actors.get(t.assignee_actor_id)
         lab = labor(t, assignee)
@@ -108,10 +118,21 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
         totals["token"] += tok["cost"]
         totals["unpriced_calls"] += tok["unpriced_calls"]
         totals["credits"] += tok["credits"]
+        human = he.human_for(titles.get(t.job_title_id or (assignee.job_title_id if assignee else None)), float(t.estimated_effort or 1), cfg)
+        if t.status != "CANCELLED":
+            he_tot["human_days"] += Decimal(str(human["days"]))
+            he_tot["human_cost"] += Decimal(str(human["cost"]))
+        end = t.completed_at or t.submitted_at
+        if t.started_at:
+            starts.append(t.started_at)
+            ends.append(end or datetime.now(timezone.utc))
         rows.append({"task_id": str(t.id), "title": t.title, "status": t.status, "order_index": t.order_index,
                      "assignee": assignee.display_name if assignee else None, "assignee_type": assignee.actor_type if assignee else None,
                      "labor": {**lab, "cost": float(lab["cost"])},
-                     "tokens": {**tok, "cost": float(tok["cost"]), "credits": float(tok["credits"])}})
+                     "tokens": {**tok, "cost": float(tok["cost"]), "credits": float(tok["credits"])},
+                     "ai_credit_try": float((tok["credits"] * unit).quantize(Decimal("0.01"))) if unit is not None else None,
+                     "ai_hours": round((end - t.started_at).total_seconds() / 3600, 2) if (t.started_at and end) else None,
+                     "human": human})
     general = by_task.get(None)
     if general:
         totals["token"] += general["cost"]
@@ -141,11 +162,30 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
         "budget": {"amount": float(project.budget_try) if project.budget_try is not None else None, "note": project.budget_note,
                    "suggested": planned["total"]},
         "totals": {"labor": float(totals["labor"]), "labor_planned": float(totals["labor_planned"]), "token": float(totals["token"]),
-                   "other": float(other), "actual": float(totals["labor"] + totals["token"] + other),
+                   # #664: müşteri gözüyle AI maliyeti kredi × paket kredi birim fiyatı (LLM TL fiyatı RECDx'in iç maliyetidir)
+                   "other": float(other), "actual": float(totals["labor"] + (_ai_try(totals["credits"], unit) if unit is not None else totals["token"]) + other),
+                   "ai_cost_basis": "KREDI" if unit is not None else "LLM_FIYATI",
                    "unpriced_calls": totals["unpriced_calls"], "credits": float(totals["credits"]),
                    "budget_variance": (float(project.budget_try - (totals["labor"] + totals["token"] + other))
-                                       if project.budget_try is not None else None)},
+                                       if project.budget_try is not None else None),
+                   **_comparison(totals["credits"], unit, he_tot, starts, ends, cfg)},
     }
+
+
+def _ai_try(credits: Decimal, unit: Decimal) -> Decimal:
+    return (credits * unit).quantize(Decimal("0.01"))
+
+
+def _comparison(credits: Decimal, unit: Optional[Decimal], he_tot: Dict[str, Decimal], starts, ends, cfg) -> Dict[str, Any]:
+    """#664: AI ile insan karşılaştırması (müşteri gözü). AI maliyeti = kredi × paket kredi birim fiyatı."""
+    ai_try = (credits * unit).quantize(Decimal("0.01")) if unit is not None else None
+    cal_days = round((max(ends) - min(starts)).total_seconds() / 86400, 2) if starts else None
+    return {"credit_unit_try": float(unit) if unit is not None else None, "ai_credit_try": float(ai_try) if ai_try is not None else None,
+            "human_days": float(he_tot["human_days"]), "human_cost": float(he_tot["human_cost"].quantize(Decimal("0.01"))),
+            "ai_calendar_days": cal_days,
+            "saving": float((he_tot["human_cost"] - ai_try).quantize(Decimal("0.01"))) if ai_try is not None else None,
+            "cost_basis_note": (f"İnsan eşdeğeri: ünvan referans aylık brüt maaşı × {cfg.get('employer_factor')} ÷ {cfg.get('work_days_month')} "
+                                f"iş günü × planlanan gün. AI: kredi × paket kredi birim fiyatı.")}
 
 
 def uuid_of(v):

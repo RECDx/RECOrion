@@ -83,6 +83,7 @@ import ModelRouterPanel from './ai/ModelRouterPanel';
 import RecaiTiersAdmin from './recai/RecaiTiersAdmin';
 import PlanRecaiPicker from './recai/PlanRecaiPicker';
 import TenantCustomTitles from './company/TenantCustomTitles';
+import CostSettingsCard from './recai/CostSettingsCard';
 import { PERMISSION_MODULES, moduleName } from '../permissions';
 
 const TAB_SLUG_MAP = {
@@ -418,6 +419,8 @@ export default function SuperAdminConsole({
     allowed_models: [],
     recai_tiers: ['MERGEN'],
     can_create_custom_titles: false,
+    credit_unit_price_try: '',
+    topup_credit_price_try: '',
     features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, vision_enabled: false, transcription_enabled: false, max_documents_per_agent: 20 },
     odoo_product_id: '',
     is_active: true
@@ -1616,6 +1619,8 @@ export default function SuperAdminConsole({
         allowed_models: plan.allowed_models || [],
         recai_tiers: plan.recai_tiers || ['MERGEN'],
         can_create_custom_titles: !!plan.can_create_custom_titles,
+        credit_unit_price_try: plan.credit_unit_price_try ?? '',  // #664: boş = otomatik (ücret ÷ kredi)
+        topup_credit_price_try: plan.topup_credit_price_try ?? '',
         features: { ...{ can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, vision_enabled: false, transcription_enabled: false, max_documents_per_agent: 20 }, ...(plan.features || {}) },
         odoo_product_id: plan.odoo_product_id ?? '',
         recdx_apps: plan.recdx_apps || {},
@@ -1637,6 +1642,8 @@ export default function SuperAdminConsole({
         allowed_models: [],
         recai_tiers: ['MERGEN', 'HIZLI'],
         can_create_custom_titles: false,
+        credit_unit_price_try: '',
+        topup_credit_price_try: '',
         features: { can_change_llm: false, can_edit_role_prompt: false, can_upload_title_documents: false, ocr_enabled: false, vision_enabled: false, transcription_enabled: false, max_documents_per_agent: 20 },
         odoo_product_id: '',
         recdx_apps: {},
@@ -1646,16 +1653,21 @@ export default function SuperAdminConsole({
     setPlanModalOpen(true);
   };
 
+  // #664: boş fiyat alanları null gider (kredi birimi otomatik hesaplanır)
+  const optNum = (v) => (v === '' || v == null ? null : Number(v));
+  const planPayload = (f) => ({ ...f, odoo_product_id: optNum(f.odoo_product_id), credit_unit_price_try: optNum(f.credit_unit_price_try),
+    topup_credit_price_try: optNum(f.topup_credit_price_try) });
+
   const handleSavePlan = async (e) => {
     e.preventDefault();
     if (!planForm.code.trim() || !planForm.name.trim()) return;
     try {
       setProcessingId('save-plan');
       if (editingPlan) {
-        await api.updatePlan(editingPlan.id, { ...planForm, odoo_product_id: planForm.odoo_product_id === '' ? null : Number(planForm.odoo_product_id) });
+        await api.updatePlan(editingPlan.id, planPayload(planForm));
         setActionFeedback({ type: 'success', text: `✓ '${planForm.name}' paketi güncellendi.` });
       } else {
-        await api.createPlan({ ...planForm, odoo_product_id: planForm.odoo_product_id === '' ? null : Number(planForm.odoo_product_id) });
+        await api.createPlan(planPayload(planForm));
         setActionFeedback({ type: 'success', text: `✓ '${planForm.name}' paketi oluşturuldu.` });
       }
       setPlanModalOpen(false);
@@ -4470,6 +4482,11 @@ export default function SuperAdminConsole({
                             <b>{p.monthly_credits}</b>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--nt-94a3b8)' }}>Kredi birimi:</span>
+                            <b>{(() => { const u = p.effective_credit_unit_try ?? p.credit_unit_price_try ?? (p.monthly_credits ? p.monthly_price / p.monthly_credits : null);
+                              return u == null ? '—' : `₺${Number(u).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`; })()}</b>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span style={{ color: 'var(--nt-94a3b8)' }}>Özel AI Ünvan Tanımlama:</span>
                             <b style={{ color: p.can_create_custom_titles ? 'var(--ac-34d399)' : 'var(--nt-64748b)' }}>
                               {p.can_create_custom_titles ? 'Evet' : 'Hayır'}
@@ -4570,6 +4587,7 @@ export default function SuperAdminConsole({
                   </table>
                 </div>
               )}
+              <div style={{ marginTop: 20 }}><CostSettingsCard /></div>
             </div>
           )}
 
@@ -6876,6 +6894,24 @@ export default function SuperAdminConsole({
                     onChange={(e) => setPlanForm({ ...planForm, monthly_credits: Number(e.target.value) })}
                     className="super-admin-input"
                   />
+                </div>
+              </div>
+
+              {/* #664: kredinin TL karşılığı (müşteri raporlarında AI maliyeti) */}
+              <div className="ui-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label htmlFor="plan-credit-unit" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>Kredi birim fiyatı (TL)</label>
+                  <input id="plan-credit-unit" type="number" min="0" step="0.0001" className="super-admin-input"
+                    value={planForm.credit_unit_price_try}
+                    placeholder={planForm.monthly_credits > 0 ? `Otomatik: ${(planForm.monthly_price / planForm.monthly_credits).toLocaleString('tr-TR', { maximumFractionDigits: 4 })}` : 'Otomatik'}
+                    onChange={(e) => setPlanForm({ ...planForm, credit_unit_price_try: e.target.value })} />
+                  <small style={{ fontSize: '0.68rem', opacity: 0.8 }}>Boş bırakılırsa aylık ücret ÷ aylık kredi.</small>
+                </div>
+                <div>
+                  <label htmlFor="plan-topup-price" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>Ek kredi fiyatı (TL/kredi)</label>
+                  <input id="plan-topup-price" type="number" min="0" step="0.0001" className="super-admin-input" placeholder="Tanımsız"
+                    value={planForm.topup_credit_price_try}
+                    onChange={(e) => setPlanForm({ ...planForm, topup_credit_price_try: e.target.value })} />
                 </div>
               </div>
 

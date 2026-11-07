@@ -152,6 +152,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/system/roles/{{role_id}}"): SUPER_ADMIN,
     ("DELETE", f"{P}/system/roles/{{role_id}}"): SUPER_ADMIN,
     ("GET", f"{P}/system/settings"): AUTH,
+    ("GET", f"{P}/system/cost-settings"): SUPER_ADMIN,  # #664 insan eşdeğeri referansları
+    ("PUT", f"{P}/system/cost-settings"): SUPER_ADMIN,
     ("GET", f"{P}/system/settings/default-manifesto-model"): AUTH,
     ("POST", f"{P}/system/settings/default-manifesto-model"): SUPER_ADMIN,
     ("GET", f"{P}/system/settings/models"): SUPER_ADMIN,

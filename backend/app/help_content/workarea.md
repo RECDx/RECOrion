@@ -1037,6 +1037,12 @@ Aktarım kartı İş Akışı'ndaki pencerede, Kapanış sekmesinde ve Onayları
 **Ekranın bölümleri:**
 
 1. **İstatistikler:** **Gerçekleşen**, **Bütçe**, **Fark** (eksi ise kırmızı), **Plan (öneri)**.
+   RECAi kullanımının TL karşılığı **harcanan kredi × paketinizin kredi birim fiyatı** ile hesaplanır (ör. PRO paketinde 39.900 TL ÷ 25.000 kredi ≈ 1,60 TL/kredi).
+3. **AI ile insan karşılaştırması:** aynı işi insan personel yapsaydı tahmini süre ve maliyet ile AI'ın gerçek süresi ve maliyeti yan yana:
+   **İnsanla tahmini süre** (planlanan iş günleri), **İnsan eşdeğeri maliyet**, **AI maliyeti** (kredi × birim fiyat), **Fark / tasarruf** ve adım tablosu
+   (Adım · Ünvan · İnsan gün/TL · AI süre/kredi/TL). İnsan eşdeğeri = adımı yapacak ünvanın referans aylık brüt maaşı × işveren maliyet katsayısı (1,25)
+   ÷ aylık iş günü (22) × planlanan gün. Referans maaşlar RECDx tarafından 2026 Türkiye maaş verilerine göre kıdem ve meslek ailesine
+   (Yazılım/BT, Genel) göre belirlenir; ünvanı atanmamış adımda "genel varsayılan" kullanılır. Bu bir tahmindir, kişisel maaş bilgisi içermez.
 2. **Uyarılar:** Ör. "n LLM çağrısının TL fiyatı tanımlı değil; token maliyeti bu çağrılar için 0 sayılıyor…", "Plan önerisi eksik olabilir: … insan personelin günlük maliyeti girilmemiş" veya "… AI adımının modeline fiyat tanımlı değil".
 3. **Bütçe** ("TL, KDV hariç. Plan önerisi: planlanan personel maliyeti + planlanan token maliyeti.").
 4. **Kategori dağılımı** (diğer maliyet kalemleri).

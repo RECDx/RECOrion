@@ -10,6 +10,49 @@ const BASIS = { ACTUAL: 'Gerçekleşen', RUNNING: 'Sürüyor', PLANNED: 'Plan (t
 export const tl = (n) => (n == null ? '—' : `${Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`);
 const tok = (n) => Number(n || 0).toLocaleString('tr-TR');
 
+const num = (n, d = 1) => (n == null ? '—' : Number(n).toLocaleString('tr-TR', { maximumFractionDigits: d }));
+const SENIORITY = { JUNIOR: 'Junior', MID: 'Orta', SENIOR: 'Kıdemli', LEAD: 'Lider', MANAGER: 'Müdür' };
+const aiTime = (h) => (h == null ? '—' : h < 24 ? `${num(h)} sa` : `${num(h / 24)} gün`);
+
+/** AI ile insan karşılaştırması (#664): insan eşdeğeri (ünvan referans maaşı) ve AI'ın gerçek süresi/kredi maliyeti. */
+export function HumanComparison({ c }) {
+  const t = c?.totals || {};
+  if (t.human_cost == null && t.ai_credit_try == null) return null;
+  return (
+    <Card title="AI ile insan karşılaştırması" subtitle="Aynı işi insan personel yapsaydı tahmini süre ve maliyet; AI'ın gerçek süresi ve kredi maliyetiyle.">
+      <div className="pj-stats">
+        <div className="pj-stat"><span>İnsanla tahmini süre</span><strong>{num(t.human_days)} iş günü</strong></div>
+        <div className="pj-stat"><span>İnsan eşdeğeri maliyet</span><strong>{tl(t.human_cost)}</strong></div>
+        <div className="pj-stat"><span>AI maliyeti</span><strong>{tl(t.ai_credit_try)}</strong>
+          <small className="pj-hint">{num(t.credits, 2)} kredi × {tl(t.credit_unit_try)}</small></div>
+        <div className="pj-stat"><span>Fark / tasarruf</span>
+          <strong className={t.saving == null ? undefined : t.saving < 0 ? 'ui-text-danger' : 'ui-text-success'}>{tl(t.saving)}</strong>
+          {t.ai_calendar_days != null && <small className="pj-hint">AI gerçek süre: {num(t.ai_calendar_days)} gün</small>}</div>
+      </div>
+      <div className="ui-table-scroll" style={{ marginTop: 10 }}>
+        <table className="ui-table" aria-label="AI ile insan karşılaştırması">
+          <thead><tr><th>Adım</th><th>Ünvan</th><th>İnsan (gün · TL)</th><th>AI (süre · kredi · TL)</th></tr></thead>
+          <tbody>
+            {(c.tasks || []).map((x) => (
+              <tr key={x.task_id}>
+                <td data-label="Adım">{x.order_index ? `${x.order_index}. ` : ''}{x.title}</td>
+                <td data-label="Ünvan">{x.human?.job_title || '—'}{x.human?.seniority ? <small className="pj-hint"> · {SENIORITY[x.human.seniority] || x.human.seniority}</small> : ''}
+                  {x.human?.basis === 'VARSAYILAN' && <small className="pj-hint"> (ünvan atanmamış, genel varsayılan)</small>}</td>
+                <td data-label="İnsan">{num(x.human?.days)} gün · {tl(x.human?.cost)}</td>
+                <td data-label="AI">{aiTime(x.ai_hours)} · {num(x.tokens?.credits, 2)} kredi · {tl(x.ai_credit_try)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="pj-hint" style={{ marginTop: 8 }}>
+        İnsan eşdeğeri: ünvanın referans aylık brüt maaşı × işveren maliyet katsayısı ÷ aylık iş günü × planlanan iş günü.
+        AI maliyeti: harcanan kredi × paketinizin kredi birim fiyatı.
+      </p>
+    </Card>
+  );
+}
+
 /** Proje maliyeti (ADIM 7.5.4): bütçe ve gerçekleşen, adım/kalem/LLM kırılımı, kalem yönetimi, Excel. TL, KDV hariç. */
 export default function CostTab({ project, onSummary }) {
   const [c, setC] = useState(null);
@@ -52,13 +95,15 @@ export default function CostTab({ project, onSummary }) {
         <div className="pj-stat"><span>Fark</span><strong className={variance == null ? undefined : variance < 0 ? 'ui-text-danger' : 'ui-text-success'}>{tl(variance)}</strong></div>
         <div className="pj-stat"><span>Plan (öneri)</span><strong>{tl(c.budget.suggested)}</strong></div>
       </div>
-      {t.unpriced_calls > 0 && (
+      {t.unpriced_calls > 0 && t.credit_unit_try == null && (
         <div className="pj-note medium">{t.unpriced_calls} LLM çağrısının TL fiyatı tanımlı değil; token maliyeti bu çağrılar için 0 sayılıyor. Fiyatlar RECDx tarafından LLM TL Fiyatları ekranında girilir.</div>
       )}
-      {(c.planned.missing_daily_cost > 0 || c.planned.missing_llm_price > 0) && (
+      {(c.planned.missing_daily_cost > 0 || (c.planned.missing_llm_price > 0 && t.credit_unit_try == null)) && (
         <div className="pj-note info">Plan önerisi eksik olabilir: {c.planned.missing_daily_cost > 0 ? `${c.planned.missing_daily_cost} insan personelin günlük maliyeti girilmemiş` : ''}
           {c.planned.missing_daily_cost > 0 && c.planned.missing_llm_price > 0 ? '; ' : ''}{c.planned.missing_llm_price > 0 ? `${c.planned.missing_llm_price} AI adımının modeline fiyat tanımlı değil` : ''}.</div>
       )}
+
+      <HumanComparison c={c} />
 
       <div className="pj-split">
         <Card title="Bütçe" subtitle="TL, KDV hariç. Plan önerisi: planlanan personel maliyeti + planlanan token maliyeti.">

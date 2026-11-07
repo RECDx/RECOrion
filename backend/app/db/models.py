@@ -120,6 +120,8 @@ class Plan(Base):
     allowed_models = Column(JSONB, default=list)
     features = Column(JSONB, default=dict)
     can_create_custom_titles = Column(Boolean, default=False)
+    credit_unit_price_try = Column(Numeric(10, 4))  # #664: kredi birim fiyatı; boş = aylık ücret ÷ aylık kredi
+    topup_credit_price_try = Column(Numeric(10, 4))  # #664: ek kredi satış fiyatı (TL/kredi)
     # Odoo ürün eşleşmesi (product.product id); satış siparişi bu ürün ve monthly_price ile açılır
     odoo_product_id = Column(Integer, nullable=True)
     # ADIM 13.1: RECDx uygulama teklifi (RECQmind, RECSlip): yok / indirimli / dahil + Odoo ürünü
@@ -173,6 +175,7 @@ class JobTitle(Base):
     sector_code = Column(String(32))
     profession_codes = Column(JSONB, default=list)
     seniority = Column(String(16))  # JUNIOR, MID, SENIOR, LEAD, MANAGER
+    reference_salary_try = Column(Numeric(12, 2))  # #664: ünvana özel referans aylık brüt maaş (boş = kıdem/aile bandı)
     responsibilities = Column(JSONB, default=list)
     kpis = Column(JSONB, default=list)
     source = Column(String(16))  # CATALOG, ADMIN, COMPANY

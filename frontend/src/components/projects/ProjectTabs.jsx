@@ -282,6 +282,12 @@ export function CloseTab({ project, currentUser, onAction, busy }) {
           </div>
           <p className="pj-hint" style={{ marginTop: 8 }}>Personel {fmtTl(cost.totals.labor)} · Token (LLM) {fmtTl(cost.totals.token)} · Diğer {fmtTl(cost.totals.other)}
             {cost.totals.unpriced_calls ? ` · ${cost.totals.unpriced_calls} çağrının TL fiyatı tanımsız` : ''}</p>
+          {cost.totals.human_cost != null && (
+            <ul className="pj-check" style={{ marginTop: 8 }} aria-label="AI ile insan karşılaştırması özeti">
+              <li>İnsanla tahmini: {Number(cost.totals.human_days || 0).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} iş günü / {fmtTl(cost.totals.human_cost)}</li>
+              <li>AI ile gerçekleşen: {cost.totals.ai_calendar_days == null ? '—' : Number(cost.totals.ai_calendar_days).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} gün / {fmtTl(cost.totals.ai_credit_try)} (fark {fmtTl(cost.totals.saving)})</li>
+            </ul>
+          )}
         </Card>
       )}
       <Card title="Kurum Hafızasına aktar" subtitle="Seçilen onaylı proje ekleri şirketin tüm AI personelinin bilgisine eklenir." actions={<Library size={18} />}>

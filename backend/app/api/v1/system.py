@@ -335,6 +335,19 @@ async def delete_system_role(role_id: uuid.UUID, db: AsyncSession = Depends(get_
     return {"success": True, "message": f"'{role.name}' yetki rolü başarıyla silindi."}
 
 
+@router.get("/cost-settings")
+async def get_cost_settings(db: AsyncSession = Depends(get_db)):
+    """#664: insan eşdeğeri referansları (maaş bantları, işveren katsayısı, aylık iş günü) ve RECDx gerçek kredi maliyeti."""
+    from app.services import human_equivalent as he
+    return await he.settings(db)
+
+
+@router.put("/cost-settings")
+async def put_cost_settings(payload: dict, db: AsyncSession = Depends(get_db)):
+    from app.services import human_equivalent as he
+    return await he.save(db, payload)
+
+
 class SettingUpdatePayload(BaseModel):
     model_code: str
 

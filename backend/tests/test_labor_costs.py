@@ -61,7 +61,9 @@ def test_labor_and_token_costs(client, db, world, ai):
         dep = rows["Bağımlı adım"]
         assert dep["labor"]["basis"] == "RUNNING" and dep["labor"]["cost"] == 100.0
         tokens = sum(t["tokens"]["cost"] for t in c["tasks"])
-        assert c["totals"]["labor"] == 2700.0 and abs(c["totals"]["actual"] - (2700 + tokens)) < 1e-6
+        # #664: müşteri gözüyle AI maliyeti = kredi × paket kredi birim fiyatı (paketi olan şirkette)
+        ai = c["totals"]["ai_credit_try"] if c["totals"]["credit_unit_try"] is not None else tokens
+        assert c["totals"]["labor"] == 2700.0 and abs(c["totals"]["actual"] - (2700 + ai)) < 0.011
         assert c["by_model"] and c["by_model"][0]["calls"] >= 1 and c["currency"] == "TRY" and c["vat_included"] is False
         client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
 

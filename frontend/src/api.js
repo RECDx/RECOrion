@@ -416,6 +416,9 @@ export const api = {
   // Şirketler & Detay Yönetimi
   getTenantDetails: (tenantId) => request(`/tenants/${tenantId}/details`),
   updateTenant: (tenantId, data) => request(`/tenants/${tenantId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  // #664: insan eşdeğeri referans maaşları ve maliyet ayarları (süper admin)
+  getCostSettings: () => request('/system/cost-settings'),
+  saveCostSettings: (data) => request('/system/cost-settings', { method: 'PUT', body: JSON.stringify(data) }),
   setTenantCustomTitles: (tenantId, mode) => request(`/tenants/${tenantId}/custom-titles`, { method: 'PUT', body: JSON.stringify({ mode }) }),
   uploadTenantLogo: (tenantId, file) => { const fd = new FormData(); fd.append('file', file); return request(`/company/${tenantId}/logo`, { method: 'PUT', body: fd }); },
   deleteTenantLogo: (tenantId) => request(`/company/${tenantId}/logo`, { method: 'DELETE' }),

@@ -36,6 +36,9 @@ class PlanResponse(BaseModel):
     recdx_apps: Dict[str, Any] = {}  # ADIM 13.1: RECQmind/RECSlip teklifi (yok/indirimli/dahil + Odoo ürünü)
     recai_tiers: List[str] = []  # #349: paketteki seçilebilir RECAi adları
     can_create_custom_titles: bool = False  # #654 (F41): eksikti; Merkez her zaman "Hayır" gösteriyordu
+    credit_unit_price_try: Optional[float] = None  # #664: boş = aylık ücret ÷ aylık kredi
+    topup_credit_price_try: Optional[float] = None
+    effective_credit_unit_try: Optional[float] = None  # hesaplanmış kredi birim fiyatı
     is_active: bool
 
     class Config:
@@ -56,6 +59,8 @@ class PlanCreate(BaseModel):
     allowed_models: List[str] = ["deepseek-v3"]
     features: Dict[str, Any] = {}
     can_create_custom_titles: bool = False
+    credit_unit_price_try: Optional[float] = Field(None, ge=0, le=1000)  # #664
+    topup_credit_price_try: Optional[float] = Field(None, ge=0, le=1000)
     odoo_product_id: Optional[int] = None
     recdx_apps: Optional[Dict[str, Any]] = None
     recai_tiers: Optional[List[str]] = None  # #349: MERGEN, HIZLI, DERIN
@@ -74,6 +79,8 @@ class PlanUpdate(BaseModel):
     allowed_models: List[str] = []
     features: Dict[str, Any] = {}
     can_create_custom_titles: bool = False
+    credit_unit_price_try: Optional[float] = Field(None, ge=0, le=1000)  # #664
+    topup_credit_price_try: Optional[float] = Field(None, ge=0, le=1000)
     odoo_product_id: Optional[int] = None
     recdx_apps: Optional[Dict[str, Any]] = None
     recai_tiers: Optional[List[str]] = None  # #349: MERGEN, HIZLI, DERIN
@@ -186,9 +193,12 @@ async def list_plans(active_only: bool = False, db: AsyncSession = Depends(get_d
         stmt = stmt.where(Plan.is_active == True)
     stmt = stmt.order_by(Plan.monthly_price.asc())
     plans = (await db.execute(stmt)).scalars().all()
+    from app.services import human_equivalent as he
+    out = [{**PlanResponse.model_validate(p).model_dump(), "effective_credit_unit_try": float(he.credit_unit(p)) if he.credit_unit(p) else None}
+           for p in plans]
     if user and user.is_super_admin:
-        return plans
-    return [{**PlanResponse.model_validate(p).model_dump(), "allowed_models": []} for p in plans]
+        return out
+    return [{**o, "allowed_models": []} for o in out]
 
 @router.post("/plans", response_model=PlanResponse)
 async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
@@ -215,6 +225,7 @@ async def create_plan(payload: PlanCreate, db: AsyncSession = Depends(get_db)):
         allowed_models=payload.allowed_models,
         features=payload.features,
         can_create_custom_titles=payload.can_create_custom_titles,
+        credit_unit_price_try=payload.credit_unit_price_try, topup_credit_price_try=payload.topup_credit_price_try,
         odoo_product_id=payload.odoo_product_id,
         recdx_apps=await _clean_app_offer(payload.recdx_apps),
         recai_tiers=_clean_tiers(payload.recai_tiers) or ["MERGEN"],
@@ -311,6 +322,7 @@ async def update_plan(plan_id: uuid.UUID, payload: PlanUpdate, db: AsyncSession 
     # Formda gönderilmeyen paket izinleri silinmesin diye birleştir
     plan.features = {**(plan.features or {}), **(payload.features or {})}
     plan.can_create_custom_titles = payload.can_create_custom_titles
+    plan.credit_unit_price_try, plan.topup_credit_price_try = payload.credit_unit_price_try, payload.topup_credit_price_try
     if payload.odoo_product_id != plan.odoo_product_id:
         await _validate_odoo_product(payload.odoo_product_id)
     plan.odoo_product_id = payload.odoo_product_id
