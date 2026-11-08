@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     # Düşünme modu kapatılan modeller (virgülle; chat_template_kwargs.enable_thinking=false). EVREN'de tüm sohbet
     # modelleri varsayılan olarak düşünür; düşünen modellerde max_tokens en az LLM_THINKING_MIN_TOKENS tutulur.
     EVREN_NO_THINKING_MODELS: str = "qwen3.8-flash-next"
+    # F85 (08.11.2026): bu amaçlarda düşünme her modelde açık kalır. Varsayılan boş: iş adımında düşünmek EVREN hızına
+    # sığmadı (qwen 4096 token'ı düşünmeye harcadı). Tekrar döngüsü bunun yerine tekrar cezasıyla önlenir.
+    EVREN_THINKING_PURPOSES: str = ""
+    # Düşünmesi kapalı modelin uzun kodda aynı satırları tekrarlaması (F85) için: bu amaçlarda repetition_penalty gönderilir.
+    EVREN_REPETITION_PENALTY: float = 1.05
+    EVREN_REPETITION_PURPOSES: str = "AGENT_CHAT"
     LLM_THINKING_MIN_TOKENS: int = 4096
     # 429 + Retry-After: en çok bu kadar saniye beklenip bir kez yeniden denenir; daha uzunsa hata döner.
     EVREN_RETRY_AFTER_MAX_SECONDS: int = 60

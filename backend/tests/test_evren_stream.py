@@ -71,6 +71,30 @@ def test_thinking_disabled_for_listed_model_and_budget_kept(client):
     assert client.sent[0]["chat_template_kwargs"] == {"enable_thinking": False} and client.sent[0]["max_tokens"] == 300
 
 
+def test_thinking_kept_for_agent_work_purpose(client, monkeypatch):
+    """F85: düşünmesi kapalı model AI personelin iş adımında (AGENT_CHAT) düşünerek çalışır; diğer amaçlarda kapalı."""
+    monkeypatch.setattr(settings, "EVREN_THINKING_PURPOSES", "AGENT_CHAT")
+    client.use(lambda r: httpx.Response(200, content=_sse(_delta(content="kod"), _finish())))
+    _run(client.chat("qwen3.8-flash-next", [{"role": "user", "content": "x"}], max_tokens=4000, purpose="AGENT_CHAT"))
+    _run(client.chat("qwen3.8-flash-next", [{"role": "user", "content": "x"}], max_tokens=4000, purpose="BRAIN"))
+    work, brain = client.sent
+    assert "chat_template_kwargs" not in work and work["max_tokens"] == 4096
+    assert brain["chat_template_kwargs"] == {"enable_thinking": False} and brain["max_tokens"] == 4000
+
+
+def test_repetition_penalty_only_for_agent_work(client, monkeypatch):
+    """F85: iş adımlarında (AGENT_CHAT) tekrar cezası gönderilir, düşünme kapalı kalır; diğer amaçlarda gönderilmez."""
+    monkeypatch.setattr(settings, "EVREN_THINKING_PURPOSES", "")
+    monkeypatch.setattr(settings, "EVREN_REPETITION_PENALTY", 1.05)
+    monkeypatch.setattr(settings, "EVREN_REPETITION_PURPOSES", "AGENT_CHAT")
+    client.use(lambda r: httpx.Response(200, content=_sse(_delta(content="kod"), _finish())))
+    _run(client.chat("qwen3.8-flash-next", [{"role": "user", "content": "x"}], max_tokens=4000, purpose="AGENT_CHAT"))
+    _run(client.chat("qwen3.8-flash-next", [{"role": "user", "content": "x"}], max_tokens=4000, purpose="BRAIN"))
+    work, brain = client.sent
+    assert work["repetition_penalty"] == 1.05 and work["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "repetition_penalty" not in brain
+
+
 def test_reasoning_never_becomes_answer(client):
     """F60: bütçe düşünmede biterse düşünme metni yanıt sayılmaz (gateway boş yanıtı yedek modele devreder)."""
     client.use(lambda r: httpx.Response(200, content=_sse(_delta(reasoning="Let me think..."), _finish("length"))))

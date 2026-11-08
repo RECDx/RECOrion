@@ -80,8 +80,12 @@ def retry_after_seconds(status_code: int, headers) -> Optional[float]:
     return wait if 0 <= wait <= settings.EVREN_RETRY_AFTER_MAX_SECONDS else None
 
 
-def thinking_enabled(model_code: str) -> bool:
-    """EVREN'de sohbet modelleri varsayılan olarak düşünür; EVREN_NO_THINKING_MODELS'takilerde kapatılır (#666)."""
+def thinking_enabled(model_code: str, purpose: Optional[str] = None) -> bool:
+    """EVREN'de sohbet modelleri varsayılan olarak düşünür; EVREN_NO_THINKING_MODELS'takilerde kapatılır (#666).
+    EVREN_THINKING_PURPOSES'taki amaçlarda (iş adımları) her modelde açık kalır (F85)."""
+    keep = {p.strip().upper() for p in (settings.EVREN_THINKING_PURPOSES or "").split(",") if p.strip()}
+    if purpose and purpose.upper() in keep:
+        return True
     off = {m.strip().lower() for m in (settings.EVREN_NO_THINKING_MODELS or "").split(",") if m.strip()}
     return (model_code or "").lower() not in off
 
@@ -201,16 +205,20 @@ class EvrenClient:
 
     async def chat(self, model_code: str, messages: List[Dict[str, str]], temperature: float = 0.7,
                    max_tokens: int = 4096, timeout: Optional[float] = None,
-                   tools: Optional[List[Dict[str, Any]]] = None, first_token_timeout: Optional[float] = None) -> ChatResult:
+                   tools: Optional[List[Dict[str, Any]]] = None, first_token_timeout: Optional[float] = None,
+                   purpose: Optional[str] = None) -> ChatResult:
         """Akışlı çağrı (#666, EVREN önerisi): ilk token first_token_timeout içinde gelmezse model meşgul sayılır ve
         EvrenError fırlatılır (gateway yedek modele geçer); timeout tüm çağrının üst sınırıdır."""
-        thinking = thinking_enabled(model_code)
+        thinking = thinking_enabled(model_code, purpose)
         if thinking:  # düşünme de bütçeden yer; EVREN: en az 2048, önerilen 4096
             max_tokens = max(max_tokens, settings.LLM_THINKING_MIN_TOKENS)
         body = {"model": model_code, "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
                 "stream": True, "stream_options": {"include_usage": True}}
         if not thinking:
             body["chat_template_kwargs"] = {"enable_thinking": False}
+        penalized = {p.strip().upper() for p in (settings.EVREN_REPETITION_PURPOSES or "").split(",") if p.strip()}
+        if purpose and purpose.upper() in penalized and settings.EVREN_REPETITION_PENALTY > 1:
+            body["repetition_penalty"] = settings.EVREN_REPETITION_PENALTY  # F85: uzun kodda tekrar döngüsü
         if tools:  # ADIM 10.2: EVREN OpenAI uyumlu function calling destekler (23.10.2026 denendi)
             body.update(tools=tools, tool_choice="auto")
         total = float(timeout or settings.LLM_TIMEOUT_SECONDS)

@@ -73,6 +73,25 @@ def test_files_from_output_rejects_unsafe_paths():
         assert safe(bad) is None, bad
 
 
+def test_files_from_output_accepts_path_in_first_comment_line():
+    """Senaryo F81: model yolu bloğun ilk satırına yorum olarak yazıyor; yorum satırı dosyaya girmez."""
+    class T:
+        order_index, title = 1, "Analiz"
+    fence = "`" * 3
+    out = "\n".join([
+        "Şema:", f"{fence}sql", "-- src/db/schema.sql", "CREATE TABLE hasta (id INTEGER);", fence,
+        f"{fence}python", "# dosya: src/db/seed.py", "print('seed')", fence,
+        f"{fence}json", "// openapi/openapi.json", '{"openapi": "3.1.0"}', fence,
+        f"{fence}html", "<!-- web/index.html -->", "<p>Merhaba</p>", fence,
+        f"{fence}python", "# Python 3.11 ile çalışır", "x = 1", fence,   # yol değil: dosya oluşmaz
+        f"{fence}text", "# v1.0", "sürüm notu", fence,                   # yol değil
+    ])
+    files = code_repo.files_from_output(T(), out)
+    assert set(files) == {"docs/adimlar/01-analiz.md", "src/db/schema.sql", "src/db/seed.py", "openapi/openapi.json", "web/index.html"}
+    assert files["src/db/schema.sql"] == "CREATE TABLE hasta (id INTEGER);\n"
+    assert files["openapi/openapi.json"] == '{"openapi": "3.1.0"}\n'  # yorum satırı JSON'a girmedi
+
+
 def test_repository_lifecycle(client, world, coder):
     w = world
     admin, member, outsider = w["admin"]["h"], w["member"]["h"], w["outsider"]["h"]

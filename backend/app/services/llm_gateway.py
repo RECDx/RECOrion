@@ -320,7 +320,7 @@ async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code
         try:
             extra = {"tools": tools} if tools else {}
             result = await evren_client.chat(model.model_code, messages, temperature=temperature, max_tokens=max_tokens,
-                                             timeout=timeout, **extra)
+                                             timeout=timeout, purpose=ctx.purpose, **extra)
         except EvrenError as exc:
             await _record(db, tenant, model, ctx, 0, 0, started, error=str(exc))
             logger.error("LLM çağrısı başarısız (%s, %s): %s", ctx.purpose, model.model_code, exc)

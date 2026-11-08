@@ -33,6 +33,11 @@ MAX_FILES = 40
 MAX_FILE_BYTES = 200_000
 CODE_BLOCK = re.compile(r"^```[ \t]*([\w+#.-]*)[ \t]+([\w./-]+\.[\w]+)[ \t]*\n(.*?)^```[ \t]*$", re.M | re.S)
 PATH_ONLY_BLOCK = re.compile(r"^```[ \t]*((?:[\w.-]+/)+[\w.-]+\.[\w]+)[ \t]*\n(.*?)^```[ \t]*$", re.M | re.S)
+# Senaryo F81 (08.11.2026): model yolu açılış satırına değil bloğun ilk satırına yorum olarak yazıyor
+# (```sql\n-- src/db/schema.sql). Yorum satırı dosyaya yazılmaz (JSON gibi yorumsuz dosyalar bozulmasın).
+COMMENT_PATH_BLOCK = re.compile(
+    r"^```[ \t]*[\w+#-]*[ \t]*\n[ \t]*(?:#|//|--|;|/\*|<!--)[ \t]*(?:(?:dosya|file|path|yol)[ \t]*:[ \t]*)?"
+    r"((?:[\w.-]+/)*[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,7})[ \t]*(?:\*/|-->)?[ \t]*\n(.*?)^```[ \t]*$", re.M | re.S | re.I)
 
 
 class RepoError(Exception):
@@ -130,7 +135,8 @@ def files_from_output(task: Task, content: str) -> Dict[str, str]:
     """Adım çıktısı her zaman `docs/adimlar/` altına; yolu belirtilmiş kod blokları ayrı dosya olarak."""
     files: Dict[str, str] = {f"docs/adimlar/{task.order_index or 0:02d}-{slug(task.title, 60)}.md": content}
     found = [(m.group(2), m.group(3)) for m in CODE_BLOCK.finditer(content)] + \
-            [(m.group(1), m.group(2)) for m in PATH_ONLY_BLOCK.finditer(content)]
+            [(m.group(1), m.group(2)) for m in PATH_ONLY_BLOCK.finditer(content)] + \
+            [(m.group(1), m.group(2)) for m in COMMENT_PATH_BLOCK.finditer(content)]
     for raw, body in found:
         path = _safe_path(raw)
         if path and not path.startswith("docs/adimlar/") and len(files) < MAX_FILES and len(body.encode()) <= MAX_FILE_BYTES:
@@ -323,6 +329,54 @@ async def tree(project: Project, ref: str) -> Dict[str, Any]:
             break
         page += 1
     return {"ref": ref, "sha": (data or {}).get("sha"), "entries": entries[:TREE_LIMIT], "truncated": len(entries) > TREE_LIMIT}
+
+
+# AI personelin gördüğü depo kodu (senaryo F98, 08.11.2026)
+REPO_CONTEXT_CHARS = 30000
+REPO_FILE_CHARS = 9000
+REPO_LISTING_MAX = 300
+CONTEXT_EXT = {".py", ".js", ".mjs", ".ts", ".html", ".css", ".sql", ".yaml", ".yml", ".json", ".toml", ".txt", ".cfg", ".ini", ".sh"}
+CODE_EXT = {".py", ".js", ".mjs", ".ts"}
+
+
+def _ext(path: str) -> str:
+    name = path.rsplit("/", 1)[-1]
+    return ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
+
+
+async def context_for_ai(project: Project, ref: str = BASE_BRANCH, limit: int = REPO_CONTEXT_CHARS) -> str:
+    """Dalın dosya listesi + kaynak dosyaların içeriği (önce uygulama kodu, sonra testler ve yapılandırma), sınır içinde.
+    Depoya ulaşılamazsa boş döner; iş durmaz."""
+    try:
+        files = [e for e in (await tree(project, ref))["entries"] if e["type"] == "blob"]
+    except Exception as exc:  # noqa: BLE001 — bağlam eksik kalır, iş sürer
+        logger.warning("Depo bağlamı alınamadı (%s, %s): %s", project.id, ref, exc)
+        return ""
+    if not files:
+        return ""
+    listing = "\n".join(f"- {e['path']}" for e in files[:REPO_LISTING_MAX])
+    def rank(e):
+        p = e["path"].lower()
+        return ("test" in p, _ext(p) not in CODE_EXT, p.count("/"), e["size"])
+    picks = sorted((e for e in files if _ext(e["path"]) in CONTEXT_EXT and not e["path"].startswith("docs/")
+                    and 0 < e["size"] <= MAX_FILE_BYTES), key=rank)
+    parts, used = [], len(listing)
+    for e in picks:
+        if used >= limit:
+            break
+        try:
+            body = (await read_file(project, ref, e["path"]))["content"]
+        except Exception:  # noqa: BLE001
+            continue
+        if len(body) > REPO_FILE_CHARS:
+            body = body[:REPO_FILE_CHARS] + "\n… (dosyanın devamı kısaltıldı)"
+        block = f"\n### {e['path']}\n{body}\n"
+        if used + len(block) > limit:
+            continue
+        parts.append(block)
+        used += len(block)
+    return (f"# Depodaki kod (dal: {ref})\nBu, projenin şu anki gerçek kodudur; önceki adım özetleriyle çelişirse depodakini esas al "
+            f"(uç nokta adları, alan adları, giriş yöntemi).\nDosyalar:\n{listing}\n" + "".join(parts) + "\n")
 
 
 async def archive(project: Project, ref: str) -> bytes:

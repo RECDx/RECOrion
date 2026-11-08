@@ -10,6 +10,7 @@ akış adımı karantinaya alıp yöneticinin kararını bekler.
 import hashlib
 import json
 import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -25,9 +26,11 @@ logger = logging.getLogger("recorion.agent_work")
 MAX_DEP_CHARS = 3000
 MAX_OWN_CHARS = 40000  # düzeltmede AI kendi önceki sürümünün tamamını görür
 REVIEW_MAX_CHARS = 60000  # kontrol personeli çıktının tamamını değerlendirir
-# Her çağrı daha kısa parça üretir (uzun bağlamlı adımlarda zaman aşımını önler); uzun çıktı devamla tamamlanır
-WORK_MAX_TOKENS = 4000
-WORK_TIMEOUT = 360
+# Senaryo F87 (08.11.2026): devamla parça birleştirme kodda kırılgan (ek yerinde satır bölünüyor, boşluk yutuluyor);
+# akışlı çağrı ve ilk token sınırı (#666) kuyrukta takılmayı ayrıca yakaladığından bir çağrı uzun çıktıyı tek
+# seferde üretebilir (qwen ~17 token/sn → 12000 token ≈ 12 dk). Daha uzun çıktı yine devamla tamamlanır.
+WORK_MAX_TOKENS = 12000
+WORK_TIMEOUT = 900
 MAX_CONTINUATIONS = 3
 
 
@@ -37,6 +40,39 @@ def _truncated(result) -> bool:
         return (result.raw.get("choices") or [{}])[0].get("finish_reason") == "length"
     except (AttributeError, IndexError):
         return False
+
+
+SEAM_MAX_OVERLAP = 400
+SEAM_MIN_OVERLAP = 5
+FENCE = "`" * 3
+# Açık kod bloğunun içinde kesilen çıktının devamı bazen "## Devam" gibi bir başlık ve yeniden açılan blokla başlıyor;
+# bunlar dosyanın içine karışmasın diye atılır (en çok 3 başlık/devam satırı + dili ya da yolu olan açılış satırı).
+REOPEN_RE = re.compile(r"\A(?:[ \t]*(?:#{1,6}[^\n]*|[^\n`]*[Dd]evam[^\n`]*)?\n){0,3}[ \t]*" + FENCE + r"[\w+#.-]+[^\n`]*\n")
+
+
+def _in_open_fence(text: str) -> bool:
+    return sum(1 for line in text.splitlines() if line.lstrip().startswith(FENCE)) % 2 == 1
+
+
+def join_pieces(pieces: List[str]) -> str:
+    """Devam parçalarını birleştirir. Model kaldığı yerden biraz geriden başlarsa (ör. "...return" + "return patients")
+    ek yerindeki örtüşme bir kez yazılır (senaryo F87, 08.11.2026: "return return patients")."""
+    out = ""
+    for piece in pieces:
+        if out and piece and _in_open_fence(out):
+            m = REOPEN_RE.match(piece.lstrip("\n"))
+            if m:  # satır ortasında kesildiyse araya satır sonu eklenmez; tekrar eden satır başı aşağıda kırpılır
+                piece = piece.lstrip("\n")[m.end():]
+        if out and piece:
+            head = piece.lstrip()
+            tail = out.rstrip()
+            for k in range(min(SEAM_MAX_OVERLAP, len(tail), len(head)), SEAM_MIN_OVERLAP - 1, -1):
+                if tail[-k:] == head[:k]:
+                    piece = head[k:]
+                    out = tail
+                    break
+        out += piece
+    return out
 
 
 async def _generate(ctx: LLMContext, messages: List[Dict[str, str]], tooling: Optional[tuple] = None):
@@ -62,8 +98,10 @@ async def _generate(ctx: LLMContext, messages: List[Dict[str, str]], tooling: Op
             break
         await live.thought(ctx.project_id, ctx.task_id, "CONTINUE", f"Çıktı uzun; kaldığı yerden devam ediyor (parça {len(pieces) + 1}).")
         messages = messages + [{"role": "assistant", "content": result.content},
-                               {"role": "user", "content": "Çıktın token sınırında kesildi. Tekrar etmeden, tam kaldığın yerden devam et."}]
-    return "".join(pieces).strip(), result, len(pieces), round(credits, 4), fallback_from, calls
+                               {"role": "user", "content": "Çıktın token sınırında kesildi. Tekrar etmeden, tam kaldığın yerden devam et. "
+                                "Başlık, açıklama veya \"Devam\" gibi bir giriş yazma; bir kod bloğunun içinde kaldıysan yeni blok "
+                                "açmadan doğrudan kodun devamını yaz ve bloğu her zamanki gibi kapat."}]
+    return join_pieces(pieces).strip(), result, len(pieces), round(credits, 4), fallback_from, calls
 
 
 def artifact_key(task: Task, version: int) -> str:
@@ -105,7 +143,9 @@ def _system(actor: Actor, tenant: Tenant, has_repo: bool = False, test_runner: b
     base = actor.system_prompt or f"Sen {tenant.name} şirketinin {actor.role} unvanlı AI personelisin."
     repo = ("\n\nBu projenin kod deposu var (ADIM 8.5): yazdığın her kaynak kod veya yapılandırma dosyasını ayrı bir kod "
             "bloğunda ver ve bloğun açılış satırına dili ve depodaki dosya yolunu yaz (ör. ```python src/app/main.py). "
-            "Bu dosyalar adımın dalına commit edilir; yol belirtmediğin kod blokları yalnızca dokümanda kalır.") if has_repo else ""
+            "Bu dosyalar adımın dalına commit edilir; yol belirtmediğin kod blokları yalnızca dokümanda kalır. "
+            "Kodun içine uzun açıklama veya düşünce yorumu yazma; tasarım kararlarını kod bloğunun dışında kısaca anlat, "
+            "her dosyayı baştan sona eksiksiz yaz.") if has_repo else ""
     repo += TEST_INSTRUCTIONS if (has_repo and test_runner) else ""
     return (f"{base}\n\nRECOrion iş akışında sana atanan bir iş adımını yürütüyorsun. Çıktın doğrudan teslim edilecek iş "
             "ürünüdür (doküman, analiz, kod, plan vb.): eksiksiz, uygulanabilir ve Markdown biçiminde yaz. Odaklı ol: gereksiz "
@@ -126,6 +166,8 @@ async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> 
             text = await artifact_text(await latest_artifact(db, dep.id), MAX_DEP_CHARS)
             if text:
                 dep_blocks.append(f"## {dep.title}\n{text}")
+    # F98: depo etkinse ana daldaki gerçek kod (özet değil) bağlama girer
+    repo_context = await code_repo.context_for_ai(project) if code_repo.active(project) else ""
     previous = await latest_artifact(db, task.id)
     own = await artifact_text(previous, MAX_OWN_CHARS)
     scope = await knowledge.scope_for_agent(db, tenant.id, agent.id, project.id)
@@ -147,7 +189,7 @@ Başlık: {task.title}
 Ne yapılacak: {task.description or '-'}
 Kabul ölçütü: {task.acceptance_criteria or '-'}
 {knowledge.format_context(hits, max_chars=6000)}{reg_context}
-# Önceki adımların çıktıları
+{repo_context}# Önceki adımların çıktıları
 {chr(10).join(dep_blocks) or 'yok'}
 
 # Bu adımın önceki sürümü
