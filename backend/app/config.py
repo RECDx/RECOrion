@@ -94,6 +94,15 @@ class Settings(BaseSettings):
     EVREN_API_BASE_URL: str = "https://evren-llmapi.ssyz.org.tr/v1"
     EVREN_API_KEY: str = ""  # .env üzerinden verilir
     LLM_TIMEOUT_SECONDS: int = 120
+    # 08.11.2026 (EVREN yanıtı, #666): sohbet çağrıları akışlı; ilk token (düşünme dahil) bu sürede gelmezse model
+    # meşgul sayılır ve çağrı kesilir (llm_gateway fallback=True ise yedek modele geçer). Kuyruktaki keep-alive sayılmaz.
+    LLM_FIRST_TOKEN_TIMEOUT_SECONDS: int = 60
+    # Düşünme modu kapatılan modeller (virgülle; chat_template_kwargs.enable_thinking=false). EVREN'de tüm sohbet
+    # modelleri varsayılan olarak düşünür; düşünen modellerde max_tokens en az LLM_THINKING_MIN_TOKENS tutulur.
+    EVREN_NO_THINKING_MODELS: str = "qwen3.8-flash-next"
+    LLM_THINKING_MIN_TOKENS: int = 4096
+    # 429 + Retry-After: en çok bu kadar saniye beklenip bir kez yeniden denenir; daha uzunsa hata döner.
+    EVREN_RETRY_AFTER_MAX_SECONDS: int = 60
 
     class Config:
         env_file = ".env"

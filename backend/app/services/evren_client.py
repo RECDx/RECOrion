@@ -9,6 +9,7 @@ Eski istemcideki "mock" geri dönüşleri kesintileri gizliyor ve hafızayı ras
 vektörlerle kirletiyordu.
 """
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -68,7 +69,101 @@ async def _send(make_request):
             await asyncio.sleep(delay)
 
 
+def retry_after_seconds(status_code: int, headers) -> Optional[float]:
+    """429 + Retry-After (saniye): beklenecek süre; başlık yok/tarih biçiminde/çok uzunsa None (#666)."""
+    if status_code != 429:
+        return None
+    try:
+        wait = float((headers or {}).get("Retry-After"))
+    except (TypeError, ValueError):
+        return None
+    return wait if 0 <= wait <= settings.EVREN_RETRY_AFTER_MAX_SECONDS else None
+
+
+def thinking_enabled(model_code: str) -> bool:
+    """EVREN'de sohbet modelleri varsayılan olarak düşünür; EVREN_NO_THINKING_MODELS'takilerde kapatılır (#666)."""
+    off = {m.strip().lower() for m in (settings.EVREN_NO_THINKING_MODELS or "").split(",") if m.strip()}
+    return (model_code or "").lower() not in off
+
+
+class _RetryLater(Exception):
+    def __init__(self, wait: float):
+        self.wait = wait
+
+
+class StreamAccumulator:
+    """OpenAI uyumlu SSE akışını tek yanıta toplar. İlk token = içerik, düşünme veya araç çağrısı parçası;
+    kuyruktaki keep-alive satırları ve yalnız rol taşıyan parça sayılmaz."""
+
+    def __init__(self):
+        self.content: List[str] = []
+        self.reasoning: List[str] = []
+        self.calls: Dict[int, Dict[str, Any]] = {}
+        self.finish_reason: Optional[str] = None
+        self.usage: Dict[str, Any] = {}
+        self.meta: Dict[str, Any] = {}
+        self.got_first = False
+        self.chunks = 0
+        self.done = False
+
+    def feed(self, line: str) -> None:
+        line = (line or "").strip()
+        if not line.startswith("data:"):
+            return  # ": keep-alive", boş satır, event: ...
+        payload = line[5:].strip()
+        if payload == "[DONE]":
+            self.done = True
+            return
+        try:
+            chunk = json.loads(payload)
+        except ValueError:
+            return
+        if chunk.get("error"):
+            raise EvrenError(f"EVREN akış hatası: {str(chunk['error'])[:300]}")
+        self.chunks += 1
+        for key in ("id", "model", "created"):
+            if chunk.get(key) is not None:
+                self.meta.setdefault(key, chunk[key])
+        if chunk.get("usage"):
+            self.usage = chunk["usage"]
+        for choice in chunk.get("choices") or []:
+            delta = choice.get("delta") or {}
+            text = delta.get("content")
+            thought = delta.get("reasoning") or delta.get("reasoning_content")
+            if text:
+                self.content.append(text)
+                self.got_first = True
+            if thought:
+                self.reasoning.append(thought)
+                self.got_first = True
+            for tc in delta.get("tool_calls") or []:
+                self.got_first = True
+                cur = self.calls.setdefault(int(tc.get("index") or 0),
+                                            {"id": None, "type": "function", "function": {"name": "", "arguments": ""}})
+                if tc.get("id"):
+                    cur["id"] = tc["id"]
+                if tc.get("type"):
+                    cur["type"] = tc["type"]
+                fn = tc.get("function") or {}
+                if fn.get("name"):
+                    cur["function"]["name"] += fn["name"]
+                if fn.get("arguments"):
+                    cur["function"]["arguments"] += fn["arguments"]
+            if choice.get("finish_reason"):
+                self.finish_reason = choice["finish_reason"]
+
+    def raw(self) -> Dict[str, Any]:
+        """Akışsız yanıtla aynı biçim (finish_reason ve usage.evren kullananlar için)."""
+        message = {"role": "assistant", "content": "".join(self.content), "reasoning": "".join(self.reasoning) or None}
+        if self.calls:
+            message["tool_calls"] = [self.calls[i] for i in sorted(self.calls)]
+        return {**self.meta, "object": "chat.completion", "usage": self.usage,
+                "choices": [{"index": 0, "message": message, "finish_reason": self.finish_reason}]}
+
+
 class EvrenClient:
+    transport: Optional[httpx.AsyncBaseTransport] = None  # testlerde httpx.MockTransport
+
     @property
     def base_url(self) -> str:
         return settings.EVREN_API_BASE_URL.rstrip("/")
@@ -78,34 +173,71 @@ class EvrenClient:
             raise EvrenError("EVREN API anahtarı tanımlı değil (.env: EVREN_API_KEY).")
         return {"Authorization": f"Bearer {settings.EVREN_API_KEY}", "Content-Type": "application/json"}
 
+    def _client(self, timeout) -> httpx.AsyncClient:
+        if self.transport is not None:
+            return httpx.AsyncClient(timeout=timeout, transport=self.transport)
+        return httpx.AsyncClient(timeout=timeout)
+
     async def _post(self, path: str, payload: Dict[str, Any], timeout: Optional[float] = None) -> Dict[str, Any]:
         async def go():
-            async with httpx.AsyncClient(timeout=timeout or settings.LLM_TIMEOUT_SECONDS) as client:
+            async with self._client(timeout or settings.LLM_TIMEOUT_SECONDS) as client:
                 return await client.post(f"{self.base_url}{path}", headers=self._headers(), json=payload)
 
-        try:
-            resp = await _send(go)
-        except httpx.TimeoutException as exc:
-            raise EvrenError("EVREN yanıt vermedi (zaman aşımı).") from exc
-        except httpx.HTTPError as exc:
-            raise EvrenError(f"EVREN bağlantı hatası: {exc}") from exc
+        for attempt in (0, 1):
+            try:
+                resp = await _send(go)
+            except httpx.TimeoutException as exc:
+                raise EvrenError("EVREN yanıt vermedi (zaman aşımı).") from exc
+            except httpx.HTTPError as exc:
+                raise EvrenError(f"EVREN bağlantı hatası: {exc}") from exc
+            wait = retry_after_seconds(resp.status_code, resp.headers) if attempt == 0 else None
+            if wait is None:
+                break
+            logger.warning("EVREN 429 (%s); Retry-After %.0f sn beklenip yeniden deneniyor.", path, wait)
+            await asyncio.sleep(wait)
         if resp.status_code != 200:
             raise EvrenError(f"EVREN hata döndürdü ({resp.status_code}): {resp.text[:300]}", resp.status_code)
         return resp.json()
 
     async def chat(self, model_code: str, messages: List[Dict[str, str]], temperature: float = 0.7,
                    max_tokens: int = 4096, timeout: Optional[float] = None,
-                   tools: Optional[List[Dict[str, Any]]] = None) -> ChatResult:
-        body = {"model": model_code, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": False}
+                   tools: Optional[List[Dict[str, Any]]] = None, first_token_timeout: Optional[float] = None) -> ChatResult:
+        """Akışlı çağrı (#666, EVREN önerisi): ilk token first_token_timeout içinde gelmezse model meşgul sayılır ve
+        EvrenError fırlatılır (gateway yedek modele geçer); timeout tüm çağrının üst sınırıdır."""
+        thinking = thinking_enabled(model_code)
+        if thinking:  # düşünme de bütçeden yer; EVREN: en az 2048, önerilen 4096
+            max_tokens = max(max_tokens, settings.LLM_THINKING_MIN_TOKENS)
+        body = {"model": model_code, "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
+                "stream": True, "stream_options": {"include_usage": True}}
+        if not thinking:
+            body["chat_template_kwargs"] = {"enable_thinking": False}
         if tools:  # ADIM 10.2: EVREN OpenAI uyumlu function calling destekler (23.10.2026 denendi)
             body.update(tools=tools, tool_choice="auto")
-        data = await self._post("/chat/completions", body, timeout)
-        choices = data.get("choices") or []
-        if not choices:
+        total = float(timeout or settings.LLM_TIMEOUT_SECONDS)
+        ttft = min(float(first_token_timeout or settings.LLM_FIRST_TOKEN_TIMEOUT_SECONDS), total)
+
+        acc = None
+        for attempt in (0, 1):
+            try:
+                acc = await asyncio.wait_for(_send(lambda: self._stream_chat(body, total, ttft)), total)
+                break
+            except _RetryLater as later:
+                if attempt == 1:
+                    raise EvrenError("EVREN istek sınırına ulaşıldı (429).", 429)
+                logger.warning("EVREN 429 (%s); Retry-After %.0f sn beklenip yeniden deneniyor.", model_code, later.wait)
+                await asyncio.sleep(later.wait)
+            except asyncio.TimeoutError as exc:
+                raise EvrenError(f"EVREN yanıt vermedi (zaman aşımı, {total:.0f} sn).") from exc
+            except httpx.TimeoutException as exc:
+                raise EvrenError("EVREN yanıt vermedi (zaman aşımı).") from exc
+            except httpx.HTTPError as exc:
+                raise EvrenError(f"EVREN bağlantı hatası: {exc}") from exc
+        if acc is None or not acc.chunks:
             raise EvrenError("EVREN boş yanıt döndürdü.")
-        msg = choices[0].get("message") or {}
-        reasoning = msg.get("reasoning") or msg.get("reasoning_content")
-        content = msg.get("content") or reasoning or ""
+        data = acc.raw()
+        msg = data["choices"][0]["message"]
+        reasoning = msg.get("reasoning")
+        content = msg.get("content") or ""  # düşünme metni asla yanıt yerine kullanılmaz (F60)
         usage = data.get("usage") or {}
         prompt_text = " ".join(str(m.get("content", "")) for m in messages)
         return ChatResult(
@@ -116,6 +248,35 @@ class EvrenClient:
             raw=data,
             tool_calls=list(msg.get("tool_calls") or []),
         )
+
+    async def _stream_chat(self, body: Dict[str, Any], total: float, ttft: float) -> StreamAccumulator:
+        loop = asyncio.get_running_loop()
+        first_deadline = loop.time() + ttft
+        acc = StreamAccumulator()
+        async with self._client(httpx.Timeout(total, connect=15.0)) as client:
+            async with client.stream("POST", f"{self.base_url}/chat/completions", headers=self._headers(), json=body) as resp:
+                if resp.status_code != 200:
+                    text = (await resp.aread()).decode("utf-8", errors="replace")[:300]
+                    wait = retry_after_seconds(resp.status_code, resp.headers)
+                    if wait is not None:
+                        raise _RetryLater(wait)
+                    raise EvrenError(f"EVREN hata döndürdü ({resp.status_code}): {text}", resp.status_code)
+                lines = resp.aiter_lines()
+                while not acc.done:
+                    try:
+                        if acc.got_first:
+                            line = await lines.__anext__()
+                        else:
+                            remaining = first_deadline - loop.time()
+                            if remaining <= 0:
+                                raise asyncio.TimeoutError
+                            line = await asyncio.wait_for(lines.__anext__(), remaining)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.TimeoutError:
+                        raise EvrenError(f"EVREN {ttft:.0f} sn içinde yanıt vermeye başlamadı (model meşgul).") from None
+                    acc.feed(line)
+        return acc
 
     async def embed(self, text: str, model_code: str) -> EmbeddingResult:
         data = await self._post("/embeddings", {"model": model_code, "input": text})
