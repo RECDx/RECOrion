@@ -41,25 +41,25 @@ def test_agent_tier_resolves_and_follows_super_admin_change(client, db, world):
     agent = r.json()
     assert agent["recai_tier"] == "DERIN" and agent["model_display_name"] == "RECAi Derin" and agent["recai_capabilities"] == {"GORSEL": False}
     assert not any(x in r.text for x in REAL)  # yanıtta gerçek model adı yok
-    assert _resolve(client, w["tenant"], agent["id"]) == "mimo-v2.6-pro"
+    assert _resolve(client, w["tenant"], agent["id"]) == "deepseek-v4.1-flash"  # 0050: MiMo emekli
 
     listed = client.get(f"/api/v1/company/{w['tenant']}/ai-agents", headers=h)
     assert not any(x in listed.text for x in REAL)
 
     sa = _super(client, db)
     tiers = {t["code"]: t for t in client.get("/api/v1/system/recai-tiers", headers=sa).json()}
-    assert tiers["DERIN"]["model_code"] == "mimo-v2.6-pro" and tiers["GORSEL"]["purpose"] == "VISION"
+    assert tiers["DERIN"]["model_code"] == "deepseek-v4.1-flash" and tiers["DERIN"]["fallback_model_code"] == "gemma-4-31b" and tiers["GORSEL"]["purpose"] == "VISION"
     assert client.get("/api/v1/system/recai-tiers", headers=h).status_code == 403
     assert client.put("/api/v1/system/recai-tiers/DERIN", headers=sa, json={"model_code": "qwen3-vl-30b"}).status_code == 422  # tür uymaz
     assert client.put("/api/v1/system/recai-tiers/DERIN", headers=sa, json={"model_code": "yok-model"}).status_code == 422
     try:
-        r = client.put("/api/v1/system/recai-tiers/DERIN", headers=sa, json={"model_code": "glm-5.3", "fallback_model_code": "mimo-v2.6-pro"})
+        r = client.put("/api/v1/system/recai-tiers/DERIN", headers=sa, json={"model_code": "glm-5.3", "fallback_model_code": "gemma-4-31b"})
         assert r.status_code == 200
         assert _resolve(client, w["tenant"], agent["id"]) == "glm-5.3"  # personel kendiliğinden yeni modele geçti
         again = client.get(f"/api/v1/company/{w['tenant']}/ai-agents", headers=h).json()
         assert next(a for a in again if a["id"] == agent["id"])["model_display_name"] == "RECAi Derin"  # ad değişmedi
     finally:
-        client.put("/api/v1/system/recai-tiers/DERIN", headers=sa, json={"model_code": "mimo-v2.6-pro", "fallback_model_code": "deepseek-v4.1-flash"})
+        client.put("/api/v1/system/recai-tiers/DERIN", headers=sa, json={"model_code": "deepseek-v4.1-flash", "fallback_model_code": "gemma-4-31b"})
 
 
 def test_package_tiers_and_capabilities(client, db, world):

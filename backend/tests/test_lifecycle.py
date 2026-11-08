@@ -221,8 +221,8 @@ def test_starter_cannot_change_llm_or_prompt(client, starter_company):
     base = {"display_name": "Ajan", "job_title_id": str(starter_company["title_id"])}
     h = starter_company["headers"]
     # Model değiştirme izni yoksa AI personel varsayılan modeli (model.default.agent = deepseek-v4-flash) zorunludur;
-    # unvanın önerdiği model (gemma-4-31b) seçilemez
-    assert client.post(url, headers=h, json={**base, "model_code": "gemma-4-31b"}).status_code == 403
+    # başka bir RECAi adına giden model (qwen3.8-flash-next → Hızlı) seçilemez (0050'den beri gemma Mergen'in yedeği)
+    assert client.post(url, headers=h, json={**base, "model_code": "qwen3.8-flash-next"}).status_code == 403
     assert client.post(url, headers=h, json={**base, "model_code": "deepseek-v4-flash", "system_prompt": "Başka bir prompt"}).status_code == 403
     ok = client.post(url, headers=h, json={**base, "model_code": "deepseek-v4-flash"})
     assert ok.status_code == 201, ok.text

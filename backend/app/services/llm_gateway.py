@@ -263,7 +263,7 @@ def _num(value) -> Optional[Decimal]:
 
 
 async def fallback_model(db: AsyncSession, tenant: Tenant, exclude: str) -> Optional[LLMModel]:
-    """Asıl model meşgul/yanıtsızken kullanılacak yedek: önce model.fallback (23.10.2026: mimo-v2.6-pro), AI personel
+    """Asıl model meşgul/yanıtsızken kullanılacak yedek: önce RECAi adının yedeği, model.fallback (0050: gemma-4-31b), AI personel
     varsayılanı, genel varsayılan, sonra paketteki ilk sohbet modeli."""
     from app.services import recai
 

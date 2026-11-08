@@ -115,7 +115,7 @@ def test_package_rules_enforced(client, company, tag, db):
     assert r.status_code == 422  # şirketin sektörü dışında
     plan = _exec(db, "SELECT id::text FROM job_titles WHERE code = %s AND tenant_id IS NULL", f"A_H{tag}_PLAN")[0]
     base = {"display_name": "Planlamacı", "catalog_title_id": plan}
-    assert client.post(f"/api/v1/company/{company['id']}/ai-agents", json={**base, "model_code": "gemma-4-31b"},
+    assert client.post(f"/api/v1/company/{company['id']}/ai-agents", json={**base, "model_code": "qwen3.8-flash-next"},
                        headers=company["headers"]).status_code == 403  # LLM değiştirme izni yok
     assert client.post(f"/api/v1/company/{company['id']}/ai-agents", json={**base, "system_prompt": "Sen başka bir şeysin."},
                        headers=company["headers"]).status_code == 403  # rol promptu değiştirme izni yok

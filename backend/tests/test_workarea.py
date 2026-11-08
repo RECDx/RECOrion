@@ -89,13 +89,13 @@ def test_chat_falls_back_when_model_busy(client, world, monkeypatch):
 
 
 def test_fallback_order_prefers_configured_backup(client, db, world):
-    """Varsayılanlar deepseek-v4-flash (0025); meşgul modelde önce model.fallback (mimo-v2.6-pro) denenir."""
+    """Varsayılanlar deepseek-v4-flash (0025); meşgul modelde önce RECAi adının yedeği, sonra model.fallback (0050: gemma-4-31b) denenir."""
     from app.db.models import Tenant
     from app.db.session import AsyncSessionLocal
     from app.services import llm_gateway
 
     # Diğer testler varsayılanları değiştirebilir; yedek ayarı yalnızca 0025 yazar
-    assert _exec(db, "SELECT value::text FROM system_settings WHERE key = 'model.fallback'")[0] == '"mimo-v2.6-pro"'
+    assert _exec(db, "SELECT value::text FROM system_settings WHERE key = 'model.fallback'")[0] == '"gemma-4-31b"'
 
     async def pick(exclude):
         async with AsyncSessionLocal() as s:
@@ -103,6 +103,8 @@ def test_fallback_order_prefers_configured_backup(client, db, world):
             m = await llm_gateway.fallback_model(s, tenant, exclude)
             return m.model_code if m else None
     # Veritabanı havuzu uygulamanın olay döngüsüne bağlı: test istemcisinin döngüsünde çalıştırılır
-    assert client.portal.call(pick, "deepseek-v4-flash") == "mimo-v2.6-pro"  # asıl model deepseek meşgulse yedek mimo
-    # #349: önce yanıt vermeyen modelin RECAi adının yedeği (RECAi Derin: mimo → deepseek-v4.1-flash)
-    assert client.portal.call(pick, "mimo-v2.6-pro") == "deepseek-v4.1-flash"
+    assert client.portal.call(pick, "deepseek-v4-flash") == "gemma-4-31b"  # RECAi Mergen meşgulse yedek gemma (0050)
+    # #349: önce yanıt vermeyen modelin RECAi adının yedeği (RECAi Derin: deepseek-v4.1-flash → gemma-4-31b, 0050)
+    assert client.portal.call(pick, "deepseek-v4.1-flash") == "gemma-4-31b"
+    # RECAi adı olmayan model yanıtsızsa genel ilk yedek (model.fallback)
+    assert client.portal.call(pick, "glm-5.3") == "gemma-4-31b"
