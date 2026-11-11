@@ -31,7 +31,8 @@ TEST_ASYNC_URL = BASE_URL.set(database=TEST_DB_NAME).render_as_string(hide_passw
 os.environ["DATABASE_URL"] = TEST_ASYNC_URL
 os.environ["DEBUG"] = "false"
 # Testlerde dış dünyaya dokunma: e-posta gönderilmez, Odoo çağrılmaz, zamanlayıcı çalışmaz
-TEST_OVERRIDES = {"EMAIL_DELIVERY": "log", "ODOO_SYNC_ENABLED": "false", "SCHEDULER_ENABLED": "false", "REDIS_DB": "15"}
+TEST_OVERRIDES = {"EMAIL_DELIVERY": "log", "ODOO_SYNC_ENABLED": "false", "SCHEDULER_ENABLED": "false", "REDIS_DB": "15",
+                  "LEARNING_LESSONS_ENABLED": "false"}
 os.environ.update(TEST_OVERRIDES)
 from app.config import settings  # noqa: E402
 
@@ -40,6 +41,7 @@ settings.DEBUG = False
 settings.EMAIL_DELIVERY = "log"
 settings.ODOO_SYNC_ENABLED = False
 settings.SCHEDULER_ENABLED = False
+settings.LEARNING_LESSONS_ENABLED = False
 settings.REDIS_DB = 15
 settings.PURCHASE_IP_LIMIT_PER_HOUR = 1000
 settings.EMAIL_CODE_IP_LIMIT_PER_HOUR = 1000

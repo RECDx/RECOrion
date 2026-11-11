@@ -156,6 +156,16 @@ async def finish(db: AsyncSession, project: Project, run: TestRun, task: Optiona
     note = f"{run.ref}: {STATUS_TR.get(run.status, run.status)} · {run.passed} geçti, {run.failed} kaldı" + (f" · {run.error}" if run.error else "")
     await task_flow.log(db, project, task, "TEST_RUN", run.started_by_actor_id, note,
                         {"test_run_id": str(run.id), "status": run.status, "passed": run.passed, "failed": run.failed})
+    if task is not None and run.status in ("PASSED", "FAILED", "ERROR"):
+        # İSTEK #742: gerçek test sonucu doğrulanabilir sinyaldir (yazılıma özgü); ortam hatası AI'ın hatası sayılmaz
+        from app.services import learning_records
+        ok = run.status == "PASSED"
+        await db.flush()
+        await learning_records.capture_task(
+            task, project, "TEST_RUN", "DOGRU" if ok else "YANLIS", feedback=report_md(run)[:4000],
+            cause=None if ok else learning_records.test_cause(run.status, run.error), cause_by=None if ok else "SYSTEM",
+            data={"test_run_id": str(run.id), "status": run.status, "passed": run.passed, "failed": run.failed},
+            lesson=not ok and run.status == "FAILED")
     return run
 
 

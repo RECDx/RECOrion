@@ -15,6 +15,7 @@ export const MENU_PERMISSIONS = {
   JOB_TITLES: ['agent:custom_title'],
   MANIFESTO: ['manifesto:manage'],
   BRAIN: ['brain:manage'],
+  LEARNING: ['memory:promote'],  // #742
   INTEGRATIONS: ['integration:manage', 'mapping:manage', 'integration:approve'],
   AUTOMATIONS: ['automation:manage'],
   REGULATIONS: ['regulation:manage'],

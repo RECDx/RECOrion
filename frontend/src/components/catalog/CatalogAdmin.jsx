@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Building2, FileText, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, DataTable, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import DocumentLibrary from '../docs/DocumentLibrary';
+import TitleDesignChat from './TitleDesignChat';
 import { AUTONOMY, SENIORITY } from './labels';
 import './catalog.css';
 
@@ -46,6 +47,7 @@ export default function CatalogAdmin() {
   const [titleForm, setTitleForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [docsTitle, setDocsTitle] = useState(null);
+  const [designOpen, setDesignOpen] = useState(false);
 
   const loadSummary = useCallback(() => api.getCatalogSummary().then(setSummary).catch((e) => toast.error(e.message)), []);
   const loadDepartments = useCallback(() => api.getCatalogDepartments({ sector_code: sector, include_inactive: true })
@@ -205,6 +207,8 @@ export default function CatalogAdmin() {
           <>
             {titleForm?.id && <Button variant="danger" icon={Trash2} onClick={deleteTitle}>Sil</Button>}
             {titleForm?.id && <Button variant="secondary" icon={FileText} onClick={() => setDocsTitle({ id: titleForm.id, title: titleForm.title })}>Bilgi Dokümanları</Button>}
+            <Button variant="secondary" icon={Sparkles} onClick={() => setDesignOpen(true)}
+              title="Ünvanı kendi cümlelerinizle anlatın; RECAi soru sorarak iş tanımı, sorumluluk, yetkinlik ve rol promptunu hazırlar.">RECAi ile tanımla</Button>
             <Button variant="secondary" onClick={() => setTitleForm(null)}>Vazgeç</Button>
             <Button onClick={saveTitle} disabled={saving}>Kaydet</Button>
           </>
@@ -253,6 +257,18 @@ export default function CatalogAdmin() {
           </div>
         )}
       </Modal>
+      {titleForm && (
+        <TitleDesignChat open={designOpen} onClose={() => setDesignOpen(false)}
+          scopeNote="RECDx kataloğu: tüm şirketlerin göreceği genel ünvan; şirket veya kişi bilgisi yazmayın."
+          initialDraft={{ title: titleForm.title, description: titleForm.description, responsibilities: toList(titleForm.responsibilities || ''),
+            required_skills: toList(titleForm.required_skills || ''), kpis: toList(titleForm.kpis || ''), base_role_prompt: titleForm.base_role_prompt }}
+          context={{ sector: titleDeptSector || 'Genel', department: deptById[titleForm.catalog_department_id]?.name,
+            seniority: SENIORITY[titleForm.seniority], autonomy_level: titleForm.autonomy_level }}
+          send={(messages, draft, context) => api.designCatalogTitle({ messages, draft, context })}
+          onApply={(d) => setTitleForm((f) => ({ ...f, title: d.title || f.title, description: d.description || f.description,
+            responsibilities: lines(d.responsibilities) || f.responsibilities, required_skills: lines(d.required_skills) || f.required_skills,
+            kpis: lines(d.kpis) || f.kpis, base_role_prompt: d.base_role_prompt || f.base_role_prompt }))} />
+      )}
       <Modal open={!!docsTitle} onClose={() => setDocsTitle(null)} size="lg" title={docsTitle ? `${docsTitle.title} · Platform Bilgi Dokümanları` : ''}>
         {docsTitle && (
           <DocumentLibrary

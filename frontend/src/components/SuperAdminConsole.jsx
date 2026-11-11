@@ -81,6 +81,7 @@ import PlatformDashboard, { HealthBadge, SystemHealthPanel, usePlatformHealth } 
 import LlmPricing from './ai/LlmPricing';
 import ModelRouterPanel from './ai/ModelRouterPanel';
 import RecaiTiersAdmin from './recai/RecaiTiersAdmin';
+import RecaiTrainingAdmin from './recai/RecaiTrainingAdmin';
 import PlanRecaiPicker from './recai/PlanRecaiPicker';
 import TenantCustomTitles from './company/TenantCustomTitles';
 import CostSettingsCard from './recai/CostSettingsCard';
@@ -4614,6 +4615,7 @@ export default function SuperAdminConsole({
           {activeTab === 'MODELS' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <RecaiTiersAdmin models={models} />
+              <RecaiTrainingAdmin />
               <div className="super-admin-page-header">
                 <div>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--nt-ffffff)', display: 'flex', alignItems: 'center', gap: 8 }}>

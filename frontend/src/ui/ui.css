@@ -290,3 +290,7 @@
 .tl-mark-empty { background: rgb(var(--rgb-ov) / 0.06); color: var(--text-muted); }
 .tl-picker { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .tl-picker-actions { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+
+/* Metin içinde bağlantı görünümlü düğme (#738: Beyin yanıtında kılavuz kaynağı / Ekrana git) */
+.ui-link { background: none; border: 0; padding: 0; font: inherit; color: var(--ac-38bdf8); cursor: pointer; text-decoration: underline; }
+.ui-link:hover { color: var(--text-main); }

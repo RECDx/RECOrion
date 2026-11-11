@@ -35,6 +35,8 @@ from app.api.v1.transfers import router as transfers_router
 from app.api.v1.mcp_server import router as mcp_server_router
 from app.api.v1.recdx_apps import router as recdx_apps_router
 from app.api.v1.automations import router as automations_router
+from app.api.v1.learning import router as learning_router
+from app.api.v1.learning import system_router as recai_training_router
 from app.api.v1.meetings import router as meetings_router
 from app.api.v1.model_router import router as model_router_router
 from app.api.v1.tenant_logo import router as tenant_logo_router
@@ -78,6 +80,8 @@ api_router.include_router(transfers_router)
 api_router.include_router(mcp_server_router)
 api_router.include_router(recdx_apps_router)
 api_router.include_router(automations_router)
+api_router.include_router(learning_router)  # #742
+api_router.include_router(recai_training_router)  # #743
 api_router.include_router(meetings_router)
 api_router.include_router(model_router_router)
 api_router.include_router(credentials_router)

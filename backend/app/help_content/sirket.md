@@ -424,6 +424,10 @@ Boş bilgiler "—" olarak görünür.
 > 3. "Şirket logosu kaydedildi." bildirimi gelir; sol üstte bina simgesinin yerine logo görünür.
 > 4. Work Space'e geçtiğinde üst çubuktaki **Kurum:** alanında da logo görünür.
 
+**RECAi model geliştirmeye katkı kartı:** RECAi, RECDx'in yerli ve milli yapay zekâ modelidir. İşaret açıkken AI personelinizin onaylanan ve reddedilen işlerinden çıkan örnekler, kişisel ve şirkete özgü bilgiler (ad, kimlik/vergi no, IBAN, telefon, e-posta, adres, firma adı, tutar) **geri çevrilemez biçimde maskelendikten sonra** RECAi'nin geliştirilmesinde kullanılır. İşaret varsayılan olarak açıktır; Şirket Yöneticisi istediği an kaldırabilir (onay sorar). Kaldırınca verileriniz sonraki eğitim setlerine girmez; önceden eğitilmiş bir modelden geri çıkarılamaz. Şirketinizin hafızası ve AI personelinizin öğrenmesi bu izinden bağımsız çalışmaya devam eder. RECDx personeli bu işareti değiştiremez.
+
+**RECDx destek erişimi kartı:** KVKK gereği RECDx şirketinizin içeriğini göremez. Bir sorunun incelenmesini istediğinizde **Süre** (1 saat – 1 hafta) ve isteğe bağlı **Neden** seçip **Erişim ver**'e tıklayın. Süre boyunca RECDx'in Merkez Beyin AI'sı iş durumunuzu (proje ve adım durumları, karantinadaki adımlar, kredi, öğrenme özeti) görebilir. Her okuma kartın altındaki **Erişim kayıtları** listesine düşer (tarih, kim, ne sordu). **Erişimi şimdi kapat** ile süre dolmadan kapatırsınız. Erişimi yalnız şirketinizin yöneticisi verir; RECDx kendine veremez.
+
 **Sık sorulan sorular:**
 
 - *Şirket adresimiz değişti, nereden düzeltirim?* Bu ekrandan değil; RECDx ile iletişime geçin.
@@ -963,6 +967,8 @@ Alt başlık: "Sektörel şablon seçimi ve otomatik rol promptu". Üstteki bilg
 | **Sistem Rol Promptu (Persona & Talimatlar) \*** | AI personelin talimatı | Rolün kimliğini, görev tanımını, kalite kurallarını ve çıktı standartlarını yazın. **✨ <RECAi kademesi> ile Prompt Yazdır** düğmesi ünvan bilgisinden otomatik yazar (önce **Ünvan Adı** girilmeli; kredi harcar). | — | Evet |
 | **Gerekli Yetenekler (Virgülle ayırınız)** | Yetenek etiketleri | Virgülle ayırarak yazın | Rota planlama, Excel, ADR | Hayır |
 
+**RECAi ile sohbetle tanımla** (rol promptu başlığının yanında): ünvanı kendi cümlelerinizle anlatırsınız (ne iş yapacak, hangi çıktıları üretecek, kime teslim edecek, neyi asla yapmamalı). RECAi eksikleri kısa sorularla sorar ve sağ tarafta taslağı (ünvan, iş tanımı, sorumluluklar, yetkinlikler, başarı ölçütleri, rol promptu) her turda günceller; taslak hazır olunca "hazır" rozeti çıkar. **Forma al** ile taslak forma aktarılır (sorumluluklar ve başarı ölçütleri açıklamaya eklenir); kayıt formdaki düğmeyle yapılır. Sohbet hiçbir şeyi kendiliğinden kaydetmez ve şirketinizin kredisini kullanır. Her sektör için çalışır.
+
 Düğmeler: **İptal**, **Ünvanı Tanımla & AI Kontrolünden Geçir** (yeni; sürerken "RECAi İnceliyor & Kaydediyor...") veya **Değişiklikleri Kaydet** (düzenleme). Başarıda "'<ad>' ünvanı şirketinize özel olarak başarıyla tanımlandı." veya "🌟 RECAi: '<ad>' ünvanı sistem geneli için faydalı bulundu ve ana şablona otomatik eklendi!"
 
 > **Dikkat:** RECAi, sistem geneli için faydalı bulduğu ünvanı (ad, kategori, açıklama, rol promptu, yetenekler) **diğer şirketlerin de kullanabileceği ortak şablona** ekler. Rol promptuna şirkete özel gizli bilgi, kişi adı veya müşteri verisi yazmayın. Bu tür bilgileri **Bilgi Dokümanları** ile verin; dokümanlar yalnızca şirketinize aittir.
@@ -1105,6 +1111,8 @@ Aynı ünvan kodu şirketinizde varsa koda otomatik bir ek konur.
 | **RECAi** | Beyin AI'nın kademesi | İlk seçenek **Platform varsayılanı (<ad>)**; paketinizde yoksa "— paketinizde yok, paketteki ilk uygun RECAi kullanılır". Diğerleri "<kademe> — <açıklama> · katsayı X"; paketinizde olmayanlar seçilemez. Not: "Katsayı yükseldikçe RECAi daha güçlü ama işlem başına daha çok kredi harcar." | RECAi Derin | Hayır |
 | Mesaj kutusu | Beyin AI'ya sorunuz | "Beyin AI'ya bir soru sorun… (Enter gönderir, Shift+Enter yeni satır)"; en çok 8000 karakter | Bu ay hangi projelere öncelik verelim? | Göndermek için evet |
 
+**Beyin AI neleri bilir?** Yalnız şirketinizi: manifesto, departmanlar, ünvanlar, AI personel, kurum hafızası ve güncel iş durumu (projeler ve adım durumları, onayınızı bekleyen adımlar, karantinadaki adımlar). İş durumu **konuşan kullanıcının yetkisiyle** sınırlıdır: proje yönetim yetkisi olmayan kullanıcı yalnız ekibinde olduğu projeleri, "Kredi ve Kullanım" izni olmayan kullanıcı kredi bilgisini göremez. "Sistemde X nasıl yapılır?" sorularında kılavuzdan yanıt verir; yanıtın altında **Kılavuz:** bağlantıları (sayfayı açar) ve varsa **Ekrana git** çıkar. Kılavuzda olmayan bir konuyu uydurmaz; şirket yöneticinize ya da RECDx desteğine başvurmanızı önerir. Başka şirketler hakkında hiçbir şey bilmez. Sohbetten çıkan şirket geneli kurallar onay kuyruğuna düşer.
+
 **Görünenler:** Onay kuyruğu satırında bilgi metni, altında "<kategori veya Bilgi> · güven %NN · tarih" ve **Onay bekliyor** rozeti. Sohbette her yanıtın altında tarih-saat · RECAi kademesi · "X kredi". Yanıt beklenirken "Yanıt hazırlanıyor…". Boş kuyrukta "Onay bekleyen bilgi yok."; boş sohbette **Beyin AI hazır** başlığı ve üç öneri düğmesi.
 
 **Düğmeler:**
@@ -1130,6 +1138,24 @@ Aynı ünvan kodu şirketinizde varsa koda otomatik bir ek konur.
 
 - *Kuyruğa kişisel bir bilgi düştü, ne yapayım?* **Reddet**'e tıklayın. Kurum hafızasına yalnızca şirket genelini ilgilendiren, doğru bilgileri alın.
 - *Onayladığım bir bilgiyi geri alabilir miyim?* Bu ekranda değil. Kurum hafızasından geri alma Work Space'teki hafıza ekranından, "Kurum Hafızasından Geri Alma" izniyle yapılır (Work Area Kılavuzu).
+
+## Öğrenme
+
+### Öğrenme ekranı
+
+**Bu ekran ne işe yarar?** AI personelinizin **hem sohbetten hem iş akışından** öğrendiklerini gösterir. Her karar bir öğrenme kaydı olur: onaylanan sürüm (**Doğru**), kontrol personelinin ya da yöneticinin reddettiği sürüm (**Yanlış**), test koşusu sonucu, sisteme aktarımın onayı/reddi/geri alınması, çıktısı olan adımın iptali (**Belirsiz**) ve sohbette söylediğiniz kurallar. Yanlışlar silinmez, etiketlenir; reddedilen sürüm sonradan onaylanan sürüme bağlanır ("çift").
+
+**Ne zaman kullanırım?** AI personelin neyi öğrendiğini görmek, haksız bir retten yanlış ders çıkmasını önlemek ve kurumsal dersleri onaylamak için.
+
+**Kimler görür / değiştirir?** "Kurum Hafızasına Ekleme ve Onaylama" izni olanlar (Şirket Yöneticisi, Proje Yöneticisi). Şirket içeriğidir; RECDx göremez.
+
+**Neden sınıfı:** Her **Yanlış** kaydın bir nedeni vardır: **AI personelin hatası**, **Ortam / altyapı**, **Değerlendirme hatası** (ret haksız ya da gerekçesiz), **Kapsam değişikliği**, **Belirsiz**. Nedeni önce sistem kuralı (ör. test ortamı hatası), sonra RECAi önerir; siz satırdaki listeden düzeltebilirsiniz. **Yalnız "AI personelin hatası" olan retlerden ders çıkar.** Nedeni başka bir şeye çevirirseniz o retten çıkan ders AI personelin hafızasından geri alınır; "AI personelin hatası"na çevirirseniz ders çıkarılır.
+
+**Dersler:** Sıradan bir onaydan ders çıkarılmaz; reddedilip sonra onaylanan işten "böyle yap", AI hatası olan retten "bunu yapma, doğrusu şu" dersi çıkar. Ders genel yazılır (kişi, müşteri, tutar, tarih içermez). Personele özgü ders doğrudan o AI personelin hafızasına girer; şirket geneli (kurumsal) ders onayınıza düşer: sağ panel › **Hafıza** › **Onay bekliyor** (ekranın üstünde bekleyen sayısı yazar).
+
+**Ekranın bölümleri:** üstte özet (Doğru / Yanlış / Belirsiz sayıları, çift sayısı, hafızaya yazılan ders, onay bekleyen kurumsal ders); süzgeç (Tümü, Yanlış, Doğru, Belirsiz); tablo: Tarih, AI personel, Adım, Kaynak, Etiket, Neden, Ders, **Ayrıntı** (iş, çıktı, geri bildirim ve ders).
+
+> **Dikkat:** Öğrenme kayıtları ayrıca şirket kartındaki "RECAi model geliştirmeye katkı" izni açıksa, maskelendikten sonra RECAi'nin geliştirilmesinde kullanılır (Şirket Profili). İzin kapalıyken de öğrenme ve hafıza çalışır.
 
 ## Entegrasyonlar
 

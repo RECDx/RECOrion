@@ -1,6 +1,8 @@
 import React from 'react';
 import { Card } from '../../ui/components';
 import { TenantLogoEditor } from './TenantLogo';
+import RecaiConsentCard from './RecaiConsentCard';
+import SupportAccessCard from './SupportAccessCard';
 
 /** Şirket Yönetimi › Şirket Profili: resmi logo (şirket yöneticisi değiştirir) ve kayıtlı kurum bilgileri. */
 export default function CompanyProfile({ tenant, onLogoChanged }) {
@@ -19,6 +21,8 @@ export default function CompanyProfile({ tenant, onLogoChanged }) {
           {rows.map(([k, v]) => <li key={k}><span>{k}</span><strong>{v || '—'}</strong></li>)}
         </ul>
       </Card>
+      <RecaiConsentCard tenantId={tenant.id} />
+      <SupportAccessCard tenantId={tenant.id} />
     </div>
   );
 }

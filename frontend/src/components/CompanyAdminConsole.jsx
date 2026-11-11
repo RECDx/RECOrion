@@ -61,13 +61,15 @@ import IntegrationsPanel from './integrations/IntegrationsPanel';
 import Automations from './integrations/Automations';
 import { CompanyRegulations } from './regulations/Regulations';
 import BrainPanel from './ai/BrainPanel';
+import LearningPanel from './ai/LearningPanel';
 import CatalogImportModal from './catalog/CatalogImportModal';
 import HireWizard from './catalog/HireWizard';
+import TitleDesignChat from './catalog/TitleDesignChat';
 import DocumentReviewModal from './docs/DocumentReviewModal';
 import DocumentLibrary from './docs/DocumentLibrary';
 import AgentKnowledgePanel from './docs/AgentKnowledgePanel';
 import { ACCEPT as DOC_ACCEPT, ACCEPT_HINT as DOC_ACCEPT_HINT, isBusy as isDocBusy, isReviewable as isDocReviewable, piiText, statusOf as docStatusOf } from './docs/docMeta';
-import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck } from 'lucide-react';
+import { Coins, Brain, Menu, PanelLeftClose, PanelLeftOpen, LayoutDashboard, Plug, BookOpenCheck, GraduationCap } from 'lucide-react';
 import { can, canOpenTab, roleLabel } from '../permissions';
 import CompanyProfile from './company/CompanyProfile';
 import TenantRolesCard from './company/TenantRolesCard';
@@ -93,6 +95,7 @@ const COMPANY_NAV = [
   { key: 'KURUM', label: 'Kurum Zekâsı', items: [
     { tab: 'MANIFESTO', label: 'Sektörel Manifesto', icon: FileText, color: '#f59e0b' },
     { tab: 'BRAIN', label: 'Beyin AI', icon: Brain, color: '#c084fc' },
+    { tab: 'LEARNING', label: 'Öğrenme', icon: GraduationCap, color: 'var(--ac-c084fc)' },
     { tab: 'INTEGRATIONS', label: 'Entegrasyonlar', icon: Plug, color: 'var(--ac-38bdf8)' },
     { tab: 'AUTOMATIONS', label: 'Otomasyonlar', icon: Zap, color: 'var(--ac-fbbf24)' },
     { tab: 'REGULATIONS', label: 'Mevzuat Paketleri', icon: BookOpenCheck, color: '#f59e0b' },
@@ -247,6 +250,7 @@ export default function CompanyAdminConsole({
   const [titleFormError, setTitleFormError] = useState('');
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [isGeneratingTitlePrompt, setIsGeneratingTitlePrompt] = useState(false);
+  const [titleDesignOpen, setTitleDesignOpen] = useState(false);  // #739
   const [titleToDelete, setTitleToDelete] = useState(null);
   const [isDeletingTitle, setIsDeletingTitle] = useState(false);
   const [expandedPromptId, setExpandedPromptId] = useState(null);
@@ -5176,6 +5180,7 @@ export default function CompanyAdminConsole({
           {activeTab === 'COMPANY_PROFILE' && <CompanyProfile tenant={tenant} onLogoChanged={(url) => setTenant((prev) => ({ ...prev, logo_url: url }))} />}
           {activeTab === 'INTEGRATIONS' && <IntegrationsPanel tenantId={tenantId} canManage={can(currentUser, 'integration:manage')} canMap={can(currentUser, 'mapping:manage')} />}
           {activeTab === 'AUTOMATIONS' && <div className="pj-steps"><Automations tenantId={tenantId} /></div>}
+          {activeTab === 'LEARNING' && <LearningPanel tenantId={tenantId} />}
           {activeTab === 'REGULATIONS' && <CompanyRegulations tenantId={tenantId}
             canManage={can(currentUser, 'regulation:manage')} />}
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
@@ -7495,6 +7500,11 @@ export default function CompanyAdminConsole({
                     <span>Sistem Rol Promptu (Persona & Talimatlar) <span style={{ color: '#f43f5e' }}>*</span></span>
                   </label>
 
+                  {/* #739: ünvanı sohbetle tanımla */}
+                  <button type="button" className="ui-btn ui-btn-secondary ui-btn-sm" onClick={() => setTitleDesignOpen(true)}
+                    title="Ünvanı kendi cümlelerinizle anlatın; RECAi soru sorarak iş tanımı, yetkinlik ve rol promptunu hazırlar.">
+                    <Sparkles size={13} /> RECAi ile sohbetle tanımla
+                  </button>
                   {/* AI ile Rol Promptu Yazdır Butonu (Madde 2) */}
                   <button
                     type="button"
@@ -7639,6 +7649,25 @@ export default function CompanyAdminConsole({
             </form>
           </div>
         </div>
+      )}
+      {/* #739: ünvanı sohbetle tanımlama — taslak forma alınır, kaydetme formdan yapılır */}
+      {isTitleModalOpen && (
+        <TitleDesignChat open={titleDesignOpen} onClose={() => setTitleDesignOpen(false)}
+          scopeNote="Sohbet şirketinizin RECAi kredisini kullanır; taslak forma alınır, kayıt formdaki düğmeyle yapılır."
+          initialDraft={{ title: titleForm.title, description: titleForm.description, base_role_prompt: titleForm.base_role_prompt,
+            required_skills: (titleForm.required_skills || '').split(',').map((x) => x.trim()).filter(Boolean) }}
+          context={{ sector: titleForm.category, department: (departments.find((d) => d.id === titleForm.department_id) || {}).name,
+            autonomy_level: titleForm.autonomy_level }}
+          send={(messages, draft, context) => api.designCompanyTitle(getActiveTenantId(), { messages, draft, context })}
+          onApply={(d) => setTitleForm((f) => {
+            const NL = '\n';
+            const bullets = (xs) => xs.map((x) => `- ${x}`).join(NL);
+            const extra = [d.responsibilities?.length ? `Sorumluluklar:${NL}${bullets(d.responsibilities)}` : '',
+              d.kpis?.length ? `Başarı ölçütleri:${NL}${bullets(d.kpis)}` : ''].filter(Boolean).join(NL + NL);
+            return { ...f, title: d.title || f.title, description: [d.description || f.description, extra].filter(Boolean).join(NL + NL),
+              required_skills: d.required_skills?.length ? d.required_skills.join(', ') : f.required_skills,
+              base_role_prompt: d.base_role_prompt || f.base_role_prompt };
+          })} />
       )}
 
       {/* ========================================================================= */}

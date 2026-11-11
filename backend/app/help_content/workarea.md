@@ -643,6 +643,8 @@ Pencerede not: "Dosya ve görselleri (Proje Ekleri) oluşturduktan sonra yükley
 |---|---|---|
 | **Vazgeç** | Pencereyi kapatır. | — |
 | **Şablonlara dön** | Şablon listesine döner. | — |
+| **Şirkete kopyala ve düzenle** (RECDx şablonunda) | RECDx şablonunun şirketinize ait düzenlenebilir bir kopyasını oluşturur ("<ad> (şirket kopyası)") ve düzenleyiciyi açar. Kopyada adımları, rolleri, süreleri ve bağımlılıkları değiştirirsiniz; RECDx şablonu değişmez. Kopyada "Kaynak: RECDx şablonu '<ad>'" yazar. | **Şirket Şablonlarını Yönetme** izni gerekir. Kopya yalnız şirketinizde görünür. |
+| **Düzenle** / **Arşivle** (şirket şablonunda) | Şirket şablonunu düzenler veya arşivler (arşivdeki şablonla proje açılamaz; açılmış projeler etkilenmez). | Şablonu oluşturan veya **Şirket Şablonlarını Yönetme** izni olan. |
 | **Projeyi oluştur** | Projeyi açar ("Oluşturuluyor…"). Sonuç: **"'<ad>' oluşturuldu; planı inceleyip onaylayın."** veya **"'<ad>' oluşturuldu. <n> adıma AI personel atandı; şirkette olmayan roller: …"**. Proje **Beyin AI Planlama** sekmesiyle açılır. | Paket sınırı geçerlidir. |
 
 Pencerede not: "Plan taslak olarak gelir: unvanı uyan AI personel adımlara atanır, onaylayıcılar boş gelir (proje yöneticisi). Planı inceleyip Beyin AI ile düzenleyebilir, sonra onaylarsınız." Şablon yoksa: **"Şablon yok"** — "Biten bir projenizin planını 'Şablon olarak kaydet' ile şirket şablonu yapabilirsiniz."

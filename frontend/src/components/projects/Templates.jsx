@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutTemplate } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, EmptyState, Modal } from '../../ui/components';
-import { toast } from '../../ui/feedback';
+import { confirmDialog, toast } from '../../ui/feedback';
+import { TemplateEditor } from './TemplatesAdmin';
 
 /** Proje şablonu galerisi (ADIM 11.1): şirketin ve RECDx'in şablonları; seçilen şablondan yeni proje. */
 export function TemplateGallery({ currentUser, onClose, onCreated }) {
@@ -13,13 +14,28 @@ export function TemplateGallery({ currentUser, onClose, onCreated }) {
   const [name, setName] = useState('');
   const [start, setStart] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(null);
 
-  useEffect(() => { api.getProjectTemplates().then(setList).catch((e) => { toast.error(e.message); setList([]); }); }, []);
-  useEffect(() => {
-    if (!picked) return;
-    setDetail(null);
-    api.getProjectTemplate(picked.id).then(setDetail).catch((e) => toast.error(e.message));
-  }, [picked]);
+  const loadList = useCallback(() => api.getProjectTemplates().then(setList).catch((e) => { toast.error(e.message); setList([]); }), []);
+  useEffect(() => { loadList(); }, [loadList]);
+  const loadDetail = useCallback((id) => { setDetail(null); return api.getProjectTemplate(id).then(setDetail).catch((e) => toast.error(e.message)); }, []);
+  useEffect(() => { if (picked) loadDetail(picked.id); }, [picked, loadDetail]);
+
+  // İSTEK #741: RECDx şablonu şirkete kopyalanır; düzenleme yalnız kopyada (RECDx şablonu değişmez).
+  const copyToCompany = async () => {
+    setBusy(true);
+    try {
+      const c = await api.copyProjectTemplate(picked.id);
+      toast.success(`'${c.name}' şirketinize kopyalandı; şimdi düzenleyebilirsiniz.`);
+      await loadList();
+      setPicked(c); setName(c.name); setEditing(c);
+    } catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  };
+  const archive = async () => {
+    if (!(await confirmDialog({ message: `'${picked.name}' arşivlensin mi? Artık bu şablonla proje açılamaz; açılmış projeler etkilenmez.` }))) return;
+    try { await api.updateProjectTemplate(picked.id, { status: 'ARCHIVED' }); toast.success('Şablon arşivlendi.'); setPicked(null); loadList(); }
+    catch (e) { toast.error(e.message); }
+  };
   const shown = useMemo(() => (list || []).filter((t) => scope === 'ALL' || t.scope === scope), [list, scope]);
 
   const create = async () => {
@@ -37,7 +53,12 @@ export function TemplateGallery({ currentUser, onClose, onCreated }) {
   return (
     <Modal open onClose={onClose} title={picked ? picked.name : 'Şablondan proje oluştur'} size="lg"
       footer={picked
-        ? <><Button variant="secondary" onClick={() => setPicked(null)}>Şablonlara dön</Button><Button onClick={create} disabled={busy}>{busy ? 'Oluşturuluyor…' : 'Projeyi oluştur'}</Button></>
+        ? <><Button variant="secondary" onClick={() => setPicked(null)}>Şablonlara dön</Button>
+          {detail?.scope === 'PLATFORM' && detail.can_copy && <Button variant="secondary" onClick={copyToCompany} disabled={busy}
+            title="RECDx şablonunun şirketinize ait düzenlenebilir bir kopyası oluşturulur; RECDx şablonu değişmez.">Şirkete kopyala ve düzenle</Button>}
+          {detail?.can_edit && <><Button variant="secondary" onClick={() => setEditing(detail)}>Düzenle</Button>
+            <Button variant="ghost" onClick={archive}>Arşivle</Button></>}
+          <Button onClick={create} disabled={busy}>{busy ? 'İşleniyor…' : 'Projeyi oluştur'}</Button></>
         : <Button variant="secondary" onClick={onClose}>Vazgeç</Button>}>
       {!picked ? (
         <>
@@ -66,6 +87,8 @@ export function TemplateGallery({ currentUser, onClose, onCreated }) {
       ) : (
         <>
           {picked.description && <p className="pj-hint">{picked.description}</p>}
+          {detail?.scope === 'PLATFORM' && <p className="pj-hint">RECDx hazır şablonu: doğrudan kullanabilir ya da şirketinize kopyalayıp adımlarını kendinize göre düzenleyebilirsiniz.</p>}
+          {detail?.source_template_name && <p className="pj-hint">Kaynak: RECDx şablonu '{detail.source_template_name}' (şirket kopyası).</p>}
           <div className="pj-form" style={{ margin: '12px 0' }}>
             <div className="pj-field">
               <label htmlFor="tpl-name">Proje adı *</label>
@@ -91,6 +114,8 @@ export function TemplateGallery({ currentUser, onClose, onCreated }) {
             Planı inceleyip Beyin AI ile düzenleyebilir, sonra onaylarsınız.</p>
         </>
       )}
+      {editing && <TemplateEditor tpl={editing} company onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); loadList(); loadDetail(picked.id); }} />}
     </Modal>
   );
 }

@@ -28,7 +28,8 @@ def test_platform_templates_seeded_and_managed(client, db, world):
     member = w["member"]["h"]
     first = _seed(client)
     assert _seed(client) == 0  # yalnızca eksikler eklenir (ikinci açılışta hiçbir şey)
-    assert first in (0, 6)
+    from app.services.project_templates import SEED_FILE
+    assert first in (0, len(json.loads(SEED_FILE.read_text(encoding="utf-8"))))  # tek başına koşuda tümü eklenir
     lst = client.get("/api/v1/project-templates", headers=member).json()
     codes = {t["name"] for t in lst if t["scope"] == "PLATFORM"}
     assert {"KVKK uyum projesi", "Müşteri şikâyeti vakası"} <= codes
@@ -96,3 +97,37 @@ def test_company_template_from_project_and_reuse(client, db, world):
     assert client.put(f"/api/v1/project-templates/{tpl['id']}", headers=member, json={"status": "ARCHIVED"}).status_code == 403
     assert client.put(f"/api/v1/project-templates/{tpl['id']}", headers=admin, json={"status": "ARCHIVED"}).status_code == 200
     assert not any(t["id"] == tpl["id"] for t in client.get("/api/v1/project-templates", headers=admin).json())
+
+
+def test_platform_template_copied_to_company_and_edited(client, db, world):
+    """İSTEK #741: RECDx şablonu şirkete kopyalanır; düzenleme yalnız kopyada, RECDx şablonu değişmez."""
+    w = world
+    admin, member = w["admin"]["h"], w["member"]["h"]
+    _seed(client)
+    kvkk = next(t for t in client.get("/api/v1/project-templates", headers=member).json() if t["name"] == "KVKK uyum projesi")
+    d = client.get(f"/api/v1/project-templates/{kvkk['id']}", headers=admin).json()
+    assert d["can_copy"] is True and d["can_edit"] is False
+    assert client.get(f"/api/v1/project-templates/{kvkk['id']}", headers=member).json()["can_copy"] is False
+    assert client.post(f"/api/v1/project-templates/{kvkk['id']}/copy", headers=member, json={}).status_code == 403
+
+    r = client.post(f"/api/v1/project-templates/{kvkk['id']}/copy", headers=admin, json={})
+    assert r.status_code == 201, r.text
+    c = r.json()
+    assert c["scope"] == "COMPANY" and c["name"] == "KVKK uyum projesi (şirket kopyası)" and c["source_template_id"] == kvkk["id"]
+    assert c["step_count"] == kvkk["step_count"]
+    full = client.get(f"/api/v1/project-templates/{c['id']}", headers=admin).json()
+    assert full["can_edit"] is True and full["source_template_name"] == "KVKK uyum projesi"
+
+    steps = full["plan"]["steps"][:2]
+    steps[0]["title"] = "Şirkete özel envanter"
+    assert client.put(f"/api/v1/project-templates/{c['id']}", headers=admin,
+                      json={"name": "Bizim KVKK", "plan": {"summary": "x", "steps": steps}}).status_code == 200
+    mine = client.get(f"/api/v1/project-templates/{c['id']}", headers=admin).json()
+    assert mine["name"] == "Bizim KVKK" and mine["step_count"] == 2 and mine["plan"]["steps"][0]["title"] == "Şirkete özel envanter"
+    orig = client.get(f"/api/v1/project-templates/{kvkk['id']}", headers=admin).json()
+    assert orig["step_count"] == 6 and orig["name"] == "KVKK uyum projesi"
+
+    # Kopya RECDx'e görünmez (KVKK); kopyadan proje açılır
+    sa = _super(client, db)
+    assert client.get(f"/api/v1/project-templates/{c['id']}", headers=sa).status_code == 404
+    assert client.post(f"/api/v1/project-templates/{c['id']}/use", headers=admin, json={"name": "Kopyadan proje"}).status_code == 200

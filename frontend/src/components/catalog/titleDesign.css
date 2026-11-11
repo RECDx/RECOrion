@@ -1,0 +1,22 @@
+/* İSTEK #739: ünvan tanımlama sohbeti — yalnız tema değişkenleri */
+.td-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; min-height: 420px; }
+.td-chat { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.td-msgs { flex: 1; overflow-y: auto; max-height: 52vh; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.td-msg { padding: 8px 10px; border-radius: 8px; font-size: 0.85rem; line-height: 1.45; white-space: pre-wrap; color: var(--text-main);
+  border: 1px solid var(--border-subtle); }
+.td-ai { background: var(--bg-card); align-self: flex-start; max-width: 95%; }
+.td-user { background: rgb(var(--rgb-ov) / 0.08); align-self: flex-end; max-width: 90%; }
+.td-busy { color: var(--text-muted); font-style: italic; }
+.td-input { display: flex; gap: 8px; align-items: flex-end; }
+.td-input textarea { flex: 1; resize: vertical; }
+.td-draft { overflow-y: auto; max-height: 60vh; border-left: 1px solid var(--border-subtle); padding-left: 16px; font-size: 0.85rem; color: var(--text-main); }
+.td-draft h4 { margin: 0 0 8px; font-size: 0.9rem; }
+.td-draft p, .td-draft ul { margin: 2px 0 10px; color: var(--text-muted); }
+.td-draft ul { padding-left: 18px; }
+.td-prompt { white-space: pre-wrap; font-family: inherit; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-subtle);
+  border-radius: 6px; padding: 8px; color: var(--text-main); max-height: 260px; overflow-y: auto; }
+.td-ready { font-size: 0.72rem; padding: 1px 6px; border-radius: 6px; background: rgb(var(--rgb-ov) / 0.12); color: var(--text-main); margin-left: 6px; }
+@media (max-width: 760px) {
+  .td-wrap { grid-template-columns: 1fr; }
+  .td-draft { border-left: 0; padding-left: 0; border-top: 1px solid var(--border-subtle); padding-top: 12px; }
+}

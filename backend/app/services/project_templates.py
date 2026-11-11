@@ -55,6 +55,7 @@ def out(t: ProjectTemplate, full: bool = False) -> Dict[str, Any]:
          "category": t.category, "kind": t.kind, "field_package": t.field_package, "status": t.status, "use_count": t.use_count,
          "step_count": len(plan.get("steps") or []), "total_days": total_days(plan),
          "roles": sorted({s["job_title"] for s in plan.get("steps") or [] if s.get("job_title")}),
+         "source_template_id": str(t.source_template_id) if t.source_template_id else None,
          "created_at": t.created_at, "updated_at": t.updated_at}
     if full:
         d["plan"] = plan

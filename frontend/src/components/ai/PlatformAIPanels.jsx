@@ -150,18 +150,35 @@ const ASSISTANT_SUGGESTIONS = [
   'Bu ay en çok kredi harcayan şirketler hangileri?',
   'Paket süresi yaklaşan müşteriler var mı?',
   'Bekleyen başvuruları özetler misin?',
+  'Hangi ünvanlar en çok ret alıyor ve neden?',
+  'Etkinliği azalan veya adımı takılan müşteriler var mı?',
 ];
 
-/** Süper Yönetici asistanı: yalnızca yönetim ve toplu veriyle çalışır (KVKK). */
+/**
+ * Merkez Beyin AI (#738): sistemin işleyişine hakim, müşteri içeriğine değil. Toplu istatistikler en az 5 şirketten.
+ * Bir şirketin iş durumu yalnız o şirketin verdiği süreli destek erişimiyle (destek modu) ve her soru şirkete kaydedilerek görülür.
+ */
 export function PlatformAssistantPanel() {
+  const [grants, setGrants] = useState([]);
+  const [support, setSupport] = useState('');
+  useEffect(() => { api.getActiveSupportGrants().then(setGrants).catch(() => setGrants([])); }, []);
   const loadHistory = useCallback(() => api.getAssistantHistory(), []);
-  const send = useCallback((content) => api.sendAssistantMessage(content), []);
+  const send = useCallback((content) => api.sendAssistantMessage(content, support || null), [support]);
   return (
     <Card
-      title="Süper Yönetici Asistanı"
-      subtitle="Müşteriler, paketler, başvurular ve kredi kullanımı hakkında soru sorun. KVKK gereği müşteri içeriklerine (proje, sohbet, hafıza, doküman) erişmez."
+      title="Merkez Beyin AI"
+      subtitle="Platformun işleyişi, ünvan/şablon/model istatistikleri (en az 5 şirketten), müşteri sağlığı ve kredi. KVKK gereği müşteri içeriğine erişmez; içerik yalnız şirketin verdiği süreli destek erişimiyle görülür."
       actions={<Badge tone="info">Platform kullanımı · kredi düşülmez</Badge>}
     >
+      <div className="pj-field" style={{ marginBottom: 10, maxWidth: 520 }}>
+        <label htmlFor="merkez-support">Destek modu</label>
+        <select id="merkez-support" className="ui-input" value={support} onChange={(e) => setSupport(e.target.value)}>
+          <option value="">Kapalı (yalnız toplu ve işletim bilgisi)</option>
+          {grants.map((g) => <option key={g.tenant_id} value={g.tenant_id}>{g.tenant_name} · {new Date(g.expires_at).toLocaleString('tr-TR')}'e kadar</option>)}
+        </select>
+        {support && <span className="pj-hint">Bu moddaki her soru şirketin destek erişimi kayıtlarına düşer ve Merkez hafızasına öğrenilmez.</span>}
+        {grants.length === 0 && <span className="pj-hint">Etkin destek erişimi veren şirket yok.</span>}
+      </div>
       <ChatPanel
         loadHistory={loadHistory}
         send={send}

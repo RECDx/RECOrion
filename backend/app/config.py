@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # Otomatik zamanlayıcı (mail hatırlatmaları)
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_INTERVAL_MINUTES: int = 60
+    # İSTEK #742: öğrenme kaydından arka planda RECAi ile ders çıkarma (testlerde kapalı; testler doğrudan çağırır)
+    LEARNING_LESSONS_ENABLED: bool = True
     # Telegram bildirimleri (ADIM 6.5): BotFather'dan alınan token ve botun kullanıcı adı (@ olmadan)
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_BOT_USERNAME: str = ""

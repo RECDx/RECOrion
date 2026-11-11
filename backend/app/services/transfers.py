@@ -359,12 +359,31 @@ async def decide(db: AsyncSession, tr: IntegrationTransfer, user, approve: bool,
         tr.status, tr.decision_note = "REJECTED", (note or "").strip() or None
         tr.approvals = (tr.approvals or []) + [{"actor_id": str(user.actor_id), "name": user.actor.display_name, "at": now().isoformat(),
                                                 "note": tr.decision_note, "approve": False}]
+        await _capture(db, tr, "YANLIS", user.actor_id, tr.decision_note)
         return tr
     tr.approvals = (tr.approvals or []) + [{"actor_id": str(user.actor_id), "name": user.actor.display_name, "at": now().isoformat(),
                                             "note": (note or "").strip() or None, "approve": True}]
     if len(tr.approvals) >= tr.required_approvals:
         tr.status = "APPROVED"
+        await _capture(db, tr, "DOGRU", user.actor_id, (note or "").strip() or None)
     return tr
+
+
+async def _capture(db: AsyncSession, tr: IntegrationTransfer, label: str, actor_id, note: Optional[str]) -> None:
+    """İSTEK #742: adım çıktısından hazırlanan aktarım kaydının onayı/reddi/geri alınması öğrenme kaydı olur (veri seti için;
+    çıkarımı RECAi yaptığı için AI personele ders yazılmaz)."""
+    if not tr.task_id:
+        return
+    from app.services import learning_records
+    task = await db.get(Task, tr.task_id)
+    project = await db.get(Project, task.project_id) if task else None
+    if task is None or project is None:
+        return
+    await learning_records.capture_task(
+        task, project, "TRANSFER", label, decided_by=actor_id, feedback=note, cause=None if label == "DOGRU" else "BELIRSIZ",
+        output=json.dumps({"object_type": tr.object_type, "object": tr.object or {}}, ensure_ascii=False, default=str)[:20000],
+        output_ref=f"transfer:{tr.id}", data={"transfer_id": str(tr.id), "object_type": tr.object_type, "status": tr.status},
+        lesson=False)
 
 
 # --- yazma (Temporal aktivitesi) ---
@@ -573,6 +592,7 @@ async def rollback(db: AsyncSession, tr: IntegrationTransfer, user) -> Integrati
     except ToolError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     tr.status, tr.rolled_back_at, tr.rolled_back_by_actor_id = "ROLLED_BACK", now(), user.actor_id
+    await _capture(db, tr, "YANLIS", user.actor_id, "Aktarım sonradan geri alındı.")
     return tr
 
 

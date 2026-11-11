@@ -929,6 +929,8 @@ Pencere başlığı yeni unvanda "Yeni Katalog Unvanı", kayıtlı unvanda unvan
 | **Yetkinlikler (her satır bir madde)** | Gerekli bilgi ve beceriler | Her satıra bir yetkinlik | Rota optimizasyonu | Hayır |
 | **Başarı ölçütleri (her satır bir madde)** | Performans göstergeleri | Her satıra bir ölçüt | Zamanında teslim oranı | Hayır |
 | **Rol promptu** | AI personelin temel talimatı | Serbest metin. "{{company_name}} ve {{department_name}} işe alımda şirket ve departman adıyla doldurulur." | Sen {{company_name}} şirketinin {{department_name}} departmanında … | Hayır |
+
+**RECAi ile tanımla** (pencerenin altındaki düğme, İSTEK #739): unvanı kendi cümlelerinizle anlatırsınız; RECAi eksikleri kısa sorularla sorar ve sağda taslağı (unvan, iş tanımı, sorumluluklar, yetkinlikler, başarı ölçütleri, rol promptu) her turda günceller. **Forma al** taslağı forma aktarır; kayıt **Kaydet** ile yapılır. Katalog tüm şirketlere açık olduğundan şirket veya kişi bilgisi yazmayın. Platform maliyetidir (müşteri kredisinden düşmez).
 | **Uygun meslek grupları (boş: departmanın tüm meslek grupları)** | Unvanın hangi meslek gruplarına önerileceği | Meslek düğmelerine tıklayın; boş bırakırsanız departmanın meslekleri geçerlidir | J.05 | Hayır |
 | **Aktif (pasif unvanlar yeni işe alımlarda görünmez)** | Yeni işe alımlarda görünmesi | — | işaretli | — |
 
@@ -1796,6 +1798,16 @@ Sohbet boşken "Asistan hazır — Platformun güncel yönetim verilerini kullan
 | **Gönder** | Soruyu gönderir; yanıt beklenirken "Yanıt hazırlanıyor…" | Kredi düşülmez |
 
 > **İpucu:** Asistanın yanıtı yönetim verisine dayanır; önemli kararlardan önce sayıları ilgili ekranda (Kayıtlı Şirketler, Dashboard) doğrulayın.
+
+**Merkez Beyin AI kapsamı (İSTEK #738):** Kartın başlığı **Merkez Beyin AI**'dır. Sistemin **işleyişine** hakimdir, müşteri **içeriğine** değil:
+
+- Platform: kılavuz (yanıtın altında **Kılavuz:** bağlantıları), RECDx şablonlarının kullanımı, son 30 günde amaç bazında RECAi çağrı sayısı, ortalama süre ve hata, durma (BLOCKED) olayı sayısı.
+- Şirket sağlığı: her şirket için son etkinlik tarihi ve karantinadaki adım **sayısı** (içerik değil).
+- Şirketler arası toplu istatistik: ünvan bazında doğru/yanlış ve AI hatası sayıları. **Yalnız en az 5 şirkette görülen ünvanlar** gösterilir (KVKK k-anonimlik: küçük bir şirket içerikten tanınmasın); daha azı "gösterilmedi" diye sayılır. Maskeli de olsa tek tek müşteri kaydı gösterilmez.
+- **Destek modu:** Kartın üstündeki **Destek modu** listesinde yalnız RECDx'e **süreli destek erişimi** vermiş şirketler (bitiş saatiyle) çıkar. Bir şirket seçilince Merkez Beyin o şirketin iş durumunu (proje ve adım durumları, karantinadaki adımlar, kredi, öğrenme özeti) görür. Bu moddaki her soru şirketin **Erişim kayıtları** listesine düşer ve Merkez hafızasına öğrenilmez. Erişimi yalnız şirket verir (Şirket Yönetimi › Şirket Profili); süresi bitince ya da şirket kapatınca soru "Bu şirketin etkin bir destek erişimi yok" hatası verir.
+- Merkez Beyin'in normal sohbetlerinden çıkan kalıcı kurallar RECDx'in kendi kurum hafızasına (onaylı) öğrenilir; şirketlerin hafızasıyla karışmaz.
+
+**RECAi eğitim verisi kartı (İSTEK #743, Yapay Zeka › EVREN Modelleri):** Yerli ve milli RECAi modeli için, "RECAi model geliştirmeye katkı" izni açık şirketlerin öğrenme kayıtlarından **maskeli, sürümlü** veri seti üretir. Kartta yalnız **sayılar** görünür: izin veren / kapatan şirket, kayıt, doğru örnek, AI hatası (olumsuz), tercih çifti, test sonucu ve üretilen sürümler (örnek, tercih çifti, iyi/kötü işaretli, test ödülü, genel ders sayıları). **Yeni veri seti üret** onay sorar. Maskelemede ad, kimlik/vergi no, IBAN, kart, telefon, e-posta, adres, plaka, firma adı ve tutar tutarlı sahte değerlerle değiştirilir; eşleme tablosu tutulmaz (geri çevrilemez). Olumsuz örnek yalnız "AI personelin hatası" olan kayıtlardan gelir; ortam, değerlendirme ve kapsam kaynaklı retler girmez. Veri setleri RECOrion deposunda bekler; EVREN'e teslim, EVREN eğitim API'si netleşince eklenecek (**Teslim: Bekliyor**).
 
 ## RECAi ve EVREN Modelleri
 

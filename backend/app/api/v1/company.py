@@ -2417,3 +2417,27 @@ async def delete_company_user(
     return {"success": True, "message": f"'{user.display_name}' kullanıcısı başarıyla silindi."}
 
 
+
+
+# ---------------------------------------------------------------- İSTEK #739: ünvan tanımlama sohbeti (şirket)
+class TitleDesignIn(BaseModel):
+    messages: List[dict] = Field(..., min_length=1, max_length=40)
+    draft: Optional[dict] = None
+    context: Optional[dict] = None
+
+
+@router.post("/{tenant_id}/job-titles/design-chat")
+async def company_title_design_chat(tenant_id: uuid.UUID, payload: TitleDesignIn,
+                                    current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Şirket ünvanı: serbest anlatımdan RECAi ile taslak (şirketin kredisi). Kaydetmez; kullanıcı forma alıp kaydeder."""
+    from app.services import title_design
+    from app.services.llm_gateway import LLMError
+
+    tenant = await _get_tenant_or_404(db, tenant_id)
+    ctx = {**(payload.context or {}), "company": tenant.name}
+    try:
+        return await title_design.chat(tenant.id, payload.messages, payload.draft, ctx, actor_id=current.actor_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except LLMError as exc:
+        raise HTTPException(status_code=503, detail=f"RECAi şu an yanıt veremedi: {exc}")

@@ -173,6 +173,10 @@ async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
     await log(db, project, task, "APPROVED", payload.get("actor_id"), payload.get("note"), {"channel": payload.get("channel") or "WEB"})
     await log(db, project, task, "DONE")
     await db.commit()
+    # İSTEK #742: onaylanan sürüm DOGRU örnek; önceki reddedilen sürümler buna bağlanır (tercih çifti)
+    from app.services import learning_records
+    await learning_records.capture_task(task, project, "APPROVAL", "DOGRU", decided_by=payload.get("actor_id"),
+                                        feedback=payload.get("note"), data={"channel": payload.get("channel") or "WEB"})
     # Kod deposu (ADIM 8.5): insan onayı ana dala birleştirmedir
     from app.services import code_repo
     approver = await db.get(Actor, _uuid(payload.get("actor_id"))) if payload.get("actor_id") else None
@@ -214,6 +218,11 @@ async def reject(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
     else:
         task.status = "REVISION"
     await db.commit()
+    # İSTEK #742: reddedilen sürüm YANLIS; nedeni (AI hatası mı, haksız ret mi, kapsam mı) RECAi önerir, yönetici düzeltebilir
+    from app.services import learning_records
+    await learning_records.capture_task(task, project, "REVIEW" if review else "REJECTION", "YANLIS", decided_by=payload.get("actor_id"),
+                                        feedback=payload.get("note"), cause="BELIRSIZ",
+                                        data={"count": task.rejection_count, "quarantined": quarantined})
     if quarantined:
         reason = f"{task.rejection_count} kez reddedildi ve karantinaya alındı."
         await notify(db, project.manager_actor_id, f"RECOrion: '{task.title}' iş adımı {reason} Yeniden denemeye veya iptal etmeye siz karar verin.",
@@ -235,6 +244,8 @@ async def release(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
     if payload.get("action") == "cancel":
         task.status, task.completed_at = "CANCELLED", now()
         await log(db, project, task, "CANCELLED", payload.get("actor_id"), payload.get("note"))
+        await db.commit()
+        await _capture_cancel(task, project, payload)
         from app.services import code_repo
         await code_repo.after_cancel(db, project, task)
     else:
@@ -283,12 +294,21 @@ async def request_cancel(db: AsyncSession, task: Task, project: Project, actor_i
     return "REQUESTED"
 
 
+async def _capture_cancel(task: Task, project: Project, payload: Optional[Dict[str, Any]]) -> None:
+    """İSTEK #742: çıktısı olan adım iptal edildiyse BELIRSIZ/KAPSAM kaydı (çıktı yanlış sayılmaz; ders çıkarılmaz)."""
+    from app.services import learning_records
+    await learning_records.capture_task(task, project, "CANCEL", "BELIRSIZ", decided_by=(payload or {}).get("actor_id"),
+                                        feedback=(payload or {}).get("note"), cause="KAPSAM", cause_by="SYSTEM",
+                                        need_output=True, lesson=False)
+
+
 async def cancel(db: AsyncSession, task_id, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     task, project = await _load(db, task_id)
     if task.status not in CLOSED:
         task.status, task.completed_at = "CANCELLED", now()
         await log(db, project, task, "CANCELLED", (payload or {}).get("actor_id"), (payload or {}).get("note"))
         await db.commit()
+        await _capture_cancel(task, project, payload)
         from app.services import code_repo
         await code_repo.after_cancel(db, project, task)
     return {"status": task.status}

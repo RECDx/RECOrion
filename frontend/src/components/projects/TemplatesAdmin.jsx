@@ -51,7 +51,8 @@ export default function TemplatesAdmin() {
 
 const newStep = (i) => ({ key: `S${i}`, title: '', job_title: '', department: '', estimated_days: 1, depends_on: [], requires_approval: true, description: '' });
 
-function TemplateEditor({ tpl, onClose, onSaved }) {
+/** Şablon düzenleyici. company=true: şirket şablonu (#741 şirket kopyası dahil) — kaydetme şirket ucuna gider. */
+export function TemplateEditor({ tpl, onClose, onSaved, company = false }) {
   const [form, setForm] = useState({ name: tpl.name, category: tpl.category || '', description: tpl.description || '', kind: tpl.kind || 'PROJECT' });
   const [steps, setSteps] = useState((tpl.plan?.steps || []).map((s) => ({ ...newStep(0), ...s })));
   const [summary, setSummary] = useState(tpl.plan?.summary || '');
@@ -74,8 +75,14 @@ function TemplateEditor({ tpl, onClose, onSaved }) {
     const body = { ...form, name: form.name.trim(), category: form.category.trim() || null, plan: { summary, steps: clean, risks: tpl.plan?.risks || [] } };
     setBusy(true);
     try {
-      if (tpl.id) await api.updatePlatformTemplate(tpl.id, body); else await api.createPlatformTemplate(body);
-      toast.success(tpl.id ? 'Şablon güncellendi.' : 'Şablon yayımlandı; tüm şirketler görebilir.');
+      if (company) {
+        const { kind, ...rest } = body;
+        await api.updateProjectTemplate(tpl.id, rest);
+        toast.success('Şirket şablonu güncellendi; RECDx şablonu değişmedi.');
+      } else {
+        if (tpl.id) await api.updatePlatformTemplate(tpl.id, body); else await api.createPlatformTemplate(body);
+        toast.success(tpl.id ? 'Şablon güncellendi.' : 'Şablon yayımlandı; tüm şirketler görebilir.');
+      }
       onSaved();
     } catch (e) { toast.error(e.message); } finally { setBusy(false); }
   };
@@ -83,6 +90,7 @@ function TemplateEditor({ tpl, onClose, onSaved }) {
   return (
     <Modal open onClose={onClose} title={tpl.id ? `${tpl.name} · düzenle` : 'Yeni RECDx şablonu'} size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>Vazgeç</Button><Button onClick={save} disabled={busy}>{busy ? 'Kaydediliyor…' : 'Kaydet'}</Button></>}>
+      {company && <p className="pj-hint" style={{ marginBottom: 10 }}>Şirketinizin şablonu; yalnız şirketinizde görünür. RECDx şablonu değişmez.</p>}
       <div className="pj-form">
         <div className="pj-field"><label htmlFor="ta-name">Ad *</label>
           <input id="ta-name" className="ui-input" value={form.name} maxLength={200} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>

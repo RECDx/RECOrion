@@ -119,6 +119,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/project-templates/{{template_id}}"): AUTH,
     ("POST", f"{P}/project-templates/{{template_id}}/use"): HANDLER("project:create"),
     ("PUT", f"{P}/project-templates/{{template_id}}"): HANDLER(),
+    ("POST", f"{P}/project-templates/{{template_id}}/copy"): HANDLER("template:manage"),
     ("POST", f"{P}/projects/{{project_id}}/save-as-template"): HANDLER(),
     # Mevzuat paketleri (ADIM 11.2): taslak/yayın RECDx'te (uzman kontrolüyle); şirket yalnızca yayını görür ve açar
     # Model yönlendirici (ADIM 11.4): platform ayarı, yalnızca RECDx
@@ -182,6 +183,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/catalog/departments/{{department_id}}"): SUPER_ADMIN,
     ("DELETE", f"{P}/catalog/departments/{{department_id}}"): SUPER_ADMIN,
     ("POST", f"{P}/catalog/titles"): SUPER_ADMIN,
+    ("POST", f"{P}/catalog/titles/design-chat"): SUPER_ADMIN,  # #739
     ("PUT", f"{P}/catalog/titles/{{title_id}}"): SUPER_ADMIN,
     ("DELETE", f"{P}/catalog/titles/{{title_id}}"): SUPER_ADMIN,
     ("GET", f"{P}/catalog/titles/{{title_id}}/documents"): SUPER_ADMIN,
@@ -240,6 +242,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{C}/job-titles/system-templates"): TENANT("tenant:view"),
     ("GET", f"{C}/job-titles"): TENANT("tenant:view"),
     ("POST", f"{C}/job-titles"): TENANT("agent:custom_title"),
+    ("POST", f"{C}/job-titles/design-chat"): TENANT("agent:custom_title"),  # #739
     ("PUT", f"{C}/job-titles/{{title_id}}"): TENANT("agent:custom_title"),
     ("DELETE", f"{C}/job-titles/{{title_id}}"): TENANT("agent:custom_title"),
     ("GET", f"{C}/llm-models"): TENANT("tenant:view"),
@@ -248,6 +251,14 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/system/recai-tiers/{{code}}"): SUPER_ADMIN,
     ("GET", f"{C}/entitlements"): TENANT("tenant:view"),
     ("POST", f"{C}/generate-role-prompt"): TENANT("agent:configure"),
+    ("GET", f"{C}/learning/summary"): TENANT("memory:promote", content=True),  # #742
+    ("GET", f"{C}/learning/records"): TENANT("memory:promote", content=True),
+    ("GET", f"{C}/learning/records/{{record_id}}"): TENANT("memory:promote", content=True),
+    ("PUT", f"{C}/learning/records/{{record_id}}/cause"): TENANT("memory:promote", content=True),
+    ("GET", f"{C}/recai-consent"): TENANT("tenant:view"),  # #743 (durum yönetim verisi)
+    ("PUT", f"{C}/recai-consent"): TENANT("tenant:manage"),  # #743 (uç içinde: RECDx değiştiremez)
+    ("GET", f"{P}/system/recai-training/summary"): SUPER_ADMIN,  # #743 yalnız sayılar
+    ("POST", f"{P}/system/recai-training/datasets"): SUPER_ADMIN,
     ("GET", f"{C}/ai-agents"): TENANT("tenant:view"),
     ("POST", f"{C}/ai-agents"): TENANT("agent:hire"),
     ("PUT", f"{AGENT}"): TENANT("agent:configure"),
@@ -299,6 +310,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     # --- Beyin AI (manifesto, hafıza ve sohbet içerir: süper admin erişemez) ---
     ("POST", f"{C}/brain/chat"): TENANT("chat:participate", content=True),
     ("GET", f"{C}/brain/history"): TENANT("chat:participate", content=True),
+    ("GET", f"{C}/support-access"): TENANT("tenant:manage"),  # #738 süreli RECDx destek erişimi
+    ("POST", f"{C}/support-access"): TENANT("tenant:manage"),
+    ("POST", f"{C}/support-access/revoke"): TENANT("tenant:manage"),
+    ("GET", f"{P}/system/support-access/active"): SUPER_ADMIN,
 
     # --- Work Space içeriği (şirket kontrolü uç içinde) ---
     ("GET", f"{P}/projects"): HANDLER(),

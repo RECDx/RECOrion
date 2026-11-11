@@ -6,7 +6,8 @@ Work Space (giriş yapmış kullanıcı):
 - GET  /project-templates/{id}                şablon ve plan iskeleti
 - POST /project-templates/{id}/use            şablondan yeni proje (project:create); plan taslak, AI personel unvanla eşleşir
 - POST /projects/{id}/save-as-template        projeden şirket şablonu (proje yöneticisi); kişi kimliği şablona girmez
-- PUT  /project-templates/{id}                şirket şablonunu düzenle/arşivle (oluşturan veya project:manage)
+- PUT  /project-templates/{id}                şirket şablonunu düzenle/arşivle (oluşturan veya template:manage)
+- POST /project-templates/{id}/copy           RECDx şablonunun şirkete düzenlenebilir kopyası (#741; template:manage)
 Süper Admin:
 - GET  /system/project-templates              platform şablonları (arşivdekiler dahil)
 - POST /system/project-templates              platform şablonu yayımla
@@ -52,9 +53,48 @@ async def list_templates(user: CurrentUser = Depends(get_current_user), db: Asyn
     return [tsvc.out(t) for t in rows]
 
 
+def _can_edit(user: CurrentUser, t: ProjectTemplate) -> bool:
+    return t.tenant_id is not None and not user.is_platform_staff and (
+        t.created_by_actor_id == user.actor_id or user.has("template:manage"))
+
+
 @router.get("/project-templates/{template_id}")
 async def get_template(template_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return tsvc.out(await _get(db, user, template_id), full=True)
+    t = await _get(db, user, template_id)
+    d = tsvc.out(t, full=True)
+    d["can_edit"] = _can_edit(user, t)
+    d["can_copy"] = bool(user.tenant_id) and not user.is_platform_staff and user.has("template:manage")
+    if t.source_template_id:
+        src = await db.get(ProjectTemplate, t.source_template_id)
+        d["source_template_name"] = src.name if src is not None and src.tenant_id is None else None
+    return d
+
+
+class CopyIn(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=200)
+
+
+@router.post("/project-templates/{template_id}/copy", status_code=201)
+async def copy_template(template_id: uuid.UUID, payload: CopyIn, user: CurrentUser = Depends(get_current_user),
+                        db: AsyncSession = Depends(get_db)):
+    """İSTEK #741: RECDx (veya şirketin kendi) şablonunun şirkete düzenlenebilir kopyası. Kaynak şablon değişmez."""
+    if not user.tenant_id or user.is_platform_staff:
+        raise HTTPException(status_code=403, detail="Şablon kopyası yalnızca bir şirket kullanıcısı tarafından alınır.")
+    if not user.has("template:manage"):
+        raise HTTPException(status_code=403, detail="Şablonu şirkete kopyalamak için 'Şirket Şablonlarını Yönetme' yetkisi gerekir.")
+    t = await _get(db, user, template_id)
+    if t.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="Bu şablon arşivde.")
+    name = (payload.name or "").strip() or (f"{t.name} (şirket kopyası)" if t.tenant_id is None else f"{t.name} (kopya)")
+    c = ProjectTemplate(tenant_id=user.tenant_id, name=name[:200], description=t.description, category=t.category,
+                        kind=t.kind, field_package=t.field_package, plan=tsvc.skeleton(t.plan or {}),
+                        source_template_id=t.id if t.tenant_id is None else t.source_template_id,
+                        created_by_actor_id=user.actor_id)
+    db.add(c)
+    await db.commit()
+    d = tsvc.out(c, full=True)
+    d["can_edit"] = True
+    return d
 
 
 class UseIn(BaseModel):

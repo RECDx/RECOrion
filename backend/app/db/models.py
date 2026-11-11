@@ -300,6 +300,10 @@ class Tenant(Base):
     custom_titles_override = Column(Boolean)
     logo_key = Column(String(255))  # resmi logo (MinIO); adres sürümlü: services/tenant_logo.url_of
     logo_updated_at = Column(DateTime(timezone=True))
+    # #743: "RECAi model geliştirmeye katkı" — varsayılan açık (kullanıcı kararı), yalnız maskeli/anonim veri; şirket kapatabilir
+    recai_training_consent = Column(Boolean, nullable=False, default=True)
+    recai_training_consent_at = Column(DateTime(timezone=True))
+    recai_training_consent_by = Column(UUID(as_uuid=True))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -536,6 +540,80 @@ class Artifact(Base):
 
     task = relationship("Task", back_populates="artifacts")
     producer = relationship("Actor")
+
+
+class LearningRecord(Base):
+    """İSTEK #742: tek etiketli öğrenme kaydı — sohbet ve iş akışı olayları; hafızayı ve RECAi veri setini (#743) besler."""
+    __tablename__ = "learning_records"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"))
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"))
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    decided_by_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    source = Column(String(32), nullable=False)  # APPROVAL, REJECTION, REVIEW, TEST_RUN, TRANSFER, CHAT, CANCEL
+    label = Column(String(12), nullable=False)  # DOGRU, YANLIS, BELIRSIZ
+    cause = Column(String(16))  # MODEL_HATASI, ORTAM, DEGERLENDIRICI, KAPSAM, BELIRSIZ
+    cause_by = Column(String(8))  # SYSTEM (kural), AI (RECAi önerisi), HUMAN (yönetici düzeltmesi)
+    cause_reason = Column(Text)
+    sector = Column(String(120))
+    job_title = Column(String(128))
+    task_input = Column(Text)
+    output = Column(Text)
+    output_ref = Column(String(64))
+    feedback = Column(Text)
+    pair_id = Column(UUID(as_uuid=True), ForeignKey("learning_records.id", ondelete="SET NULL"))
+    lesson = Column(Text)
+    lesson_scope = Column(String(8))  # AGENT, GLOBAL
+    lesson_memory_id = Column(UUID(as_uuid=True), ForeignKey("memory_items.id", ondelete="SET NULL"))
+    lesson_status = Column(String(12), nullable=False, default="PENDING")  # PENDING, SAVED, NONE, SKIPPED, FAILED
+    data = Column(JSONB, nullable=False, default=dict)
+    reviewed_by_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    reviewed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class SupportAccessGrant(Base):
+    """#738: müşterinin RECDx desteğine verdiği süreli erişim (KVKK: süre bitince ya da müşteri kapatınca biter)."""
+    __tablename__ = "support_access_grants"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    granted_by_actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    reason = Column(Text)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class SupportAccessLog(Base):
+    """#738: destek erişimiyle yapılan her okuma (müşteri görür)."""
+    __tablename__ = "support_access_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    grant_id = Column(UUID(as_uuid=True), ForeignKey("support_access_grants.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("actors.id", ondelete="SET NULL"))
+    action = Column(String(64), nullable=False)
+    detail = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class TrainingDataset(Base):
+    """#743: üretilen RECAi veri seti sürümü (yalnız sayılar ve depolama yolu; içerik Merkez'de gösterilmez)."""
+    __tablename__ = "training_datasets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    version = Column(Integer, nullable=False, unique=True)
+    status = Column(String(16), nullable=False, default="READY")
+    counts = Column(JSONB, nullable=False, default=dict)
+    tenant_count = Column(Integer, nullable=False, default=0)
+    storage_prefix = Column(String(255))
+    delivered_at = Column(DateTime(timezone=True))
+    note = Column(Text)
+    created_by_actor_id = Column(UUID(as_uuid=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class MemoryItem(Base):
@@ -855,6 +933,7 @@ class ProjectTemplate(Base):
     plan = Column(JSONB, nullable=False)
     status = Column(String(16), nullable=False, default="ACTIVE")  # ACTIVE, ARCHIVED
     source_project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"))
+    source_template_id = Column(UUID(as_uuid=True), ForeignKey("project_templates.id", ondelete="SET NULL"))  # #741 şirket kopyası
     use_count = Column(Integer, nullable=False, default=0)
     created_by_actor_id = Column(UUID(as_uuid=True))
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

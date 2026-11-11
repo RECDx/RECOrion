@@ -781,6 +781,9 @@ class AgentLearningService:
             )
             db.add(mem)
             await db.flush()
+            # İSTEK #742: sohbetten öğrenilen kural da tek öğrenme kaydına girer (hafıza + RECAi veri seti aynı kaynaktan)
+            from app.services import learning_records
+            await learning_records.capture_chat(db, tenant_id, agent_id, task_id, fact, mem.id, target_scope)
             if needs_approval:
                 saved_items.append({"id": str(mem.id), "fact": fact, "scope": target_scope, "category": category,
                                     "confidence": conf, "status": "CANDIDATE"})

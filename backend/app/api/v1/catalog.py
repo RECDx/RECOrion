@@ -461,3 +461,24 @@ async def hire_preview(tenant_id: uuid.UUID, title_id: uuid.UUID, department_nam
         # Varsayılan: AI personel varsayılan modeli (model.default.agent); unvanın önerisi bilgi olarak gösterilir
         "model_code": default,
     }
+
+
+# ---------------------------------------------------------------- İSTEK #739: ünvan tanımlama sohbeti (Merkez)
+class TitleDesignIn(BaseModel):
+    messages: List[dict] = Field(..., min_length=1, max_length=40)
+    draft: Optional[dict] = None
+    context: Optional[dict] = None
+
+
+@router.post("/catalog/titles/design-chat")
+async def catalog_title_design_chat(payload: TitleDesignIn, user: CurrentUser = Depends(get_current_user)):
+    """Merkez katalog unvanı: serbest anlatımdan RECAi ile taslak (platform maliyeti). Kaydetmez."""
+    from app.services import title_design
+    from app.services.llm_gateway import LLMError
+
+    try:
+        return await title_design.chat(None, payload.messages, payload.draft, payload.context, actor_id=user.actor_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except LLMError as exc:
+        raise HTTPException(status_code=503, detail=f"RECAi şu an yanıt veremedi: {exc}")

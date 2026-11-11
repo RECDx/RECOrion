@@ -247,6 +247,7 @@ async def put_brain_settings(tenant_id: uuid.UUID, payload: BrainSettingsPayload
 
 class ChatPayload(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
+    support_tenant_id: Optional[uuid.UUID] = None  # #738: Merkez — müşterinin verdiği süreli destek erişimiyle o şirket
 
 
 def _message_out(m: ChatMessage) -> dict:
@@ -281,7 +282,28 @@ async def _converse(db: AsyncSession, ctx: LLMContext, tenant_id: uuid.UUID, act
     return {"message": _message_out(answer), "model_code": result.public_model, "credits": result.credits}
 
 
-async def _brain_prompt(db: AsyncSession, tenant: Tenant, query: str) -> str:
+BRAIN_SCOPE = """
+# Kapsamın ve sınırların (İSTEK #738)
+- Yalnız {company} şirketini bilirsin; başka şirketler hakkında bilgi verme, tahmin de yürütme.
+- Konuştuğun kullanıcının yetkisi dışındaki bilgiyi verme: aşağıdaki "İş durumu" yalnız onun görebildiklerini içerir.
+- "Sistemde X nasıl yapılır" sorularında aşağıdaki KILAVUZ bölümlerine dayan; düğme ve menü adlarını **kalın** yaz; ilgili ekranın
+  adını söyle. Kılavuzda yoksa bunu açıkça söyle, uydurma; şirket yöneticisine ya da RECDx desteğine (Yardım menüsü) başvurmasını öner.
+- Yapay zekanın adı RECAi'dir; model veya sağlayıcı adı yazma.
+"""
+
+
+async def _brain_prompt(db: AsyncSession, tenant: Tenant, query: str, user: Optional[CurrentUser] = None) -> str:
+    base = await _brain_prompt_base(db, tenant, query)
+    if user is None:
+        return base
+    from app.services import brain_scope
+    help_text, _ = await brain_scope.help_section(db, user, query)
+    facts = await brain_scope.company_facts(db, tenant, user)
+    return (base + BRAIN_SCOPE.format(company=tenant.name) + "\n# İş durumu (güncel)\n" + facts
+            + ("\n\n# KILAVUZ (sistem kullanımı)\n" + help_text if help_text else ""))
+
+
+async def _brain_prompt_base(db: AsyncSession, tenant: Tenant, query: str) -> str:
     departments = (await db.execute(select(Department).where(Department.tenant_id == tenant.id).order_by(Department.name))).scalars().all()
     titles = (await db.execute(select(JobTitle).where(JobTitle.tenant_id == tenant.id).order_by(JobTitle.title))).scalars().all()
     agents = (await db.execute(select(Actor).where(Actor.tenant_id == tenant.id, Actor.actor_type == "AI_AGENT",
@@ -320,10 +342,27 @@ uygulanabilir olsun; tablo kullanma, gerekirse başlık, kısa maddeler ve **kal
 @router.post("/company/{tenant_id}/brain/chat")
 async def brain_chat(tenant_id: uuid.UUID, payload: ChatPayload,
                      current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.services import brain_scope
     tenant = await _get_tenant(db, tenant_id)
-    system_prompt = await _brain_prompt(db, tenant, payload.content)
-    return await _converse(db, LLMContext(tenant_id=tenant.id, purpose="BRAIN"), tenant.id, current.actor_id,
-                           "BRAIN", system_prompt, payload.content.strip())
+    system_prompt = await _brain_prompt(db, tenant, payload.content, current)
+    _, sources = await brain_scope.help_section(db, current, payload.content)
+    res = await _converse(db, LLMContext(tenant_id=tenant.id, purpose="BRAIN"), tenant.id, current.actor_id,
+                          "BRAIN", system_prompt, payload.content.strip())
+    _learn(tenant.id, payload.content, res)  # şirket Beyin'i yalnız şirket hafızasına öğrenir (kurumsal aday → yönetici onayı)
+    return {**res, "sources": sources}
+
+
+def _learn(tenant_id, question: str, res: dict) -> None:
+    """#738: Beyin sohbetinden kalıcı kural öğrenme — iki ayrı hafıza: şirketinki şirkete, Merkez'inki RECDx'e (recdx_hq)."""
+    from app.api.v1.chat import _spawn_learning
+    from app.config import settings
+    if not settings.LEARNING_LESSONS_ENABLED:  # testlerde kapalı (testler öğrenmeyi doğrudan çağırır)
+        return
+    try:
+        _spawn_learning(tenant_id, None, [{"role": "user", "content": question},
+                                          {"role": "assistant", "content": res["message"]["content"]}], None, None)
+    except Exception:  # öğrenme yardımcıdır
+        pass
 
 
 @router.get("/company/{tenant_id}/brain/history")
@@ -377,11 +416,108 @@ Bugün: {datetime.now(credits.TZ).date().isoformat()} (dönem {period})
 """
 
 
+MERKEZ_SCOPE = """
+# Merkez Beyin kapsamın (İSTEK #738)
+- Sistemin İŞLEYİŞİNE hakimsin, müşteri İÇERİĞİNE değil. Toplu istatistikler en az 5 şirketin verisinden oluşur; daha azına
+  dayanan bir şirket veya kişiyi tahmin etmeye çalışma. Maskeli de olsa tek tek müşteri kaydı gösterme.
+- Amacın ürünü geliştirmek (zayıf ünvan/şablon, pahalı veya yavaş model, sık durma nedeni) ve müşteri sağlığını izlemek
+  (azalan etkinlik, takılan adımlar, kredi). Önerilerini somut yaz.
+- Bir şirketin içeriği yalnız o şirketin verdiği SÜRELİ DESTEK ERİŞİMİ varsa aşağıda "Destek erişimi" bölümünde gelir; her okuma
+  şirkete bildirilir. Yoksa içerik soruları için şirketten destek erişimi istenmesini öner.
+"""
+
+
 @router.post("/system/assistant/chat")
 async def assistant_chat(payload: ChatPayload, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.services import brain_scope
     hq_id = await get_hq_tenant_id(db)
-    return await _converse(db, LLMContext(tenant_id=None, purpose="PLATFORM_ASSISTANT"), hq_id, current.actor_id,
-                           "PLATFORM_ASSISTANT", await _platform_prompt(db), payload.content.strip())
+    prompt = await _platform_prompt(db) + MERKEZ_SCOPE + "\n" + await brain_scope.platform_facts(db)
+    help_text, sources = await brain_scope.help_section(db, current, payload.content)
+    if help_text:
+        prompt += "\n\n# KILAVUZ (RECOrion ekranları)\n" + help_text
+    support = None
+    if payload.support_tenant_id:
+        grant = await brain_scope.active_grant(db, payload.support_tenant_id)
+        if grant is None:
+            raise HTTPException(status_code=403, detail="Bu şirketin etkin bir destek erişimi yok (süresi bitmiş ya da kapatılmış).")
+        t = await db.get(Tenant, payload.support_tenant_id)
+        prompt += (f"\n\n# Destek erişimi: {t.name} (müşterinin izniyle, {grant.expires_at:%d.%m.%Y %H:%M}'e kadar; okuma kayda geçer)\n"
+                   + await brain_scope.company_facts(db, t, None))
+        await brain_scope.log_access(db, grant, current.actor_id, "BEYIN_SORU", payload.content.strip()[:300])
+        await db.commit()
+        support = {"tenant_id": str(t.id), "tenant_name": t.name, "expires_at": grant.expires_at}
+    res = await _converse(db, LLMContext(tenant_id=None, purpose="PLATFORM_ASSISTANT"), hq_id, current.actor_id,
+                          "PLATFORM_ASSISTANT", prompt, payload.content.strip())
+    if not payload.support_tenant_id:  # destek sohbeti müşteri içeriği taşır: Merkez hafızasına öğrenilmez
+        _learn(hq_id, payload.content, res)
+    return {**res, "sources": sources, "support": support}
+
+
+@router.get("/system/support-access/active")
+async def active_support_grants(db: AsyncSession = Depends(get_db)):
+    """#738: Merkez — müşterilerin verdiği etkin destek erişimleri (yalnız şirket adı ve bitiş)."""
+    from app.db.models import SupportAccessGrant
+    from app.services.brain_scope import now as _now
+    rows = (await db.execute(select(SupportAccessGrant, Tenant.name).join(Tenant, Tenant.id == SupportAccessGrant.tenant_id).where(
+        SupportAccessGrant.revoked_at.is_(None), SupportAccessGrant.expires_at > _now()).order_by(SupportAccessGrant.expires_at))).all()
+    return [{"tenant_id": str(g.tenant_id), "tenant_name": n, "expires_at": g.expires_at, "reason": g.reason} for g, n in rows]
+
+
+# ---------------------------------------------------------------- #738: şirket — RECDx destek erişimi ver/kapat, kayıtları gör
+class SupportGrantIn(BaseModel):
+    hours: int = Field(..., ge=1, le=168)
+    reason: Optional[str] = Field(None, max_length=500)
+
+
+async def _support_out(db: AsyncSession, tenant_id: uuid.UUID) -> dict:
+    from app.db.models import SupportAccessGrant, SupportAccessLog
+    from app.services import brain_scope
+    g = await brain_scope.active_grant(db, tenant_id)
+    logs = (await db.execute(select(SupportAccessLog, Actor.display_name).outerjoin(Actor, Actor.id == SupportAccessLog.actor_id)
+                             .where(SupportAccessLog.tenant_id == tenant_id).order_by(SupportAccessLog.created_at.desc()).limit(50))).all()
+    past = (await db.execute(select(SupportAccessGrant).where(SupportAccessGrant.tenant_id == tenant_id)
+                             .order_by(SupportAccessGrant.created_at.desc()).limit(10))).scalars().all()
+    return {"active": {"id": str(g.id), "expires_at": g.expires_at, "reason": g.reason} if g else None,
+            "grants": [{"id": str(x.id), "created_at": x.created_at, "expires_at": x.expires_at, "revoked_at": x.revoked_at,
+                        "reason": x.reason} for x in past],
+            "logs": [{"at": l.created_at, "who": n or "RECDx", "action": l.action, "detail": l.detail} for l, n in logs]}
+
+
+@router.get("/company/{tenant_id}/support-access")
+async def get_support_access(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await _support_out(db, tenant_id)
+
+
+@router.post("/company/{tenant_id}/support-access", status_code=201)
+async def grant_support_access(tenant_id: uuid.UUID, payload: SupportGrantIn, current: CurrentUser = Depends(get_current_user),
+                               db: AsyncSession = Depends(get_db)):
+    """Erişimi yalnız şirketin kendi yöneticisi verir (RECDx kendine veremez)."""
+    from datetime import timedelta as _td
+    from app.db.models import SupportAccessGrant
+    from app.services.brain_scope import now as _now
+    if current.is_platform_staff or current.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Destek erişimini yalnızca şirketin kendi yöneticisi verebilir.")
+    for g in (await db.execute(select(SupportAccessGrant).where(SupportAccessGrant.tenant_id == tenant_id,
+                                                                SupportAccessGrant.revoked_at.is_(None),
+                                                                SupportAccessGrant.expires_at > _now()))).scalars():
+        g.revoked_at = _now()  # yeni süre öncekinin yerini alır
+    db.add(SupportAccessGrant(tenant_id=tenant_id, granted_by_actor_id=current.actor_id, reason=(payload.reason or "").strip() or None,
+                              expires_at=_now() + _td(hours=payload.hours)))
+    await db.commit()
+    return await _support_out(db, tenant_id)
+
+
+@router.post("/company/{tenant_id}/support-access/revoke")
+async def revoke_support_access(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.db.models import SupportAccessGrant
+    from app.services.brain_scope import now as _now
+    if current.is_platform_staff or current.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Destek erişimini yalnızca şirketin kendi yöneticisi kapatabilir.")
+    for g in (await db.execute(select(SupportAccessGrant).where(SupportAccessGrant.tenant_id == tenant_id,
+                                                                SupportAccessGrant.revoked_at.is_(None)))).scalars():
+        g.revoked_at = _now()
+    await db.commit()
+    return await _support_out(db, tenant_id)
 
 
 @router.get("/system/assistant/history")

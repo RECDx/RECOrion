@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button, EmptyState } from '../../ui/components';
 import { toast } from '../../ui/feedback';
+import { navigateTo, openHelp } from '../../help/helpBus';
 import { fmtDate, fmtPrecise } from './format';
 import SimpleMarkdown from './SimpleMarkdown';
 import './ai.css';
@@ -39,7 +40,7 @@ export default function ChatPanel({ loadHistory, send, icon, emptyTitle, emptyTe
     setMessages((m) => [...m, pending]);
     try {
       const res = await send(content);
-      setMessages((m) => [...m, { ...res.message, model_code: res.model_code, credits: res.credits }]);
+      setMessages((m) => [...m, { ...res.message, model_code: res.model_code, credits: res.credits, sources: res.sources }]);
     } catch (e) {
       // Yanıt alınamadıysa soru kaydedilmez; kullanıcı tekrar deneyebilsin diye metni geri koy
       setMessages((m) => m.filter((x) => x.id !== pending.id));
@@ -63,6 +64,17 @@ export default function ChatPanel({ loadHistory, send, icon, emptyTitle, emptyTe
         {messages.map((m) => (
           <div key={m.id} className={`ai-msg ${m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant'}`}>
             {m.role === 'user' ? m.content : <SimpleMarkdown text={m.content} />}
+            {m.sources?.length > 0 && (
+              <div className="ai-msg-meta" aria-label="Kılavuz kaynakları">
+                Kılavuz:{' '}
+                {m.sources.map((s, i) => (
+                  <React.Fragment key={s.slug}>{i > 0 && ' · '}
+                    <button type="button" className="ui-link" onClick={() => openHelp({ slug: s.slug })}>{s.guide_title} › {s.title}</button>
+                    {s.screen && <> (<button type="button" className="ui-link" onClick={() => navigateTo(s.screen)}>Ekrana git</button>)</>}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
             <div className="ai-msg-meta">
               {fmtDate(m.created_at)}
               {m.model_code ? ` · ${m.model_code}` : ''}

@@ -89,3 +89,7 @@
 /* Onay kutusu + etiket satırı (RECSlip ayarları vb.) */
 .pj-field.pj-toggle { flex-direction: row; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; color: var(--text-main); }
 .pj-toggle input[type="checkbox"] { width: auto; margin: 0; flex: none; }
+
+/* #742 öğrenme kaydı ayrıntısı: girdi/çıktı metni */
+.pj-pre { white-space: pre-wrap; font-family: inherit; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-subtle);
+  border-radius: 6px; padding: 8px; color: var(--text-main); max-height: 280px; overflow-y: auto; margin: 4px 0 10px; }

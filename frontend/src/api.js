@@ -323,6 +323,7 @@ export const api = {
   useProjectTemplate: (id, data) => request(`/project-templates/${id}/use`, { method: 'POST', body: JSON.stringify(data) }),
   saveProjectAsTemplate: (projectId, data) => request(`/projects/${projectId}/save-as-template`, { method: 'POST', body: JSON.stringify(data) }),
   updateProjectTemplate: (id, data) => request(`/project-templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  copyProjectTemplate: (id, data = {}) => request(`/project-templates/${id}/copy`, { method: 'POST', body: JSON.stringify(data) }),
   getPlatformTemplates: () => request('/system/project-templates'),
   createPlatformTemplate: (data) => request('/system/project-templates', { method: 'POST', body: JSON.stringify(data) }),
   updatePlatformTemplate: (id, data) => request(`/system/project-templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -501,6 +502,19 @@ export const api = {
   updateCompanyJobTitle: (tenantId, titleId, data) => request(`/company/${tenantId}/job-titles/${titleId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCompanyJobTitle: (tenantId, titleId) => request(`/company/${tenantId}/job-titles/${titleId}`, { method: 'DELETE' }),
   generateRolePrompt: (tenantId, data) => request(`/company/${tenantId}/generate-role-prompt`, { method: 'POST', body: JSON.stringify(data) }),
+  // İSTEK #739: ünvanı sohbetle tanımlama (kaydetmez; taslak döner)
+  designCompanyTitle: (tenantId, data) => request(`/company/${tenantId}/job-titles/design-chat`, { method: 'POST', body: JSON.stringify(data) }),
+  designCatalogTitle: (data) => request('/catalog/titles/design-chat', { method: 'POST', body: JSON.stringify(data) }),
+  // İSTEK #742: öğrenme kayıtları
+  getLearningSummary: (tenantId) => request(`/company/${tenantId}/learning/summary`),
+  getLearningRecords: (tenantId, params = {}) => request(`/company/${tenantId}/learning/records?${new URLSearchParams(params).toString()}`),
+  getLearningRecord: (tenantId, id) => request(`/company/${tenantId}/learning/records/${id}`),
+  // İSTEK #743: RECAi geliştirmeye katkı izni ve Merkez veri seti (yalnız sayılar)
+  getRecaiConsent: (tenantId) => request(`/company/${tenantId}/recai-consent`),
+  setRecaiConsent: (tenantId, data) => request(`/company/${tenantId}/recai-consent`, { method: 'PUT', body: JSON.stringify(data) }),
+  getRecaiTrainingSummary: () => request('/system/recai-training/summary'),
+  buildRecaiDataset: (data) => request('/system/recai-training/datasets', { method: 'POST', body: JSON.stringify(data) }),
+  setLearningCause: (tenantId, id, data) => request(`/company/${tenantId}/learning/records/${id}/cause`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Müşteri Şirket Yönetimi (Company Admin) - AI Ajan İşe Alım & Yaşam Döngüsü (Madde 3)
   getAvailableLLMModels: (tenantId) => request(`/company/${tenantId}/llm-models`),
@@ -598,7 +612,12 @@ export const api = {
 
   // Süper Yönetici asistanı
   getAssistantHistory: () => request('/system/assistant/history'),
-  sendAssistantMessage: (content) => request('/system/assistant/chat', { method: 'POST', body: JSON.stringify({ content }) }),
+  sendAssistantMessage: (content, supportTenantId = null) => request('/system/assistant/chat', { method: 'POST', body: JSON.stringify({ content, support_tenant_id: supportTenantId }) }),
+  // #738: süreli RECDx destek erişimi
+  getActiveSupportGrants: () => request('/system/support-access/active'),
+  getSupportAccess: (tenantId) => request(`/company/${tenantId}/support-access`),
+  grantSupportAccess: (tenantId, data) => request(`/company/${tenantId}/support-access`, { method: 'POST', body: JSON.stringify(data) }),
+  revokeSupportAccess: (tenantId) => request(`/company/${tenantId}/support-access/revoke`, { method: 'POST' }),
 };
 
 
