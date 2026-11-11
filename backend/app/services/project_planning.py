@@ -175,7 +175,7 @@ Hedef tarihler: {project.start_date or 'belirlenmedi'} - {project.end_date or 'b
 {(feedback or 'yok')[:4000]}
 
 Sadece şu JSON'u döndür:
-{{"summary": "planın 3-5 cümlelik özeti",
+{{"summary": "planın 3-5 cümlelik özeti (toplam gün veya bitiş tarihi YAZMA; süreyi sistem simülasyonla hesaplar)",
   "steps": [{{"key": "S1", "title": "adım adı", "description": "ne yapılacak", "acceptance_criteria": "tamam sayılma ölçütü",
              "department": "departman", "job_title": "gereken unvan", "agent_id": "havuzdan agent_id veya boş",
              "reviewer_agent_id": "çıktıyı kontrol edecek, işi yapandan farklı havuz agent_id'si veya boş",
@@ -222,8 +222,14 @@ async def plan_chat(db: AsyncSession, project: Project, actor_id: uuid.UUID, con
     history = list(reversed((await db.execute(select(ChatMessage).where(
         ChatMessage.project_id == project.id, ChatMessage.message_type == "PLAN_CHAT")
         .order_by(ChatMessage.created_at.desc()).limit(12))).scalars().all()))
-    plan_text = "\n".join(f"{s['key']}. {s['title']} ({s['estimated_days']} gün, {s.get('job_title') or '-'})"
-                          for s in (project.plan or {}).get("steps", [])) or "henüz plan yok"
+    steps = (project.plan or {}).get("steps", [])
+    plan_text = "\n".join(f"{s['key']}. {s['title']} ({s['estimated_days']} gün, {s.get('job_title') or '-'})" for s in steps) or "henüz plan yok"
+    # F72/F78: süre tek kaynaktan; AI kendisi toplayıp farklı rakam söylemesin
+    effort = sum(float(s.get("estimated_days") or 0) for s in steps)
+    sim = project.simulation or {}
+    plan_text += (f"\nHesaplanmış değerler (bunları kullan, kendin toplama): toplam efor {effort:g} adam-gün"
+                  + (f"; takvim süresi (paralel adımlarla, simülasyon) {sim.get('workdays')} iş günü, {sim.get('start_date')} – {sim.get('end_date')}"
+                     if sim.get("workdays") else "; takvim süresi için Ekip & Simülasyon'da simülasyon çalıştırılmalı") + ".") if steps else ""
     system = f"""Sen {ctx['tenant'].name} şirketinin Beyin AI'sısın. Proje yöneticisiyle "{project.name}" projesini planlıyorsun.
 İsterleri netleştir, eksikleri sor, iş adımları ve AI personel seçimi hakkında öneri yap. Kısa ve uygulanabilir yanıt ver.
 Planı değiştirmek gerekiyorsa yöneticiye "Planı bu konuşmaya göre güncelle" butonunu kullanmasını öner.
@@ -379,6 +385,8 @@ async def simulate(db: AsyncSession, project: Project, start: Optional[date] = N
     unassigned = [t.title for t in tasks if not t.assignee_actor_id]
     if unassigned:
         risks.append({"level": "high", "text": f"{len(unassigned)} iş adımına personel atanmamış: {', '.join(unassigned[:4])}."})
+    if start < date.today() and project.status in ("DRAFT", "PLANNING", "READY"):  # F69
+        risks.append({"level": "high", "text": f"Başlangıç tarihi ({start.isoformat()}) geçmişte; başlamamış proje için bugün veya sonrası seçin."})
     if project.end_date and end > project.end_date:
         late = workdays_between(project.end_date, end) - 1
         risks.append({"level": "high", "text": f"Tahmini bitiş ({end.isoformat()}) hedef tarihten {late} iş günü sonra."})

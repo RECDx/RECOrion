@@ -117,7 +117,7 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
                 <div className="pj-stat"><span>İnsanla yapılsaydı</span><strong title={tl(d.roi.human_equivalent)}>{tlShort(d.roi.human_equivalent)}</strong></div>
                 <div className="pj-stat"><span>AI maliyeti</span><strong title={tl(d.roi.ai_cost)}>{tlShort(d.roi.ai_cost)}</strong></div>
               </div>
-              <p className="pj-hint" style={{ marginTop: 8 }}>{d.roi.assumption} {compact(d.roi.work_days)} iş günü · {d.roi.rated_humans} kişinin ortalaması.
+              <p className="pj-hint" style={{ marginTop: 8 }}>{d.roi.assumption} {compact(d.roi.work_days)} iş günü{d.roi.basis === 'REFERANS' ? ' · ünvan referans maaşları.' : ` · ${d.roi.rated_humans} kişinin ortalaması.`}
                 {d.roi.unpriced_calls ? ` ${d.roi.unpriced_calls} çağrının TL fiyatı tanımsız; AI maliyeti eksik olabilir.` : ''}</p>
             </>
           ) : (
@@ -131,7 +131,7 @@ export default function CompanyDashboard({ tenantId, departments = [], fixedDepa
         </Card>
       </div>
 
-      <Card title="AI personel karnesi" subtitle={`Son ${d.days} gün. Otonomi: insan revizyonu istenmeden tamamlanan adımların payı.`}>
+      <Card title="AI personel karnesi" subtitle={`Son ${d.days} gün. İlk seferde onay: kontrol personeli ve yönetici hiç geri göndermeden tamamlanan adımlar. Otonomi: yöneticinin (insan) revizyon istemeden tamamladığı adımlar; kontrol personelinin (AI) geri göndermeleri otonomiyi düşürmez, "Revizyon" sütununda sayılır.`}>
         {d.agents.length === 0 ? <p className="pj-hint">Bu kapsamda iş almış AI personel yok.</p> : (
           <div className="ui-table-scroll">
             <table className="ui-table dash-table">

@@ -114,7 +114,7 @@ async def cancel_remaining(db: AsyncSession, project_id, payload: Optional[Dict[
     project = await db.get(Project, _uuid(project_id))
     cancelled = []
     for t in (await db.execute(select(Task).where(Task.project_id == project.id, Task.status.notin_(CLOSED)))).scalars():
-        t.status = "CANCELLED"
+        t.status, t.completed_at = "CANCELLED", now()  # F112: iptal anı maliyette kesim tarihidir
         await log(db, project, t, "CANCELLED", (payload or {}).get("actor_id"), (payload or {}).get("note"))
         cancelled.append(t)
     await db.commit()
@@ -233,7 +233,7 @@ async def release(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
         res = await approve(db, task_id, {"actor_id": payload.get("actor_id"), "note": payload.get("note"), "channel": "WEB"})
         return {**res, "approved": True}
     if payload.get("action") == "cancel":
-        task.status = "CANCELLED"
+        task.status, task.completed_at = "CANCELLED", now()
         await log(db, project, task, "CANCELLED", payload.get("actor_id"), payload.get("note"))
         from app.services import code_repo
         await code_repo.after_cancel(db, project, task)
@@ -286,7 +286,7 @@ async def request_cancel(db: AsyncSession, task: Task, project: Project, actor_i
 async def cancel(db: AsyncSession, task_id, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     task, project = await _load(db, task_id)
     if task.status not in CLOSED:
-        task.status = "CANCELLED"
+        task.status, task.completed_at = "CANCELLED", now()
         await log(db, project, task, "CANCELLED", (payload or {}).get("actor_id"), (payload or {}).get("note"))
         await db.commit()
         from app.services import code_repo

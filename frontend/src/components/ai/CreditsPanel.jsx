@@ -90,6 +90,12 @@ export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0
         <Breakdown title="AI personele göre" rows={data.by_actor} label={(r) => r.name} />
         <Breakdown title="İşlem türüne göre" rows={data.by_purpose} label={(r) => purposeLabel(r.key)} />
       </div>
+      {/* F115: kapsam farkı açıklaması */}
+      <p className="pj-hint" style={{ margin: 0 }}>
+        Bu döküm bu dönemin şirket genelidir (tüm projeler ve sohbetler). "AI personele göre" kredi, personelin hem kendi işleri hem
+        kontrol personeli olarak yaptığı değerlendirmeleri içerir. Proje Maliyet ekranı ise krediyi iş adımına göre toplar; adımdaki
+        kontrol personeli payı orada ayrıca gösterilir.
+      </p>
 
       <Card title="Son işlemler" subtitle={data.failed_calls ? `Bu dönem ${data.failed_calls} işlem başarısız oldu (kredi düşülmedi).` : undefined}>
         <DataTable

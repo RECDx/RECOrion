@@ -224,6 +224,10 @@ async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentU
         await db.commit()
         raise
     await db.commit()
+    if payload.action in ("complete", "cancel"):
+        # F112: akış bitmiş/kapalı olsa da kapanışta açık kalan adımlar iptal edilir (maliyette "sürüyor" görünmez)
+        from app.services import task_flow
+        await task_flow.cancel_remaining(db, project.id, {"actor_id": str(user.actor_id), "note": "Proje kapatıldı; açık adım iptal edildi."})
     if payload.action == "complete":  # ADIM 12.4: kapanışta tanımlı aktarım önerileri (onaya düşer)
         from app.services import transfers
         await transfers.after_project_closed(project)

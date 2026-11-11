@@ -47,6 +47,13 @@ def labor(task: Task, assignee: Optional[Actor]) -> Dict[str, Any]:
     if task.labor_cost_try is not None:
         return {"days": float(task.labor_days or 0), "cost": _d(task.labor_cost_try), "basis": "ACTUAL", "rated": task.labor_rate_try is not None}
     rate = assignee.daily_cost_try if assignee else None
+    if task.status == "CANCELLED":  # F112: iptal edilen adım "sürüyor"/"plan" sayılmaz
+        if not task.started_at:
+            return {"days": 0.0, "cost": ZERO, "basis": "CANCELLED", "rated": rate is not None}
+        end = (task.completed_at or task.updated_at or datetime.now(timezone.utc)).date()
+        days = workdays(task.started_at.date(), end)
+        cost = (_d(rate) * Decimal(str(days))).quantize(Decimal("0.01")) if rate is not None else ZERO
+        return {"days": float(days), "cost": cost, "basis": "CANCELLED", "rated": rate is not None}
     if task.started_at:
         start = task.started_at.date()
         end = (task.completed_at.date() if task.completed_at else _today())
@@ -78,15 +85,18 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
     # Token maliyeti: adım bazında ve adıma bağlı olmayan proje çağrıları (Beyin AI planlama, planlama sohbeti)
     token_rows = (await db.execute(
         select(LLMCall.task_id, LLMCall.model_code, LLMCall.purpose, func.count(), func.sum(LLMCall.tokens_in), func.sum(LLMCall.tokens_out),
-               func.sum(LLMCall.cost_try), func.count().filter(LLMCall.cost_try.is_(None)), func.sum(LLMCall.credits_cost))
+               func.sum(LLMCall.cost_try), func.count().filter(LLMCall.cost_try.is_(None)), func.sum(LLMCall.credits_cost), LLMCall.actor_id)
         .where(LLMCall.project_id == project.id, LLMCall.status == "SUCCESS")
-        .group_by(LLMCall.task_id, LLMCall.model_code, LLMCall.purpose))).all()
+        .group_by(LLMCall.task_id, LLMCall.model_code, LLMCall.purpose, LLMCall.actor_id))).all()
     from app.services import recai
 
     all_tiers = await recai.tiers(db)
     by_task: Dict[Any, Dict[str, Any]] = {}
     by_model: Dict[str, Dict[str, Any]] = {}  # #349: müşteriye RECAi adına göre
-    for task_id, model, purpose, calls, t_in, t_out, cost, unpriced, credits in token_rows:
+    actor_credits: Dict[Any, Dict[Any, Decimal]] = {}  # F115: adımda işi yapan / kontrol eden ayrımı
+    for task_id, model, purpose, calls, t_in, t_out, cost, unpriced, credits, actor_id in token_rows:
+        per = actor_credits.setdefault(task_id, {})
+        per[actor_id] = per.get(actor_id, ZERO) + _d(credits)
         for bucket, key in ((by_task, task_id), (by_model, recai.public_name(model, all_tiers, purpose))):
             b = bucket.setdefault(key, {"calls": 0, "tokens_in": 0, "tokens_out": 0, "cost": ZERO, "unpriced_calls": 0, "credits": ZERO})
             b["calls"] += calls
@@ -102,10 +112,16 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
     cfg = await he.settings(db)
     tenant = await db.get(Tenant, project.tenant_id)
     unit = await he.tenant_credit_unit(db, tenant) if tenant else None
+    # F70/F76/F114: müşteriye gösterilen AI (token) maliyeti her yerde tek kaynaktan: kredi × paket kredi birim fiyatı.
+    # LLM TL fiyatı RECDx'in iç maliyetidir (llm_cost olarak ayrı kalır); kredi birimi varken "fiyatsız" çağrı yoktur.
+    if unit is not None:
+        for bucket in (*by_task.values(), *by_model.values()):
+            bucket["llm_cost"], bucket["cost"], bucket["unpriced_calls"] = bucket["cost"], _ai_try(bucket["credits"], unit), 0
     jt_ids = {t.job_title_id or (actors[t.assignee_actor_id].job_title_id if t.assignee_actor_id in actors else None) for t in tasks}
     titles = {j.id: j for j in (await db.execute(select(JobTitle).where(JobTitle.id.in_([i for i in jt_ids if i] or [project.id])))).scalars()}
     rows, totals = [], {"labor": ZERO, "labor_planned": ZERO, "token": ZERO, "unpriced_calls": 0, "credits": ZERO}
     he_tot = {"human_days": ZERO, "human_cost": ZERO}
+    planned_credits = ZERO
     starts, ends = [], []
     for t in tasks:
         assignee = actors.get(t.assignee_actor_id)
@@ -119,9 +135,14 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
         totals["unpriced_calls"] += tok["unpriced_calls"]
         totals["credits"] += tok["credits"]
         human = he.human_for(titles.get(t.job_title_id or (assignee.job_title_id if assignee else None)), float(t.estimated_effort or 1), cfg)
-        if t.status != "CANCELLED":
+        # F113: iptal edilen (hiç yapılmamış) adım insan eşdeğerine girmez; satırda "kapsam dışı" işaretlenir. AI'ın iptalden önce
+        # harcadığı kredi ise gerçek harcamadır, AI tarafında kalır.
+        in_scope = t.status != "CANCELLED"
+        if in_scope:
             he_tot["human_days"] += Decimal(str(human["days"]))
             he_tot["human_cost"] += Decimal(str(human["cost"]))
+            planned_credits += _d(t.estimated_credits)
+        review_credits = sum((c for a, c in actor_credits.get(t.id, {}).items() if a and a != t.assignee_actor_id), ZERO)
         end = t.completed_at or t.submitted_at
         if t.started_at:
             starts.append(t.started_at)
@@ -132,7 +153,11 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
                      "tokens": {**tok, "cost": float(tok["cost"]), "credits": float(tok["credits"])},
                      "ai_credit_try": float((tok["credits"] * unit).quantize(Decimal("0.01"))) if unit is not None else None,
                      "ai_hours": round((end - t.started_at).total_seconds() / 3600, 2) if (t.started_at and end) else None,
-                     "human": human})
+                     "human": human, "in_scope": in_scope,
+                     # F71: adımın plan kredisi (simülasyon) ve TL karşılığı; F115: kredinin kontrol personeline düşen kısmı
+                     "estimated_credits": float(t.estimated_credits) if t.estimated_credits is not None else None,
+                     "estimated_try": float(_ai_try(_d(t.estimated_credits), unit)) if (unit is not None and t.estimated_credits is not None) else None,
+                     "review_credits": float(review_credits)})
     general = by_task.get(None)
     if general:
         totals["token"] += general["cost"]
@@ -150,7 +175,7 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
     other = sum(by_category.values(), ZERO)
     for row in rows:
         row["other"] = float(items_by_task.get(uuid_of(row["task_id"]), ZERO))
-    planned = await planned_costs(db, project, tasks, actors)
+    planned = await planned_costs(db, project, tasks, actors, unit)
     return {
         "project_id": str(project.id), "currency": "TRY", "vat_included": False,
         "tasks": rows,
@@ -163,11 +188,14 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
                    "suggested": planned["total"]},
         "totals": {"labor": float(totals["labor"]), "labor_planned": float(totals["labor_planned"]), "token": float(totals["token"]),
                    # #664: müşteri gözüyle AI maliyeti kredi × paket kredi birim fiyatı (LLM TL fiyatı RECDx'in iç maliyetidir)
-                   "other": float(other), "actual": float(totals["labor"] + (_ai_try(totals["credits"], unit) if unit is not None else totals["token"]) + other),
+                   "other": float(other), "actual": float(totals["labor"] + totals["token"] + other),
                    "ai_cost_basis": "KREDI" if unit is not None else "LLM_FIYATI",
                    "unpriced_calls": totals["unpriced_calls"], "credits": float(totals["credits"]),
+                   # F74: fark = bütçe − gerçekleşen (gerçekleşenle aynı kaynak)
                    "budget_variance": (float(project.budget_try - (totals["labor"] + totals["token"] + other))
                                        if project.budget_try is not None else None),
+                   "planned_credits": float(planned_credits), "planned_ai_try": float(_ai_try(planned_credits, unit)) if unit is not None else None,
+                   "effort_days_note": "Toplam efor: adımların planlanan iş günlerinin toplamı (adam-gün); takvim süresi paralel adımlarla daha kısadır.",
                    **_comparison(totals["credits"], unit, he_tot, starts, ends, cfg)},
     }
 
@@ -201,21 +229,27 @@ def item_out(it: ProjectCostItem) -> Dict[str, Any]:
             "attachment_name": it.attachment_name, "has_attachment": bool(it.attachment_path), "created_at": it.created_at}
 
 
-async def planned_costs(db: AsyncSession, project: Project, tasks, actors) -> Dict[str, Any]:
+async def planned_costs(db: AsyncSession, project: Project, tasks, actors, unit: Optional[Decimal] = None) -> Dict[str, Any]:
     """Plana göre tahmini maliyet: personel (günlük maliyet × planlanan gün) + token (simülasyon varsayımı × LLM fiyatı).
     Bütçe önerisi olarak kullanılır. Fiyatı veya günlük maliyeti olmayan kalemler eksik sayılır (missing)."""
     from app.services import pricing
     from app.services.project_planning import TOKENS_IN_PER_DAY, TOKENS_OUT_PER_DAY
 
-    labor_total, token_total, missing_rate, missing_price = ZERO, ZERO, 0, 0
+    labor_total, token_total, missing_rate, missing_price, credits = ZERO, ZERO, 0, 0, ZERO
     for t in tasks:
+        if t.status == "CANCELLED":
+            continue
         days = Decimal(str(t.estimated_effort or 1))
         a = actors.get(t.assignee_actor_id)
         if a and a.daily_cost_try is not None:
             labor_total += _d(a.daily_cost_try) * days
         elif a and a.actor_type == "HUMAN":
             missing_rate += 1
-        if a and a.actor_type == "AI_AGENT":
+        if a and a.actor_type == "AI_AGENT" and unit is not None and t.estimated_credits is not None:
+            # F71/F76: plan (öneri) AI tutarı simülasyonun kredi tahmini × paket kredi birim fiyatı
+            credits += _d(t.estimated_credits)
+            token_total += _ai_try(_d(t.estimated_credits), unit)
+        elif a and a.actor_type == "AI_AGENT":
             price = await pricing.price_at(db, a.preferred_model_id)
             if price:
                 token_total += pricing.call_cost(price, int(TOKENS_IN_PER_DAY * days), int(TOKENS_OUT_PER_DAY * days))
@@ -223,4 +257,4 @@ async def planned_costs(db: AsyncSession, project: Project, tasks, actors) -> Di
                 missing_price += 1
     return {"labor": float(labor_total.quantize(Decimal("0.01"))), "token": float(token_total.quantize(Decimal("0.01"))),
             "total": float((labor_total + token_total).quantize(Decimal("0.01"))),
-            "missing_daily_cost": missing_rate, "missing_llm_price": missing_price}
+            "missing_daily_cost": missing_rate, "missing_llm_price": missing_price, "credits": float(credits)}

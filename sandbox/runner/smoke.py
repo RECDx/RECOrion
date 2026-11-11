@@ -100,6 +100,18 @@ def _dig(data, path):
     return data
 
 
+SKIP_UI = {"node_modules", ".git", "docs", "tests", "test", "__tests__", "coverage", "dist", "build", ".venv", "venv"}
+
+
+def _has_web_ui() -> bool:
+    """Depoda (doküman/test/derleme klasörleri dışında) HTML ya da JSX/Vue arayüz dosyası var mı."""
+    for root, dirs, files in os.walk(WORK):
+        dirs[:] = [d for d in dirs if d not in SKIP_UI and not d.startswith(".rx-")]
+        if any(f.endswith((".html", ".jsx", ".tsx", ".vue")) for f in files):
+            return True
+    return False
+
+
 def start_services(spec):
     procs, out = [], []
     for i, s in enumerate((spec.get("services") or [])[:5]):
@@ -270,6 +282,11 @@ def main():
                 pass
     for s in result["services"]:
         s["log"] = s.get("log") or ""
+    # Depoda web arayüzü varsa arayüzden deneme zorunlu: yalnız API denemek arayüzün çalıştığını göstermez
+    if _has_web_ui() and not any(c.get("type") == "browser" for c in checks):
+        result["checks"].append({"name": "Arayüzden deneme", "type": "browser", "ok": False, "seconds": 0,
+                                 "detail": "Depoda web arayüzü (HTML) var ama recorion.json'da arayüzden deneme (type: browser) yok; "
+                                           "arayüzün gerçek API'ye bağlanıp çalıştığı doğrulanmadı."})
     bad_svc = [s for s in svcs if not s.get("ready")]
     bad = [c for c in result["checks"] if c["ok"] is False]
     if bad_svc or bad:

@@ -95,7 +95,7 @@ async function downloadFile(endpoint, fallbackName) {
   if (!res.ok) {
     if (res.status === 401) handleUnauthorized();
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.detail || `HTTP Error ${res.status}`);
+    throw apiError(errData, res.status);
   }
   const disposition = res.headers.get('content-disposition') || '';
   const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);

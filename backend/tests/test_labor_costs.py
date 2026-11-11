@@ -56,7 +56,11 @@ def test_labor_and_token_costs(client, db, world, ai):
         assert human["labor"]["basis"] == "ACTUAL" and human["labor"]["days"] == 1 and human["labor"]["cost"] == 2500.0
         assert ai_row["labor"]["cost"] == 100.0  # AI günlük sabit maliyet × 1 gün
         # FakeAI çağrısı: 1200 girdi × 10/1M + 300 çıktı × 40/1M = 0,024 ₺
-        assert ai_row["tokens"]["calls"] == 1 and abs(ai_row["tokens"]["cost"] - 0.024) < 1e-9 and ai_row["tokens"]["unpriced_calls"] == 0
+        # F70: kredi birimi olan şirkette müşteriye gösterilen tutar kredi × birim; LLM TL maliyeti llm_cost'ta (RECDx iç maliyeti)
+        llm = ai_row["tokens"].get("llm_cost", ai_row["tokens"]["cost"])
+        assert ai_row["tokens"]["calls"] == 1 and abs(llm - 0.024) < 1e-9 and ai_row["tokens"]["unpriced_calls"] == 0
+        if c["totals"]["credit_unit_try"] is not None:
+            assert abs(ai_row["tokens"]["cost"] - ai_row["ai_credit_try"]) < 0.011
         # İnsan adımı bitince bağımlı AI adımı başladı: süren adım da gerçekleşen maliyet biriktirir (1 gün × 100 ₺)
         dep = rows["Bağımlı adım"]
         assert dep["labor"]["basis"] == "RUNNING" and dep["labor"]["cost"] == 100.0
@@ -73,7 +77,15 @@ def test_labor_and_token_costs(client, db, world, ai):
         client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "start"})
         _wait(client, admin, pid2, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "AI çıktısı")
         c2 = client.get(f"/api/v1/projects/{pid2}/costs", headers=admin).json()
-        assert c2["totals"]["unpriced_calls"] >= 1 and c2["totals"]["token"] == 0
+        if c2["totals"]["credit_unit_try"] is None:
+            assert c2["totals"]["unpriced_calls"] >= 1 and c2["totals"]["token"] == 0
+        else:  # F70: kredi birimi varken LLM fiyatının olmaması müşteri tutarını sıfırlamaz
+            assert c2["totals"]["unpriced_calls"] == 0 and c2["totals"]["token"] > 0
+            assert abs(c2["totals"]["actual"] - c2["totals"]["labor"] - c2["totals"]["token"] - c2["totals"]["other"]) < 0.011
+        # F74: fark = bütçe − gerçekleşen
+        assert client.put(f"/api/v1/projects/{pid2}/budget", headers=admin, json={"budget_try": 5000}).status_code == 200
+        c3 = client.get(f"/api/v1/projects/{pid2}/costs", headers=admin).json()["totals"]
+        assert abs(c3["budget_variance"] - (5000 - c3["actual"])) < 0.011
         client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "cancel"})
     finally:
         _exec(db, "DELETE FROM llm_model_prices WHERE model_id = %s", model_id)

@@ -103,7 +103,8 @@ async def company_overview(db: AsyncSession, tenant: Tenant, days: int = 30, dep
         done = sum(1 for x in c["tasks"] if x["status"] == "DONE")
         table.append({"project_id": str(p.id), "name": p.name, "status": p.status, "status_label": psvc.STATUS_LABELS.get(p.status, p.status),
                       "budget": c["budget"]["amount"], "actual": t["actual"], "labor": t["labor"], "token": t["token"], "other": t["other"],
-                      "variance": t["budget_variance"], "credits": t["credits"], "tasks_done": done, "tasks_total": len(c["tasks"])})
+                      "variance": t["budget_variance"], "credits": t["credits"], "tasks_done": done,
+                      "tasks_total": sum(1 for x in c["tasks"] if x["status"] != "CANCELLED")})  # F112: iptaller toplamda değil
     agents, roi = await agent_scorecards(db, tenant, since, department_id)
     people = await team_status(db, tenant, since, department_id)
     credit_summary = None
@@ -116,7 +117,7 @@ async def company_overview(db: AsyncSession, tenant: Tenant, days: int = 30, dep
         "days": days, "since": since.date().isoformat(), "department_id": str(department_id) if department_id else None,
         "currency": "TRY", "vat_included": False,
         "projects": {"total": len(projects), "by_status": status_counts, "on_time": on_time, "late": late},
-        "tasks": {"total": sum(task_counts.values()), "by_status": task_counts},
+        "tasks": {"total": sum(v for k, v in task_counts.items() if k != "CANCELLED"), "by_status": task_counts},  # F112
         "credits": credit_summary,
         "series": series,
         "by_model": by_model,
@@ -270,6 +271,15 @@ async def agent_scorecards(db: AsyncSession, tenant: Tenant, since: datetime, de
         Actor.tenant_id == tenant.id, Actor.actor_type == "HUMAN", Actor.daily_cost_try.isnot(None), Actor.daily_cost_try > 0))).all()]
     avg_rate = (sum(rates) / len(rates)) if len(rates) >= ROI_MIN_RATED_HUMANS else None
 
+    # F116: AI maliyeti proje ekranıyla aynı kaynaktan (kredi × paket kredi birim fiyatı); insan eşdeğeri ünvan referans maaşından
+    from app.db.models import JobTitle
+    from app.services import human_equivalent as he
+    unit = await he.tenant_credit_unit(db, tenant)
+    cfg = await he.settings(db)
+    jt_ids = {t.job_title_id for t in done if t.job_title_id} | {a.job_title_id for a in agents if a.job_title_id}
+    titles = {j.id: j for j in (await db.execute(select(JobTitle).where(JobTitle.id.in_(list(jt_ids) or [uuid.uuid4()])))).scalars()}
+    ref_equivalent = Decimal(0)
+
     cards, total_days, total_ai_cost, total_unpriced = [], Decimal(0), Decimal(0), 0
     for a in agents:
         mine = [t for t in done if t.assignee_actor_id == a.id]
@@ -281,7 +291,12 @@ async def agent_scorecards(db: AsyncSession, tenant: Tenant, since: datetime, de
                     Decimal(costs.workdays(t.started_at.date(), t.completed_at.date())) if t.started_at else Decimal(1)) for t in mine)
         fixed = sum((Decimal(str(t.labor_cost_try)) for t in mine if t.labor_cost_try is not None), Decimal(0))
         calls, cr, tl, unpriced = spend.get(a.id, (0, 0, 0, 0))
-        ai_cost = Decimal(str(tl or 0)) + fixed
+        if unit is not None:
+            ai_cost, unpriced = (Decimal(str(cr or 0)) * unit).quantize(Decimal("0.01")) + fixed, 0
+        else:
+            ai_cost = Decimal(str(tl or 0)) + fixed
+        for t in mine:
+            ref_equivalent += Decimal(str(he.human_for(titles.get(t.job_title_id or a.job_title_id), float(t.estimated_effort or 1), cfg)["cost"]))
         total_days += days
         total_ai_cost += ai_cost
         total_unpriced += unpriced
@@ -297,9 +312,13 @@ async def agent_scorecards(db: AsyncSession, tenant: Tenant, since: datetime, de
             "work_days": float(days), "calls": calls, "credits": round(_f(cr), 2), "cost": round(float(ai_cost), 2), "unpriced_calls": unpriced,
         })
     if avg_rate is None:
-        roi = {"available": False, "reason": f"Tahmini tasarruf için en az {ROI_MIN_RATED_HUMANS} insan personelin günlük maliyeti "
-                                              "tanımlı olmalı (ortalama kişi ücretini ele vermesin diye; KVKK).",
-               "rated_humans": len(rates), "work_days": float(total_days), "ai_cost": round(float(total_ai_cost), 2)}
+        # F116: şirket ücretleri yoksa insan eşdeğeri, proje Maliyet ekranındaki gibi ünvan referans maaşından hesaplanır
+        roi = {"available": bool(done), "basis": "REFERANS", "work_days": float(total_days),
+               "human_equivalent": round(float(ref_equivalent), 2), "ai_cost": round(float(total_ai_cost), 2),
+               "saving": round(float(ref_equivalent - total_ai_cost), 2), "rated_humans": len(rates), "unpriced_calls": total_unpriced,
+               "reason": None if done else "Bu dönemde AI personelin tamamladığı adım yok.",
+               "assumption": "İnsan eşdeğeri: tamamlanan adımların planlanan iş günü × ünvan referans maaşından günlük maliyet "
+                             "(proje Maliyet ekranıyla aynı yöntem). AI: kredi × paket kredi birim fiyatı."}
     else:
         human_equivalent = total_days * avg_rate
         roi = {"available": True, "work_days": float(total_days), "human_equivalent": round(float(human_equivalent), 2),

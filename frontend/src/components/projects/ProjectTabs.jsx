@@ -34,7 +34,11 @@ export function TeamSimTab({ project, actors, onChanged }) {
     toast.success(`Tahmini bitiş ${fmtDay(r.end_date)} (${r.workdays} iş günü).`);
   });
   const applyDates = () => run('dates', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (sim.start_date < today && !(await confirmDialog({ message: `Başlangıç tarihi (${fmtDay(sim.start_date)}) geçmişte. Proje tarihleri yine de bu şekilde ayarlansın mı?` }))) return;  // F69
     await api.updateProject(project.id, { start_date: sim.start_date, end_date: sim.end_date });
+    // F75: hedef tarih değişti; gecikme uyarısı eski hedefe göre kalmasın diye simülasyon yeniden hesaplanır
+    await api.simulateProject(project.id, sim.start_date);
     toast.success('Simülasyon tarihleri projeye uygulandı.');
   });
 
@@ -78,7 +82,8 @@ export function TeamSimTab({ project, actors, onChanged }) {
       <Card title="Simülasyon" subtitle="İş günü takvimi, bağımlılıklar ve personel kapasitesiyle tarih, süre ve kredi tahmini."
         actions={editable && (
           <div className="pj-actions">
-            <input type="date" className="ui-input" aria-label="Başlangıç tarihi" value={start} onChange={(e) => setStart(e.target.value)} />
+            <input type="date" className="ui-input" aria-label="Başlangıç tarihi" value={start} min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setStart(e.target.value)} />
             <Button icon={CalendarRange} onClick={simulate} disabled={!!busy || !project.tasks.length}>{busy === 'sim' ? 'Hesaplanıyor…' : 'Simüle et'}</Button>
           </div>
         )}>
@@ -280,12 +285,12 @@ export function CloseTab({ project, currentUser, onAction, busy }) {
             <div className="pj-stat"><span>Fark</span><strong>{fmtTl(cost.totals.budget_variance)}</strong></div>
             <div className="pj-stat"><span>Kredi</span><strong>{Number(cost.totals.credits || 0).toLocaleString('tr-TR')}</strong></div>
           </div>
-          <p className="pj-hint" style={{ marginTop: 8 }}>Personel {fmtTl(cost.totals.labor)} · Token (LLM) {fmtTl(cost.totals.token)} · Diğer {fmtTl(cost.totals.other)}
+          <p className="pj-hint" style={{ marginTop: 8 }}>Personel {fmtTl(cost.totals.labor)} · AI (kredi) {fmtTl(cost.totals.token)} · Diğer {fmtTl(cost.totals.other)}
             {cost.totals.unpriced_calls ? ` · ${cost.totals.unpriced_calls} çağrının TL fiyatı tanımsız` : ''}</p>
           {cost.totals.human_cost != null && (
             <ul className="pj-check" style={{ marginTop: 8 }} aria-label="AI ile insan karşılaştırması özeti">
-              <li>İnsanla tahmini: {Number(cost.totals.human_days || 0).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} iş günü / {fmtTl(cost.totals.human_cost)}</li>
-              <li>AI ile gerçekleşen: {cost.totals.ai_calendar_days == null ? '—' : Number(cost.totals.ai_calendar_days).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} gün / {fmtTl(cost.totals.ai_credit_try)} (fark {fmtTl(cost.totals.saving)})</li>
+              <li>İnsanla tahmini: {Number(cost.totals.human_days || 0).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} adam-gün (efor) / {fmtTl(cost.totals.human_cost)}</li>
+              <li>AI ile gerçekleşen: {cost.totals.ai_calendar_days == null ? '—' : Number(cost.totals.ai_calendar_days * 24).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} saat (takvim) / {fmtTl(cost.totals.ai_credit_try)} (fark {fmtTl(cost.totals.saving)})</li>
             </ul>
           )}
         </Card>

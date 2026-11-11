@@ -91,7 +91,9 @@ def test_agent_scorecard_and_roi(client, db, world, ai):
     _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE tenant_id = %s", w["tenant"])
     _exec(db, "UPDATE actors SET daily_cost_try = 3000 WHERE id = %s", w["admin"]["id"])
     roi = client.get(url, headers=admin).json()["roi"]
-    assert roi["available"] is False and "KVKK" in roi["reason"]
+    # F116: şirket ücretleri (en az 3 kişi) yoksa insan eşdeğeri ünvan referans maaşından (proje Maliyet ekranıyla aynı yöntem)
+    assert roi["basis"] == "REFERANS" and roi["available"] is True and roi["human_equivalent"] > 0
+    assert abs(roi["saving"] - (roi["human_equivalent"] - roi["ai_cost"])) < 0.05
     _exec(db, "UPDATE actors SET daily_cost_try = 2000 WHERE id IN (%s, %s)", w["member"]["id"], w["outsider"]["id"])
     d = client.get(url, headers=admin).json()
     roi = d["roi"]

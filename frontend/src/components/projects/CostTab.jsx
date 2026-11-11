@@ -6,8 +6,10 @@ import { confirmDialog, toast } from '../../ui/feedback';
 
 export const CATEGORIES = { MATERYAL: 'Materyal', DANISMANLIK: 'Danışmanlık', EGITIM: 'Eğitim', LISANS: 'Lisans / yazılım',
   SEYAHAT: 'Seyahat', DONANIM: 'Donanım', DIGER: 'Diğer' };
-const BASIS = { ACTUAL: 'Gerçekleşen', RUNNING: 'Sürüyor', PLANNED: 'Plan (tahmin)' };
+const BASIS = { ACTUAL: 'Gerçekleşen', RUNNING: 'Sürüyor', PLANNED: 'Plan (tahmin)', CANCELLED: 'İptal' };
 export const tl = (n) => (n == null ? '—' : `${Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`);
+// F70: kredi birim fiyatı 4 haneli (1,5959 ₺); 2 haneye yuvarlanınca çarpım tutmuyor gibi görünüyordu
+const unitTl = (n) => (n == null ? '—' : `${Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ₺`);
 const tok = (n) => Number(n || 0).toLocaleString('tr-TR');
 
 const num = (n, d = 1) => (n == null ? '—' : Number(n).toLocaleString('tr-TR', { maximumFractionDigits: d }));
@@ -21,25 +23,31 @@ export function HumanComparison({ c }) {
   return (
     <Card title="AI ile insan karşılaştırması" subtitle="Aynı işi insan personel yapsaydı tahmini süre ve maliyet; AI'ın gerçek süresi ve kredi maliyetiyle.">
       <div className="pj-stats">
-        <div className="pj-stat"><span>İnsanla tahmini süre</span><strong>{num(t.human_days)} iş günü</strong></div>
+        <div className="pj-stat"><span>İnsanla toplam efor</span><strong>{num(t.human_days)} adam-gün</strong>
+          <small className="pj-hint">adımların iş günleri toplamı; takvim süresi paralel adımlarla daha kısadır</small></div>
         <div className="pj-stat"><span>İnsan eşdeğeri maliyet</span><strong>{tl(t.human_cost)}</strong></div>
-        <div className="pj-stat"><span>AI maliyeti</span><strong>{tl(t.ai_credit_try)}</strong>
-          <small className="pj-hint">{num(t.credits, 2)} kredi × {tl(t.credit_unit_try)}</small></div>
+        <div className="pj-stat"><span>AI maliyeti (gerçekleşen)</span><strong>{tl(t.ai_credit_try)}</strong>
+          <small className="pj-hint">{num(t.credits, 2)} kredi × {unitTl(t.credit_unit_try)}</small>
+          {t.planned_credits > 0 && <small className="pj-hint">Plan: {num(t.planned_credits, 0)} kredi · {tl(t.planned_ai_try)}
+            {` (${t.credits > t.planned_credits ? '+' : ''}%${Math.round(((t.credits - t.planned_credits) / t.planned_credits) * 100)})`}</small>}</div>
         <div className="pj-stat"><span>Fark / tasarruf</span>
           <strong className={t.saving == null ? undefined : t.saving < 0 ? 'ui-text-danger' : 'ui-text-success'}>{tl(t.saving)}</strong>
-          {t.ai_calendar_days != null && <small className="pj-hint">AI gerçek süre: {num(t.ai_calendar_days)} gün</small>}</div>
+          {t.ai_calendar_days != null && <small className="pj-hint">AI'ın gerçek süresi: {num(t.ai_calendar_days * 24, 1)} saat (ilk başlangıçtan son teslime, takvim)</small>}</div>
       </div>
       <div className="ui-table-scroll" style={{ marginTop: 10 }}>
         <table className="ui-table" aria-label="AI ile insan karşılaştırması">
-          <thead><tr><th>Adım</th><th>Ünvan</th><th>İnsan (gün · TL)</th><th>AI (süre · kredi · TL)</th></tr></thead>
+          <thead><tr><th>Adım</th><th>Ünvan</th><th>İnsan (gün · TL)</th><th>AI (süre · kredi · TL)</th><th>Plan kredisi</th></tr></thead>
           <tbody>
             {(c.tasks || []).map((x) => (
-              <tr key={x.task_id}>
-                <td data-label="Adım">{x.order_index ? `${x.order_index}. ` : ''}{x.title}</td>
+              <tr key={x.task_id} style={x.in_scope === false ? { opacity: 0.6 } : undefined}>
+                <td data-label="Adım">{x.order_index ? `${x.order_index}. ` : ''}{x.title}
+                  {x.in_scope === false && <small className="pj-hint"> (iptal — insan tarafına dahil değil)</small>}</td>
                 <td data-label="Ünvan">{x.human?.job_title || '—'}{x.human?.seniority ? <small className="pj-hint"> · {SENIORITY[x.human.seniority] || x.human.seniority}</small> : ''}
                   {x.human?.basis === 'VARSAYILAN' && <small className="pj-hint"> (ünvan atanmamış, genel varsayılan)</small>}</td>
                 <td data-label="İnsan">{num(x.human?.days)} gün · {tl(x.human?.cost)}</td>
-                <td data-label="AI">{aiTime(x.ai_hours)} · {num(x.tokens?.credits, 2)} kredi · {tl(x.ai_credit_try)}</td>
+                <td data-label="AI">{aiTime(x.ai_hours)} · {num(x.tokens?.credits, 2)} kredi · {tl(x.ai_credit_try)}
+                  {x.review_credits > 0 && <small className="pj-hint"> (kontrol personeli: {num(x.review_credits, 2)} kredi)</small>}</td>
+                <td data-label="Plan kredisi">{x.estimated_credits != null ? `${num(x.estimated_credits, 0)} · ${tl(x.estimated_try)}` : '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -73,9 +81,10 @@ export default function CostTab({ project, onSummary }) {
   if (!c) return <p className="pj-hint">Yükleniyor…</p>;
   const t = c.totals;
   const saveBudget = async () => {
+    if (budget.amount !== '' && Number(budget.amount) < 0) { toast.error('Bütçe eksi olamaz; 0 veya daha büyük bir tutar girin.'); return; }  // F73
     try {
       await api.setProjectBudget(project.id, budget.amount === '' ? null : Number(budget.amount), budget.note);
-      toast.success('Bütçe kaydedildi.');
+      toast.success(budget.amount === '' ? 'Bütçe kaldırıldı (bu projede bütçe tanımlı değil).' : 'Bütçe kaydedildi.');  // F78
       budgetDirty.current = false;
       load();
     } catch (e) { toast.error(e.message); }
@@ -127,7 +136,7 @@ export default function CostTab({ project, onSummary }) {
           )}
           <ul className="pj-check" style={{ marginTop: 12 }}>
             <li>Personel: {tl(t.labor)}{t.labor_planned ? ` (başlamamış adımlar için tahmin ${tl(t.labor_planned)})` : ''}</li>
-            <li>Token (LLM): {tl(t.token)} · {tok(t.credits)} kredi</li>
+            <li>AI (kredi): {tl(t.token)} · {num(t.credits, 2)} kredi{t.credit_unit_try != null ? ` × ${unitTl(t.credit_unit_try)}` : ''}</li>
             <li>Diğer kalemler: {tl(t.other)}</li>
           </ul>
         </Card>
@@ -149,7 +158,7 @@ export default function CostTab({ project, onSummary }) {
       <Card title="İş adımları" subtitle="Personel maliyeti gerçekleşen iş günü × günlük maliyet; tamamlanan adımda kayda geçer.">
         <div className="ui-table-scroll">
           <table className="ui-table">
-            <thead><tr><th>#</th><th>İş adımı</th><th>Personel</th><th>Gün</th><th>Personel</th><th>Token (LLM)</th><th>Diğer</th><th>Toplam</th></tr></thead>
+            <thead><tr><th>#</th><th>İş adımı</th><th>Personel</th><th>Gün</th><th>Personel</th><th>AI maliyeti</th><th>Diğer</th><th>Toplam</th></tr></thead>
             <tbody>
               {c.tasks.map((x) => {
                 const labor = x.labor.basis === 'PLANNED' ? 0 : x.labor.cost;
@@ -160,7 +169,7 @@ export default function CostTab({ project, onSummary }) {
                     <td data-label="Personel">{x.assignee || '—'}{x.assignee_type === 'AI_AGENT' ? ' (AI)' : ''}</td>
                     <td data-label="Gün">{x.labor.days} <small className="pj-hint">{BASIS[x.labor.basis]}</small></td>
                     <td data-label="Personel maliyeti">{x.labor.basis === 'PLANNED' ? <span className="pj-hint">{tl(x.labor.cost)} (tahmin)</span> : tl(x.labor.cost)}</td>
-                    <td data-label="Token (LLM)">{tl(x.tokens.cost)}{x.tokens.unpriced_calls ? <small className="pj-hint"> · {x.tokens.unpriced_calls} fiyatsız</small> : ''}</td>
+                    <td data-label="AI maliyeti">{tl(x.tokens.cost)}{x.tokens.unpriced_calls ? <small className="pj-hint"> · {x.tokens.unpriced_calls} fiyatsız</small> : ''}</td>
                     <td data-label="Diğer">{tl(x.other)}</td>
                     <td data-label="Toplam"><strong>{tl(labor + x.tokens.cost + x.other)}</strong></td>
                   </tr>
@@ -169,7 +178,7 @@ export default function CostTab({ project, onSummary }) {
               {c.project_level_tokens && (
                 <tr>
                   <td data-label="#">—</td><td data-label="İş adımı">Proje geneli (Beyin AI planlama)</td><td data-label="Personel">RECAi</td><td data-label="Gün">—</td>
-                  <td data-label="Personel maliyeti">—</td><td data-label="Token (LLM)">{tl(c.project_level_tokens.cost)}</td><td data-label="Diğer">—</td>
+                  <td data-label="Personel maliyeti">—</td><td data-label="AI maliyeti">{tl(c.project_level_tokens.cost)}</td><td data-label="Diğer">—</td>
                   <td data-label="Toplam"><strong>{tl(c.project_level_tokens.cost)}</strong></td>
                 </tr>
               )}

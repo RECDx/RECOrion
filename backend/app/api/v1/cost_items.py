@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import CurrentUser, get_current_user
@@ -148,8 +148,15 @@ async def download_attachment(project_id: uuid.UUID, item_id: uuid.UUID, user: C
 
 
 class BudgetIn(BaseModel):
-    budget_try: Optional[Decimal] = Field(None, ge=0, le=100_000_000_000)
+    budget_try: Optional[Decimal] = Field(None, le=100_000_000_000)
     budget_note: Optional[str] = Field(None, max_length=2000)
+
+    @field_validator("budget_try")
+    @classmethod
+    def _not_negative(cls, v):  # F73: anlaşılır Türkçe mesaj
+        if v is not None and v < 0:
+            raise ValueError("Bütçe eksi olamaz; 0 veya daha büyük bir tutar girin.")
+        return v
 
 
 @router.put("/{project_id}/budget")
