@@ -85,6 +85,7 @@ import RecaiTrainingAdmin from './recai/RecaiTrainingAdmin';
 import PrivacySettingsCard from './recai/PrivacySettingsCard';
 import PlanRecaiPicker from './recai/PlanRecaiPicker';
 import TenantCustomTitles from './company/TenantCustomTitles';
+import RecaiConsentCard from './company/RecaiConsentCard';
 import CostSettingsCard from './recai/CostSettingsCard';
 import { PERMISSION_MODULES, moduleName } from '../permissions';
 
@@ -5880,6 +5881,9 @@ export default function SuperAdminConsole({
 
                     <TenantCustomTitles key={selectedTenantDetails.tenant.id} tenant={selectedTenantDetails.tenant}
                       plan={plans.find((p) => p.id === selectedTenantDetails.tenant.plan_id)} />
+
+                    {/* #743: müşterinin RECAi katkı izni — Merkez yalnız görür, değiştiremez */}
+                    <RecaiConsentCard key={`consent-${selectedTenantDetails.tenant.id}`} tenantId={selectedTenantDetails.tenant.id} readOnly />
 
                     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 6 }}>
                       {/* Hoş Geldin Maili Gönder (Madde 1) */}

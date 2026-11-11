@@ -49,7 +49,8 @@ def test_consent_and_dataset(client, db, world, monkeypatch):
     c = client.get(f"/api/v1/company/{w['tenant']}/recai-consent", headers=admin).json()
     assert c["consent"] is True and "maskelendikten sonra" in c["text"]  # varsayılan açık (kullanıcı kararı)
     sa = _super(client, db)
-    assert client.put(f"/api/v1/company/{w['tenant']}/recai-consent", headers=sa, json={"consent": False}).status_code == 403
+    assert client.get(f"/api/v1/company/{w['tenant']}/recai-consent", headers=sa).json()["consent"] is True  # Merkez görür
+    assert client.put(f"/api/v1/company/{w['tenant']}/recai-consent", headers=sa, json={"consent": False}).status_code == 403  # değiştiremez
     assert client.put(f"/api/v1/company/{w['tenant']}/recai-consent", headers=w["member"]["h"], json={"consent": False}).status_code == 403
 
     good = _rec(db, w["tenant"], w["agent"], "DOGRU", output="Sayın Ahmet Yılmaz, IBAN TR33 0006 1005 1978 6457 8413 26. Fiyat tablosu ekte.")

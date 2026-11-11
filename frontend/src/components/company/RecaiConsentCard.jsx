@@ -3,8 +3,11 @@ import { api } from '../../api';
 import { Card } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 
-/** İSTEK #743: şirket kartında "RECAi model geliştirmeye katkı" izni (varsayılan açık; şirket yöneticisi kapatabilir). */
-export default function RecaiConsentCard({ tenantId }) {
+/**
+ * İSTEK #743: şirket kartında "RECAi model geliştirmeye katkı" izni (varsayılan açık; şirket yöneticisi kapatabilir).
+ * readOnly: Merkez › firma detayında salt okunur gösterim — izin müşterinin kararıdır, RECDx değiştiremez.
+ */
+export default function RecaiConsentCard({ tenantId, readOnly = false }) {
   const [c, setC] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { api.getRecaiConsent(tenantId).then(setC).catch((e) => toast.error(e.message)); }, [tenantId]);
@@ -16,6 +19,23 @@ export default function RecaiConsentCard({ tenantId }) {
     catch (e) { toast.error(e.message); } finally { setBusy(false); }
   };
 
+  const changed = c?.changed_at && (
+    <p className="pj-hint">Son değişiklik: {new Date(c.changed_at).toLocaleString('tr-TR')}{c.changed_by ? ` · ${c.changed_by}` : ''}</p>
+  );
+
+  if (readOnly) {
+    return (
+      <div className="pj-field" aria-label="RECAi model geliştirmeye katkı izni">
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={!!c?.consent} disabled readOnly /> RECAi model geliştirmeye katkı
+        </label>
+        <span className="pj-hint">{!c ? 'Yükleniyor…' : c.consent ? 'Açık: maskeli verileri RECAi eğitim setlerine girer.' : 'Kapalı: verileri eğitim setlerine girmez.'}
+          {' '}Yalnız şirketin kendi yöneticisi değiştirebilir.</span>
+        {changed}
+      </div>
+    );
+  }
+
   return (
     <Card title="RECAi model geliştirmeye katkı" subtitle="RECDx'in yerli ve milli yapay zekâ modeli RECAi'nin gelişimine maskeli verilerle katkı.">
       {!c ? <p className="pj-hint">Yükleniyor…</p> : (
@@ -25,7 +45,7 @@ export default function RecaiConsentCard({ tenantId }) {
             Maskeli verilerimiz RECAi'nin geliştirilmesinde kullanılabilir
           </label>
           <p className="pj-hint" style={{ marginTop: 8 }}>{c.text}</p>
-          {c.changed_at && <p className="pj-hint">Son değişiklik: {new Date(c.changed_at).toLocaleString('tr-TR')}{c.changed_by ? ` · ${c.changed_by}` : ''}</p>}
+          {changed}
         </>
       )}
     </Card>
