@@ -130,6 +130,11 @@ async def project_finished(db: AsyncSession, project_id) -> None:
     await notify(db, project.manager_actor_id,
                  f"RECOrion: '{project.name}' projesinin tüm iş adımları tamamlandı. Kapanış özetini yazıp projeyi kapatabilirsiniz.",
                  "PROJECT_FINISHED", project_name=project.name, project_url=_url(project))
+    try:  # #740: otomasyonla açılan işin sonucu seçilen kişilere iletilir (ör. günlük e-posta özeti, Resmi Gazete özeti)
+        from app.services import automations
+        await automations.deliver_result(db, project)
+    except Exception:
+        logger.exception("Otomasyon sonucu iletilemedi")
 
 
 # ---------------------------------------------------------------- iş adımı akışı

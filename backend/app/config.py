@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # Otomatik zamanlayıcı (mail hatırlatmaları)
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_INTERVAL_MINUTES: int = 60
+    # İSTEK #740: e-posta bağlayıcısı OAuth (RECDx platform uygulaması; boşsa 'Hesapla giriş' kapalı, uygulama şifresi kullanılır)
+    MAIL_GOOGLE_CLIENT_ID: str = ""
+    MAIL_GOOGLE_CLIENT_SECRET: str = ""
+    MAIL_MS_CLIENT_ID: str = ""
+    MAIL_MS_CLIENT_SECRET: str = ""
     # İSTEK #742: öğrenme kaydından arka planda RECAi ile ders çıkarma (testlerde kapalı; testler doğrudan çağırır)
     LEARNING_LESSONS_ENABLED: bool = True
     # Telegram bildirimleri (ADIM 6.5): BotFather'dan alınan token ve botun kullanıcı adı (@ olmadan)

@@ -507,5 +507,117 @@
    "Bağlantıyı ekleyip ajan anahtarı oluşturun.",
    "Ajanı sunucuda kurup izinli sorgu şablonlarını tanımlayın."
   ]
+ },
+ {
+  "code": "gmail",
+  "title": "Gmail / Google Workspace",
+  "vendor": "Google",
+  "category": "E-posta",
+  "method": "NATIVE",
+  "connector": "mail",
+  "preset": {
+   "provider": "gmail",
+   "auth": "password"
+  },
+  "sort": 300,
+  "description": "Gmail kutusu: AI personel e-postaları arar, okur, özetler; yeni e-posta otomasyonu tetikler. Gönderme her zaman insan onayıyla; 'Yalnızca okuma' seçilirse AI personel e-posta gönderemez.",
+  "keywords": "gmail google mail e-posta eposta posta kutusu workspace imap",
+  "setup_steps": [
+   "Google hesabında 2 adımlı doğrulamayı açın; Hesap › Güvenlik › Uygulama şifreleri'nden 'RECOrion' adıyla şifre oluşturun.",
+   "E-posta adresinizi ve 16 haneli uygulama şifresini girin (RECDx 'Hesapla giriş'i açtıysa şifre yerine onu seçebilirsiniz).",
+   "'Dene' ile bağlantıyı doğrulayın; AI personele 'E-posta' araç iznini verin."
+  ]
+ },
+ {
+  "code": "outlook",
+  "title": "Outlook / Hotmail / Microsoft 365",
+  "vendor": "Microsoft",
+  "category": "E-posta",
+  "method": "NATIVE",
+  "connector": "mail",
+  "preset": {
+   "provider": "outlook",
+   "auth": "oauth"
+  },
+  "sort": 301,
+  "description": "Outlook.com, Hotmail ve Microsoft 365 kutusu (hesapla giriş). Gönderme her zaman insan onayıyla; 'Yalnızca okuma' seçilirse AI personel e-posta gönderemez.",
+  "keywords": "outlook hotmail live microsoft 365 office exchange e-posta imap",
+  "setup_steps": [
+   "Giriş yöntemi 'Hesapla giriş' olarak gelir (Microsoft şifreyle IMAP girişini kapattı).",
+   "Bağlantıyı kaydedip 'Giriş yap'a basın; Microsoft hesabınızla izin verin.",
+   "'Dene' ile doğrulayın. Hesapla giriş RECDx tarafından henüz açılmadıysa RECDx destek ile iletişime geçin."
+  ]
+ },
+ {
+  "code": "icloud_mail",
+  "title": "iCloud Mail",
+  "vendor": "Apple",
+  "category": "E-posta",
+  "method": "NATIVE",
+  "connector": "mail",
+  "preset": {
+   "provider": "icloud",
+   "auth": "password"
+  },
+  "sort": 302,
+  "description": "iCloud e-posta kutusu (uygulamaya özel şifre ile). Gönderme her zaman insan onayıyla; 'Yalnızca okuma' seçilirse AI personel e-posta gönderemez.",
+  "keywords": "icloud apple me.com mac.com e-posta imap",
+  "setup_steps": [
+   "appleid.apple.com › Giriş ve Güvenlik › Uygulamaya özel şifreler'den şifre oluşturun.",
+   "iCloud e-posta adresinizi ve bu şifreyi girin; 'Dene' ile doğrulayın."
+  ]
+ },
+ {
+  "code": "yandex_mail",
+  "title": "Yandex Mail",
+  "vendor": "Yandex",
+  "category": "E-posta",
+  "method": "NATIVE",
+  "connector": "mail",
+  "preset": {
+   "provider": "yandex",
+   "auth": "password"
+  },
+  "sort": 303,
+  "description": "Yandex e-posta kutusu (uygulama şifresiyle). Gönderme her zaman insan onayıyla; 'Yalnızca okuma' seçilirse AI personel e-posta gönderemez.",
+  "keywords": "yandex mail e-posta imap",
+  "setup_steps": [
+   "Yandex ID › Güvenlik › Uygulama şifreleri'nden 'E-posta' şifresi oluşturun.",
+   "Adres ve şifreyi girip 'Dene'ye basın."
+  ]
+ },
+ {
+  "code": "mail_imap",
+  "title": "Şirket e-posta sunucusu (IMAP/SMTP)",
+  "vendor": "",
+  "category": "E-posta",
+  "method": "NATIVE",
+  "connector": "mail",
+  "preset": {
+   "provider": "imap",
+   "auth": "password"
+  },
+  "sort": 304,
+  "description": "Kendi alan adınızdaki kutu (cPanel, Plesk, Zimbra, Yandex 360, Turkcell vb.): IMAP ile okuma, SMTP ile onaylı gönderme.",
+  "keywords": "imap smtp kurumsal e-posta mail sunucusu cpanel plesk zimbra",
+  "setup_steps": [
+   "Barındırma firmanızdan IMAP ve SMTP sunucu adı ile portlarını öğrenin (genelde 993 / 587).",
+   "E-posta adresi ve şifreyi (varsa uygulama şifresi) girin; 'Dene' ile doğrulayın."
+  ]
+ },
+ {
+  "code": "web_rss",
+  "title": "Web sayfası / RSS kaynağı",
+  "vendor": "",
+  "category": "Web kaynağı",
+  "method": "NATIVE",
+  "connector": "web_source",
+  "sort": 310,
+  "description": "Web sayfası ve RSS/Atom akışı okur (ör. Resmi Gazete, sektör haberleri). Yeni maddeler otomasyonla Case açabilir.",
+  "keywords": "rss atom web sayfa haber resmi gazete mevzuat duyuru akış",
+  "setup_steps": [
+   "İzlenecek RSS akışını (varsa) ya da sayfa adresini girin; boş bırakırsanız AI personel adresi kendisi verir.",
+   "Otomasyonlar'da 'Yoklama' tetiğiyle read_feed aracını seçin; yeni madde gelince Case açılır."
+  ]
  }
 ]

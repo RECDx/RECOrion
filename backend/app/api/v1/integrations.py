@@ -64,7 +64,8 @@ def conn_out(c: IntegrationConnection) -> Dict[str, Any]:
            "catalog_code": c.catalog_code, "name": c.name, "config": c.config or {}, "secrets_set": secrets_set, "status": c.status,
            "last_test_at": c.last_test_at, "last_test_ok": c.last_test_ok, "last_error": c.last_error, "created_at": c.created_at,
            **({"agent": _agent_out(c)} if c.connector == "edge" else {})}
-    if oauth.enabled(c.config):
+    from app.integrations import mail as _mail
+    if oauth.enabled(c.config) or (c.connector == "mail" and _mail.uses_oauth(c.config)):  # #740: Gmail/Outlook hesapla giriş
         exp = secrets.get("_expires_at")
         out["oauth"] = {"connected": bool(secrets.get("_access_token")), "can_refresh": bool(secrets.get("_refresh_token")),
                         "expires_at": datetime.fromtimestamp(int(exp), timezone.utc) if exp else None,
@@ -324,6 +325,8 @@ async def decide(call_id: uuid.UUID, payload: DecisionIn, user: CurrentUser = De
 async def oauth_start(tenant_id: uuid.UUID, cid: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Servisin giriş ekranına gidecek adresi üretir (PKCE + state). İstemci yoksa RECOrion kendini otomatik kaydeder."""
     conn = await _conn(db, user, tenant_id, cid)
+    if conn.connector == "mail":
+        return await _mail_oauth_start(conn, tenant_id, cid, user)
     if conn.connector != "mcp" or not oauth.enabled(conn.config):
         raise HTTPException(status_code=409, detail="Bu bağlantının kimlik yöntemi tek tık giriş değil.")
     if conn.status != "ACTIVE":
@@ -350,6 +353,53 @@ async def oauth_start(tenant_id: uuid.UUID, cid: uuid.UUID, user: CurrentUser = 
     return {"authorize_url": oauth.authorize_url(meta, client["id"], state, codes["challenge"]), "redirect_uri": oauth.redirect_uri()}
 
 
+async def _mail_oauth_start(conn, tenant_id, cid, user) -> dict:
+    """#740: Gmail / Outlook hesapla giriş. İstemci RECDx'in platform uygulamasıdır (ortam ayarı), şirkete kaydedilmez."""
+    from urllib.parse import urlencode
+    from app.integrations import mail
+    if not mail.uses_oauth(conn.config):
+        raise HTTPException(status_code=409, detail="Bu e-posta bağlantısının giriş yöntemi 'Hesapla giriş' değil.")
+    if conn.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="Bağlantı devre dışı.")
+    kind = mail.provider(conn.config)["oauth"]
+    client = mail.oauth_client(kind)
+    if not client:
+        raise HTTPException(status_code=409, detail="Hesapla giriş henüz RECDx tarafından açılmadı; şimdilik 'Uygulama şifresi' yöntemini "
+                                                    "kullanın (Outlook/Hotmail için RECDx destek ile iletişime geçin).")
+    meta = mail.OAUTH[kind]
+    state, codes = pysecrets.token_urlsafe(32), oauth.pkce()
+    await oauth.save_pending(state, {"kind": "mail", "tenant_id": str(tenant_id), "connection_id": str(cid), "actor_id": str(user.actor_id),
+                                     "verifier": codes["verifier"], "token_endpoint": meta["token_endpoint"], "oauth": kind})
+    q = {"response_type": "code", "client_id": client["id"], "redirect_uri": oauth.redirect_uri(), "scope": meta["scope"],
+         "state": state, "code_challenge": codes["challenge"], "code_challenge_method": "S256",
+         "login_hint": conn.config.get("username") or "", **meta["extra"]}
+    return {"authorize_url": meta["authorization_endpoint"] + "?" + urlencode(q), "redirect_uri": oauth.redirect_uri()}
+
+
+async def _mail_oauth_callback(db, pending: dict, code: str):
+    from app.integrations import mail
+    cid = pending["connection_id"]
+    conn = await db.get(IntegrationConnection, uuid.UUID(cid))
+    if not conn or str(conn.tenant_id) != pending["tenant_id"] or conn.connector != "mail":
+        return _back(False, None, "Bağlantı bulunamadı veya değişti.")
+    client = mail.oauth_client(pending["oauth"])
+    try:
+        if not client or not code:
+            raise ToolError("Giriş tamamlanamadı (istemci veya kod eksik).")
+        tokens = await oauth._token_request(pending["token_endpoint"], client, ["client_secret_post"], {
+            "grant_type": "authorization_code", "code": code, "redirect_uri": oauth.redirect_uri(), "code_verifier": pending["verifier"]})
+    except ToolError as exc:
+        conn.last_test_at, conn.last_test_ok, conn.last_error = datetime.now(timezone.utc), False, str(exc)[:1000]
+        await db.commit()
+        return _back(False, cid, str(exc))
+    ctx = tool_gateway.context(conn)
+    conn.secret = vault.seal({**ctx.secrets, **tokens}, tool_gateway.binding(conn))
+    conn.last_test_at, conn.last_test_ok, conn.last_error = datetime.now(timezone.utc), True, None
+    await db.commit()
+    logger.info("E-posta OAuth girişi tamamlandı (bağlantı %s)", cid)
+    return _back(True, cid)
+
+
 def _back(ok: bool, cid: Optional[str], message: str = "") -> RedirectResponse:
     from app.config import settings
 
@@ -366,6 +416,8 @@ async def oauth_callback(state: str = "", code: str = "", error: str = "", error
     cid = pending["connection_id"]
     if error:
         return _back(False, cid, "Giriş iptal edildi veya izin verilmedi." if error == "access_denied" else f"Servis girişi reddetti: {(error_description or error)[:200]}")
+    if pending.get("kind") == "mail":
+        return await _mail_oauth_callback(db, pending, code)
     conn = await db.get(IntegrationConnection, uuid.UUID(cid))
     if not conn or str(conn.tenant_id) != pending["tenant_id"] or conn.connector != "mcp" or not oauth.enabled(conn.config):
         return _back(False, None, "Bağlantı bulunamadı veya değişti.")

@@ -24,7 +24,8 @@ from app.services.llm_gateway import LLMContext
 logger = logging.getLogger("recorion.catalog")
 SEED_FILE = Path(__file__).resolve().parent.parent / "seed" / "integration_catalog.json"
 METHODS = ("NATIVE", "MCP_OAUTH", "MCP_TOKEN", "EDGE", "PLANNED")
-CATEGORIES = ("ERP", "CRM", "İş takibi", "Doküman", "Yazılım", "Müşteri destek", "Mesajlaşma", "Finans", "Tasarım", "Diğer")
+CATEGORIES = ("ERP", "CRM", "İş takibi", "Doküman", "Yazılım", "Müşteri destek", "Mesajlaşma", "E-posta", "Web kaynağı", "Finans",
+              "Tasarım", "Diğer")  # #740: E-posta, Web kaynağı
 METHOD_LABEL = {"NATIVE": "Doğrudan bağlantı", "MCP_OAUTH": "Tek tık giriş (MCP)", "MCP_TOKEN": "MCP sunucusu",
                 "EDGE": "Şirket sunucusu (Edge)", "PLANNED": "Yakında"}
 CODE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")

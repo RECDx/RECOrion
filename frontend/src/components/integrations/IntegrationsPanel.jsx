@@ -174,7 +174,14 @@ function AgentTokenModal({ data, onClose }) {
 
 // MCP kimlik yöntemine göre görünen alanlar (ADIM 12.1)
 const MCP_FIELDS = { token: ['token', 'auth_header'], oauth: ['client_id', 'client_secret'], none: [] };
+const MAIL_SERVER_FIELDS = ['imap_host', 'imap_port', 'smtp_host', 'smtp_port'];
 const visible = (code, config, key) => {
+  if (code === 'mail') {  // #740: sunucu alanları yalnız "Diğer" sağlayıcıda; hesapla girişte şifre alanı yok
+    if (MAIL_SERVER_FIELDS.includes(key)) return (config.provider || 'imap') === 'imap';
+    if (key === 'password') return config.auth !== 'oauth';
+    if (key === 'auth') return ['gmail', 'outlook'].includes(config.provider);
+    return true;
+  }
   if (code !== 'mcp' || !['token', 'auth_header', 'client_id', 'client_secret'].includes(key)) return true;
   return MCP_FIELDS[config.auth_mode || 'token'].includes(key);
 };

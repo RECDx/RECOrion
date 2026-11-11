@@ -1220,6 +1220,20 @@ Bağlantı satırının altında açılır. AI personelin bu bağlantının hang
 
 > **İpucu:** AI personele önce yalnızca okuma araçlarını verin. Yazma araçları zaten her seferinde insan onayına düşer ve elle denenemez ("Yazma araçları elle denenemez; AI personel kullandığında onaya düşer."). Odoo bağlantısı kayıt silmez.
 
+#### E-posta ve Web/RSS bağlantıları (İSTEK #740)
+
+**E-posta** kategorisinde **Gmail / Google Workspace**, **Outlook / Hotmail / Microsoft 365**, **iCloud Mail**, **Yandex Mail** ve **Şirket e-posta sunucusu (IMAP/SMTP)** kartları vardır. Bağlanınca AI personel (araç izni verdiğiniz) e-postaları **arar** (gönderen, konu, metin, son N gün, okunmamış), **okur** (okunmadı işareti değişmez; ek adlarını görür) ve özetler. **Gönderme her zaman onayınızdan geçer** (Onay Kutusu / Telegram düğmesi); bağlantıyı **Yalnızca okuma** yaparsanız AI personel hiç e-posta gönderemez.
+
+- **Giriş yöntemi:** Gmail, iCloud ve Yandex'te normal şifre çalışmaz; hesabınızın güvenlik ayarlarından **uygulama şifresi** oluşturup girin. **Outlook/Hotmail** için **Hesapla giriş** gerekir (Microsoft şifreyle girişi kapattı): bağlantıyı kaydedip **Giriş yap**'a basın, Microsoft hesabınızla izin verin. Gmail'de de hesapla giriş seçilebilir. Hesapla giriş RECDx tarafından henüz açılmadıysa "Hesapla giriş henüz RECDx tarafından açılmadı" uyarısı çıkar; o durumda uygulama şifresi kullanın.
+- **Sunucu adresleri** yalnız "Diğer (IMAP/SMTP)" sağlayıcısında sorulur (genelde IMAP 993, SMTP 587). İç ağdaki sunuculara bağlanılmaz.
+- E-posta içeriği **dış veridir**: AI personel içindeki talimatları uygulamaz, yalnız bilgi olarak kullanır.
+
+**Web sayfası / RSS kaynağı** kartı: AI personel bir sayfanın metnini ya da RSS/Atom akışının son maddelerini okur (ör. Resmi Gazete, sektör haberleri). Yalnız okuma; iç ağ adresleri ve XML varlık tanımı içeren akışlar reddedilir.
+
+**Otomasyonla kullanım:** **Otomasyonlar** › kural › tetik **Yoklama** › bağlantı olarak e-posta kutusunu seçin: yeni gelen her e-posta (isteğe bağlı gönderen/konu süzgeciyle) bir iş açar; e-postanın gönderen, konu ve tarih bilgisi işe eklenir. RSS bağlantısını seçerseniz akışa eklenen her yeni madde bir iş açar. İlk turda mevcut iletiler/maddeler taban alınır; yalnız sonradan gelenler iş açar. Günlük özet için tetik **Zamanlı** (ör. her gün 08:00) seçip isterlere "Dün gelen e-postaları özetle" yazın.
+
+**Sonucu gönderme:** Kural formundaki **İş bitince sonucu yöneticiye ve bildirilecek kişiye gönder** işaretlenirse iş bittiğinde son onaylı çıktı yöneticiye ve seçilen kişiye, her birinin bildirim tercihine göre **e-posta** ("<iş> — sonuç") ve/veya **Telegram** ile gider. WhatsApp kanalı sonraki sürümde eklenecek.
+
 #### Bağlantı ekle (katalog) penceresi
 
 [[EKRAN: ca-m-baglanti-katalog | Bağlantı ekle katalog penceresi: arama, kategori sekmeleri, yöntem rozetli sistem kartları ve "RECAi'ye sorun" kutusu | Entegrasyonlar ekranında "Bağlantı ekle"ye tıklayın; "Tümü" sekmesindeyken görüntü alın]]

@@ -240,7 +240,36 @@ async def clean_action(db: AsyncSession, tenant_id: uuid.UUID, raw: Any) -> Dict
         if not m or m.tenant_id != tenant_id or m.status == "ARCHIVED":
             raise AutomationError("Kapanışta aktarım için seçilen eşleme bulunamadı.")
         out["transfer_on_close"].append(str(m.id))
+    out["deliver_result"] = bool(a.get("deliver_result"))  # #740: iş bitince sonuç yöneticiye ve seçilen kişilere iletilir
     return out
+
+
+async def deliver_result(db: AsyncSession, project) -> int:
+    """İSTEK #740: kuralın açtığı iş bitince son onaylı çıktının özeti yöneticiye ve bildirilecek kişilere, her birinin kanal
+    tercihiyle (e-posta / Telegram) gönderilir. Dönen: gönderilen kişi sayısı."""
+    from app.services import agent_work, notify
+    from app.db.models import Task
+    if not project.source_rule_id:
+        return 0
+    rule = await db.get(AutomationRule, project.source_rule_id)
+    a = (rule.action or {}) if rule else {}
+    if not a.get("deliver_result"):
+        return 0
+    last = (await db.execute(select(Task).where(Task.project_id == project.id, Task.status == "DONE")
+                             .order_by(Task.completed_at.desc().nullslast()).limit(1))).scalar_one_or_none()
+    text = ""
+    if last is not None:
+        text = await agent_work.artifact_text(await agent_work.latest_artifact(db, last.id), 3500)
+    if not text:
+        return 0
+    people = list(dict.fromkeys([str(project.manager_actor_id)] + [str(x) for x in a.get("notify_actor_ids") or []]))
+    from app.services.notify import project_url
+    msg = f"RECOrion: '{project.name}' tamamlandı ('{rule.name}' otomasyonu).\n\n{text}"
+    for aid in people:
+        await notify.send(db, aid, msg[:4000], email_code="AUTOMATION_RESULT",
+                          email_context={"rule_name": rule.name, "project_name": project.name, "result_text": text,
+                                         "project_url": project_url(project.id)})
+    return len(people)
 
 
 def _uuid(v: Any) -> Optional[uuid.UUID]:

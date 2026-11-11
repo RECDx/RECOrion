@@ -318,6 +318,8 @@ function RuleModal({ tenantId, rule, conns, people, templates, onClose, onSaved 
     weekday: rule?.schedule?.weekday ?? 0, day: rule?.schedule?.day ?? 1, type: a0.type || 'CREATE_CASE', manager: a0.manager_actor_id || people[0]?.id || '',
     template: a0.template_id || '', caseName: a0.name || '', notify: (a0.notify_actor_ids || [])[0] || '', message: a0.message || '',
     autoStart: !!a0.auto_start, requirements: rule?.requirements || '', rate: rule?.rate_limit_per_hour || 20,
+    deliverResult: !!a0.deliver_result, mailFrom: rule?.poll?.args?.from || '', mailSubject: rule?.poll?.args?.subject || '',
+    feedUrl: rule?.poll?.args?.url || '',  // #740
   });
   const [conds, setConds] = useState(rule?.conditions || []);
   const [story, setStory] = useState('');
@@ -340,14 +342,21 @@ function RuleModal({ tenantId, rule, conns, people, templates, onClose, onSaved 
     const body = { name: f.name.trim(), description: f.description || null, trigger: f.trigger, connection_id: f.connection_id || null,
       event_type: f.trigger === 'WEBHOOK' ? f.event_type || null : null, conditions: conds.filter((c) => c.field),
       requirements: f.requirements || null, rate_limit_per_hour: Number(f.rate) || 20 };
-    if (f.trigger === 'POLL') {
+    const connKind = conns.find((c) => c.id === f.connection_id)?.connector;
+    if (f.trigger === 'POLL' && (connKind === 'mail' || connKind === 'web_source')) {
+      // #740: yeni e-posta / yeni RSS maddesi geldiğinde (ilk turda mevcutlar taban alınır, yalnız sonrakiler iş açar)
+      body.poll = { tool: connKind === 'mail' ? 'list_new_messages' : 'read_feed',
+        args: connKind === 'mail' ? { from: f.mailFrom || undefined, subject: f.mailSubject || undefined } : { url: f.feedUrl || undefined },
+        id_field: 'id', version_field: null, interval_minutes: Number(f.interval) || 15 };
+    } else if (f.trigger === 'POLL') {
       const old = rule?.poll || {};  // hazır kuralın zenginleştirme/alan ayarları korunur
       body.poll = { ...old, tool: old.tool || 'search_records', args: { order: 'id desc', limit: 50, domain: [], ...(old.args || {}), model: f.model },
         id_field: old.id_field || 'id', version_field: f.version_field || null, interval_minutes: Number(f.interval) || 15 };
     }
     if (f.trigger === 'SCHEDULE') body.schedule = { ...(rule?.schedule || {}), every: f.every, time: f.time, weekday: Number(f.weekday), day: Number(f.day) };
     body.action = f.type === 'NOTIFY' ? { type: 'NOTIFY', notify_actor_ids: f.notify ? [f.notify] : [], message: f.message }
-      : { ...a0, type: f.type, manager_actor_id: f.manager, template_id: f.template || null, name: f.caseName, auto_start: f.autoStart };
+      : { ...a0, type: f.type, manager_actor_id: f.manager, template_id: f.template || null, name: f.caseName, auto_start: f.autoStart,
+        deliver_result: f.deliverResult, notify_actor_ids: f.notify ? [f.notify] : (a0.notify_actor_ids || []) };
     setBusy(true);
     try {
       const saved = rule ? await api.updateAutomation(tenantId, rule.id, body) : await api.createAutomation(tenantId, body);
@@ -385,7 +394,17 @@ function RuleModal({ tenantId, rule, conns, people, templates, onClose, onSaved 
           </div>
         )}
         {f.trigger === 'WEBHOOK' && <div className="pj-field"><label htmlFor="ar-event">Olay türü (isteğe bağlı)</label><input id="ar-event" className="ui-input" value={f.event_type} onChange={set('event_type')} placeholder="ör. order.created" /></div>}
-        {f.trigger === 'POLL' && <>
+        {f.trigger === 'POLL' && conns.find((c) => c.id === f.connection_id)?.connector === 'mail' && <>
+          <div className="pj-field"><label htmlFor="ar-mfrom">Gönderen içerir (isteğe bağlı)</label><input id="ar-mfrom" className="ui-input" value={f.mailFrom} onChange={set('mailFrom')} placeholder="ör. @tedarikci.com" /></div>
+          <div className="pj-field"><label htmlFor="ar-msubj">Konu içerir (isteğe bağlı)</label><input id="ar-msubj" className="ui-input" value={f.mailSubject} onChange={set('mailSubject')} placeholder="ör. Sipariş" /></div>
+          <div className="pj-field"><label htmlFor="ar-interval">Sıklık (dk)</label><input id="ar-interval" className="ui-input" type="number" min={5} max={1440} value={f.interval} onChange={set('interval')} /></div>
+          <p className="pj-hint full">Yeni gelen her e-posta bir iş açar; e-postanın gönderen, konu ve tarih bilgisi işe eklenir. AI personel gövdeyi "E-posta" aracıyla okur.</p>
+        </>}
+        {f.trigger === 'POLL' && conns.find((c) => c.id === f.connection_id)?.connector === 'web_source' && <>
+          <div className="pj-field full"><label htmlFor="ar-feed">RSS/Atom akışı (boşsa bağlantıdaki)</label><input id="ar-feed" className="ui-input" value={f.feedUrl} onChange={set('feedUrl')} placeholder="https://…/rss" /></div>
+          <div className="pj-field"><label htmlFor="ar-interval">Sıklık (dk)</label><input id="ar-interval" className="ui-input" type="number" min={5} max={1440} value={f.interval} onChange={set('interval')} /></div>
+        </>}
+        {f.trigger === 'POLL' && !['mail', 'web_source'].includes(conns.find((c) => c.id === f.connection_id)?.connector) && <>
           <div className="pj-field"><label htmlFor="ar-model">İzlenen model</label><input id="ar-model" className="ui-input" value={f.model} onChange={set('model')} placeholder="ör. sale.order" /></div>
           <div className="pj-field"><label htmlFor="ar-interval">Sıklık (dk)</label><input id="ar-interval" className="ui-input" type="number" min={5} max={1440} value={f.interval} onChange={set('interval')} /></div>
           <div className="pj-field"><label htmlFor="ar-version">Değişiklik alanı (isteğe bağlı)</label><input id="ar-version" className="ui-input" value={f.version_field} onChange={set('version_field')} placeholder="ör. write_date; boşsa yalnızca yeni kayıt" /></div>
@@ -428,6 +447,12 @@ function RuleModal({ tenantId, rule, conns, people, templates, onClose, onSaved 
           <label className="pj-field full" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <input type="checkbox" checked={f.autoStart} onChange={set('autoStart')} disabled={!f.template} /> Şablon planıyla otomatik başlat (adımlara AI personel atanabilirse; yoksa taslakta kalır)
           </label>
+          <label className="pj-field full" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={f.deliverResult} onChange={set('deliverResult')} /> İş bitince sonucu yöneticiye ve bildirilecek kişiye gönder (e-posta / Telegram, kişinin tercihine göre)
+          </label>
+          <div className="pj-field"><label htmlFor="ar-deliver">Bildirilecek kişi (isteğe bağlı)</label>
+            <select id="ar-deliver" className="ui-input" value={f.notify} onChange={set('notify')}><option value="">— yalnız yönetici</option>
+              {people.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}</select></div>
         </>}
         <div className="pj-field"><label htmlFor="ar-rate">Saatlik en fazla iş</label><input id="ar-rate" className="ui-input" type="number" min={1} max={200} value={f.rate} onChange={set('rate')} /></div>
       </div>
