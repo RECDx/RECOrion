@@ -6,6 +6,7 @@ import { toast } from '../../ui/feedback';
 
 const TONE = { RUNNING: 'info', PASSED: 'success', FAILED: 'danger', NO_TESTS: 'warning', ERROR: 'danger' };
 const SUB = { PASSED: 'Geçti', FAILED: 'Kaldı', NO_TESTS: 'Test yok', TIMEOUT: 'Süre doldu', INSTALL_FAILED: 'Kurulum başarısız' };
+const SMOKE = { PASSED: ['success', 'Geçti'], FAILED: ['danger', 'Kaldı'], ERROR: ['danger', 'Çalıştırılamadı'], NO_SMOKE: ['warning', 'Yapılmadı'] };
 const fmt = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 const mono = { fontFamily: 'var(--font-mono)', fontSize: '0.75rem' };
 const logStyle = { ...mono, whiteSpace: 'pre-wrap', background: 'var(--bg-dark)', border: '1px solid var(--border-subtle)', borderRadius: 8,
@@ -74,7 +75,14 @@ export default function TestRunsTab({ project }) {
           )}
           {r.error && <p className="ui-text-danger" style={{ fontSize: '0.8rem' }}>{r.error}</p>}
           {r.result?.note && <p className="pj-hint">{r.result.note}</p>}
-          {(r.result?.projects || []).length > 0 && (
+          {r.result?.smoke && (
+            <div className="pj-actions" style={{ alignItems: 'center' }}>
+              <span className="pj-hint">Duman testi (uygulamayı açıp deneme)</span>
+              <Badge tone={(SMOKE[r.result.smoke.status] || ['neutral'])[0]}>{(SMOKE[r.result.smoke.status] || [null, r.result.smoke.status])[1]}</Badge>
+              {r.result.smoke.readme && !r.result.smoke.readme.ok && <Badge tone="warning">README eksik</Badge>}
+            </div>
+          )}
+          {((r.result?.projects || []).length > 0 || r.result?.smoke) && (
             <Button variant="ghost" size="sm" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Ayrıntıyı gizle' : 'Ayrıntı'}</Button>
           )}
           {open === r.id && (r.result?.projects || []).map((p) => (
@@ -95,8 +103,38 @@ export default function TestRunsTab({ project }) {
               {p.test?.log && <details><summary className="pj-hint">Test çıktısı</summary><pre style={logStyle}>{p.test.log}</pre></details>}
             </div>
           ))}
+          {open === r.id && r.result?.smoke && <SmokeDetail smoke={r.result.smoke} />}
         </Card>
       ))}
+    </div>
+  );
+}
+
+/** Duman testi ayrıntısı (#734): hizmetler açıldı mı, denetimler, README. */
+function SmokeDetail({ smoke }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <p className="pj-hint" style={{ margin: 0 }}>Duman testi{smoke.seconds ? ` · ${smoke.seconds} sn` : ''}</p>
+      {smoke.note && <p className="pj-hint">{smoke.note}</p>}
+      <ul className="pj-list">
+        {(smoke.services || []).map((s) => (
+          <li key={s.name}>
+            <span style={mono}>{s.ready ? '✓' : '✗'} {s.name} · {s.dir} · port {s.port}</span>
+            <small className="pj-hint">{s.ready ? `açıldı (HTTP ${s.ready_status})` : (s.error || 'açılmadı')}</small>
+            {!s.ready && s.log && <pre style={logStyle}>{s.log}</pre>}
+          </li>
+        ))}
+        {(smoke.checks || []).map((c, i) => (
+          <li key={`${c.name}-${i}`}>
+            <span style={mono}>{c.ok === true ? '✓' : c.ok === false ? '✗' : '–'} {c.name} ({c.type === 'browser' ? 'arayüz' : 'API'})</span>
+            <small className="pj-hint">{c.detail}</small>
+          </li>
+        ))}
+        {smoke.readme && (
+          <li><span style={mono}>{smoke.readme.ok ? '✓' : '✗'} README</span>
+            <small className="pj-hint">{smoke.readme.file ? `${smoke.readme.file} · ${smoke.readme.chars} karakter` : 'yok'}{smoke.readme.ok ? '' : ' — kurulum talimatı eksik/yetersiz'}</small></li>
+        )}
+      </ul>
     </div>
   );
 }

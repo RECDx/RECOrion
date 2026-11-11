@@ -301,7 +301,16 @@ async def chat(ctx: LLMContext, messages: List[Dict[str, str]], model_code: Opti
         if not backup or not failed:
             raise
         logger.warning("%s yanıt vermedi; yedek model %s ile deneniyor (%s).", failed, backup.model_code, ctx.purpose)
-        result = await _chat_once(ctx, messages, backup.model_code, temperature, max_tokens, timeout, tools)
+        try:
+            result = await _chat_once(ctx, messages, backup.model_code, temperature, max_tokens, timeout, tools)
+        except LLMUnavailable as exc2:
+            # F65: kullanıcı asıl modelin (seçtiği RECAi kademesinin) adını ve yedeğe geçildiğini görür
+            from app.services import recai
+            async with AsyncSessionLocal() as db:
+                all_tiers = await recai.tiers(db)
+            raise LLMUnavailable(f"{recai.public_name(failed, all_tiers)} yanıt veremedi; yedek model "
+                                 f"({recai.public_name(backup.model_code, all_tiers)}) ile de denendi, o da yanıt vermedi. "
+                                 "EVREN şu an yoğun olabilir; lütfen biraz sonra tekrar deneyin.", model_code=exc2.model_code) from exc2
         result.fallback_from = failed
         return result
 
@@ -331,7 +340,9 @@ async def _chat_once(ctx: LLMContext, messages: List[Dict[str, str]], model_code
         tool_calls = list(getattr(result, "tool_calls", None) or [])
         if not result.content.strip() and not tool_calls:  # yalnızca araç çağrısı içeren yanıt boş sayılmaz
             await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
-            raise LLMUnavailable("Model bir yanıt üretemedi (düşünme bütçesi doldu). Lütfen isteği kısaltıp tekrar deneyin.",
+            # F86: yöneticinin uygulayabileceği yönlendirme
+            raise LLMUnavailable("Model yanıtı tamamlayamadı (yanıt/düşünme sınırı doldu). 'Yeniden dene' ile tekrar deneyin; "
+                                 "sürerse adımı daha küçük adımlara bölün ya da başka RECAi kademesindeki bir personel seçin.",
                                  model_code=model.model_code)
         cost = await _record(db, tenant, model, ctx, result.tokens_in, result.tokens_out, started, raw=result.raw)
         from app.services import recai

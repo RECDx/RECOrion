@@ -451,6 +451,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/tasks/{{task_id}}/submit"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/decision"): HANDLER(),
     ("POST", f"{P}/tasks/{{task_id}}/release"): HANDLER(),
+    # Aşama 2 bulguları F92 / F110: adımın kişileri ve iptali (proje yöneticisi; handler denetler)
+    ("GET", f"{P}/tasks/{{task_id}}/people"): HANDLER(),
+    ("PUT", f"{P}/tasks/{{task_id}}/people"): HANDLER(),
+    ("POST", f"{P}/tasks/{{task_id}}/cancel"): HANDLER(),
     ("GET", f"{P}/tasks/{{task_id}}/artifacts/{{artifact_id}}"): HANDLER(),
     ("GET", f"{P}/chat/history/{{task_id}}"): HANDLER(),
     ("GET", f"{P}/chat/project/{{project_id}}"): HANDLER(),

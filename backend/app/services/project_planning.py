@@ -148,6 +148,10 @@ Görevin: isterlere göre uygulanabilir iş adımlarını çıkarmak ve her adı
 havuzundan en uygun personeli önermek. Havuzda uygun personel yoksa agent_id boş bırak ve hire_suggestions'a gereken unvanı yaz.
 Bir personele aynı anda çok iş yığma; başka projelerdeki açık işleri dikkate al. Bağımlılıklar döngüsüz olmalı.
 Kalite gerektiren adımlara, işi yapandan farklı ve konuya uygun bir kontrol personeli (reviewer_agent_id) öner.
+Yazılım/kod üreten bir işse plan, teslimden önce mutlaka "Kurulum ve duman testi" adımı içermeli (test veya kalite unvanlı
+personel; yoksa kabul adımına dahil et): uygulama README'deki talimatla temiz ortamda kurulup AÇILIR, recorion.json'daki
+denetimlerle giriş ve temel akış (web arayüzü varsa arayüzden) gerçekten denenir; ölçütü "uygulama açıldı, denetimler geçti,
+README eksiksiz" olsun. Kabul/teslim adımının ölçütü de bu gerçek sonuca dayanmalı, yalnız rapor yazmak yetmez.
 Bilmediğin bilgiyi uydurma; eksikleri "questions" içinde yöneticiye sor.
 
 # Proje

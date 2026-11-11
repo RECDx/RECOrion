@@ -97,7 +97,8 @@ class TaskWorkflow:
         return "CANCELLED"
 
     async def _quarantined(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Karantinada yöneticinin kararını bekler. Devam edilecekse güncel adım bilgisini, iptalde None döner."""
+        """Karantinada yöneticinin kararını bekler. Devam edilecekse güncel adım bilgisini, iptalde None döner; yönetici son
+        sürümü onayladıysa (F90, action=approve) {"approved": True} döner."""
         choice = await self._wait("released")
         if choice is None:
             await self._cancel(task_id)
@@ -120,6 +121,8 @@ class TaskWorkflow:
                     info = await self._quarantined(task_id)
                     if info is None:
                         return "CANCELLED"
+                    if info.get("approved"):
+                        return "DONE"
                     continue
                 work = {"actor_id": out["actor_id"], "note": f"AI personel çıktısı, sürüm {out['version']}", "artifact_id": out["artifact_id"]}
             else:
@@ -139,6 +142,8 @@ class TaskWorkflow:
                         info = await self._quarantined(task_id)
                         if info is None:
                             return "CANCELLED"
+                        if info.get("approved"):
+                            return "DONE"
                     continue
                 # Değerlendirme yapılamadıysa (rv ok=False) karar insan onaylayıcıya bırakılır
             # 3. Teslim ve insan onayı
@@ -157,6 +162,8 @@ class TaskWorkflow:
                 info = await self._quarantined(task_id)
                 if info is None:
                     return "CANCELLED"
+                if info.get("approved"):
+                    return "DONE"
 
 
 @workflow.defn(name="ProjectWorkflow")

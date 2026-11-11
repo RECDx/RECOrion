@@ -77,6 +77,11 @@ async def decide(db: AsyncSession, raw: str, approve: bool, note: Optional[str],
     note = (note or "").strip()
     if not approve and not note:
         raise HTTPException(status_code=422, detail="Revizyon isterken gerekçeyi yazın; personel buna göre düzeltecek.")
+    if approve:  # kabul kapısı (#734): uyarı varsa onay yalnız Work Space'te, uyarı görülerek verilir
+        from app.services import sandbox
+        gate = await sandbox.acceptance_gate(db, project, task)
+        if gate:
+            raise HTTPException(status_code=409, detail=f"{gate} Bu adımı RECOrion Work Space'ten, uyarıyı görerek onaylayabilirsiniz.")
     await engine.signal_task(str(task.id), "decide", {"actor_id": str(actor.id), "approve": approve, "note": note, "channel": channel})
     tok.used_at = _now()
     await db.commit()

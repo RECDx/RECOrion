@@ -18,6 +18,7 @@ import { can } from './permissions';
 import { mergeMessages, useProjectLive } from './live';
 import CompanyDashboard from './components/dashboard/CompanyDashboard';
 import { confirmDialog, notify, promptDialog, toast } from './ui/feedback';
+import { approveTask } from './components/projects/approveTask';
 import { setHelpScreen } from './help/helpBus';
 
 // Kayıtlı kullanıcı yalnızca geçerli bir oturum token'ı varsa kullanılır
@@ -693,10 +694,11 @@ export default function App() {
           canPromote={canPromote}
           canRevoke={canRevoke}
           onMemoryAction={handleMemoryAction}
-          onApproveQualityGate={(t) => runTaskAction(() => api.decideTask(t.id, true), 'Onaylandı; iş akışı sonraki adıma geçiyor.')}
+          onApproveQualityGate={(t) => runTaskAction(() => approveTask(t.id), 'Onaylandı; iş akışı sonraki adıma geçiyor.')}
           onRejectQualityGate={async (t) => {
             const note = await promptDialog({ message: 'Revizyon gerekçesi (personel buna göre düzeltecek):' });
             if (note && note.trim()) runTaskAction(() => api.decideTask(t.id, false, note.trim()), 'Revizyon istendi.');
+            else if (note !== null) toast.error('Revizyon için gerekçe yazın; personel buna göre düzeltecek.');  // F83
           }}
           onSubmitTask={async (t) => {
             const note = await promptDialog({ message: 'Teslim notu (isteğe bağlı):' });

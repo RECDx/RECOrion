@@ -5,9 +5,11 @@ import { Badge, Button, Card, EmptyState, Modal } from '../../ui/components';
 import SimpleMarkdown from '../ai/SimpleMarkdown';
 import FlowCanvas from './FlowCanvas';
 import { confirmDialog, promptDialog, toast } from '../../ui/feedback';
+import { approveTask } from './approveTask';
 import { fmtDay } from './projectMeta';
 import { useProjectLive } from '../../live';
 import { TaskTransferModal } from '../integrations/Transfers';
+import TaskPeopleModal from './TaskPeopleModal';
 
 const TONE = { BACKLOG: 'neutral', READY: 'info', IN_PROGRESS: 'info', WAITING_APPROVAL: 'warning', REVISION: 'danger',
   QUARANTINED: 'danger', DONE: 'success', CANCELLED: 'neutral' };
@@ -19,7 +21,10 @@ const EVENT = { PROJECT_STARTED: 'Proje akışı başladı', TASK_STARTED: 'Adı
   TEST_FIX_LOOP: 'Testler kaldı: düzeltme ve yeniden test adımı açıldı', TEST_FIX_LIMIT: 'Düzeltme turu sınırı doldu (karar proje yöneticisinde)',
   TEST_FIX_SKIPPED: 'Düzeltme adımı açılamadı', REPO_COMMIT: 'Kod deposuna commit edildi',
   REPO_MERGED: 'Ana dala birleştirildi', REPO_ERROR: 'Kod deposu işlemi yapılamadı',
-  REPO_MIRROR_SET: 'Kod deposu yansıtması kuruldu', REPO_MIRROR_CLEARED: 'Kod deposu yansıtması kaldırıldı' };
+  REPO_MIRROR_SET: 'Kod deposu yansıtması kuruldu', REPO_MIRROR_CLEARED: 'Kod deposu yansıtması kaldırıldı',
+  TEST_FIX_UPDATED: 'Testler yine kaldı: açık düzeltme turu güncel sonuçla sürüyor', TEST_FIX_CLOSED: 'Testler geçti: gereksiz düzeltme turları kapatıldı',
+  TEST_GATE_OVERRIDE: 'Kabul öncesi denetim uyarısına rağmen onaylandı', PEOPLE_CHANGED: 'Adımın kişileri değiştirildi',
+  QUARANTINE_APPROVED: 'Karantinadaki son sürüm yönetici tarafından kabul edildi' };
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 /** İş Akışı (ADIM 7.1): adımların canlı akış durumu, teslim/onay/karantina kararları ve olay geçmişi. */
@@ -29,7 +34,9 @@ export default function WorkflowTab({ project }) {
   const [viewing, setViewing] = useState(null);
   const [view, setView] = useState('list');
   const [transfer, setTransfer] = useState(null);  // ADIM 12.4
+  const [people, setPeople] = useState(null);  // F92
   const closeViewer = useCallback(() => setViewing(null), []);
+  const closePeople = useCallback(() => setPeople(null), []);
   const live = ['ACTIVE', 'PAUSED'].includes(project.status);
 
   const [thought, setThought] = useState(null);
@@ -70,8 +77,37 @@ export default function WorkflowTab({ project }) {
     if (note !== null) run(t.id, () => api.submitTask(t.id, note), 'Teslim edildi.');
   };
   const reject = async (t) => {
-    const note = await promptDialog({ title: 'Revizyon iste', message: 'Gerekçe (personel buna göre düzeltecek):' });
+    const mr = t.manager_revisions;
+    const last = mr && mr.used + 1 >= mr.max;
+    const note = await promptDialog({
+      title: 'Revizyon iste',
+      message: (mr ? `Revizyon ${mr.used + 1}/${mr.max}${last ? ' — bu revizyonla adım KARANTİNAYA alınır (sonra yeniden deneme veya iptal kararı sizde).' : ' (kontrol personeli retleri ayrı sayılır).'}\n\n` : '')
+        + 'Gerekçe (personel buna göre düzeltecek):',
+    });
     if (note && note.trim()) run(t.id, () => api.decideTask(t.id, false, note.trim()), 'Revizyon istendi.');
+    else if (note !== null) toast.error('Revizyon için gerekçe yazın; personel buna göre düzeltecek.');  // F83
+  };
+  const acceptLast = async (t) => {  // F90: karantinadaki son sürümü yönetici gerekçeyle kabul eder
+    const note = await promptDialog({ title: 'Son sürümü kabul et', message: `'${t.title}' son sürümüyle onaylanacak ve kod ana dala birleşecek. Gerekçe:` });
+    if (!note || !note.trim()) { if (note !== null) toast.error('Kabul gerekçesini yazın.'); return; }
+    run(t.id, async () => {
+      try {
+        return await api.releaseTask(t.id, 'approve', note.trim());
+      } catch (e) {
+        if (e.code !== 'TEST_GATE') throw e;
+        const ok = await confirmDialog({ title: 'Kabul öncesi denetim', message: `${e.message}\n\nYine de kabul edilsin mi?`, confirmText: 'Yine de kabul et' });
+        if (!ok) throw new Error('Kabul edilmedi.');
+        return api.releaseTask(t.id, 'approve', note.trim(), null, true);
+      }
+    }, 'Son sürüm kabul edildi.');
+  };
+  const cancelOpen = async (t) => {
+    const note = await promptDialog({
+      title: 'Adımı iptal et',
+      message: `'${t.title}' iptal edilecek. Bu adıma bağlı adımlar beklemeden devam eder; AI personel o an çalışıyorsa elindeki iş bitince kapanır. Gerekçe:`,
+    });
+    if (note && note.trim()) run(t.id, () => api.cancelTask(t.id, note.trim()), 'İptal isteği iletildi.');
+    else if (note !== null) toast.error('İptal gerekçesini yazın.');
   };
   const cancelTask = async (t) => {
     if (await confirmDialog({ message: `'${t.title}' iptal edilsin mi? Bu adıma bağlı adımlar beklemeden devam eder.` })) {
@@ -143,7 +179,10 @@ export default function WorkflowTab({ project }) {
                   {t.can_transfer && <Button size="sm" variant="secondary" icon={Upload} onClick={() => setTransfer(t)}>Sisteme aktar</Button>}
                 </div>
               )}
-              {(t.can_submit || t.can_decide || t.can_release) && (
+              {t.can_decide && t.acceptance_warning && (
+                <p className="pj-note high" style={{ margin: 0 }}>{t.acceptance_warning}</p>
+              )}
+              {(t.can_submit || t.can_decide || t.can_release || t.can_cancel || t.can_edit_people) && (
                 <div className="pj-actions">
                   {t.can_submit && (
                     <Button size="sm" icon={Send} onClick={() => submit(t)} disabled={busy === t.id}>
@@ -152,20 +191,33 @@ export default function WorkflowTab({ project }) {
                   )}
                   {t.can_decide && (
                     <>
-                      <Button size="sm" variant="success" icon={CheckCircle2} onClick={() => run(t.id, () => api.decideTask(t.id, true), 'Onaylandı.')} disabled={busy === t.id}>Onayla</Button>
+                      <Button size="sm" variant="success" icon={CheckCircle2} onClick={() => run(t.id, () => approveTask(t.id), 'Onaylandı.')} disabled={busy === t.id}>Onayla</Button>
                       <Button size="sm" variant="secondary" icon={RotateCcw} onClick={() => reject(t)} disabled={busy === t.id}>Revizyon iste</Button>
                     </>
                   )}
                   {t.can_release && (
                     <>
                       <Button size="sm" icon={RotateCcw} onClick={() => run(t.id, () => api.releaseTask(t.id, 'retry'), 'Adım yeniden denemeye açıldı.')} disabled={busy === t.id}>Yeniden dene</Button>
+                      {t.can_accept_last && <Button size="sm" variant="secondary" icon={CheckCircle2} onClick={() => acceptLast(t)} disabled={busy === t.id}>Son sürümü kabul et</Button>}
                       <Button size="sm" variant="danger" onClick={() => cancelTask(t)} disabled={busy === t.id}>Adımı iptal et</Button>
                     </>
+                  )}
+                  {t.can_edit_people && (
+                    <Button size="sm" variant="ghost" onClick={() => setPeople(t)} disabled={busy === t.id}>Kişiler</Button>
+                  )}
+                  {t.can_cancel && (
+                    <Button size="sm" variant="ghost" onClick={() => cancelOpen(t)} disabled={busy === t.id}>Adımı iptal et</Button>
                   )}
                 </div>
               )}
               {t.status === 'QUARANTINED' && (
-                <p className="pj-note high" style={{ margin: 0 }}>{t.rejection_count} kez reddedildi. Yeniden denemek ret sayacını sıfırlar; gerekirse önce Ekip sekmesinden başka personel ekleyin.</p>
+                <p className="pj-note high" style={{ margin: 0 }}>
+                  {t.blocked_reason ? `Adım durdu: ${t.blocked_reason}` : `${t.rejection_count} kez reddedildi.`}{' '}
+                  Yeniden denemek ret sayacını sıfırlar; gerekirse "Kişiler" ile başka personel seçin{t.can_accept_last ? ' ya da son sürümü gerekçeyle kabul edin' : ''}.
+                </p>
+              )}
+              {t.status === 'QUARANTINED' && t.acceptance_warning && t.can_accept_last && (
+                <p className="pj-note high" style={{ margin: 0 }}>{t.acceptance_warning}</p>
               )}
             </div>
           </div>
@@ -173,6 +225,7 @@ export default function WorkflowTab({ project }) {
       </div>
       {viewing && <ArtifactModal task={viewing.task} artifactId={viewing.id} onClose={closeViewer} />}
       {transfer && <TaskTransferModal project={project} task={transfer} onClose={() => setTransfer(null)} />}
+      {people && <TaskPeopleModal task={people} onClose={closePeople} onSaved={load} />}
       <Card title="Akış geçmişi" subtitle="Silinemez kayıt: her teslim, onay, ret ve karar.">
         <ul className="pj-list">
           {flow.events.map((e) => (

@@ -54,6 +54,20 @@ function handleUnauthorized() {
   }
 }
 
+/** API hatası: detail metin, {code, message} nesnesi veya doğrulama listesi olabilir; mesaj her zaman okunur metin olur. */
+function apiError(errData, status) {
+  const d = errData && errData.detail;
+  let message;
+  if (typeof d === 'string') message = d;
+  else if (Array.isArray(d)) message = d.map((x) => x && (x.msg || x.message)).filter(Boolean).join(' · ');
+  else if (d && typeof d === 'object') message = d.message || d.msg;
+  const err = new Error(message || `HTTP Error ${status}`);
+  err.status = status;
+  err.code = d && typeof d === 'object' && !Array.isArray(d) ? d.code : undefined;
+  err.detail = d;
+  return err;
+}
+
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const headers = authHeaders(options.headers);
@@ -66,7 +80,7 @@ async function request(endpoint, options = {}) {
     if (!res.ok) {
       if (res.status === 401 && endpoint !== '/auth/login') handleUnauthorized();
       const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || `HTTP Error ${res.status}`);
+      throw apiError(errData, res.status);
     }
     return await res.json();
   } catch (err) {
@@ -283,9 +297,12 @@ export const api = {
   // İş akışı (Adım 7.1)
   getProjectWorkflow: (projectId) => request(`/projects/${projectId}/workflow`),
   submitTask: (taskId, note) => request(`/tasks/${taskId}/submit`, { method: 'POST', body: JSON.stringify({ note: note || null }) }),
-  decideTask: (taskId, approve, note) => request(`/tasks/${taskId}/decision`, { method: 'POST', body: JSON.stringify({ approve, note: note || null }) }),
+  getTaskPeople: (taskId) => request(`/tasks/${taskId}/people`),
+  setTaskPeople: (taskId, data) => request(`/tasks/${taskId}/people`, { method: 'PUT', body: JSON.stringify(data) }),
+  cancelTask: (taskId, note) => request(`/tasks/${taskId}/cancel`, { method: 'POST', body: JSON.stringify({ note }) }),
+  decideTask: (taskId, approve, note, force = false) => request(`/tasks/${taskId}/decision`, { method: 'POST', body: JSON.stringify({ approve, note: note || null, force }) }),
   getTaskArtifact: (taskId, artifactId) => request(`/tasks/${taskId}/artifacts/${artifactId}`),
-  releaseTask: (taskId, action, note, assigneeId) => request(`/tasks/${taskId}/release`, { method: 'POST', body: JSON.stringify({ action, note: note || null, assignee_actor_id: assigneeId || null }) }),
+  releaseTask: (taskId, action, note, assigneeId, force = false) => request(`/tasks/${taskId}/release`, { method: 'POST', body: JSON.stringify({ action, note: note || null, assignee_actor_id: assigneeId || null, force }) }),
   createProject: (data) => request('/projects/', { method: 'POST', body: JSON.stringify(data) }),
   getRegulationPacksAdmin: () => request('/system/regulation-packs'),
   updateRegulationPack: (id, data) => request(`/system/regulation-packs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

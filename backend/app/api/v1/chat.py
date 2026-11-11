@@ -53,7 +53,7 @@ class SendMessageRequest(BaseModel):
     attachments: List[uuid.UUID] = Field(default_factory=list, max_length=5)
 
 
-CHAT_TIMEOUT = 150  # sohbet yanıtı; süre dolarsa yedek model denenir
+CHAT_TIMEOUT = 300  # sohbet yanıtı (F96: EVREN yavaşken 150 sn yetmedi); ilk token 60 sn içinde gelmezse zaten yedeğe geçilir
 ATTACHMENT_EXCERPT = 4000
 ATTACHMENT_WAIT_SECONDS = 90  # yeni yüklenen ekin metin çıkarma + güvenlik kontrolü için en fazla bekleme
 PROCESSING = ("UPLOADED", "PROCESSING")
@@ -308,6 +308,11 @@ async def send_chat_message(
             timeout=CHAT_TIMEOUT, fallback=True,
         )
     except LLMError as exc:
+        # F96: hata sohbette kalıcı görünür (mesaj kayıtlı, yanıt yok) ve "yanıt yazıyor…" göstergesi kapanır
+        db.add(ChatMessage(tenant_id=tenant_id, project_id=project_id, task_id=task_id, sender_actor_id=None, sender_name="RECOrion",
+                           role="assistant", content=f"⚠️ Yanıt alınamadı: {exc.message} Mesajınız kaydedildi; birazdan yeniden gönderebilirsiniz.",
+                           is_private=payload.is_private, visible_to_actor_id=visible_to, message_type=payload.message_type))
+        await db.commit()
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
     model_code = ai.model_code

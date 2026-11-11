@@ -6,6 +6,8 @@ POST /run (gövde: deponun zip arşivi) → her koşu için yeni bir iş kabı:
   2. Alt projeler bulunur: requirements.txt / pyproject.toml → Python, package.json → Node. Bağımlılıklar kurulur
      (yalnız bu aşamada internet açık).
   3. Ağ kesilir; testler çalışır: pytest (junit raporu) / npm test. Kökte scripts/recorion_test.sh varsa o çalışır.
+  3b. Duman testi (#734): kökte recorion.json varsa uygulama kendi komutuyla açılır, adresler ve (Playwright ile) arayüz
+      akışı denenir (smoke.py); README de bakılır.
   4. Sonuç (geçen/kalan/hata sayıları, kalan testlerin adı ve mesajı, kayıt sonları) döner; kap silinir.
 Kodun kendisi bu servise ya da RECOrion ağına erişemez; bu servis yalnız backend ile ortak iç ağdadır.
 """
@@ -25,12 +27,14 @@ import docker
 from docker.errors import ImageNotFound
 from fastapi import FastAPI, HTTPException, Request
 
-RUNTIME_IMAGE = os.environ.get("SANDBOX_RUNTIME_IMAGE", "recorion-sandbox-runtime:1")
+RUNTIME_IMAGE = os.environ.get("SANDBOX_RUNTIME_IMAGE", "recorion-sandbox-runtime:2")
 RUNTIME_DIR = "/srv/runtime"
 MAX_ZIP = 25 * 1024 * 1024
 MAX_FILES = 3000
 INSTALL_TIMEOUT = int(os.environ.get("SANDBOX_INSTALL_TIMEOUT", "300"))
 TEST_TIMEOUT = int(os.environ.get("SANDBOX_TEST_TIMEOUT", "300"))
+SMOKE_TIMEOUT = int(os.environ.get("SANDBOX_SMOKE_TIMEOUT", "300"))
+SMOKE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "smoke.py")
 LOG_TAIL = 6000
 SKIP_DIRS = {"node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build", ".next"}
 
@@ -189,6 +193,31 @@ def _install(box, proj: Dict[str, str], i: int) -> Tuple[int, str, float]:
     return _exec(box, "npm install --no-audit --no-fund --loglevel=error", wd, INSTALL_TIMEOUT)
 
 
+def _put_file(box, path: str, body: bytes) -> None:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        ti = tarfile.TarInfo(os.path.basename(path))
+        ti.size, ti.mode, ti.uid, ti.gid, ti.mtime = len(body), 0o644, 1000, 1000, int(time.time())
+        tar.addfile(ti, io.BytesIO(body))
+    box.put_archive(os.path.dirname(path), buf.getvalue())
+
+
+def _smoke(box, projects: List[Dict[str, str]]) -> Dict[str, Any]:
+    """Duman testi: betik koşu anında kaba konur (uygulama kodu değiştiremez), sonucu JSON olarak okunur."""
+    _put_file(box, "/work/.rx-projects.json", json.dumps(projects).encode())
+    _put_file(box, "/work/.rx-smoke.py", open(SMOKE_SCRIPT, "rb").read())
+    code, out, sec = _exec(box, "python /work/.rx-smoke.py", "/work", SMOKE_TIMEOUT)
+    raw = _read_file(box, "/work/.rx-smoke.json")
+    try:
+        res = json.loads(raw) if raw else None
+    except ValueError:
+        res = None
+    if not isinstance(res, dict):
+        res = {"status": "ERROR", "note": "Duman testi sonucu okunamadı" + (" (süre doldu)." if code == 124 else "."), "log": _tail(out)}
+    res["seconds"] = sec
+    return res
+
+
 def _exists(box, path: str) -> bool:
     return box.exec_run(["test", "-e", path], user="runner")[0] == 0
 
@@ -225,7 +254,7 @@ def _run_sync(data: bytes) -> Dict[str, Any]:
     tar, paths = _tar_from_zip(data)
     projects = _projects(paths)
     custom = "scripts/recorion_test.sh" in paths
-    if not projects and not custom:
+    if not projects and not custom and "recorion.json" not in paths:
         return {"status": "NO_TESTS", "projects": [], "seconds": 0,
                 "note": "Depoda çalıştırılabilir proje bulunamadı (requirements.txt, pyproject.toml veya package.json yok)."}
     started = time.time()
@@ -258,16 +287,20 @@ def _run_sync(data: bytes) -> Dict[str, Any]:
                     r["test"] = _test(box, r, i) if r["install"]["ok"] else {
                         "passed": 0, "failed": 0, "errors": 0, "skipped": 0, "failures": [], "exit_code": None, "status": "INSTALL_FAILED",
                         "seconds": 0, "log": "", "command": ""}
+            try:
+                smoke = _smoke(box, projects)
+            except Exception as exc:  # duman testi koşuyu bozmasın
+                smoke = {"status": "ERROR", "note": f"Duman testi çalıştırılamadı: {exc.__class__.__name__}"}
         finally:
             try:
                 box.remove(force=True)
             except Exception:
                 pass
     states = [r["test"]["status"] for r in results]
-    if any(s in ("FAILED", "TIMEOUT", "INSTALL_FAILED") for s in states):
+    if any(s in ("FAILED", "TIMEOUT", "INSTALL_FAILED") for s in states) or smoke.get("status") in ("FAILED", "ERROR"):
         status = "FAILED"
-    elif any(s == "PASSED" for s in states):
+    elif any(s == "PASSED" for s in states) or smoke.get("status") == "PASSED":
         status = "PASSED"
     else:
         status = "NO_TESTS"
-    return {"status": status, "projects": results, "seconds": round(time.time() - started, 1)}
+    return {"status": status, "projects": results, "smoke": smoke, "seconds": round(time.time() - started, 1)}

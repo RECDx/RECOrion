@@ -116,9 +116,12 @@ def test_ai_test_specialist_step_runs_tests(client, world, coder, fake_sandbox, 
         _cleanup(client, admin, pid, base)
 
 
-def test_failed_tests_send_back_to_developer(client, world, db, coder, fake_sandbox):  # noqa: F811
-    """Testler kalınca: geliştiriciye 'Test düzeltmesi 1' (test adımı onaylanınca başlar) + test uzmanına 'Yeniden test 1';
-    yeniden test de kalırsa 2. tur açılır; akış yeni adımları kendiliğinden yürütür."""
+def test_failed_tests_send_back_to_developer(client, world, db, coder, fake_sandbox, monkeypatch):  # noqa: F811
+    """Testler kalınca (Aşama 2 bulgularıyla yeniden: F100/F103/F105/F109):
+    - geliştiriciye 'Test düzeltmesi 1' HEMEN başlar (test adımının onayını beklemez), 'Yeniden test 1' düzeltme + test adımı
+      bitince çalışır; yeni adımlarda kontrol personeli yoktur;
+    - açık tur varken test adımı yeniden koşup yine kalırsa yeni tur AÇILMAZ (TEST_FIX_UPDATED);
+    - yeniden test de kalınca 2. tur açılır; ardından testler geçince açık tur kendiliğinden kapanır."""
     from datetime import date, timedelta
 
     from tests.test_workflow import _exec
@@ -137,26 +140,65 @@ def test_failed_tests_send_back_to_developer(client, world, db, coder, fake_sand
         assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "mark_ready"}).status_code == 200
         assert client.put(base, headers=admin, json={"mode": "RECORION"}).status_code == 200
         client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "start"})
-        approve = lambda tid: client.post(f"/api/v1/tasks/{tid}/decision", headers=admin, json={"approve": True})  # noqa: E731
+        decide = lambda tid, ok=True, note=None: client.post(f"/api/v1/tasks/{tid}/decision", headers=admin,  # noqa: E731
+                                                             json={"approve": ok, "note": note, "force": True})
+        F1, R1 = "Test düzeltmesi 1: Randevu modülü", "Yeniden test 1: Testler"
 
         t, _ = _wait(client, admin, pid, lambda t, f: t["Randevu modülü"]["status"] == "WAITING_APPROVAL", "geliştirici adımı onaya gelmeli", 90)
-        assert approve(t["Randevu modülü"]["id"]).status_code == 200
-        t, f = _wait(client, admin, pid, lambda t, f: t["Testler"]["status"] == "WAITING_APPROVAL", "test adımı onaya gelmeli", 90)
-        fix, retest = t.get("Test düzeltmesi 1: Randevu modülü"), t.get("Yeniden test 1: Testler")
-        assert fix and retest, list(t)
-        assert fix["assignee"]["id"] == w["agent"] and fix["depends_on"] == [t["Testler"]["id"]] and fix["status"] in ("BACKLOG", "READY")
-        assert retest["assignee"]["id"] == w["reviewer"] and retest["depends_on"] == [fix["id"]]
+        assert decide(t["Randevu modülü"]["id"]).status_code == 200
+        # Test adımı onaylanmadan düzeltme kendiliğinden başlar ve onaya gelir (F103)
+        t, f = _wait(client, admin, pid, lambda t, f: t["Testler"]["status"] == "WAITING_APPROVAL" and F1 in t
+                     and t[F1]["status"] == "WAITING_APPROVAL", "düzeltme test onayını beklemeden çalışmalı", 120)
+        fix, retest = t[F1], t[R1]
+        assert fix["assignee"]["id"] == w["agent"] and fix["depends_on"] == [] and fix["fix_kind"] == "FIX" and fix["reviewer"] is None
+        assert retest["assignee"]["id"] == w["reviewer"] and set(retest["depends_on"]) == {fix["id"], t["Testler"]["id"]}
+        assert retest["fix_of_task_id"] == t["Testler"]["id"] and retest["status"] in ("BACKLOG", "READY")
         assert any(e["kind"] == "TEST_FIX_LOOP" for e in f["events"])
-        # Test adımı onaylanınca düzeltme kendiliğinden başlar, ardından yeniden test; o da kalınca 2. tur açılır
-        assert approve(t["Testler"]["id"]).status_code == 200
-        t, _ = _wait(client, admin, pid, lambda t, f: t["Test düzeltmesi 1: Randevu modülü"]["status"] == "WAITING_APPROVAL", "düzeltme adımı çalışmalı", 90)
-        assert approve(t["Test düzeltmesi 1: Randevu modülü"]["id"]).status_code == 200
-        t, _ = _wait(client, admin, pid, lambda t, f: "Test düzeltmesi 2: Randevu modülü" in t, "2. düzeltme turu açılmalı", 90)
+        # Açık tur varken test adımı revizyonla yeniden koşup yine kalır: yeni tur açılmaz (F100)
+        assert decide(t["Testler"]["id"], False, "Bir test daha ekle").status_code == 200
+        t, f = _wait(client, admin, pid, lambda t, f: any(e["kind"] == "TEST_FIX_UPDATED" for e in f["events"])
+                     and t["Testler"]["status"] == "WAITING_APPROVAL", "açık tur güncellenmeli", 120)
+        assert "Test düzeltmesi 2: Randevu modülü" not in t
+        # Düzeltme + test adımı onaylanınca yeniden test çalışır; o da kalınca 2. tur açılır
+        assert decide(t[F1]["id"]).status_code == 200
+        assert decide(t["Testler"]["id"]).status_code == 200
+        t, _ = _wait(client, admin, pid, lambda t, f: "Test düzeltmesi 2: Randevu modülü" in t and t[R1]["status"] == "WAITING_APPROVAL",
+                     "2. düzeltme turu açılmalı", 120)
         assert t["Yeniden test 2: Testler"]["assignee"]["id"] == w["reviewer"]
-        assert len([r for r in client.get(f"/api/v1/projects/{pid}/test-runs", headers=admin).json()["runs"]]) == 2
+        assert len(client.get(f"/api/v1/projects/{pid}/test-runs", headers=admin).json()["runs"]) == 3
+        # Yeniden test 1 revizyonla tekrar koşar ve bu kez geçer: açık 2. tur kendiliğinden kapanır (F105)
+        passed = {**FAKE, "status": "PASSED", "projects": [{**FAKE["projects"][0], "test": {**FAKE["projects"][0]["test"],
+                                                                                          "passed": 4, "failed": 0, "status": "PASSED", "failures": []}}]}
+
+        async def execute(archive):
+            return passed
+        monkeypatch.setattr(sandbox, "execute", execute)
+        assert decide(t[R1]["id"], False, "Yeniden çalıştır").status_code == 200
+        t, f = _wait(client, admin, pid, lambda t, f: t["Test düzeltmesi 2: Randevu modülü"]["status"] == "CANCELLED"
+                     and t["Yeniden test 2: Testler"]["status"] == "CANCELLED", "testler geçince açık tur kapanmalı", 120)
+        assert any(e["kind"] == "TEST_FIX_CLOSED" for e in f["events"])
     finally:
         _exec(db, "UPDATE actors SET role = 'Uzman' WHERE id = %s", w["reviewer"])
         _cleanup(client, admin, pid, base)
+
+
+def test_pick_developer_scoring():
+    """F99: kalan testlerde geçen dosyaları yazan geliştirici seçilir; test/doküman dosyaları puan almaz."""
+    text = "FAILED tests/test_api.py::test_login - File \"/work/src/auth.py\", line 12 in verify_password"
+    backend = ["src/auth.py", "src/main.py", "docs/adimlar/02-backend.md"]
+    frontend = ["src/frontend/js/api.js", "src/frontend/index.html"]
+    assert sandbox._score(backend, text) > 0 and sandbox._score(frontend, text) == 0
+    assert sandbox._score(["tests/test_api.py", "docs/adimlar/04-test.md"], text) == 0
+
+
+def test_test_specialist_paths():
+    """F104: test uzmanı yalnız test dosyalarını, test yapılandırmasını, recorion.json ve README'yi depoya yazar."""
+    from app.services.code_repo import is_test_path
+    for ok in ("tests/test_api.py", "conftest.py", "src/frontend/tests/frontend.test.js", "requirements.txt", "recorion.json",
+               "README.md", "docs/adimlar/04-test.md", "scripts/recorion_test.sh", "app/user_test.py", "web/login.spec.ts"):
+        assert is_test_path(ok), ok
+    for bad in ("src/auth.py", "src/main.py", "src/frontend/js/api.js", "src/db/seed.py", "main.py"):
+        assert not is_test_path(bad), bad
 
 
 def _sandbox_up() -> bool:

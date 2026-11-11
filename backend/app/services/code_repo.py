@@ -144,14 +144,26 @@ def files_from_output(task: Task, content: str) -> Dict[str, str]:
     return files
 
 
-async def commit_step(project: Project, task: Task, version: int, content: str, author: str) -> Dict[str, Any]:
-    """Çıktıyı adımın dalına commit eder; dal yoksa main'den açılır; ana dala birleştirme isteği yoksa açılır."""
+TEST_PATH = re.compile(r"(^|/)(tests?|__tests__|spec)/|(^|/)(test_[^/]+|[^/]+_test\.py|[^/]+\.(test|spec)\.[cm]?[jt]sx?|conftest\.py|"
+                       r"pytest\.ini|requirements[^/]*\.txt|package\.json|recorion\.json|README(\.md)?)$|^scripts/recorion_test\.sh$|^docs/", re.I)
+
+
+def is_test_path(path: str) -> bool:
+    """Test uzmanının depoya yazabileceği dosyalar (F104): testler, test yapılandırması/bağımlılıkları, recorion.json, README, dokümanlar."""
+    return bool(TEST_PATH.search(path or ""))
+
+
+async def commit_step(project: Project, task: Task, version: int, content: str, author: str, keep=None) -> Dict[str, Any]:
+    """Çıktıyı adımın dalına commit eder; dal yoksa main'den açılır; ana dala birleştirme isteği yoksa açılır.
+    keep: dosya yolu süzgeci (ör. test uzmanı yalnız test dosyaları); süzülenler "dropped" olarak döner."""
     owner, repo = project.repo_owner, project.repo_name
     branch = task.repo_branch or branch_name(task)
     branch_exists = bool(await _exists(f"/repos/{owner}/{repo}/branches/{branch}"))
     ref = branch if branch_exists else BASE_BRANCH
     ops = []
     files = files_from_output(task, content)
+    dropped = [p for p in files if keep and not keep(p)]
+    files = {p: b for p, b in files.items() if p not in dropped}
     for path, body in files.items():
         current = await _exists(f"/repos/{owner}/{repo}/contents/{path}?ref={ref}")
         op = {"path": path, "content": base64.b64encode(body.encode("utf-8")).decode()}
@@ -171,7 +183,7 @@ async def commit_step(project: Project, task: Task, version: int, content: str, 
             "body": f"RECOrion iş adımı: **{task.title}**\n\nAna dala birleştirme insan onayıyla yapılır (adım onaylanınca)."})
         pr = opened["number"]
     task.repo_branch, task.repo_pr_number = branch, pr
-    return {"branch": branch, "commit": sha, "pr": pr, "files": list(files)}
+    return {"branch": branch, "commit": sha, "pr": pr, "files": list(files), "dropped": dropped}
 
 
 async def merge_step(project: Project, task: Task, approver: str) -> Dict[str, Any]:
@@ -203,18 +215,23 @@ async def close_step(project: Project, task: Task) -> None:
 
 
 # ---------------------------------------------------------------- akış kancaları (hata akışı durdurmaz)
-async def after_output(db: AsyncSession, project: Project, task: Task, version: int, content: str, author: str) -> None:
+async def after_output(db: AsyncSession, project: Project, task: Task, version: int, content: str, author: str,
+                       keep=None) -> List[str]:
+    """Depo varsa çıktıyı adımın dalına commit eder; süzgece takılıp yazılmayan dosyaların listesini döner."""
     from app.services import task_flow
 
     if not active(project):
-        return
+        return []
     try:
-        r = await commit_step(project, task, version, content, author)
+        r = await commit_step(project, task, version, content, author, keep)
         await task_flow.log(db, project, task, "REPO_COMMIT", task.assignee_actor_id,
-                            f"{r['branch']} dalına {len(r['files'])} dosya commit edildi.", r)
+                            f"{r['branch']} dalına {len(r['files'])} dosya commit edildi."
+                            + (f" Yazılmayan (test uzmanı kapsamı dışı): {', '.join(r['dropped'])}." if r["dropped"] else ""), r)
+        return r["dropped"]
     except RepoError as exc:
         logger.warning("Depo commit hatası (%s): %s", task.id, exc.message)
         await task_flow.log(db, project, task, "REPO_ERROR", note=exc.message)
+        return []
 
 
 async def after_approval(db: AsyncSession, project: Project, task: Task, actor_id, approver: str) -> None:

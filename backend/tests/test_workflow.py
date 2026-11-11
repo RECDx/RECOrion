@@ -228,9 +228,16 @@ def test_reviewer_loop_and_blocked_agent(client, world, ai):
     assert kinds.count("REVIEW_FAILED") == 2 and kinds.count("REVIEW_PASSED") == 1 and "REJECTED" not in kinds
     assert "Eksik bölüm 2" in ai.work_prompts[-1]  # kontrol personelinin bulguları geri bildirim olarak gitti
 
-    # Kontrol personelinin 2 reddi sayaca dahil: insanın reddi 3. ret olur > karantina
-    assert client.post(f"/api/v1/tasks/{t['id']}/decision", headers=admin, json={"approve": False, "note": "Bir daha"}).status_code == 200
-    _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "QUARANTINED", "3. retle karantina", timeout=30)
+    # F82: kontrol personelinin 2 reddi ile yöneticinin revizyonları ayrı sayılır: 1. ve 2. revizyon adımı geri gönderir,
+    # karantina ancak yöneticinin 3. revizyonunda olur (önceden "Revizyon 3/3" olarak gösterilir)
+    for i in range(1, 4):
+        flow_t, _ = _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "WAITING_APPROVAL", f"revizyon {i} öncesi onayda", timeout=45)
+        assert flow_t["AI adımı"]["manager_revisions"] == {"used": i - 1, "max": 3}
+        assert client.post(f"/api/v1/tasks/{t['id']}/decision", headers=admin, json={"approve": False, "note": f"Bir daha {i}"}).status_code == 200
+        if i < 3:
+            _wait(client, admin, pid, lambda x, f, i=i: sum(1 for e in f["events"] if e["kind"] == "REJECTED") == i
+                  and x["AI adımı"]["status"] != "QUARANTINED", f"{i}. revizyon karantinaya götürmemeli", timeout=30)
+    _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "QUARANTINED", "yöneticinin 3. revizyonuyla karantina", timeout=45)
 
     # Model hatası: yeniden denemede AI çalışamaz > adım durur (BLOCKED) > yönetici tekrar dener
     ai.broken = True
@@ -238,9 +245,22 @@ def test_reviewer_loop_and_blocked_agent(client, world, ai):
     tasks, flow = _wait(client, admin, pid, lambda x, f: any(e["kind"] == "BLOCKED" for e in f["events"]) and x["AI adımı"]["status"] == "QUARANTINED",
                         "model hatasında adım durmalı", timeout=90)
     assert any(e["kind"] == "BLOCKED" and "model yanıt vermedi" in (e["note"] or "") for e in flow["events"])
+    # F86: durma nedeni kartta; F90: yönetici son sürümü gerekçeyle kabul edebilir
+    assert "model yanıt vermedi" in (tasks["AI adımı"]["blocked_reason"] or "") and tasks["AI adımı"]["can_accept_last"]
     ai.broken = False
     assert client.post(f"/api/v1/tasks/{t['id']}/release", headers=admin, json={"action": "retry"}).status_code == 200
     _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "WAITING_APPROVAL", "yeniden denemede çıktı üretmeli", timeout=45)
+    for i in range(1, 4):  # yöneticinin 3 revizyonu → karantina, ardından son sürümü kabul
+        if i > 1:
+            _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "WAITING_APPROVAL", f"kabul öncesi revizyon {i}", timeout=45)
+        client.post(f"/api/v1/tasks/{t['id']}/decision", headers=admin, json={"approve": False, "note": f"Tekrar {i}"})
+    tasks, _ = _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "QUARANTINED", "karantina", timeout=45)
+    assert tasks["AI adımı"]["blocked_reason"] is None  # son durma nedeni retten sonra gösterilmez (yeniden denemeden sonra)
+    rel = lambda body: client.post(f"/api/v1/tasks/{t['id']}/release", headers=admin, json=body)  # noqa: E731
+    assert rel({"action": "approve"}).status_code == 422  # gerekçe şart
+    assert rel({"action": "approve", "note": "Teknik olarak yeterli, kabul"}).status_code == 200
+    _, flow = _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "DONE", "son sürüm kabul edilmeli", timeout=45)
+    assert any(e["kind"] == "QUARANTINE_APPROVED" for e in flow["events"])
     assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"}).status_code == 200
 
 

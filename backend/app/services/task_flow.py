@@ -186,13 +186,28 @@ async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
     return {"status": task.status}
 
 
+async def rejections_since_release(db: AsyncSession, task: Task, kind: str) -> int:
+    """Son yeniden denemeden (RELEASED) beri verilen belirli türdeki ret sayısı (REVIEW_FAILED: kontrol, REJECTED: onaylayıcı)."""
+    from sqlalchemy import func
+    last = (await db.execute(select(func.max(TaskEvent.created_at)).where(TaskEvent.task_id == task.id, TaskEvent.kind == "RELEASED"))).scalar()
+    q = select(func.count()).select_from(TaskEvent).where(TaskEvent.task_id == task.id, TaskEvent.kind == kind)
+    if last:
+        q = q.where(TaskEvent.created_at > last)
+    return int((await db.execute(q)).scalar() or 0)
+
+
 async def reject(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str, Any]:
     task, project = await _load(db, task_id)
     task.rejection_count = int(task.rejection_count or 0) + 1
-    if payload.get("source") != "REVIEW":  # kontrol personelinin retinde REVIEW_FAILED kaydı zaten yazıldı
+    review = payload.get("source") == "REVIEW"
+    if not review:  # kontrol personelinin retinde REVIEW_FAILED kaydı zaten yazıldı
         await log(db, project, task, "REJECTED", payload.get("actor_id"), payload.get("note"),
                   {"count": task.rejection_count, "channel": payload.get("channel") or "WEB"})
-    quarantined = task.rejection_count >= int(task.max_rejections or 3)
+    await db.flush()
+    # F82: kontrol personeli retleri ile onaylayıcı (proje yöneticisi) revizyonları AYRI sayılır; karantina, son "yeniden dene"den
+    # beri ikisinden biri ret sınırına ulaşınca olur (2 kontrol reti + 1 yönetici revizyonu karantinaya götürmez).
+    same_kind = await rejections_since_release(db, task, "REVIEW_FAILED" if review else "REJECTED")
+    quarantined = same_kind >= int(task.max_rejections or 3)
     if quarantined:
         task.status = "QUARANTINED"
         await log(db, project, task, "QUARANTINED", note=f"{task.rejection_count} kez reddedildi; proje yöneticisinin kararı bekleniyor.")
@@ -213,6 +228,10 @@ async def reject(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str
 async def release(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Karantinadaki adım: retry (ret sayacı sıfırlanır, yeniden çalışılır) veya cancel."""
     task, project = await _load(db, task_id)
+    if payload.get("action") == "approve":  # F90: yönetici karantinadaki son sürümü gerekçeyle kabul eder
+        await log(db, project, task, "QUARANTINE_APPROVED", payload.get("actor_id"), payload.get("note"))
+        res = await approve(db, task_id, {"actor_id": payload.get("actor_id"), "note": payload.get("note"), "channel": "WEB"})
+        return {**res, "approved": True}
     if payload.get("action") == "cancel":
         task.status = "CANCELLED"
         await log(db, project, task, "CANCELLED", payload.get("actor_id"), payload.get("note"))
@@ -238,6 +257,30 @@ async def block(db: AsyncSession, task_id, error: str) -> Dict[str, Any]:
     await notify(db, project.manager_actor_id, f"RECOrion: '{task.title}' iş adımı durdu: {error} Kararınız bekleniyor.",
                  "TASK_ATTENTION", project_name=project.name, task_title=task.title, reason=error, project_url=_url(project))
     return {"status": task.status}
+
+
+async def request_cancel(db: AsyncSession, task: Task, project: Project, actor_id=None, note: Optional[str] = None) -> str:
+    """Açık bir adımı iptal eder (F110): başlamamışsa (Sırada) hemen kapatılır ve proje akışı yenilenir; başlamışsa adımın
+    akışına iptal sinyali gider (AI o an çalışıyorsa elindeki iş bitince kapanır). Dönen değer: CANCELLED | REQUESTED | CLOSED."""
+    from app.workflows import engine
+
+    if task.status in CLOSED:
+        return "CLOSED"
+    payload = {"actor_id": str(actor_id) if actor_id else None, "note": note}
+    if task.status in ("BACKLOG", "READY"):
+        try:  # READY adımın akışı az önce başlamış olabilir: önce ona iletilir
+            await engine.signal_task(str(task.id), "cancel", payload)
+            return "REQUESTED"
+        except Exception:
+            pass
+        await cancel(db, task.id, payload)
+        try:
+            await engine.signal_project(str(project.id), "refresh")
+        except Exception:  # akış yoksa (proje başlamamış) sorun değil
+            logger.info("Proje akışı yenilenemedi (%s)", project.id)
+        return "CANCELLED"
+    await engine.signal_task(str(task.id), "cancel", payload)
+    return "REQUESTED"
 
 
 async def cancel(db: AsyncSession, task_id, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
