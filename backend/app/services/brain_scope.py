@@ -23,7 +23,6 @@ from app.core.security import CurrentUser
 from app.db.models import (LearningRecord, LLMCall, Project, ProjectMember, ProjectTemplate, SupportAccessGrant, SupportAccessLog,
                            Task, TaskEvent, Tenant)
 
-K_MIN = 5  # Merkez toplu istatistiğinde bir satır için gereken en az şirket sayısı
 STATUS_TR = {"BACKLOG": "sırada", "READY": "başlayabilir", "IN_PROGRESS": "çalışılıyor", "WAITING_APPROVAL": "onay bekliyor",
              "REVISION": "revizyonda", "QUARANTINED": "karantinada", "DONE": "tamamlandı", "CANCELLED": "iptal"}
 
@@ -104,18 +103,34 @@ async def company_facts(db: AsyncSession, tenant: Tenant, user: Optional[Current
 
 # ---------------------------------------------------------------- Merkez (toplu, k ≥ 5)
 async def platform_facts(db: AsyncSession) -> str:
+    from app.services import reports
+    priv = await reports.privacy(db)  # #744: k eşiği ve baskınlık sınırı Merkez ayarıdır
+    k_min, dom = priv["k_min"], priv["dominance_pct"]
     parts: List[str] = []
-    # Ünvan bazında ret/doğru oranı ve neden dağılımı — yalnız en az K_MIN şirkette görülen ünvanlar
-    rows = (await db.execute(select(LearningRecord.job_title, func.count(func.distinct(LearningRecord.tenant_id)),
+    # Ünvan bazında doğru/yanlış — yalnız en az k şirkette görülen ve tek şirketin payı sınırı aşmayan ünvanlar
+    rows = (await db.execute(select(LearningRecord.job_title, LearningRecord.tenant_id,
                                     func.count().filter(LearningRecord.label == "YANLIS"),
                                     func.count().filter(LearningRecord.label == "DOGRU"),
-                                    func.count().filter(LearningRecord.cause == "MODEL_HATASI"))
-                             .where(LearningRecord.job_title.isnot(None)).group_by(LearningRecord.job_title))).all()
-    shown = [f"{t}: {n_t} şirket, doğru {ok}, yanlış {bad} (AI hatası {mh})" for t, n_t, bad, ok, mh in rows if n_t >= K_MIN]
-    hidden = sum(1 for r in rows if r[1] < K_MIN)
-    parts += [f"# Ünvan bazında öğrenme istatistiği (yalnız en az {K_MIN} şirkette görülenler)", _lines(shown)]
+                                    func.count().filter(LearningRecord.cause == "MODEL_HATASI"), func.count())
+                             .where(LearningRecord.job_title.isnot(None))
+                             .group_by(LearningRecord.job_title, LearningRecord.tenant_id))).all()
+    agg: Dict[str, Dict[str, Any]] = {}
+    for title, tid, bad, ok, mh, n in rows:
+        a = agg.setdefault(title, {"bad": 0, "ok": 0, "mh": 0, "per": {}})
+        a["bad"] += bad
+        a["ok"] += ok
+        a["mh"] += mh
+        a["per"][tid] = n
+    shown, hidden = [], 0
+    for title, a in sorted(agg.items()):
+        total = sum(a["per"].values())
+        if len(a["per"]) < k_min or (total and max(a["per"].values()) * 100 / total > dom):
+            hidden += 1
+            continue
+        shown.append(f"{title}: {len(a['per'])} şirket, doğru {a['ok']}, yanlış {a['bad']} (AI hatası {a['mh']})")
+    parts += [f"# Ünvan bazında öğrenme istatistiği (en az {k_min} şirket; tek şirket payı en çok %{dom})", _lines(shown)]
     if hidden:
-        parts.append(f"- ({hidden} ünvan {K_MIN}'ten az şirkette görüldüğü için gösterilmedi: KVKK k-anonimlik)")
+        parts.append(f"- ({hidden} ünvan gösterilmedi: {k_min}'ten az şirkette görüldü ya da tek şirket baskın — KVKK k-anonimlik)")
     # Takılmalar ve model sağlığı (sayı)
     since = now() - timedelta(days=30)
     blocked = (await db.execute(select(func.count()).select_from(TaskEvent).where(TaskEvent.kind == "BLOCKED",

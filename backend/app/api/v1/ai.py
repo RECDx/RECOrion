@@ -299,8 +299,10 @@ async def _brain_prompt(db: AsyncSession, tenant: Tenant, query: str, user: Opti
     from app.services import brain_scope
     help_text, _ = await brain_scope.help_section(db, user, query)
     facts = await brain_scope.company_facts(db, tenant, user)
+    from app.services import reports
     return (base + BRAIN_SCOPE.format(company=tenant.name) + "\n# İş durumu (güncel)\n" + facts
-            + ("\n\n# KILAVUZ (sistem kullanımı)\n" + help_text if help_text else ""))
+            + ("\n\n# KILAVUZ (sistem kullanımı)\n" + help_text if help_text else "")
+            + reports.PROMPT.format(catalog=reports.catalog_prompt(user)))  # #744 rapor (kullanıcının yetkisindeki raporlar)
 
 
 async def _brain_prompt_base(db: AsyncSession, tenant: Tenant, query: str) -> str:
@@ -429,9 +431,10 @@ MERKEZ_SCOPE = """
 
 @router.post("/system/assistant/chat")
 async def assistant_chat(payload: ChatPayload, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    from app.services import brain_scope
+    from app.services import brain_scope, reports
     hq_id = await get_hq_tenant_id(db)
-    prompt = await _platform_prompt(db) + MERKEZ_SCOPE + "\n" + await brain_scope.platform_facts(db)
+    prompt = (await _platform_prompt(db) + MERKEZ_SCOPE + "\n" + await brain_scope.platform_facts(db)
+              + reports.PROMPT.format(catalog=reports.catalog_prompt(None, platform=True)))  # #744
     help_text, sources = await brain_scope.help_section(db, current, payload.content)
     if help_text:
         prompt += "\n\n# KILAVUZ (RECOrion ekranları)\n" + help_text

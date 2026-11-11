@@ -12,6 +12,7 @@ const SUGGESTIONS = [
   'Şirketimizin mevcut AI personel yapısını değerlendirir misin?',
   'Hangi departmanlarda eksik ünvan görüyorsun?',
   'Bu ay öncelik vermemiz gereken işleri planlayalım.',
+  'Projelere göre adım durumlarını pivot tablo olarak göster.',
 ];
 
 /**
@@ -45,6 +46,7 @@ export default function BrainPanel({ tenantId, currentUser, canManage }) {
 
   const loadHistory = useCallback(() => api.getBrainHistory(tenantId), [tenantId]);
   const send = useCallback((content) => api.sendBrainMessage(tenantId, content), [tenantId]);
+  const runReport = useCallback((spec) => api.runCompanyReport(tenantId, spec), [tenantId]);  // #744
   const options = settings?.available_models || [];
   const defaultAvailable = options.some((m) => m.display_name === settings?.platform_default && m.available !== false);
 
@@ -88,9 +90,10 @@ export default function BrainPanel({ tenantId, currentUser, canManage }) {
           <ChatPanel
             loadHistory={loadHistory}
             send={send}
+            runReport={runReport}
             icon={Brain}
             emptyTitle="Beyin AI hazır"
-            emptyText="Şirketinizin manifestosunu, departmanlarını, AI personelini ve kurum hafızasını bilerek yanıt verir."
+            emptyText="Şirketinizi, yetkiniz dahilindeki iş durumunu ve kılavuzu bilerek yanıt verir; istediğinizde tablo, grafik veya pivot rapor hazırlar."
             suggestions={SUGGESTIONS}
             placeholder="Beyin AI'ya bir soru sorun… (Enter gönderir, Shift+Enter yeni satır)"
           />

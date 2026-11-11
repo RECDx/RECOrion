@@ -164,6 +164,7 @@ export function PlatformAssistantPanel() {
   useEffect(() => { api.getActiveSupportGrants().then(setGrants).catch(() => setGrants([])); }, []);
   const loadHistory = useCallback(() => api.getAssistantHistory(), []);
   const send = useCallback((content) => api.sendAssistantMessage(content, support || null), [support]);
+  const runReport = useCallback((spec) => api.runPlatformReport(spec), []);  // #744
   return (
     <Card
       title="Merkez Beyin AI"
@@ -182,6 +183,7 @@ export function PlatformAssistantPanel() {
       <ChatPanel
         loadHistory={loadHistory}
         send={send}
+        runReport={runReport}
         icon={Bot}
         emptyTitle="Asistan hazır"
         emptyText="Platformun güncel yönetim verilerini kullanarak yanıt verir."

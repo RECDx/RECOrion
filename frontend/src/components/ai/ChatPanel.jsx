@@ -5,13 +5,14 @@ import { toast } from '../../ui/feedback';
 import { navigateTo, openHelp } from '../../help/helpBus';
 import { fmtDate, fmtPrecise } from './format';
 import SimpleMarkdown from './SimpleMarkdown';
+import ReportBlock, { splitReport } from './ReportBlock';
 import './ai.css';
 
 /**
  * Basit sohbet paneli (Beyin AI ve Süper Yönetici asistanı).
  * loadHistory(): Promise<message[]>; send(content): Promise<{ message, model_code, credits }>
  */
-export default function ChatPanel({ loadHistory, send, icon, emptyTitle, emptyText, suggestions = [], placeholder }) {
+export default function ChatPanel({ loadHistory, send, icon, emptyTitle, emptyText, suggestions = [], placeholder, runReport }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -63,7 +64,10 @@ export default function ChatPanel({ loadHistory, send, icon, emptyTitle, emptyTe
         )}
         {messages.map((m) => (
           <div key={m.id} className={`ai-msg ${m.role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant'}`}>
-            {m.role === 'user' ? m.content : <SimpleMarkdown text={m.content} />}
+            {m.role === 'user' ? m.content : (() => {
+              const { text, spec } = runReport ? splitReport(m.content) : { text: m.content, spec: null };
+              return <>{text && <SimpleMarkdown text={text} />}{spec && <ReportBlock spec={spec} run={runReport} />}</>;
+            })()}
             {m.sources?.length > 0 && (
               <div className="ai-msg-meta" aria-label="Kılavuz kaynakları">
                 Kılavuz:{' '}

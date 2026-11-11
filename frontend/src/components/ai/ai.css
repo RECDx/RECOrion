@@ -75,3 +75,7 @@
   .ai-msg { max-width: 94%; }
   .ai-chat { height: 70vh; }
 }
+
+/* #744 Beyin AI rapor bloğu */
+.ai-report { margin-top: 10px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-card); }
+.ai-report .ui-table { font-size: 0.8rem; }

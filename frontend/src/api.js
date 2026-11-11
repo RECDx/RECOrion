@@ -615,6 +615,11 @@ export const api = {
   sendAssistantMessage: (content, supportTenantId = null) => request('/system/assistant/chat', { method: 'POST', body: JSON.stringify({ content, support_tenant_id: supportTenantId }) }),
   // #738: süreli RECDx destek erişimi
   getActiveSupportGrants: () => request('/system/support-access/active'),
+  // #744: raporlar ve Merkez gizlilik ayarı
+  runCompanyReport: (tenantId, spec) => request(`/company/${tenantId}/reports/run`, { method: 'POST', body: JSON.stringify(spec) }),
+  runPlatformReport: (spec) => request('/system/reports/run', { method: 'POST', body: JSON.stringify(spec) }),
+  getPrivacySettings: () => request('/system/privacy-settings'),
+  setPrivacySettings: (data) => request('/system/privacy-settings', { method: 'PUT', body: JSON.stringify(data) }),
   getSupportAccess: (tenantId) => request(`/company/${tenantId}/support-access`),
   grantSupportAccess: (tenantId, data) => request(`/company/${tenantId}/support-access`, { method: 'POST', body: JSON.stringify(data) }),
   revokeSupportAccess: (tenantId) => request(`/company/${tenantId}/support-access/revoke`, { method: 'POST' }),

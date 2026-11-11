@@ -259,6 +259,12 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{C}/recai-consent"): TENANT("tenant:manage"),  # #743 (uç içinde: RECDx değiştiremez)
     ("GET", f"{P}/system/recai-training/summary"): SUPER_ADMIN,  # #743 yalnız sayılar
     ("POST", f"{P}/system/recai-training/datasets"): SUPER_ADMIN,
+    ("GET", f"{C}/reports/catalog"): TENANT(None, content=True),  # #744 (rapor bazında izin uç içinde)
+    ("POST", f"{C}/reports/run"): TENANT(None, content=True),
+    ("GET", f"{P}/system/reports/catalog"): SUPER_ADMIN,
+    ("POST", f"{P}/system/reports/run"): SUPER_ADMIN,
+    ("GET", f"{P}/system/privacy-settings"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/privacy-settings"): SUPER_ADMIN,
     ("GET", f"{C}/ai-agents"): TENANT("tenant:view"),
     ("POST", f"{C}/ai-agents"): TENANT("agent:hire"),
     ("PUT", f"{AGENT}"): TENANT("agent:configure"),
