@@ -107,7 +107,7 @@ export default function Automations({ tenantId }) {
               const [label, tone] = STATUS[r.status] || [r.status, 'neutral'];
               return (
                 <li key={r.id} style={{ flexWrap: 'wrap' }} aria-label={`Kural: ${r.name}`}>
-                  <span><strong>{r.name}</strong> <Badge tone="neutral">{TRIGGERS[r.trigger]}</Badge> <Badge tone={tone}>{label}</Badge><br />
+                  <span><button type="button" className="ig-link" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit' }} onClick={() => setLogOf(r)}><strong>{r.name}</strong></button> <Badge tone="neutral">{TRIGGERS[r.trigger]}</Badge> <Badge tone={tone}>{label}</Badge><br />
                     <small className="pj-hint">{whenText(r)}{r.conditions.length ? ` · ${r.conditions.length} koşul` : ''} · {r.action?.type === 'NOTIFY' ? 'bildirim' : r.action?.kind === 'PROJECT' ? 'proje açar' : 'Case açar'}
                       {r.next_run_at && r.status === 'ACTIVE' ? ` · sıradaki ${fmt(r.next_run_at)}` : ''}
                       {r.last_fired_at ? ` · son iş ${fmt(r.last_fired_at)} (${r.fire_count})` : ''}</small>
@@ -115,7 +115,7 @@ export default function Automations({ tenantId }) {
                     {r.trigger === 'WEBHOOK' && <><br /><code className="ig-inline">{r.webhook_url}</code></>}</span>
                   <Button size="sm" variant="secondary" icon={FlaskConical} onClick={() => setTesting(r)}>Dene</Button>
                   {['POLL', 'SCHEDULE'].includes(r.trigger) && r.status === 'ACTIVE' && <Button size="sm" variant="secondary" icon={Play} onClick={() => runNow(r)}>Hemen çalıştır</Button>}
-                  <Button size="sm" variant="secondary" icon={History} onClick={() => setLogOf(r)}>Günlük</Button>
+                  <Button size="sm" variant="secondary" icon={History} onClick={() => setLogOf(r)}>Ayrıntı</Button>
                   <Button size="sm" variant="secondary" onClick={() => setEditing(r)}>Düzenle</Button>
                   {r.trigger === 'WEBHOOK' && <Button size="sm" variant="ghost" icon={KeyRound} onClick={() => rotate(r)}>İmza anahtarı</Button>}
                   <Button size="sm" variant="ghost" icon={r.status === 'ACTIVE' ? Pause : Play} onClick={() => setStatus(r, r.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE')}>{r.status === 'ACTIVE' ? 'Duraklat' : 'Etkinleştir'}</Button>
@@ -132,7 +132,7 @@ export default function Automations({ tenantId }) {
       {editing && <RuleModal tenantId={tenantId} rule={editing.id ? editing : null} conns={conns} people={people} templates={templates}
         onClose={() => setEditing(null)} onSaved={(saved) => { setEditing(null); load(); if (saved?.webhook_secret) setSecret({ rule: saved, secret: saved.webhook_secret }); }} />}
       {testing && <TestModal tenantId={tenantId} rule={testing} onClose={() => { setTesting(null); load(); }} />}
-      {logOf && <RuleLogModal tenantId={tenantId} rule={logOf} onClose={() => setLogOf(null)} />}
+      {logOf && <RuleLogModal tenantId={tenantId} rule={logOf} templates={templates} conns={conns} onClose={() => setLogOf(null)} />}
       {installing && <PresetModal tenantId={tenantId} {...installing} people={people} onClose={() => setInstalling(null)} onDone={() => { setInstalling(null); load(); }} />}
       {secret && <SecretModal data={secret} onClose={() => setSecret(null)} />}
     </>
@@ -167,11 +167,40 @@ function LogTable({ rows, withPayload = false }) {
   );
 }
 
-function RuleLogModal({ tenantId, rule, onClose }) {
+/** #735: kayıtlı kuralın ayrıntısı — ne zaman/neyle tetiklenir, ne yapar, açtığı işler ve kuralın günlüğü. */
+function RuleLogModal({ tenantId, rule, templates = [], conns = [], onClose }) {
   const [rows, setRows] = useState(null);
-  useEffect(() => { api.getAutomationLog(tenantId, rule.id).then(setRows).catch((e) => { toast.error(e.message); setRows([]); }); }, [tenantId, rule.id]);
+  const [works, setWorks] = useState(null);
+  useEffect(() => {
+    api.getAutomationLog(tenantId, rule.id).then(setRows).catch((e) => { toast.error(e.message); setRows([]); });
+    api.getAutomationProjects(tenantId, rule.id).then(setWorks).catch(() => setWorks([]));
+  }, [tenantId, rule.id]);
+  const [label, tone] = STATUS[rule.status] || [rule.status, 'neutral'];
+  const a = rule.action || {};
+  const tpl = templates.find((t) => t.id === a.template_id);
+  const conn = conns.find((c) => c.id === rule.connection_id);
   return (
-    <Modal open onClose={onClose} title={`${rule.name} · günlük`} size="lg" footer={<Button variant="secondary" onClick={onClose}>Kapat</Button>}>
+    <Modal open onClose={onClose} title={`Otomasyon: ${rule.name}`} size="lg" footer={<Button variant="secondary" onClick={onClose}>Kapat</Button>}>
+      <ul className="pj-check" aria-label="Kural özeti">
+        <li>Durum: <Badge tone={tone}>{label}</Badge>{rule.next_run_at && rule.status === 'ACTIVE' ? ` · sıradaki çalışma ${fmt(rule.next_run_at)}` : ''}</li>
+        <li>Tetik: {TRIGGERS[rule.trigger]} — {whenText(rule)}{conn ? ` · bağlantı: ${conn.name}` : ''}</li>
+        <li>Koşullar: {rule.conditions.length ? rule.conditions.map((c) => `${c.field} ${c.op} ${c.value == null ? '' : typeof c.value === 'object' ? JSON.stringify(c.value) : c.value}`).join(' · ') : 'yok (her olayda)'}</li>
+        <li>Eylem: {a.type === 'NOTIFY' ? 'bildirim gönderir' : a.kind === 'PROJECT' ? 'proje açar' : 'Case açar'}
+          {tpl ? ` · şablon: ${tpl.name}` : ''}{a.auto_start ? ' · kendiliğinden başlar' : ''}{a.plan_with_recai ? ' · RECAi plan taslağı çıkarır' : ''}</li>
+        <li>Çalışma: {rule.fire_count || 0} kez iş açtı{rule.last_fired_at ? ` · son ${fmt(rule.last_fired_at)}` : ''}</li>
+        {rule.last_error && <li className="ui-text-danger">Son hata: {rule.last_error}</li>}
+      </ul>
+      <h4 style={{ margin: '14px 0 6px' }}>Açtığı işler</h4>
+      {!works ? <p className="pj-hint">Yükleniyor…</p> : works.length === 0 ? <p className="pj-hint">Bu kural henüz Case/proje açmadı.</p> : (
+        <ul className="pj-list" aria-label="Kuralın açtığı işler">
+          {works.map((w) => (
+            <li key={w.id}><span>{w.kind === 'CASE' ? 'Case' : 'Proje'}: <strong>{w.name}</strong> <Badge tone="neutral">{w.status_label}</Badge>
+              <br /><small className="pj-hint">{fmt(w.created_at)}</small></span>
+              <a className="ig-link" href={projectLink(w.id)}>Aç</a></li>
+          ))}
+        </ul>
+      )}
+      <h4 style={{ margin: '14px 0 6px' }}>Günlük</h4>
       {!rows ? <p className="pj-hint">Yükleniyor…</p> : <LogTable rows={rows} withPayload />}
     </Modal>
   );

@@ -222,6 +222,19 @@ async def rule_log(tenant_id: uuid.UUID, rid: uuid.UUID, limit: int = Query(50, 
     return [svc.log_out(r, with_payload=True) for r in rows]
 
 
+@router.get("/company/{tenant_id}/automations/{rid}/projects")
+async def rule_projects(tenant_id: uuid.UUID, rid: uuid.UUID, limit: int = Query(50, le=200), user: CurrentUser = Depends(get_current_user),
+                        db: AsyncSession = Depends(get_db)):
+    """#735: kuralın açtığı Case/projeler (detay sayfası). Yalnız ad, tür, durum ve tarih (içerik yok)."""
+    from app.db.models import Project
+    from app.services import projects as psvc
+    _manage(user, tenant_id)
+    rows = (await db.execute(select(Project).where(Project.tenant_id == tenant_id, Project.source_rule_id == rid)
+                             .order_by(Project.created_at.desc()).limit(limit))).scalars().all()
+    return [{"id": str(p.id), "name": p.name, "kind": p.kind, "status": p.status, "status_label": psvc.STATUS_LABELS.get(p.status, p.status),
+             "created_at": p.created_at} for p in rows]
+
+
 @router.get("/company/{tenant_id}/automation-log")
 async def tenant_log(tenant_id: uuid.UUID, limit: int = Query(100, le=500), user: CurrentUser = Depends(get_current_user),
                      db: AsyncSession = Depends(get_db)):

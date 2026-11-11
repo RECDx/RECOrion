@@ -32,7 +32,9 @@ function useMonacoTheme() {
 }
 
 const EDITOR_OPTIONS = { readOnly: true, domReadOnly: true, automaticLayout: true, minimap: { enabled: true }, lineNumbers: 'on',
-  scrollBeyondLastLine: false, fontSize: 13, renderWhitespace: 'selection', wordWrap: 'off' };
+  scrollBeyondLastLine: false, fontSize: 13, renderWhitespace: 'selection', wordWrap: 'off',
+  // F101: Monaco "ı" gibi harfleri "i"ye benzer (belirsiz) sayıp kutu içine alıyordu; Türkçe metin için kapatıldı
+  unicodeHighlight: { ambiguousCharacters: false, allowedLocales: { tr: true, _os: true, _vscode: true } } };
 
 /** Düz dosya listesinden ağaç: { name, path, type, children } */
 function buildTree(entries) {

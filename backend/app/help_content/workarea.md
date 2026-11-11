@@ -991,7 +991,7 @@ Başlık "<adım> · çıktı". AI personelin ürettiği çıktı başlıklar, l
 
 [[EKRAN: wa-sisteme-aktar | "<adım> · sisteme aktar" penceresi: Eşleme listesi, "Bu adım bitince otomatik öner" kutuları, "RECAi ile hazırla" düğmesi ve altta aktarım kartları | Proje yöneticisi olarak tamamlanmış bir adımda "Sisteme aktar" düğmesine basın; şirkette onaylı bir eşleme olmalı]]
 
-**Ne işe yarar?** Adımın çıktısından şirket sistemine (ör. Odoo satış siparişi) gidecek kaydı RECAi'ye çıkartır ve önizleme hazırlar. Pencerede: "RECAi adımın çıktısından kayıtları çıkarır ve önizleme hazırlar. Hiçbir kayıt onaysız yazılmaz."
+**Ne işe yarar?** Adımın çıktısından şirket sistemine (ör. Odoo satış veya satın alma siparişi; satın alma için adım adım anlatım Şirket Yönetimi › Entegrasyonlar yardımında) gidecek kaydı RECAi'ye çıkartır ve önizleme hazırlar. Pencerede: "RECAi adımın çıktısından kayıtları çıkarır ve önizleme hazırlar. Hiçbir kayıt onaysız yazılmaz."
 
 | Alan | Ne işe yarar | Nasıl doldurulur | Örnek | Zorunlu |
 |---|---|---|---|---|

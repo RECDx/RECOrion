@@ -331,10 +331,15 @@ async def refs(project: Project, tasks: List[Task]) -> List[Dict[str, Any]]:
 
 async def tree(project: Project, ref: str) -> Dict[str, Any]:
     ref = _ref(ref)
+    # F88: Gitea'nın git/trees ucu bazı dal adlarını çözemiyor ("sha not found"); dal önce commit SHA'sına çevrilir
+    target = ref
+    if not re.fullmatch(r"[0-9a-f]{40}", ref):
+        branch = await _exists(f"/repos/{project.repo_owner}/{project.repo_name}/branches/{ref}")
+        target = ((branch or {}).get("commit") or {}).get("id") or ref
     entries, page = [], 1
     while True:
         try:
-            _, data = await _call("GET", f"/repos/{project.repo_owner}/{project.repo_name}/git/trees/{ref}",
+            _, data = await _call("GET", f"/repos/{project.repo_owner}/{project.repo_name}/git/trees/{target}",
                                   params={"recursive": "true", "per_page": 1000, "page": page})
         except RepoError as exc:
             if exc.status in (400, 404):

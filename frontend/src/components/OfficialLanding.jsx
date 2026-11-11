@@ -476,7 +476,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   </div>
 
                   <div className="plan-models-box">
-                    <span className="models-title">RECAi ({p.recai_tiers?.length || 0}):</span>
+                    <span className="models-title">RECAi ({(p.recai_tiers?.length || 0) + RECAI_CAPABILITIES.filter(c => p.features?.[c.feature]).length}):</span>{/* F67: listelenen tüm adlar sayılır */}
                     <div className="model-tags-wrap">
                       {(p.recai_tiers || []).map(code => (
                         <span key={code} className="model-mini-tag">{recaiTierName(code)}</span>
@@ -1370,7 +1370,7 @@ export default function OfficialLanding({ onEnterWorkspace, currentUser, onLogou
                   name="username"
                   autoComplete="username"
                   required 
-                  placeholder="ornek: cuneyterdil@recx.com"
+                  placeholder="ornek: ad.soyad@sirketiniz.com"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
                   className="login-input-3d"

@@ -131,7 +131,7 @@ def test_quality_run_recommend_approve_and_route(client, db, world, monkeypatch)
     sa, admin = _super(client, db), world["admin"]["h"]
     assert client.get("/api/v1/system/model-router", headers=admin).status_code == 403
     assert client.post("/api/v1/system/model-router/runs", headers=sa, json={"models": ["qwen3-embedding-8b"]}).status_code == 422  # sohbet modeli değil
-    r = client.post("/api/v1/system/model-router/runs", headers=sa, json={"models": ["deepseek-v4-flash", "mimo-v2.6-pro"]})
+    r = client.post("/api/v1/system/model-router/runs", headers=sa, json={"models": ["deepseek-v4-flash", "gemma-4-31b"]})
     assert r.status_code == 202, r.text
     run_id = r.json()["id"]
     assert client.post("/api/v1/system/model-router/runs", headers=sa, json={"models": ["glm-5.3"]}).status_code == 409  # süren koşu
@@ -145,11 +145,11 @@ def test_quality_run_recommend_approve_and_route(client, db, world, monkeypatch)
     rec = run["recommendation"]
     for tt in rsvc.TASK_TYPES:
         assert rec[tt]["recommended"] == "deepseek-v4-flash", (tt, rec[tt])
-        assert next(c for c in rec[tt]["candidates"] if c["model_code"] == "mimo-v2.6-pro")["eligible"] is False
+        assert next(c for c in rec[tt]["candidates"] if c["model_code"] == "gemma-4-31b")["eligible"] is False
 
     # Eşik altı model gerekçesiz onaylanamaz; önerilen onaylanır, iz tutulur
     assert client.post("/api/v1/system/model-router/routes", headers=sa,
-                       json={"task_type": "CODE", "model_code": "mimo-v2.6-pro", "run_id": run_id}).status_code == 422
+                       json={"task_type": "CODE", "model_code": "gemma-4-31b", "run_id": run_id}).status_code == 422
     r = client.post("/api/v1/system/model-router/routes", headers=sa, json={"task_type": "CODE", "model_code": "glm-5.3", "note": "Deneme"})
     assert r.status_code == 200 and r.json()["routes"]["CODE"] == "glm-5.3"
     ov = client.get("/api/v1/system/model-router", headers=sa).json()

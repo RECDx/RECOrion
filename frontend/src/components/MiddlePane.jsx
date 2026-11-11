@@ -27,6 +27,9 @@ import './workarea.css';
 
 const CLOSED = ['COMPLETED', 'CANCELLED'];
 
+// F94: sunucu saati saat dilimi bilgisi olmadan (UTC) gelebiliyor; yerel saate çevrilir
+const utcDate = (v) => new Date(typeof v === 'string' && !/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? `${v}Z` : v);
+
 export default function MiddlePane({ 
   selectedTask, 
   messages, 
@@ -209,7 +212,7 @@ export default function MiddlePane({
                   </div>
 
                   <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>
-                    {m.created_at ? new Date(m.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    {m.created_at ? utcDate(m.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : ''}
                   </span>
                 </div>
 

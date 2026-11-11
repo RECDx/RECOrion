@@ -16,7 +16,7 @@ const FILTERS = [['ALL', 'Tüm ekip'], ['MY', 'Benim'], ['A2A', 'Ajanlar arası'
 /** Çalışma Alanı sol bölmesi (Adım 8.3): proje seçimi, gerçek ilerleme, iş adımları ve proje ekibi. */
 export default function LeftPane({
   project, projects = [], onSelectProject, members = [], flowTasks = {}, canManage,
-  tasks, selectedTask, onSelectTask, chatFilter, onSetChatFilter, onCreateTaskModal, canSeeA2A = false,
+  tasks, selectedTask, onSelectTask, chatFilter, onSetChatFilter, onCreateTaskModal, canSeeA2A = false, kvkkRestricted = false,
 }) {
   const done = tasks?.filter((t) => t.status === 'DONE').length || 0;
   const total = tasks?.length || 0;
@@ -34,7 +34,7 @@ export default function LeftPane({
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name} · {statusOf(p.status).label}</option>)}
             </select>
           ) : (
-            <strong style={{ fontSize: '0.875rem' }}>{project?.name || 'Henüz proje yok'}</strong>
+            <strong style={{ fontSize: '0.875rem' }}>{project?.name || (kvkkRestricted ? 'Projeler KVKK gereği gösterilmiyor' : 'Henüz proje yok')}</strong>
           )}
         </div>
         {project && (

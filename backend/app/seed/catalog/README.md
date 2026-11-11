@@ -32,7 +32,7 @@ olmayan mesleki bilgi içerir; hiçbir şirkete ait veri içermez.
           "skills": ["5-8 madde"],
           "kpis": ["3-5 madde"],
           "professions": ["A.06"],            // [] = departmanın tüm meslek grupları
-          "recommended_model_code": "mimo-v2.6-pro",
+          "recommended_model_code": "deepseek-v4.1-flash",
           "autonomy_level": "L1",             // L1 öner+onay, L2 rutin işleri kendisi yapar, L3 tam otonom
           "role_prompt": "Türkçe sistem promptu, 150-300 kelime"
         }
@@ -43,7 +43,7 @@ olmayan mesleki bilgi içerir; hiçbir şirkete ait veri içermez.
 ```
 
 ## Önerilen model kodları
-- `mimo-v2.6-pro`: analiz, planlama, yönetim, hukuk, finans gibi akıl yürütme gerektiren işler
+- `deepseek-v4.1-flash` (MiMo-V2.6-Pro EVREN'de emekli, 0052): analiz, planlama, yönetim, hukuk, finans gibi akıl yürütme gerektiren işler
 - `deepseek-v4.1-flash`: güçlü ve hızlı genel amaçlı işler, yazılım/teknik işler
 - `deepseek-v4-flash`: rutin, yüksek hacimli işler (müşteri yanıtı, kayıt, sipariş takibi)
 - `gemma-4-31b`: kısa metin, içerik ve yazışma işleri

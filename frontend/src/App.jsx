@@ -655,6 +655,7 @@ export default function App() {
       <div className="tri-pane-container" data-active-pane={activePane}>
         {/* Left Pane: Project, Workflow & Team */}
         <LeftPane 
+          kvkkRestricted={kvkkRestricted}
           project={activeProject}
           projects={projects}
           onSelectProject={(p) => { if (p.id !== activeProject?.id) { setMessages([]); setActiveProject(p); } }}
@@ -694,7 +695,14 @@ export default function App() {
           canPromote={canPromote}
           canRevoke={canRevoke}
           onMemoryAction={handleMemoryAction}
-          onApproveQualityGate={(t) => runTaskAction(() => approveTask(t.id), 'Onaylandı; iş akışı sonraki adıma geçiyor.')}
+          onApproveQualityGate={async (t) => {
+            try {
+              const r = await approveTask(t.id, t.title);
+              if (r?.cancelled) return;
+              toast.success('Onaylandı; iş akışı sonraki adıma geçiyor.');
+              setTimeout(() => { if (activeProject) reloadWork(activeProject.id).catch(() => {}); }, 1500);
+            } catch (err) { toast.error(err.message); }
+          }}
           onRejectQualityGate={async (t) => {
             const note = await promptDialog({ message: 'Revizyon gerekçesi (personel buna göre düzeltecek):' });
             if (note && note.trim()) runTaskAction(() => api.decideTask(t.id, false, note.trim()), 'Revizyon istendi.');

@@ -25,6 +25,11 @@ export default function MappingStudio({ tenantId, conn, onClose }) {
     api.getMappingTemplates(tenantId, conn.connector).then(setTemplates),
   ]).catch((e) => toast.error(e.message)), [tenantId, conn.id, conn.connector]);
   useEffect(() => { load(); }, [load]);
+  // #737: eşleme kaldırma (arşivlenir: geçmiş aktarımların kaydı bozulmaz, listeden ve yeni aktarımlardan çıkar)
+  const remove = async (m) => {
+    if (!(await confirmDialog({ message: `'${m.name}' eşlemesi kaldırılsın mı? Yeni aktarımlarda kullanılmaz; geçmiş aktarımların kaydı korunur.`, confirmText: 'Kaldır' }))) return;
+    try { await api.archiveMapping(tenantId, m.id); toast.success('Eşleme kaldırıldı.'); load(); } catch (e) { toast.error(e.message); }
+  };
 
   if (editing) {
     return <MappingEditor tenantId={tenantId} conn={conn} mapping={editing} objects={objects}
@@ -38,7 +43,9 @@ export default function MappingStudio({ tenantId, conn, onClose }) {
     <Modal open onClose={onClose} title={`${conn.name} · eşlemeler`} size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>Kapat</Button><Button icon={Plus} onClick={() => setCreating(true)}>Yeni eşleme</Button></>}>
       <p className="pj-hint">Eşleme, RECAi'nin ürettiği ortak iş nesnesinin (ürün kartı, cari, teklif...) bu sistemde hangi alanlara yazılacağını belirler.
-        Onaylanan eşleme, iş çıktısını bu sisteme aktarırken kullanılır; her aktarım yine önizleme ve onaydan geçer.</p>
+        Onaylanan eşleme, iş çıktısını bu sisteme aktarırken kullanılır; her aktarım yine önizleme ve onaydan geçer.
+        Örnek: "Sipariş → Odoo satın alma siparişi" eşlemesi, tedarikçiyi vergi numarasıyla, ürünü stok koduyla bulur ve KDV'yi
+        satın alma vergisinden alır; aynı kayıt ikinci kez gelirse yenisini açmak yerine mevcut kaydı günceller.</p>
       {!list ? <p className="pj-hint">Yükleniyor…</p> : list.length === 0 ? (
         <EmptyState icon={Wand2} title="Henüz eşleme yok" description="RECDx hazır eşlemesinden başlayın veya RECAi'ye önerdirin." />
       ) : (
@@ -50,7 +57,10 @@ export default function MappingStudio({ tenantId, conn, onClose }) {
                 <span><strong>{m.name}</strong> <Badge tone={tone}>{label}</Badge><br />
                   <small className="pj-hint">{m.object_label} → {m.target.model || m.target.tool} · {m.rules.length} kural · sürüm {m.version}
                     {m.last_dry_run ? ` · son deneme: ${m.last_dry_run.ok ? 'hatasız' : 'hatalı'}` : ''}</small></span>
-                <Button size="sm" variant="secondary" onClick={() => setEditing(m)}>Aç</Button>
+                <span className="pj-actions">
+                  <Button size="sm" variant="secondary" onClick={() => setEditing(m)}>Aç</Button>
+                  <Button size="sm" variant="ghost" icon={Trash2} onClick={() => remove(m)} aria-label={`${m.name} eşlemesini kaldır`}>Kaldır</Button>
+                </span>
               </li>
             );
           })}

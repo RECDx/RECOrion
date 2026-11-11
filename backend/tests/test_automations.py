@@ -82,6 +82,9 @@ def test_signed_webhook_opens_draft_case_once(client, db, world):
     outcomes = [x["outcome"] for x in log]
     assert outcomes.count("REJECTED") == 3 and outcomes.count("DRAFTED") == 1 and "DUPLICATE" in outcomes and "LOOP" in outcomes
     assert all("rxw_" not in json.dumps(x) for x in log)
+    # #735 detay: kuralın açtığı işler
+    works = client.get(f"/api/v1/company/{w['tenant']}/automations/{rule['id']}/projects", headers=w["admin"]["h"])
+    assert works.status_code == 200 and [x["id"] for x in works.json()] == [pid], works.text
 
     # günlük silinemez / değiştirilemez
     with pytest.raises(Exception, match="değiştirilemez"):

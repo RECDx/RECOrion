@@ -58,10 +58,13 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
     from app.services import sandbox
     gates = {t.id: await sandbox.acceptance_gate(db, project, t) for t in tasks if t.status in ("WAITING_APPROVAL", "QUARANTINED")}
     # F86: duran adımın nedeni kartta görünsün (son "yeniden dene"den sonraki en son BLOCKED kaydı)
-    blocked = {}
+    blocked, unreviewed = {}, {}
     for e in events:  # en yeniden eskiye
         if e.task_id and e.task_id not in blocked and e.kind in ("BLOCKED", "RELEASED"):
             blocked[e.task_id] = e.note if e.kind == "BLOCKED" else None
+        # F89: son sürüm kontrol personelinden geçmeden onaya geldiyse kartta uyarı
+        if e.task_id and e.task_id not in unreviewed and e.kind in ("REVIEW_SKIPPED", "REVIEW_PASSED", "REVIEW_FAILED", "AI_OUTPUT"):
+            unreviewed[e.task_id] = e.note if (e.kind == "REVIEW_SKIPPED" and (e.data or {}).get("unreviewed")) else None
     # F82: yönetici revizyonları kontrol retlerinden ayrı sayılır; bu revizyon karantinaya götürecekse önceden söylenir
     revision_left = {}
     for t in tasks:
@@ -94,6 +97,7 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
             "acceptance_warning": gates.get(t.id),  # kabul kapısı (#734): onaydan önce gösterilir
             "manager_revisions": revision_left.get(t.id),  # F82: {used, max}
             "blocked_reason": blocked.get(t.id) if t.status == "QUARANTINED" else None,  # F86
+            "unreviewed_warning": unreviewed.get(t.id) if t.status == "WAITING_APPROVAL" else None,  # F89
             "can_accept_last": t.status == "QUARANTINED" and manages and bool(latest.get(t.id)),  # F90
             # ADIM 12.4: çıktıyı dış sisteme aktarma (proje yöneticisi) ve adım bitince önerilecek eşlemeler
             "can_transfer": manages and t.status in ("DONE", "WAITING_APPROVAL") and bool(art),

@@ -12,13 +12,14 @@ const TYPE_FOR = { VISION: 'VISION', TRANSCRIPTION: 'AUDIO', OCR: 'OCR' };
  * o adı kullanan tüm AI personeller kendiliğinden yeni modele geçer. Gerçek model adları yalnızca bu ekranda görünür.
  */
 export default function RecaiTiersAdmin({ models = [] }) {
-  const [tiers, setTiers] = useState([]);
+  const [tiers, setTiers] = useState(null);  // F61: null = yükleniyor
+  const [loadError, setLoadError] = useState('');
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState('');
 
   const load = () => api.getRecaiTiers()
-    .then((rows) => { setTiers(rows); setDraft(Object.fromEntries(rows.map((t) => [t.code, { model_code: t.model_code, fallback_model_code: t.fallback_model_code || '' }]))); })
-    .catch((e) => toast.error(e.message));
+    .then((rows) => { setLoadError(''); setTiers(rows); setDraft(Object.fromEntries(rows.map((t) => [t.code, { model_code: t.model_code, fallback_model_code: t.fallback_model_code || '' }]))); })
+    .catch((e) => { setLoadError(e.message); setTiers((cur) => cur || []); });
   useEffect(() => { load(); }, []);
 
   const choices = (t) => models.filter((m) => m.status === 'ACTIVE' && m.model_type === (TYPE_FOR[t.purpose] || 'CHAT'));
@@ -45,7 +46,12 @@ export default function RecaiTiersAdmin({ models = [] }) {
       <table className="rt-table" data-testid="recai-tiers">
         <thead><tr><th>Ad</th><th>Model</th><th>Yedek model</th><th /></tr></thead>
         <tbody>
-          {tiers.map((t) => (
+          {tiers === null && <tr><td colSpan={4} className="pj-hint">Yükleniyor…</td></tr>}
+          {loadError && (
+            <tr><td colSpan={4} className="ui-text-danger">RECAi adları yüklenemedi: {loadError}{' '}
+              <button type="button" className="ui-btn ui-btn-ghost ui-btn-sm" onClick={load}>Tekrar dene</button></td></tr>
+          )}
+          {(tiers || []).map((t) => (
             <tr key={t.code}>
               <td>
                 <div className="rt-name">{t.name} <Badge tone={t.kind === 'CHAT' ? 'info' : 'neutral'}>{t.kind === 'CHAT' ? 'Seçilebilir ad' : 'Yetenek'}</Badge></div>

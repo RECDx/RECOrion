@@ -58,6 +58,12 @@ export default function TestRunsTab({ project }) {
               {refs.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
             <Button icon={Play} disabled={busy || running} onClick={run}>{running ? 'Koşu sürüyor…' : 'Testleri çalıştır'}</Button>
+            {running && (  /* F111: neden başlatılamadığı */
+              <small className="pj-hint">
+                Projede aynı anda tek koşu yapılır; şu an <span style={mono}>{(data.runs.find((r) => r.status === 'RUNNING') || {}).ref}</span> dalı
+                çalışıyor. Bitince seçili dal için başlatabilirsiniz.
+              </small>
+            )}
           </div>
         ) : (
           <p className="pj-hint">Testleri elle proje yöneticisi başlatır; AI Test Uzmanı'nın koşuları kendiliğinden yapılır.</p>

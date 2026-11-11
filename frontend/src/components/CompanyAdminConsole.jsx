@@ -7435,7 +7435,7 @@ export default function CompanyAdminConsole({
                       Paket Kapsamında
                     </span>
                   </div>
-                  <select
+                  <select aria-label="Önerilen RECAi"
                     value={titleForm.recommended_model_code}
                     onChange={(e) => setTitleForm({ ...titleForm, recommended_model_code: e.target.value })}
                     style={{
@@ -7454,7 +7454,7 @@ export default function CompanyAdminConsole({
                     {availableModels && availableModels.length > 0 ? (
                       availableModels.map((m) => (
                         <option key={m.model_code} value={m.model_code} disabled={m.available === false}>
-                          {m.display_name}{m.description ? ` — ${m.description}` : ''}{m.available === false ? ' (paketinizde yok)' : ''}
+                          {m.display_name}{m.description ? ` — ${m.description}` : ''}{m.effort_coefficient != null ? ` · katsayı ${m.effort_coefficient}` : ''}{m.available === false ? ' (paketinizde yok)' : ''}
                         </option>
                       ))
                     ) : null}
@@ -8045,7 +8045,7 @@ export default function CompanyAdminConsole({
                       {canChangeLlm ? 'Değiştirilebilir' : 'Paketinizde sabit'}
                     </span>
                   </div>
-                  <select
+                  <select aria-label="AI personelin RECAi kademesi (kredi katsayısıyla)"
                     value={canChangeLlm ? agentForm.model_code : (editingAgent ? agentForm.model_code : forcedModelForTitle(agentForm.job_title_id))}
                     disabled={!canChangeLlm}
                     onChange={(e) => setAgentForm({ ...agentForm, model_code: e.target.value })}
@@ -8065,7 +8065,7 @@ export default function CompanyAdminConsole({
                     {availableModels && availableModels.length > 0 ? (
                       availableModels.map((m) => (
                         <option key={m.model_code} value={m.model_code} disabled={m.available === false}>
-                          {m.display_name}{m.description ? ` — ${m.description}` : ''}{m.available === false ? ' (paketinizde yok)' : ''}
+                          {m.display_name}{m.description ? ` — ${m.description}` : ''}{m.effort_coefficient != null ? ` · katsayı ${m.effort_coefficient}` : ''}{m.available === false ? ' (paketinizde yok)' : ''}
                         </option>
                       ))
                     ) : null}

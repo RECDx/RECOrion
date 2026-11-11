@@ -397,6 +397,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/company/{{tenant_id}}/automations/{{rid}}/test"): HANDLER(),
     ("POST", f"{P}/company/{{tenant_id}}/automations/{{rid}}/run"): HANDLER(),
     ("GET", f"{P}/company/{{tenant_id}}/automations/{{rid}}/log"): HANDLER(),
+    ("GET", f"{P}/company/{{tenant_id}}/automations/{{rid}}/projects"): HANDLER(),  # #735 detay
     ("GET", f"{P}/company/{{tenant_id}}/automation-log"): HANDLER(),
     ("POST", f"{P}/hooks/{{rid}}"): PUBLIC,
     ("GET", f"{P}/system/recdx-app-requests"): SUPER_ADMIN,

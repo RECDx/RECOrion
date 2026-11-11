@@ -326,9 +326,9 @@ async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant:
 REVIEW_MAX_TOKENS = 3000
 
 
-async def _review_skipped(db: AsyncSession, project, task, reviewer, reason: str) -> Dict[str, Any]:
+async def _review_skipped(db: AsyncSession, project, task, reviewer, reason: str, detail: Optional[str] = None) -> Dict[str, Any]:
     """Değerlendirme yapılamadı: adım sessizce geçmez, geçmişe kaydedilir ve karar insan onaylayıcıya kalır."""
-    await task_flow.log(db, project, task, "REVIEW_SKIPPED", reviewer.id, reason[:1000])
+    await task_flow.log(db, project, task, "REVIEW_SKIPPED", reviewer.id, reason[:1000], {"unreviewed": True, "detail": detail})
     await db.commit()
     return {"ok": False, "error": reason}
 
@@ -407,7 +407,10 @@ Sadece şu JSON'u döndür (issues en fazla 6, notes en fazla 4 madde, her biri 
     except LLMError as exc:
         return await _review_skipped(db, project, task, reviewer, exc.message)
     if verdict is None:
-        return await _review_skipped(db, project, task, reviewer, f"Kontrol personelinin değerlendirmesi okunamadı ({last_error}).")
+        # F89: kullanıcıya ham hata değil, anlaşılır uyarı; teknik ayrıntı olay verisinde kalır
+        return await _review_skipped(db, project, task, reviewer,
+                                     "Kontrol personelinin değerlendirmesi okunamadı (yanıtı bozuk geldi). Bu sürüm kontrolden GEÇMEDEN "
+                                     "onayınıza geldi; çıktıyı dikkatle inceleyin ya da revizyon isteyin.", detail=str(last_error)[:300])
     issues = [str(i)[:500] for i in (verdict.get("issues") or [])][:10]
     notes = [str(i)[:500] for i in (verdict.get("notes") or [])][:6]
     passed = verdict.get("passed") is True or not issues  # ret sebebi yazılmadıysa ret yok (F91)

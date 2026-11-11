@@ -201,6 +201,7 @@ export const api = {
   testAutomation: (tenantId, id, payload, eventType) => request(`/company/${tenantId}/automations/${id}/test`, { method: 'POST', body: JSON.stringify({ payload, event_type: eventType || null }) }),
   runAutomation: (tenantId, id) => request(`/company/${tenantId}/automations/${id}/run`, { method: 'POST' }),
   getAutomationLog: (tenantId, id) => request(`/company/${tenantId}/automations/${id}/log`),
+  getAutomationProjects: (tenantId, id) => request(`/company/${tenantId}/automations/${id}/projects`),
   getCompanyAutomationLog: (tenantId) => request(`/company/${tenantId}/automation-log`),
   suggestAutomation: (tenantId, text, sample) => request(`/company/${tenantId}/automations/suggest`, { method: 'POST', body: JSON.stringify({ text, sample: sample || null }) }),
   getAutomationPresets: (tenantId, app) => request(`/company/${tenantId}/automations/presets/${app}`),

@@ -130,6 +130,8 @@ export function TeamSimTab({ project, actors, onChanged }) {
   );
 }
 
+const SOFTWARE = /yazılım|geliştir|backend|frontend|\bkod\b|\bapi\b|web sitesi|web arayüz|uygulama/i;
+
 /** Hazırlık & Bildirim (ADIM 6.5): hazırlık kontrol listesi, hazır yapma/başlatma ve Telegram bağlantısı. */
 export function ReadinessTab({ project, onAction, busy }) {
   const tasks = project.tasks;
@@ -141,6 +143,14 @@ export function ReadinessTab({ project, onAction, busy }) {
     [!!(project.start_date && project.end_date), `Tarihler belirlendi (${fmtDay(project.start_date)} – ${fmtDay(project.end_date)})`],
   ];
   const required = [checks[0], checks[1], checks[2], checks[4]];
+  // F79: kod üreten projede kod deposu (AI kodu oraya yazar; yoksa kod yalnız dokümanda kalır)
+  const software = SOFTWARE.test(`${project.requirements || ''} ${tasks.map((t) => t.title).join(' ')}`);
+  const noRepo = software && (!project.repo_mode || project.repo_mode === 'NONE');
+  if (software) checks.push([!noRepo, 'Kod deposu açıldı (Kod Deposu sekmesi) — kod üreten adımlar var']);
+  const markReady = async () => {
+    if (noRepo && !(await confirmDialog({ message: 'Bu projede kod üreten adımlar var ama kod deposu açılmadı. AI personelin yazdığı kod depoya düşmez, testler ve duman testi çalışmaz. Yine de başlamaya hazır yapılsın mı?', confirmText: 'Yine de hazır yap' }))) return;
+    onAction('mark_ready');
+  };
   return (
     <div className="pj-split">
       <Card title="Hazırlık kontrol listesi" subtitle="Başlamaya hazır olan projenin başlangıç günü gelince size e-posta ve Telegram bildirimi gönderilir.">
@@ -152,7 +162,7 @@ export function ReadinessTab({ project, onAction, busy }) {
         {project.can_manage && (
           <div className="pj-actions" style={{ marginTop: 14 }}>
             {project.status === 'PLANNING' && (
-              <Button icon={CheckCircle2} onClick={() => onAction('mark_ready')} disabled={busy || !required.every(([ok]) => ok)}>Başlamaya hazır yap</Button>
+              <Button icon={CheckCircle2} onClick={markReady} disabled={busy || !required.every(([ok]) => ok)}>Başlamaya hazır yap</Button>
             )}
             {project.status === 'READY' && (
               <>

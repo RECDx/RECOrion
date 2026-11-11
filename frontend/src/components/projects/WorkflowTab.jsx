@@ -59,7 +59,10 @@ export default function WorkflowTab({ project }) {
     return () => clearInterval(t);
   }, [live, load, liveStatus]);
 
+  const inflight = useRef(new Set());  // F97: çift tıklamada ikinci istek gitmez (durum güncellenmeden önce de)
   const run = async (id, fn, message) => {
+    if (inflight.current.has(id)) return;
+    inflight.current.add(id);
     setBusy(id);
     try {
       await fn();
@@ -68,6 +71,7 @@ export default function WorkflowTab({ project }) {
     } catch (e) {
       toast.error(e.message);
     } finally {
+      inflight.current.delete(id);
       setBusy('');
     }
   };
@@ -100,6 +104,13 @@ export default function WorkflowTab({ project }) {
         return api.releaseTask(t.id, 'approve', note.trim(), null, true);
       }
     }, 'Son sürüm kabul edildi.');
+  };
+  const approveRun = async (t) => {  // F93: onay penceresi + not; vazgeçilirse sessiz
+    setBusy(t.id);
+    try {
+      const r = await approveTask(t.id, t.title);
+      if (!r?.cancelled) { toast.success('Onaylandı.'); setTimeout(load, 1200); }
+    } catch (e) { toast.error(e.message); } finally { setBusy(''); }
   };
   const cancelOpen = async (t) => {
     const note = await promptDialog({
@@ -173,11 +184,15 @@ export default function WorkflowTab({ project }) {
               )}
               {t.artifact && (
                 <div className="pj-actions">
-                  <Button size="sm" variant="ghost" icon={FileText} onClick={() => setViewing({ task: t, id: t.artifact.id })}>
+                  <Button size="sm" variant="ghost" icon={FileText} onClick={() => setViewing({ task: t, id: t.artifact.id })}
+                    aria-label={`${t.title}: çıktıyı gör (sürüm ${t.artifact.version})`}>
                     Çıktıyı gör (sürüm {t.artifact.version})
                   </Button>
                   {t.can_transfer && <Button size="sm" variant="secondary" icon={Upload} onClick={() => setTransfer(t)}>Sisteme aktar</Button>}
                 </div>
+              )}
+              {t.can_decide && t.unreviewed_warning && (
+                <p className="pj-note high" style={{ margin: 0 }}>{t.unreviewed_warning}</p>
               )}
               {t.can_decide && t.acceptance_warning && (
                 <p className="pj-note high" style={{ margin: 0 }}>{t.acceptance_warning}</p>
@@ -191,7 +206,7 @@ export default function WorkflowTab({ project }) {
                   )}
                   {t.can_decide && (
                     <>
-                      <Button size="sm" variant="success" icon={CheckCircle2} onClick={() => run(t.id, () => approveTask(t.id), 'Onaylandı.')} disabled={busy === t.id}>Onayla</Button>
+                      <Button size="sm" variant="success" icon={CheckCircle2} onClick={() => approveRun(t)} disabled={busy === t.id}>Onayla</Button>
                       <Button size="sm" variant="secondary" icon={RotateCcw} onClick={() => reject(t)} disabled={busy === t.id}>Revizyon iste</Button>
                     </>
                   )}

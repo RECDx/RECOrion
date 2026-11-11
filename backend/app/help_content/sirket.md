@@ -1412,6 +1412,29 @@ Boşsa "Henüz araç çağrısı yok." Kayıtlar silinemez.
 > 4. **Tekrar aktarımda eşleştir: kaynak** olarak vergi numarasını, **hedef alan** olarak Odoo'daki vergi numarası alanını seçer.
 > 5. **Kaydet** → **Denetle** → **Dene (yazmadan)**; önizlemeyi kontrol eder → **Onayla**. Rozet **Onaylı** olur.
 
+**Adım adım örnek: projeden Odoo'ya satın alma siparişi açma**
+
+Bir projede (ör. "Ofis malzemesi tedariki") AI personelin hazırladığı siparişin Odoo Satın Alma'ya kayıt olarak düşmesi için:
+
+> **Örnek:**
+> 1. **Odoo'da hazırlık:** AI personel için ayrı bir entegrasyon kullanıcısı açın; bu kullanıcıya Satın Alma (purchase) uygulamasında
+>    sipariş oluşturma yetkisi verin, API anahtarını bu kullanıcıyla üretin.
+> 2. **Bağlantı:** Entegrasyonlar → **Bağlantı ekle** → **Odoo** (ya da var olan Odoo bağlantınızı **Düzenle**). **İzinli modeller**'e
+>    şunları ekleyin: `purchase.order, purchase.order.line, res.partner, product.product, account.tax`. **Dene** ile doğrulayın.
+> 3. **Eşleme:** Bağlantıda **Eşlemeler** → **Yeni eşleme** → hazır **Odoo satın alma siparişi** eşlemesiyle başlayın
+>    (Nesne: Sipariş, yön: satın alma). Tedarikçi vergi numarası veya adıyla, ürün stok koduyla bulunur; KDV satın alma vergisinden
+>    alınır. **Dene (yazmadan)** ile önizleyin → **Onayla**.
+> 4. **Projede:** İş Akışı'nda siparişi hazırlayan adımın altında **Sisteme aktar** → eşlemeyi seçin. RECAi adım çıktısından sipariş
+>    önizlemesini çıkarır (tedarikçi, kalemler, miktar, fiyat). Kontrol edip onaya gönderin. İsterseniz adıma "Bu adım bitince
+>    otomatik öner" işaretini koyun; adım onaylanınca aktarım önerisi kendiliğinden gelir.
+> 5. **Onay:** Sipariş aktarımı varsayılan olarak iki onay ister (diğer kayıt türlerinde 100.000 ₺ üstü tutarlar iki onaya çıkar).
+>    Onaylar **Onaylarım** ekranından verilir; onaydan sonra kayıt Odoo'da **Taslak teklif (RFQ)** olarak açılır.
+> 6. **Kontrol ve geri alma:** Aktarım kaydında Odoo'daki sipariş numarası görünür. Yanlış açıldıysa aktarım kaydından geri
+>    alınabilir (siparişi iptal eder); silme yapılmaz.
+
+İpucu: AI personele Odoo **yazma** aracını (create_record) doğrudan vermek de mümkündür; ama satın alma gibi parasal kayıtlarda
+eşleme + Sisteme aktar yolu önerilir, çünkü önizleme, çift onay ve geri alma yalnız bu yolda vardır.
+
 **Sık sorulan sorular:**
 
 - *AI personel izinsiz bir şey yazabilir mi?* Hayır. Yazma araçları ve aktarımlar her zaman insan onayına düşer; her çağrı kayda geçer.

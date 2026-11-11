@@ -5,6 +5,10 @@ import { Badge, Button, Card, EmptyState } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 
 const STATE = { OPEN: ['Onay bekliyor', 'warning'], MERGED: ['Ana dala birleşti', 'success'], CLOSED: ['Kapatıldı', 'neutral'] };
+// F84: açık birleştirme isteğinde etiket adımın gerçek akış durumunu söyler (İş Akışı ile aynı)
+const TASK = { BACKLOG: ['Sırada', 'neutral'], READY: ['Başlayabilir', 'info'], IN_PROGRESS: ['Çalışılıyor', 'info'],
+  WAITING_APPROVAL: ['Onay bekliyor', 'warning'], REVISION: ['Revizyonda', 'danger'], QUARANTINED: ['Karantinada', 'danger'],
+  DONE: ['Tamamlandı · birleştirilmedi', 'warning'], CANCELLED: ['İptal edildi', 'neutral'] };
 const FILE = { added: 'eklendi', modified: 'değişti', deleted: 'silindi', changed: 'değişti' };
 // Kod Gezgini (ADIM 16.1): Monaco yalnız bu görünüm açılınca yüklenir
 const CodeExplorer = lazy(() => import('./CodeExplorer'));
@@ -49,7 +53,8 @@ export default function CodeRepoTab({ project }) {
           <div className="pj-actions" style={{ alignItems: 'center' }}>
             <Badge tone="success">RECOrion deposu açık</Badge>
             <span className="pj-hint" style={{ fontFamily: 'var(--font-mono)' }} title="Depo özeldir; dosyalar bu ekrandan görüntülenir">{repo.url}</span>
-            {repo.can_manage && !closed && <Button variant="ghost" size="sm" disabled={busy} onClick={() => setMode('NONE')}>Kullanma</Button>}
+            {repo.can_manage && !closed && <Button variant="ghost" size="sm" disabled={busy} onClick={() => setMode('NONE')}
+              title="Bu projede kod deposunu kapatır: AI personelin kodu artık depoya yazılmaz, testler çalışmaz. Depo silinmez; yeniden açılabilir.">Depoyu kullanma</Button>}
           </div>
         ) : (
           <div className="pj-actions" style={{ alignItems: 'center' }}>
@@ -86,7 +91,7 @@ export default function CodeRepoTab({ project }) {
       {on && view === 'steps' && (steps.length === 0 ? (
         <EmptyState icon={FileCode2} title="Henüz commit yok" description="AI personel bir iş adımının çıktısını ürettiğinde değişiklikler burada görünür." />
       ) : steps.map((s) => {
-        const [label, tone] = STATE[s.state] || ['—', 'neutral'];
+        const [label, tone] = (s.state === 'OPEN' ? TASK[s.status] : STATE[s.state]) || STATE[s.state] || ['—', 'neutral'];
         return (
           <Card key={s.task_id} title={`${s.order_index ? `${s.order_index}. ` : ''}${s.title}`}
             subtitle={<span style={{ fontFamily: 'var(--font-mono)' }}>{s.branch} → {repo.base}{s.pr ? ` · istek #${s.pr}` : ''}</span>}
