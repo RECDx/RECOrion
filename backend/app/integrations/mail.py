@@ -133,9 +133,30 @@ def _imap_login(host: str, port: int, user: str, pw: Optional[str], token: Optio
             m.logout()
         except Exception:
             pass
-        raise ToolError("E-posta sunucusu girişi reddetti (kullanıcı adı, uygulama şifresi veya oturum). "
-                        + ("Gmail/iCloud'da normal şifre değil 'uygulama şifresi' gerekir." if not token else "")) from exc
+        raise ToolError(login_error(host, server_reply(exc), bool(token))) from exc
     return m
+
+
+def server_reply(exc: Exception) -> str:
+    """Sunucunun ret gerekçesi (yalnız sunucu cevabı; şifre/token içermez), kısa ve tek satır."""
+    raw = exc.args[0] if exc.args else exc
+    text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+    text = re.sub(r"[\r\n\t]+", " ", text).strip()
+    return text[:200]
+
+
+def login_error(host: str, reply: str, oauth_used: bool) -> str:
+    """Kullanıcıya anlaşılır ret mesajı + sunucunun kendi gerekçesi. Microsoft şifreyle girişi kapattıysa bunu açıkça söyler."""
+    ms = any(h in (host or "") for h in ("outlook", "office365", "hotmail", "live.com"))
+    if not oauth_used and ms:
+        hint = ("Microsoft, Hotmail/Outlook hesaplarında parolayla (uygulama parolası dahil) IMAP girişini kapatmış olabilir. "
+                "Microsoft'un 'App passwords' bölümünden üretilen parolayla da reddediliyorsa tek yol 'Hesapla giriş'tir "
+                "(RECDx'in Microsoft uygulama kaydı gerekir).")
+    elif not oauth_used:
+        hint = "Gmail, iCloud ve Yandex'te normal şifre değil, hesabın güvenlik ayarlarında üretilen 'uygulama şifresi' gerekir."
+    else:
+        hint = "Oturum geçersiz ya da süresi dolmuş olabilir; Entegrasyonlar ekranında yeniden 'Giriş yap'a basın."
+    return f"E-posta sunucusu girişi reddetti. {hint}" + (f" Sunucunun cevabı: \"{reply}\"" if reply else "")
 
 
 def _dec(v: Optional[str]) -> str:
@@ -265,7 +286,9 @@ def _send_sync(conn: Tuple, user: str, msg: EmailMessage, pw: Optional[str], tok
             else:
                 s.login(user, pw or "")
         except smtplib.SMTPAuthenticationError as exc:
-            raise ToolError("SMTP sunucusu girişi reddetti (kullanıcı adı veya uygulama şifresi).") from exc
+            reply = exc.smtp_error.decode("utf-8", "replace") if isinstance(exc.smtp_error, bytes) else str(exc.smtp_error or "")
+            raise ToolError(login_error(host, re.sub(r"\s+", " ", reply).strip()[:200], bool(token)).replace(
+                "E-posta sunucusu", "SMTP (gönderme) sunucusu")) from exc
         s.send_message(msg)
 
 

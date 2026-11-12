@@ -221,3 +221,21 @@ def test_automation_result_delivered(client, db, world, monkeypatch):
     assert {o[0] for o in out} == {w["admin"]["id"], w["member"]["id"]}
     assert out[0][1] == "AUTOMATION_RESULT" and "tedarikçi" in out[0][2]["result_text"]
     assert _exec(db, "SELECT count(*) FROM email_templates WHERE code = 'AUTOMATION_RESULT'")[0] == 1
+
+
+def test_login_error_shows_server_reason_and_catalog_default(monkeypatch):
+    """Ret mesajı sunucunun gerekçesini gösterir (şifre değil); Microsoft'ta parolayla girişin kapalı olabileceğini söyler.
+    Outlook kartı, RECDx OAuth uygulaması tanımlı değilken 'Uygulama şifresi' ile gelir."""
+    from types import SimpleNamespace
+    from app.config import settings
+    from app.services import integration_catalog as ic
+    msg = mail.login_error("outlook.office365.com", mail.server_reply(mail.imaplib.IMAP4.error(b"AUTHENTICATE failed.")), False)
+    assert "Hesapla giriş" in msg and 'Sunucunun cevabı: "AUTHENTICATE failed."' in msg
+    assert "uygulama şifresi" in mail.login_error("imap.gmail.com", "", False) and "cevabı" not in mail.login_error("imap.gmail.com", "", False)
+    entry = SimpleNamespace(id=uuid.uuid4(), code="outlook", title="Outlook", vendor="Microsoft", category="E-posta", method="NATIVE",
+                            connector="mail", preset={"provider": "outlook", "auth": "oauth"}, description="", setup_steps=[],
+                            keywords="", sort=1, status="ACTIVE", requires_app=None)
+    monkeypatch.setattr(settings, "MAIL_MS_CLIENT_ID", "")
+    assert ic.out(entry)["preset"]["auth"] == "password"
+    monkeypatch.setattr(settings, "MAIL_MS_CLIENT_ID", "recdx-app")
+    assert ic.out(entry)["preset"]["auth"] == "oauth"

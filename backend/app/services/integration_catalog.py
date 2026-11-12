@@ -31,9 +31,20 @@ METHOD_LABEL = {"NATIVE": "Doğrudan bağlantı", "MCP_OAUTH": "Tek tık giriş 
 CODE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 
 
+def _preset(e: IntegrationCatalogEntry) -> Dict[str, Any]:
+    """#740: e-posta kartında 'Hesapla giriş' yalnız RECDx'in OAuth uygulaması tanımlıysa varsayılan gelir; değilse uygulama şifresi
+    (kullanıcı tanımsız girişe takılmasın)."""
+    preset = dict(e.preset or {})
+    if e.connector == "mail" and preset.get("auth") == "oauth":
+        from app.integrations import mail
+        if not mail.oauth_client(mail.provider(preset)["oauth"] or ""):
+            preset["auth"] = "password"
+    return preset
+
+
 def out(e: IntegrationCatalogEntry) -> Dict[str, Any]:
     return {"id": str(e.id), "code": e.code, "title": e.title, "vendor": e.vendor, "category": e.category, "method": e.method,
-            "method_label": METHOD_LABEL.get(e.method, e.method), "connector": e.connector, "preset": e.preset or {},
+            "method_label": METHOD_LABEL.get(e.method, e.method), "connector": e.connector, "preset": _preset(e),
             "description": e.description, "setup_steps": e.setup_steps or [], "keywords": e.keywords, "sort": e.sort, "status": e.status,
             "requires_app": e.requires_app}
 
