@@ -177,7 +177,9 @@ def test_workflow_full_cycle(client, world, ai):
     tasks, _ = _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL" and (t["AI adımı"]["artifact"] or {}).get("version") == 2,
                      "AI geri bildirimle sürüm 2 üretmeli")
     assert "Maliyet bölümünü ekle" in ai.work_prompts[-1] and "PARÇA-1 # AI adımı çıktısı #1" in ai.work_prompts[-1]
-    assert client.post(f"/api/v1/tasks/{ai_task['id']}/decision", headers=admin, json={"approve": True}).status_code == 200
+    # C3-28: onay notu ("sonraki adımda düzeltin") sonraki adımların AI personeline ulaşır
+    assert client.post(f"/api/v1/tasks/{ai_task['id']}/decision", headers=admin,
+                       json={"approve": True, "note": "Sonraki adımda tarihleri GG.AA.YYYY biçiminde yaz"}).status_code == 200
 
     # Yetki: ekip dışı göremez; üye yalnızca kendi adımını teslim eder; onay yöneticide
     assert client.get(f"/api/v1/projects/{pid}/workflow", headers=outsider).status_code == 403
@@ -204,6 +206,7 @@ def test_workflow_full_cycle(client, world, ai):
 
     # Bağımlı AI adımı insan adımı bitince kendiliğinden çalışır > onay > proje akışı biter
     tasks, _ = _wait(client, admin, pid, lambda t, f: t["Bağımlı adım"]["status"] == "WAITING_APPROVAL", "bağımlı AI adımı çıktı üretmeli")
+    assert "onay notları" in ai.work_prompts[-1] and "GG.AA.YYYY" in ai.work_prompts[-1]  # C3-28
     assert client.post(f"/api/v1/tasks/{dep_id}/decision", headers=admin, json={"approve": True}).status_code == 200
     _, flow = _wait(client, admin, pid, lambda t, f: any(e["kind"] == "PROJECT_FINISHED" for e in f["events"]), "proje akışı bitmeli")
     kinds = [e["kind"] for e in reversed(flow["events"])]

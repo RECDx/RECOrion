@@ -40,6 +40,90 @@ COMMENT_PATH_BLOCK = re.compile(
     r"((?:[\w.-]+/)*[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,7})[ \t]*(?:\*/|-->)?[ \t]*\n(.*?)^```[ \t]*$", re.M | re.S | re.I)
 
 
+# Senaryo C3-21 (12.11.2026): model yolu bloğun İLK satırına ÇIPLAK yazıyor (```python\nsrc/app/main.py\n...). Tek "kelime",
+# uzantılı ya da bilinen dosya adı, boşluksuz; yol satırı dosyaya yazılmaz.
+BARE_PATH_BLOCK = re.compile(
+    r"^```[ \t]*[\w+#-]*[ \t]*\n[ \t]*((?:[\w.-]+/)*(?:[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,7}|Dockerfile|Makefile|Procfile))[ \t]*\n(.*?)^```[ \t]*$",
+    re.M | re.S)
+
+# Senaryo C3-27 (12.11.2026): model yolu bloğun ÜSTÜNDEKİ başlık satırına yazıyor (### `src/web/index.html`, **src/x.py**,
+# "Dosya: src/x.py"); araya boş satır girebilir. Satırda yoldan başka söz olmamalı (yanlış eşleşme olmasın).
+HEADING_PATH_BLOCK = re.compile(
+    r"^[ \t]*(?:#{1,6}[ \t]*|[-*][ \t]+)?(?:\*\*|__)?(?:(?:dosya|file|path|yol)[ \t]*:[ \t]*)?`?"
+    r"((?:[\w.-]+/)*(?:[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,7}|Dockerfile|Makefile|Procfile))`?(?:\*\*|__)?[ \t]*:?[ \t]*\n"
+    r"(?:[ \t]*\n){0,2}```[ \t]*[\w+#-]*[ \t]*\n(.*?)^```[ \t]*$",
+    re.M | re.S | re.I)
+
+# Senaryo C3-29: başlık yol ile başlar (### `src/web/admin.js` (açıklama)), altında ≤3 açıklama satırı, sonra kod bloğu.
+HEADING_DESC_PATH_BLOCK = re.compile(
+    r"^[ \t]*#{1,6}[ \t]*`((?:[\w.-]+/)*(?:[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,7}|Dockerfile|Makefile|Procfile))`[^\n]*\n"
+    r"(?:(?![ \t]*```)[^\n]*\n){0,3}```[ \t]*[\w+#-]*[ \t]*\n(.*?)^```[ \t]*$",
+    re.M | re.S)
+# Kısmi blok: "// ...", "# ...", "<!-- ... -->", "/* ... */" yer tutucusu → tam dosya değil; yazılmaz.
+PARTIAL_MARK = re.compile(r"^[ \t]*(?://|#|<!--|/\*|--)[ \t]*(?:\.\.\.|…)", re.M)
+
+# Senaryo C3-33 (13.11.2026): genel geri arama. Yolu yukarıdaki desenlerle bulunamayan blok için üstteki ≤4 satıra bakılır;
+# en yakın dosya adı, uzantısı bloğun diliyle uyumluysa kullanılır ("## 3. Duman Testi (recorion.json)" + açıklama + blok).
+NEAR_PATH = re.compile(r"(?<![\w/.-])((?:[\w.-]+/)*(?:[\w-][\w.-]*\.[A-Za-z][A-Za-z0-9]{0,7}|Dockerfile|Makefile|Procfile))(?![\w/-])")
+LANG_EXT = {"python": {"py"}, "py": {"py"}, "json": {"json"}, "markdown": {"md"}, "md": {"md"}, "bash": {"sh"}, "sh": {"sh"},
+            "shell": {"sh"}, "javascript": {"js", "mjs"}, "js": {"js", "mjs"}, "typescript": {"ts"}, "ts": {"ts"},
+            "html": {"html", "htm"}, "css": {"css"}, "toml": {"toml"}, "yaml": {"yml", "yaml"}, "yml": {"yml", "yaml"},
+            "ini": {"ini", "cfg"}, "text": {"txt", "cfg", "ini"}, "txt": {"txt"}, "sql": {"sql"}, "dockerfile": {"Dockerfile"}}
+KNOWN_EXT = set().union(*LANG_EXT.values())
+
+
+FENCE_OPEN = re.compile(r"^ {0,3}(`{3,})[ \t]*([\w+#.-]*)")
+FENCE_LINE = re.compile(r"^\s*(`{3,})[ \t]*([\w+#.-]*)[^\n]*$")
+
+
+def fenced_blocks(content: str) -> List[Tuple[str, int, str]]:
+    """(dil, açılış satırının konumu, tam gövde). Markdown bloğunun içindeki dilli açılışlar iç blok sayılır ve yalın ``` ile
+    kapanır; dış blok ancak derinlik sıfırken gelen yalın ``` ile biter (C3-33: README içinde ```bash)."""
+    out: List[Tuple[str, int, str]] = []
+    lines = content.split("\n")
+    offsets, pos = [], 0
+    for ln in lines:
+        offsets.append(pos)
+        pos += len(ln) + 1
+    i, n = 0, len(lines)
+    while i < n:
+        m = FENCE_OPEN.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        ticks, lang = len(m.group(1)), m.group(2)
+        nested = lang.lower() in ("markdown", "md")
+        depth, j = 0, i + 1
+        while j < n:
+            f = FENCE_LINE.match(lines[j])
+            if f and len(f.group(1)) >= 3:
+                if f.group(2):  # dilli açılış
+                    if nested:
+                        depth += 1
+                elif depth > 0:
+                    depth -= 1
+                elif len(f.group(1)) >= ticks:
+                    break
+            j += 1
+        if j >= n:
+            break  # kapanmamış blok: yazılmaz
+        out.append((lang, offsets[i], "\n".join(lines[i + 1:j]) + "\n"))
+        i = j + 1
+    return out
+
+
+def _near_path(content: str, start: int, lang: str):
+    lines = content[:start].rstrip("\n").split("\n")[-4:]
+    want = LANG_EXT.get((lang or "").lower())
+    for line in reversed(lines):
+        if line.strip().startswith("```"):
+            return None  # önceki bloğun içine/sonuna taşma yok
+        for cand in reversed(NEAR_PATH.findall(line)):
+            ext = cand.rsplit(".", 1)[-1] if "." in cand.rsplit("/", 1)[-1] else cand.rsplit("/", 1)[-1]
+            if (want and ext in want) or (not want and ext in KNOWN_EXT):  # dil yoksa yalnız bilinen uzantı (alan adı değil)
+                return cand
+    return None
+
 class RepoError(Exception):
     def __init__(self, message: str, status: int = 502):
         super().__init__(message)
@@ -134,11 +218,33 @@ def _safe_path(path: str) -> Optional[str]:
 def files_from_output(task: Task, content: str) -> Dict[str, str]:
     """Adım çıktısı her zaman `docs/adimlar/` altına; yolu belirtilmiş kod blokları ayrı dosya olarak."""
     files: Dict[str, str] = {f"docs/adimlar/{task.order_index or 0:02d}-{slug(task.title, 60)}.md": content}
-    found = [(m.group(2), m.group(3)) for m in CODE_BLOCK.finditer(content)] + \
+    found = [(m.group(1), m.group(2)) for m in HEADING_DESC_PATH_BLOCK.finditer(content)] + \
+            [(m.group(1), m.group(2)) for m in HEADING_PATH_BLOCK.finditer(content)] + \
+            [(m.group(2), m.group(3)) for m in CODE_BLOCK.finditer(content)] + \
             [(m.group(1), m.group(2)) for m in PATH_ONLY_BLOCK.finditer(content)] + \
-            [(m.group(1), m.group(2)) for m in COMMENT_PATH_BLOCK.finditer(content)]
+            [(m.group(1), m.group(2)) for m in COMMENT_PATH_BLOCK.finditer(content)] + \
+            [(m.group(1), m.group(2)) for m in BARE_PATH_BLOCK.finditer(content)]
+    blocks = fenced_blocks(content)
+    # C3-33: düz desenler iç içe blokta gövdeyi yarıda keser → aynı bloğun tarayıcıdaki TAM gövdesi kullanılır
+    full = []
+    for raw, body in found:
+        for _lang, _off, whole in blocks:
+            k = whole.find(body[:400]) if body else -1
+            if 0 <= k <= 300 and len(whole) - k > len(body):
+                body = whole[k:]
+                break
+        full.append((raw, body))
+    found = full
+    seen = {b[:400] for _, b in found}
+    for lang, off, whole in blocks:  # yolu hiçbir desenle bulunamayan blok: üst satırlara bak
+        if not any(x and x in whole for x in seen):
+            near = _near_path(content, off, lang)
+            if near:
+                found.append((near, whole))
     for raw, body in found:
         path = _safe_path(raw)
+        if PARTIAL_MARK.search(body):  # C3-29: kısmi parça tam dosyanın yerine geçmesin
+            continue
         if path and not path.startswith("docs/adimlar/") and len(files) < MAX_FILES and len(body.encode()) <= MAX_FILE_BYTES:
             files[path] = body if body.endswith("\n") else body + "\n"
     return files

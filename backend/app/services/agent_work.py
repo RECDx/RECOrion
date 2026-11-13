@@ -192,6 +192,15 @@ async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> 
             text = await artifact_text(await latest_artifact(db, dep.id), MAX_DEP_CHARS)
             if text:
                 dep_blocks.append(f"## {dep.title}\n{text}")
+    # C3-28 (12.11.2026): yöneticinin önceki adımlara yazdığı onay notları ("sonraki adımda düzeltin") bu adıma da ulaşsın
+    approval_notes = (await db.execute(
+        select(Task.title, TaskEvent.note).join(Task, Task.id == TaskEvent.task_id)
+        .where(TaskEvent.project_id == project.id, TaskEvent.kind.in_(("APPROVED", "QUARANTINE_APPROVED")),
+               TaskEvent.note.isnot(None), TaskEvent.task_id != task.id)
+        .order_by(TaskEvent.created_at.desc()).limit(8))).all()
+    if approval_notes:
+        dep_blocks.append("## Proje yöneticisinin önceki adımlara onay notları (bu adımda ilgili olanları MUTLAKA uygula)\n"
+                          + "\n".join(f"- {t}: {(n or '').strip()[:800]}" for t, n in reversed(approval_notes)))
     # F98: depo etkinse ana daldaki gerçek kod (özet değil) bağlama girer
     repo_context = await code_repo.context_for_ai(project) if code_repo.active(project) else ""
     previous = await latest_artifact(db, task.id)
