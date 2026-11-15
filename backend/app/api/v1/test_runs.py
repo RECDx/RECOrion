@@ -25,6 +25,7 @@ router = APIRouter(prefix="/projects", tags=["Proje Test Koşuları"])
 @router.get("/{project_id}/test-runs")
 async def list_runs(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     project = await psvc.load(db, user, project_id)
+    await sandbox.expire_stale(db, project.id)  # C3-37: yetim "çalışıyor" koşular kapanır
     rows = (await db.execute(select(TestRun).where(TestRun.project_id == project.id).order_by(TestRun.created_at.desc()).limit(30))).scalars().all()
     return {"enabled": sandbox.enabled() and code_repo.active(project), "runs": [sandbox.view(r) for r in rows],
             "can_run": user.has("project:manage") or project.manager_actor_id == user.actor_id}
@@ -60,6 +61,7 @@ async def start_run(project_id: uuid.UUID, payload: RunIn, background: Backgroun
         raise HTTPException(status_code=503, detail="Kod çalıştırma ortamı bu kurulumda yapılandırılmamış; RECDx ile iletişime geçin.")
     if not code_repo.active(project):
         raise HTTPException(status_code=409, detail="Önce projenin kod deposunu açın.")
+    await sandbox.expire_stale(db, project.id)  # C3-37: yetim koşu yeni koşuyu kilitlemesin
     busy = (await db.execute(select(TestRun.id).where(TestRun.project_id == project.id, TestRun.status == "RUNNING"))).first()
     if busy:
         raise HTTPException(status_code=409, detail="Bu projede süren bir test koşusu var; bitmesini bekleyin.")

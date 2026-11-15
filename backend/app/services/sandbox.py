@@ -24,6 +24,23 @@ from app.services import code_repo, task_flow
 logger = logging.getLogger("recorion.sandbox")
 
 RUN_TIMEOUT = 900  # kurulum + test üst süresi (servis kendi içinde aşama başına 300 sn sınırlar)
+STALE_AFTER = RUN_TIMEOUT + 300  # C3-35/C3-37: bu süreyi aşan "çalışıyor" koşu yetimdir (sistem yeniden başladı / bağlantı koptu)
+
+
+async def expire_stale(db: AsyncSession, project_id=None) -> int:
+    """Yetim koşuları kapatır: RUNNING kalıp üst süreyi aşanlar ERROR olur; yeni koşu başlatmayı kilitlemesinler."""
+    from datetime import timedelta
+    from sqlalchemy import select
+    q = select(TestRun).where(TestRun.status == "RUNNING", TestRun.created_at < now() - timedelta(seconds=STALE_AFTER))
+    if project_id is not None:
+        q = q.where(TestRun.project_id == project_id)
+    rows = (await db.execute(q)).scalars().all()
+    for r in rows:
+        r.status, r.finished_at = "ERROR", now()
+        r.error = "Koşu yarıda kaldı (sistem yeniden başladı ya da bağlantı koptu); yeniden başlatın."
+    if rows:
+        await db.commit()
+    return len(rows)
 MAX_ARCHIVE = 25 * 1024 * 1024
 TEST_ROLE = re.compile(r"test|\bqa\b|kalite güvence", re.I)
 STATUS_TR = {"RUNNING": "Çalışıyor", "PASSED": "Geçti", "FAILED": "Kaldı", "NO_TESTS": "Test bulunamadı", "ERROR": "Çalıştırılamadı"}

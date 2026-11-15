@@ -26,6 +26,7 @@ def test_masker_consistent_and_irreversible():
     for secret in ("Ahmet", "Yılmaz", TCKN, "Deniz Lojistik", "1234567890", "TR33", "0532", "ahmet@firma.com", "Bağdat", "34 ABC 123", "125.000"):
         assert secret not in out, (secret, out)
     assert "Sayın " in out and "Vergi No: " in out and " TL" in out  # yapı korunur
+    assert "TR00" in out  # sahte IBAN geçersiz kontrol hanesiyle: gerçek hesaba denk gelemez
     fake_person = m.map[("KISI", "ahmet yılmaz")]
     assert out.count(fake_person) == 2  # aynı kişi → aynı sahte ad
     assert m.counts["KISI"] >= 1 and m.counts["TCKN"] == 1 and m.counts["IBAN"] == 1

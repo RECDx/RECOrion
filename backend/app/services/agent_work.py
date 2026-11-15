@@ -156,6 +156,9 @@ SMOKE_INSTRUCTIONS = (
     "{\"name\": \"Liste\", \"type\": \"http\", \"service\": \"api\", \"path\": \"/...\", \"bearer\": \"{token}\", \"expect_status\": 200}, "
     "{\"name\": \"Arayüzden giriş\", \"type\": \"browser\", \"service\": \"api\", \"path\": \"/\", \"steps\": [{\"fill\": \"#username\", "
     "\"value\": \"...\"}, {\"click\": \"button[type=submit]\"}, {\"expect_text\": \"girişten sonra görünen metin\"}]}]}. "
+    "Browser adım türleri YALNIZ şunlardır (başka anahtar hata verir): fill (+value), click, select (+value), check, uncheck, "
+    "press (+selector), goto, expect_text, expect_selector (veya wait_for_selector; isteğe bağlı state), wait_ms; her adıma "
+    "isteğe bağlı timeout (ms) verilebilir. "
     "Kurallar: başlatma komutu README'deki komutla aynı olsun; ilk açılışta gereken klasör/veritabanı/örnek veri uygulamanın kendisi "
     "tarafından oluşturulsun; web arayüzü varsa en az bir 'browser' denetimiyle gerçek arayüzden giriş ve bir temel işlem denensin "
     "(seçiciler depodaki HTML ile birebir aynı olmalı); arayüz API'ye hangi adresten bağlanıyorsa o adres gerçekten çalışmalı (ayrı "
@@ -177,6 +180,15 @@ def _system(actor: Actor, tenant: Tenant, has_repo: bool = False, test_runner=Fa
             "tekrar ve dolgu yazma; çoğu iş adımı için 600-1500 kelime yeterlidir. Bilmediğin bilgiyi "
             "uydurma; tarih, adım numarası, sürüm, kişi adı ve kullanıcı/şifre gibi bilgileri yalnız sana verilenlerden ve depodaki "
             "koddan al (F108). Varsayımlarını ve açık soruları çıktının sonunda 'Varsayımlar ve açık sorular' başlığıyla belirt." + repo)
+
+
+def with_manager_note(note: Optional[str], feedback: Optional[str]) -> Optional[str]:
+    """C3-43/C3-58: son yeniden denemedeki yönetici notu düzeltme isteğinin başına ÖNCELİKLİ olarak eklenir; not yoksa
+    (son yeniden deneme notsuz yapıldıysa) geri bildirim olduğu gibi kalır."""
+    if not (note or "").strip():
+        return feedback
+    return (f"Proje yöneticisinin yönlendirmesi (ÖNCELİKLİ, mutlaka uygula):\n{note.strip()[:3000]}"
+            + (f"\n\nÖnceki kontrol notu:\n{feedback}" if feedback else ""))
 
 
 async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> Dict[str, Any]:
@@ -205,6 +217,12 @@ async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> 
     repo_context = await code_repo.context_for_ai(project) if code_repo.active(project) else ""
     previous = await latest_artifact(db, task.id)
     own = await artifact_text(previous, MAX_OWN_CHARS)
+    # C3-43: yönetici karantinadaki adımı not yazarak yeniden denemeye açtıysa bu not, bir sonraki karantina kararına kadar
+    # üretilen TÜM sürümlerde en öncelikli yönlendirmedir (kontrolcü reddinden sonraki sürümler de görür). Son yeniden
+    # denemede not yazılmadıysa eski not taşınmaz.
+    rel = (await db.execute(select(TaskEvent.note).where(TaskEvent.task_id == task.id, TaskEvent.kind == "RELEASED")
+                            .order_by(TaskEvent.created_at.desc()).limit(1))).first()
+    feedback = with_manager_note(rel[0] if rel else None, feedback)
     scope = await knowledge.scope_for_agent(db, tenant.id, agent.id, project.id)
     hits = await knowledge.retrieve(scope, f"{task.title}\n{task.description or ''}"[:2000], limit=6)
     # Mevzuat paketleri (ADIM 11.2): adımla ilgili, şirketin açtığı ve uzman kontrolünden geçmiş özetler
@@ -247,7 +265,9 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
         content, result, parts, credits, fallback_from, tool_calls = await _generate(
             LLMContext(tenant_id=tenant.id, purpose="AGENT_CHAT", actor_id=agent.id, task_id=task.id, project_id=project.id,
                        task_type=model_router.classify(task.title, task.description, task.acceptance_criteria, job_title=agent.role)),
-            [{"role": "system", "content": _system(agent, tenant, code_repo.active(project), _runs_tests(project, agent, task))},
+            # C3-40: test düzeltmesi (FIX) adımındaki geliştirici de duman testi biçimini (recorion.json şeması) bilsin; yoksa uyduruyor
+            [{"role": "system", "content": _system(agent, tenant, code_repo.active(project),
+                                                   _runs_tests(project, agent, task) or ("fix" if task.fix_kind == "FIX" else False))},
              {"role": "user", "content": prompt}],
             tooling=(db, agent, project, task))
     except LLMError as exc:
@@ -275,10 +295,17 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
                          "tool_calls": [{"id": str(c.id), "tool": c.tool, "status": c.status} for c in tool_calls]})
     runs = _runs_tests(project, agent, task)
     keep = code_repo.is_test_path if runs == "test" else None  # F104: test uzmanı yalnız test dosyalarını commit eder
-    dropped = await code_repo.after_output(db, project, task, version, content, agent.display_name, keep)  # depo varsa adımın dalına commit
-    if dropped:
-        warn = ("\n\n_Sistem: test uzmanı uygulama kodunu değiştiremez; şu dosyalar depoya yazılmadı: "
-                + ", ".join(f"`{d}`" for d in dropped[:15]) + ". Uygulamadaki hata düzeltme turunda geliştiriciye gider._")
+    repo_res = await code_repo.after_output(db, project, task, version, content, agent.display_name, keep)  # depo varsa adımın dalına commit
+    dropped, partial = repo_res["dropped"], repo_res["partial"]
+    if dropped or partial:
+        warn = ""
+        if dropped:
+            warn += ("\n\n_Sistem: test uzmanı uygulama kodunu değiştiremez; şu dosyalar depoya yazılmadı: "
+                     + ", ".join(f"`{d}`" for d in dropped[:15]) + ". Uygulamadaki hata düzeltme turunda geliştiriciye gider._")
+        if partial:  # C3-59: '...' ile kısaltılan dosya yazılmaz; sonraki sürüm bunu "önceki sürüm"de görür
+            warn += ("\n\n_Sistem: şu dosyalar '...' / 'kalan kodlar aynı' gibi kısaltma içerdiği için depoya YAZILMADI (depodaki eski "
+                     "hâli duruyor): " + ", ".join(f"`{d}`" for d in partial[:15])
+                     + ". Değiştirilecek dosya her zaman baştan sona TAM yazılmalı._")
         content += warn
         data = content.encode("utf-8")
         await storage.put_object(key, data, "text/markdown; charset=utf-8")
@@ -310,6 +337,19 @@ def _runs_tests(project: Project, agent: Actor, task: Optional[Task] = None):
 
 async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant: Tenant, agent: Actor) -> str:
     await live.thought(project.id, task.id, "ANALYSIS", f"{agent.display_name}: testler Kod Çalıştırma Ortamı'nda çalıştırılıyor…")
+    # C3-42: dal, ana daldaki (onaylanmış düzeltmeler dahil) son kodla güncellenir; yoksa testler eski kodla koşar
+    upd = await code_repo.update_from_base(project, task)
+    if upd == "CONFLICT":  # çakışma: son çıktı ana daldan açılan yeni dala yazılır (eski kodla test koşulmasın)
+        art = await latest_artifact(db, task.id)
+        if art is not None:
+            r = await code_repo.rebranch(project, task, art.version, await artifact_text(art, 10_000_000), agent.display_name,
+                                         code_repo.is_test_path if _runs_tests(project, agent, task) == "test" else None)
+            await task_flow.log(db, project, task, "REPO_UPDATED", None,
+                                f"Adımın dalı ana dalla çakışıyordu; son sürüm ana daldan açılan {r['branch']} dalına yazıldı (#{r['pr']}).",
+                                {"result": "REBRANCHED", **r})
+            await db.commit()
+    elif upd != "SKIPPED":
+        await task_flow.log(db, project, task, "REPO_UPDATED", None, "Adımın dalı ana daldaki son değişikliklerle güncellendi.", {"result": upd})
     run = await sandbox.start(db, project, task.repo_branch or code_repo.BASE_BRANCH, agent.id, task)
     await db.commit()  # koşu Testler sekmesinde "Çalışıyor" görünsün
     run = await sandbox.finish(db, project, run, task)

@@ -202,3 +202,43 @@ def test_repository_mirror_to_company_account(client, world):
             _gitea("DELETE", f"/repos/{owner}/{repo}")
             if not _gitea("GET", f"/orgs/{owner}/repos").json():
                 _gitea("DELETE", f"/orgs/{owner}")
+
+
+def test_repository_seeded_from_another_project(client, world, coder):
+    """C3-67: kapalı projeye adım eklenemez; bakım projesi deposunu başka projenin ana dalındaki kodla açar."""
+    import base64
+
+    w = world
+    admin = w["admin"]["h"]
+    src_id, _, _ = _ready_project(client, w, "Kaynak Kod Projesi")
+    dst_id, _, _ = _ready_project(client, w, "Bakım Projesi")
+    repos = []
+    try:
+        r = client.put(f"/api/v1/projects/{src_id}/repository", headers=admin, json={"mode": "RECORION"})
+        assert r.status_code == 200, r.text
+        so, sr = r.json()["url"].rstrip("/").split("/")[-2:]
+        repos.append((so, sr))
+        body = base64.b64encode("print('kaynak')\n".encode()).decode()
+        up = httpx.post(settings.GITEA_URL.rstrip("/") + f"/api/v1/repos/{so}/{sr}/contents", timeout=30,
+                        headers={"Authorization": f"token {settings.GITEA_TOKEN}"},
+                        json={"branch": "main", "message": "kaynak", "files": [{"operation": "create", "path": "src/app.py", "content": body}]})
+        assert up.status_code in (200, 201), up.text
+        base = f"/api/v1/projects/{dst_id}/repository"
+        assert client.put(base, headers=admin, json={"mode": "RECORION", "source_project_id": dst_id}).status_code == 422  # kendisi
+        r = client.put(base, headers=admin, json={"mode": "RECORION", "source_project_id": src_id})
+        assert r.status_code == 200, r.text
+        do, dr = r.json()["url"].rstrip("/").split("/")[-2:]
+        repos.append((do, dr))
+        assert (do, dr) != (so, sr)
+        f = client.get(f"{base}/file", headers=admin, params={"ref": "main", "path": "src/app.py"})
+        assert f.status_code == 200 and "kaynak" in f.json()["content"]
+        flow = client.get(f"/api/v1/projects/{dst_id}/workflow", headers=admin).json()
+        assert any(e["kind"] == "REPO_ENABLED" and "Kaynak Kod Projesi" in (e.get("note") or "") for e in flow["events"])
+        # depo açıldıktan sonra başlangıç kodu yeniden seçilemez; kaynak depo değişmedi
+        assert client.put(base, headers=admin, json={"mode": "RECORION", "source_project_id": src_id}).status_code == 409
+        assert _gitea("GET", f"/repos/{so}/{sr}/contents/src/app.py").status_code == 200
+    finally:
+        for pid in (src_id, dst_id):
+            client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        for o, n in repos:
+            _gitea("DELETE", f"/repos/{o}/{n}")

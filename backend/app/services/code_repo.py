@@ -199,6 +199,39 @@ def active(project: Project) -> bool:
     return enabled() and project.repo_mode == "RECORION" and bool(project.repo_owner and project.repo_name)
 
 
+SEED_MAX_FILES = 400
+SEED_MAX_BYTES = 8_000_000
+
+
+async def seed_from(project: Project, source: Project) -> Dict[str, Any]:
+    """C3-67: bakım/düzeltme projesi, kapanmış bir projenin ana dalındaki kodla başlar (kapalı projeye adım eklenemez).
+    Kaynağın main dalındaki dosyalar yeni deponun main dalına tek commit olarak kopyalanır; kaynak depo değişmez."""
+    src = await tree(source, BASE_BRANCH)
+    blobs = [e for e in src["entries"] if e["type"] == "blob"][:SEED_MAX_FILES]
+    owner, repo = project.repo_owner, project.repo_name
+    ops, total = [], 0
+    for e in blobs:
+        _, f = await _call("GET", f"/repos/{source.repo_owner}/{source.repo_name}/contents/{e['path']}",
+                           params={"ref": src["sha"] or BASE_BRANCH})
+        content = (f or {}).get("content") or ""
+        total += len(content) * 3 // 4
+        if total > SEED_MAX_BYTES:
+            raise RepoError("Kaynak projenin kodu kopyalamak için çok büyük.", 413)
+        current = await _exists(f"/repos/{owner}/{repo}/contents/{e['path']}?ref={BASE_BRANCH}")
+        op = {"path": e["path"], "content": content.replace("\n", "")}
+        if isinstance(current, dict) and current.get("sha"):
+            op.update(operation="update", sha=current["sha"])
+        else:
+            op["operation"] = "create"
+        ops.append(op)
+    if not ops:
+        return {"files": 0, "source_sha": src["sha"]}
+    await _call("POST", f"/repos/{owner}/{repo}/contents", {
+        "files": ops, "branch": BASE_BRANCH, "author": {"name": "RECOrion", "email": "ai@recorion.local"},
+        "message": f"Başlangıç kodu: '{source.name}' projesinin ana dalı ({(src['sha'] or '')[:10]})"})
+    return {"files": len(ops), "source_sha": src["sha"]}
+
+
 # ---------------------------------------------------------------- iş adımının dosyaları
 def branch_name(task: Task) -> str:
     return f"adim-{task.order_index or 0}-{slug(task.title, 50)}"
@@ -215,8 +248,9 @@ def _safe_path(path: str) -> Optional[str]:
     return path
 
 
-def files_from_output(task: Task, content: str) -> Dict[str, str]:
-    """Adım çıktısı her zaman `docs/adimlar/` altına; yolu belirtilmiş kod blokları ayrı dosya olarak."""
+def files_from_output(task: Task, content: str, partials: Optional[List[str]] = None) -> Dict[str, str]:
+    """Adım çıktısı her zaman `docs/adimlar/` altına; yolu belirtilmiş kod blokları ayrı dosya olarak.
+    partials verilirse '...' ile kısaltıldığı için yazılmayan dosya yolları buna eklenir (C3-59)."""
     files: Dict[str, str] = {f"docs/adimlar/{task.order_index or 0:02d}-{slug(task.title, 60)}.md": content}
     found = [(m.group(1), m.group(2)) for m in HEADING_DESC_PATH_BLOCK.finditer(content)] + \
             [(m.group(1), m.group(2)) for m in HEADING_PATH_BLOCK.finditer(content)] + \
@@ -244,6 +278,8 @@ def files_from_output(task: Task, content: str) -> Dict[str, str]:
     for raw, body in found:
         path = _safe_path(raw)
         if PARTIAL_MARK.search(body):  # C3-29: kısmi parça tam dosyanın yerine geçmesin
+            if partials is not None and path and not path.startswith("docs/adimlar/") and path not in partials:
+                partials.append(path)
             continue
         if path and not path.startswith("docs/adimlar/") and len(files) < MAX_FILES and len(body.encode()) <= MAX_FILE_BYTES:
             files[path] = body if body.endswith("\n") else body + "\n"
@@ -267,7 +303,9 @@ async def commit_step(project: Project, task: Task, version: int, content: str, 
     branch_exists = bool(await _exists(f"/repos/{owner}/{repo}/branches/{branch}"))
     ref = branch if branch_exists else BASE_BRANCH
     ops = []
-    files = files_from_output(task, content)
+    partial: List[str] = []
+    files = files_from_output(task, content, partial)
+    partial = [p for p in partial if p not in files]  # aynı dosyanın tam hâli de verildiyse uyarı yok
     dropped = [p for p in files if keep and not keep(p)]
     files = {p: b for p, b in files.items() if p not in dropped}
     for path, body in files.items():
@@ -289,8 +327,33 @@ async def commit_step(project: Project, task: Task, version: int, content: str, 
             "body": f"RECOrion iş adımı: **{task.title}**\n\nAna dala birleştirme insan onayıyla yapılır (adım onaylanınca)."})
         pr = opened["number"]
     task.repo_branch, task.repo_pr_number = branch, pr
-    return {"branch": branch, "commit": sha, "pr": pr, "files": list(files), "dropped": dropped}
+    return {"branch": branch, "commit": sha, "pr": pr, "files": list(files), "dropped": dropped, "partial": partial}
 
+
+async def update_from_base(project: Project, task: Task) -> str:
+    """C3-42: adımın dalını ana daldaki son değişikliklerle günceller (Gitea "PR'ı güncelle", birleştirme). Test koşusundan önce
+    çağrılır: dal düzeltmeler ana dala birleşmeden önce açıldıysa testler eski kodla koşmasın. Dönen: UPDATED | CONFLICT | SKIPPED."""
+    if not active(project) or not task.repo_pr_number or task.repo_merged_at:
+        return "SKIPPED"
+    try:
+        code, _ = await _call("POST", f"/repos/{project.repo_owner}/{project.repo_name}/pulls/{task.repo_pr_number}/update",
+                              ok=(200, 204, 409), params={"style": "merge"})
+    except RepoError:
+        return "SKIPPED"
+    return "CONFLICT" if code == 409 else "UPDATED"
+
+
+
+async def rebranch(project: Project, task: Task, version: int, content: str, author: str, keep=None) -> Dict[str, Any]:
+    """C3-42: dal ana dalla çakışıyor → eski PR kapatılır, çıktı ana daldan açılan YENİ dala (…-r<sürüm>) yazılır, yeni PR açılır.
+    Çıktılar tam dosya olduğu için adımın son hâli korunur; ana daldaki onaylı düzeltmeler de dalda olur."""
+    if task.repo_pr_number and not task.repo_merged_at:
+        try:
+            await _call("PATCH", f"/repos/{project.repo_owner}/{project.repo_name}/pulls/{task.repo_pr_number}", {"state": "closed"})
+        except RepoError:
+            pass
+    task.repo_branch, task.repo_pr_number = f"{branch_name(task)}-r{version}", None
+    return await commit_step(project, task, version, content, author, keep)
 
 async def merge_step(project: Project, task: Task, approver: str) -> Dict[str, Any]:
     if not task.repo_pr_number or task.repo_merged_at:
@@ -322,22 +385,25 @@ async def close_step(project: Project, task: Task) -> None:
 
 # ---------------------------------------------------------------- akış kancaları (hata akışı durdurmaz)
 async def after_output(db: AsyncSession, project: Project, task: Task, version: int, content: str, author: str,
-                       keep=None) -> List[str]:
-    """Depo varsa çıktıyı adımın dalına commit eder; süzgece takılıp yazılmayan dosyaların listesini döner."""
+                       keep=None) -> Dict[str, List[str]]:
+    """Depo varsa çıktıyı adımın dalına commit eder. Dönen: {"dropped": süzgece takılanlar, "partial": '...' ile kısaltıldığı
+    için yazılmayanlar (C3-59)}."""
     from app.services import task_flow
 
     if not active(project):
-        return []
+        return {"dropped": [], "partial": []}
     try:
         r = await commit_step(project, task, version, content, author, keep)
         await task_flow.log(db, project, task, "REPO_COMMIT", task.assignee_actor_id,
                             f"{r['branch']} dalına {len(r['files'])} dosya commit edildi."
-                            + (f" Yazılmayan (test uzmanı kapsamı dışı): {', '.join(r['dropped'])}." if r["dropped"] else ""), r)
-        return r["dropped"]
+                            + (f" Yazılmayan (test uzmanı kapsamı dışı): {', '.join(r['dropped'])}." if r["dropped"] else "")
+                            + (f" Yazılmayan (kısaltılmış, '...' içeriyor; tam dosya gerekli): {', '.join(r['partial'])}."
+                               if r["partial"] else ""), r)
+        return {"dropped": r["dropped"], "partial": r["partial"]}
     except RepoError as exc:
         logger.warning("Depo commit hatası (%s): %s", task.id, exc.message)
         await task_flow.log(db, project, task, "REPO_ERROR", note=exc.message)
-        return []
+        return {"dropped": [], "partial": []}
 
 
 async def after_approval(db: AsyncSession, project: Project, task: Task, actor_id, approver: str) -> None:

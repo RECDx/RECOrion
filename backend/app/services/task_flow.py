@@ -92,6 +92,13 @@ async def _load(db: AsyncSession, task_id) -> tuple:
 async def next_ready(db: AsyncSession, project_id, running: List[str]) -> Dict[str, Any]:
     """Bağımlılıkları kapanmış ve henüz başlamamış adımlar; açık adım sayısı."""
     tasks = (await db.execute(select(Task).where(Task.project_id == _uuid(project_id)).order_by(Task.order_index))).scalars().all()
+    # C3-45: "çalışıyor" görünen ama akışı ölmüş adım (sistem yeniden başladı, akış başarısız) yeniden başlatılır; yoksa sonsuza dek takılır
+    from app.workflows import engine
+    for t in tasks:
+        if t.status in WORKING and str(t.id) not in running and await engine.task_workflow_open(str(t.id)) is False:
+            t.status = "READY"
+            project = await db.get(Project, t.project_id)
+            await log(db, project, t, "RESUMED", note="Adımın akışı yarıda kalmıştı (sistem yeniden başladı ya da akış kesildi); yeniden başlatıldı.")
     ids = {str(t.id) for t in tasks}
     closed = {str(t.id) for t in tasks if t.status in CLOSED}
     ready = [str(t.id) for t in tasks if t.status in ("BACKLOG", "READY") and str(t.id) not in running
@@ -295,7 +302,14 @@ async def request_cancel(db: AsyncSession, task: Task, project: Project, actor_i
         except Exception:  # akış yoksa (proje başlamamış) sorun değil
             logger.info("Proje akışı yenilenemedi (%s)", project.id)
         return "CANCELLED"
-    await engine.signal_task(str(task.id), "cancel", payload)
+    try:
+        await engine.signal_task(str(task.id), "cancel", payload)
+    except Exception:
+        # C3-44: adımın akışı bitmiş/yoksa (ör. sistem yeniden başlarken denemeleri tükendi) sinyal gidemez → doğrudan iptal
+        if await engine.task_workflow_open(str(task.id)) is False:
+            await cancel(db, task.id, payload)
+            return "CANCELLED"
+        raise
     return "REQUESTED"
 
 

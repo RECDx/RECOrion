@@ -17,7 +17,7 @@ from app.config import settings
 from app.db.models import TestRun
 from app.services import sandbox
 from tests.test_code_repo import _gitea, coder  # noqa: F401  (fikstür)
-from tests.test_workflow import _ready_project, _wait, world  # noqa: F401  (fikstür)
+from tests.test_workflow import _exec, _ready_project, _wait, world  # noqa: F401  (fikstür)
 
 pytestmark = pytest.mark.skipif(not settings.GITEA_TOKEN, reason="GITEA_TOKEN yok (kod deposu sunucusu yapılandırılmamış)")
 
@@ -226,3 +226,21 @@ def test_real_sandbox_runs_pytest_offline():
     t = res["projects"][0]["test"]
     assert res["status"] == "FAILED" and t["passed"] == 2 and t["failed"] == 1, res
     assert t["failures"][0]["name"].endswith("test_hatali")
+
+
+def test_stale_running_run_expires_and_unblocks(client, db, world):
+    """C3-35/C3-37: sistem yeniden başlayınca yarıda kalan "çalışıyor" koşu üst süreyi aşınca kapanır, yeni koşuyu kilitlemez."""
+    from app.db.session import AsyncSessionLocal
+    w = world
+    pid = client.post("/api/v1/projects", headers=w["admin"]["h"], json={"tenant_id": w["tenant"], "name": "Yetim koşu"}).json()["id"]
+    old = _exec(db, "INSERT INTO test_runs (id, tenant_id, project_id, ref, status, created_at) VALUES (gen_random_uuid(), %s, %s, 'main', 'RUNNING', "
+                    "now() - interval '2 hours') RETURNING id", w["tenant"], pid)[0]
+    fresh = _exec(db, "INSERT INTO test_runs (id, tenant_id, project_id, ref, status, created_at) VALUES (gen_random_uuid(), %s, %s, 'dal', 'RUNNING', now()) "
+                      "RETURNING id", w["tenant"], pid)[0]
+
+    async def go():
+        async with AsyncSessionLocal() as s:
+            return await sandbox.expire_stale(s, pid)
+    assert client.portal.call(go) == 1
+    assert _exec(db, "SELECT status FROM test_runs WHERE id = %s", old)[0] == "ERROR"
+    assert _exec(db, "SELECT status FROM test_runs WHERE id = %s", fresh)[0] == "RUNNING"  # süren gerçek koşuya dokunulmaz

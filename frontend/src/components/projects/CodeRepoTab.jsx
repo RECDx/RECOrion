@@ -26,12 +26,25 @@ export default function CodeRepoTab({ project }) {
   const load = useCallback(() => api.getProjectRepository(project.id).then(setRepo).catch((e) => toast.error(e.message)), [project.id]);
   useEffect(() => { load(); }, [load]);
 
+  // C3-67: bakım/düzeltme projesi başka bir projenin (ör. kapanmış) ana dalındaki kodla başlayabilir
+  const [sources, setSources] = useState([]);
+  const [source, setSource] = useState('');
+  const canSeed = ['DRAFT', 'PLANNING', 'READY'].includes(project.status) && repo && repo.mode !== 'RECORION' && !repo.url;
+  useEffect(() => {
+    if (!canSeed || !repo?.can_manage) return;
+    api.getProjects(project.tenant_id, 'all')
+      .then((list) => setSources((list || []).filter((p) => p.id !== project.id && p.repo_mode === 'RECORION' && (p.kind || 'PROJECT') === 'PROJECT')))  // C3-68b: Case değil
+      .catch(() => setSources([]));
+  }, [canSeed, repo?.can_manage, project.id, project.tenant_id]);
+
   const setMode = async (mode) => {
     if (mode === 'NONE' && !(await confirmDialog({ message: 'Kod deposu kullanılmasın mı? Depo ve geçmişi silinmez; yeni çıktılar artık commit edilmez.' }))) return;
     setBusy(true);
     try {
-      setRepo({ ...(await api.setProjectRepository(project.id, mode)), can_manage: repo?.can_manage });
-      toast.success(mode === 'RECORION' ? 'Kod deposu açıldı; AI personelin kod çıktıları adım dallarına commit edilecek.' : 'Kod deposu kullanımı kapatıldı.');
+      setRepo({ ...(await api.setProjectRepository(project.id, mode, mode === 'RECORION' ? source : null)), can_manage: repo?.can_manage });
+      toast.success(mode === 'RECORION'
+        ? (source ? 'Kod deposu seçilen projenin kodundan açıldı; AI personel bu kod üzerinde çalışacak.' : 'Kod deposu açıldı; AI personelin kod çıktıları adım dallarına commit edilecek.')
+        : 'Kod deposu kullanımı kapatıldı.');
     } catch (e) { toast.error(e.message); } finally { setBusy(false); }
   };
   const merge = async (s) => {
@@ -59,6 +72,16 @@ export default function CodeRepoTab({ project }) {
         ) : (
           <div className="pj-actions" style={{ alignItems: 'center' }}>
             <Badge tone="neutral">Depo yok</Badge>
+            {repo.can_manage && canSeed && sources.length > 0 && (
+              <>
+                <label htmlFor="repo-source" className="pj-hint">Başlangıç kodu</label>
+                <select id="repo-source" className="ui-input" style={{ maxWidth: 320 }} value={source} onChange={(e) => setSource(e.target.value)}
+                  title="Bakım/düzeltme projesi için: seçilen projenin ana dalındaki kod bu projenin deposuna kopyalanır (kaynak değişmez).">
+                  <option value="">Boş depo</option>
+                  {sources.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </>
+            )}
             {repo.can_manage && !closed
               ? <Button icon={GitBranch} disabled={busy} onClick={() => setMode('RECORION')}>{busy ? 'Açılıyor…' : 'RECOrion deposunu aç'}</Button>
               : <span className="pj-hint">Depoyu proje yöneticisi açar.</span>}

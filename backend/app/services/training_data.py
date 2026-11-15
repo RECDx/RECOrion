@@ -80,7 +80,9 @@ class Masker:
             "FIRMA": lambda: f"{r.choice(FAKE_FIRM)} {r.choice(FAKE_FIRM_KIND)}",
             "TCKN": lambda: _fake_tckn(r),
             "VKN": lambda: "".join(str(r.randint(0, 9)) for _ in range(10)),
-            "IBAN": lambda: "TR" + "".join(str(r.randint(0, 9)) for _ in range(24)),
+            # Kontrol hanesi 00 hiçbir geçerli IBAN'da yoktur: sahte değer gerçek bir hesaba denk gelemez ve gerçeğinin
+            # ilk hanelerini rastlantıyla tekrar etmez (önceki "TR + 24 rastgele" %1 olasılıkla "TR33…" üretiyordu).
+            "IBAN": lambda: "TR00" + "".join(str(r.randint(0, 9)) for _ in range(22)),
             "KART": lambda: "4000 " + " ".join("".join(str(r.randint(0, 9)) for _ in range(4)) for _ in range(3)),
             "EPOSTA": lambda: f"kisi{n}@ornek.com.tr",
             "TELEFON": lambda: f"0555 {r.randint(100, 999)} {r.randint(10, 99)} {r.randint(10, 99)}",

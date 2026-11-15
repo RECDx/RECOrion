@@ -277,7 +277,9 @@ def _run_sync(data: bytes) -> Dict[str, Any]:
             except Exception:
                 pass
             if custom:
-                code, out, sec = _exec(box, "sh scripts/recorion_test.sh", "/work", TEST_TIMEOUT)
+                # C3-39: betik kurulumdaki sanal ortamla çalışır (pytest/python bağımlılıkları orada; ağ kesik, yeniden kurulamaz)
+                code, out, sec = _exec(box, 'PATH="$(ls -d /work/.rx-venv-*/bin 2>/dev/null | tr "\\n" ":")$PATH" sh scripts/recorion_test.sh',
+                                       "/work", TEST_TIMEOUT)
                 results.append({"dir": ".", "kind": "script", "install": None,
                                 "test": {"passed": 0, "failed": 0, "errors": 0, "skipped": 0, "failures": [], "exit_code": code,
                                          "status": "TIMEOUT" if code == 124 else "PASSED" if code == 0 else "FAILED",

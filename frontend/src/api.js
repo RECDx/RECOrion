@@ -270,7 +270,7 @@ export const api = {
   getCompanyDashboard: (tenantId, days = 30, departmentId = null) => request(`/company/${tenantId}/dashboard?${new URLSearchParams({ days, ...(departmentId ? { department_id: departmentId } : {}) }).toString()}`),
   // Proje kod deposu (Adım 8.5)
   getProjectRepository: (projectId) => request(`/projects/${projectId}/repository`),
-  setProjectRepository: (projectId, mode) => request(`/projects/${projectId}/repository`, { method: 'PUT', body: JSON.stringify({ mode }) }),
+  setProjectRepository: (projectId, mode, sourceProjectId = null) => request(`/projects/${projectId}/repository`, { method: 'PUT', body: JSON.stringify({ mode, source_project_id: sourceProjectId || null }) }),
   // Kod Çalıştırma Ortamı (ADIM 16.2)
   getTestRuns: (projectId) => request(`/projects/${projectId}/test-runs`),
   startTestRun: (projectId, ref) => request(`/projects/${projectId}/test-runs`, { method: 'POST', body: JSON.stringify({ ref }) }),

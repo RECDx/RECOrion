@@ -106,3 +106,14 @@ async def signal_project(project_id: str, name: str, payload: Optional[Dict[str,
 
 async def signal_task(task_id: str, name: str, payload: Dict[str, Any]) -> None:
     await _signal(task_workflow_id(task_id), name, payload)
+
+
+async def task_workflow_open(task_id: str) -> Optional[bool]:
+    """C3-44: adımın akışı hâlâ çalışıyor mu? True/False; motora ulaşılamıyorsa None."""
+    try:
+        desc = await (await client()).get_workflow_handle(task_workflow_id(task_id)).describe()
+    except RPCError as exc:
+        return False if "not found" in str(exc).lower() else None
+    except (OSError, RuntimeError):
+        return None
+    return getattr(desc.status, "name", str(desc.status)) == "RUNNING"

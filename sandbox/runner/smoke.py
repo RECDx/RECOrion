@@ -182,6 +182,10 @@ def run_http(c, services, saved):
     return True, f"HTTP {code}"
 
 
+STEP_KINDS = ("fill", "click", "select", "check", "uncheck", "press", "goto", "expect_text", "expect_selector",
+              "wait_for_selector", "wait_ms")
+
+
 def run_browser(c, services, saved, browser):
     if browser is None:
         return None, "Tarayıcı denetimi bu ortamda yok (Playwright kurulu değil)."
@@ -193,28 +197,43 @@ def run_browser(c, services, saved, browser):
     page.on("pageerror", lambda e: errors.append(str(e)[:200]))
     page.on("response", lambda r: errors.append(f"{r.request.method} {r.url.split('127.0.0.1')[-1]} → {r.status}") if r.status >= 400 else None)
     page.set_default_timeout(10_000)
+    steps = (c.get("steps") or [])[:25]
+    where = "sayfa açılışı"
     try:
         page.goto(f"http://127.0.0.1:{svc['port']}{_fmt(c.get('path') or '/', saved)}")
-        for st in (c.get("steps") or [])[:25]:
+        for i, st in enumerate(steps, 1):
             st = _fmt(st, saved)
-            if "fill" in st:
-                page.fill(st["fill"], str(st.get("value", "")))
-            elif "click" in st:
-                page.click(st["click"])
-            elif "select" in st:
-                page.select_option(st["select"], str(st.get("value", "")))
-            elif "goto" in st:
-                page.goto(f"http://127.0.0.1:{svc['port']}{st['goto']}")
-            elif "expect_text" in st:
-                page.get_by_text(str(st["expect_text"])).first.wait_for(state="visible")
-            elif "expect_selector" in st:
-                page.wait_for_selector(st["expect_selector"], state="visible")
-            elif "wait_ms" in st:
+            kind = next((k for k in STEP_KINDS if k in st), None)
+            where = f"adım {i}/{len(steps)} ({kind or '?'}: {str(st.get(kind, ''))[:60] if kind else json.dumps(st, ensure_ascii=False)[:80]})"
+            # C3-60: tanınmayan adım sessizce atlanmaz (atlanırsa sonraki adım yanıltıcı biçimde zaman aşımına düşer)
+            if kind is None:
+                raise ValueError(f"Bilinmeyen adım türü; desteklenenler: {', '.join(STEP_KINDS)}")
+            to = min(int(st.get("timeout") or 10_000), 30_000)
+            if kind == "fill":
+                page.fill(st["fill"], str(st.get("value", "")), timeout=to)
+            elif kind == "click":
+                page.click(st["click"], timeout=to)
+            elif kind == "select":
+                page.select_option(st["select"], str(st.get("value", "")), timeout=to)
+            elif kind == "check":
+                page.check(st["check"], timeout=to)
+            elif kind == "uncheck":
+                page.uncheck(st["uncheck"], timeout=to)
+            elif kind == "press":
+                page.press(st.get("selector") or "body", str(st["press"]), timeout=to)
+            elif kind == "goto":
+                page.goto(f"http://127.0.0.1:{svc['port']}{st['goto']}", timeout=to)
+            elif kind == "expect_text":
+                page.get_by_text(str(st["expect_text"])).first.wait_for(state="visible", timeout=to)
+            elif kind in ("expect_selector", "wait_for_selector"):
+                state = st.get("state") if st.get("state") in ("attached", "detached", "visible", "hidden") else "visible"
+                page.wait_for_selector(st[kind], state=state, timeout=to)
+            elif kind == "wait_ms":
                 page.wait_for_timeout(min(int(st["wait_ms"]), 5000))
         return True, "Adımlar tamamlandı" + (f" (uyarılar: {'; '.join(errors[:3])})" if errors else "")
     except Exception as exc:
         msg = str(exc).split("\n")[0][:300]
-        return False, msg + (f" · Sayfa hataları/başarısız istekler: {'; '.join(errors[:5])}" if errors else "")
+        return False, f"{where}: {msg}" + (f" · Sayfa hataları/başarısız istekler: {'; '.join(errors[:5])}" if errors else "")
     finally:
         page.close()
 

@@ -10,6 +10,7 @@ import { fmtDay } from './projectMeta';
 import { useProjectLive } from '../../live';
 import { TaskTransferModal } from '../integrations/Transfers';
 import TaskPeopleModal from './TaskPeopleModal';
+import RetryTaskModal from './RetryTaskModal';
 
 const TONE = { BACKLOG: 'neutral', READY: 'info', IN_PROGRESS: 'info', WAITING_APPROVAL: 'warning', REVISION: 'danger',
   QUARANTINED: 'danger', DONE: 'success', CANCELLED: 'neutral' };
@@ -37,6 +38,8 @@ export default function WorkflowTab({ project }) {
   const [people, setPeople] = useState(null);  // F92
   const closeViewer = useCallback(() => setViewing(null), []);
   const closePeople = useCallback(() => setPeople(null), []);
+  const [retrying, setRetrying] = useState(null);  // C3-43/C3-50
+  const closeRetry = useCallback(() => setRetrying(null), []);
   const live = ['ACTIVE', 'PAUSED'].includes(project.status);
 
   const [thought, setThought] = useState(null);
@@ -91,6 +94,7 @@ export default function WorkflowTab({ project }) {
     if (note && note.trim()) run(t.id, () => api.decideTask(t.id, false, note.trim()), 'Revizyon istendi.');
     else if (note !== null) toast.error('Revizyon için gerekçe yazın; personel buna göre düzeltecek.');  // F83
   };
+  const retry = (t) => setRetrying(t);  // C3-43/C3-50: not + gerekirse başka personel
   const acceptLast = async (t) => {  // F90: karantinadaki son sürümü yönetici gerekçeyle kabul eder
     const note = await promptDialog({ title: 'Son sürümü kabul et', message: `'${t.title}' son sürümüyle onaylanacak ve kod ana dala birleşecek. Gerekçe:` });
     if (!note || !note.trim()) { if (note !== null) toast.error('Kabul gerekçesini yazın.'); return; }
@@ -212,7 +216,7 @@ export default function WorkflowTab({ project }) {
                   )}
                   {t.can_release && (
                     <>
-                      <Button size="sm" icon={RotateCcw} onClick={() => run(t.id, () => api.releaseTask(t.id, 'retry'), 'Adım yeniden denemeye açıldı.')} disabled={busy === t.id}>Yeniden dene</Button>
+                      <Button size="sm" icon={RotateCcw} onClick={() => retry(t)} disabled={busy === t.id}>Yeniden dene</Button>
                       {t.can_accept_last && <Button size="sm" variant="secondary" icon={CheckCircle2} onClick={() => acceptLast(t)} disabled={busy === t.id}>Son sürümü kabul et</Button>}
                       <Button size="sm" variant="danger" onClick={() => cancelTask(t)} disabled={busy === t.id}>Adımı iptal et</Button>
                     </>
@@ -228,7 +232,7 @@ export default function WorkflowTab({ project }) {
               {t.status === 'QUARANTINED' && (
                 <p className="pj-note high" style={{ margin: 0 }}>
                   {t.blocked_reason ? `Adım durdu: ${t.blocked_reason}` : `${t.rejection_count} kez reddedildi.`}{' '}
-                  Yeniden denemek ret sayacını sıfırlar; gerekirse "Kişiler" ile başka personel seçin{t.can_accept_last ? ' ya da son sürümü gerekçeyle kabul edin' : ''}.
+                  Yeniden denemek ret sayacını sıfırlar; gerekirse "Yeniden dene" penceresinde başka personel seçin{t.can_accept_last ? ' ya da son sürümü gerekçeyle kabul edin' : ''}.
                 </p>
               )}
               {t.status === 'QUARANTINED' && t.acceptance_warning && t.can_accept_last && (
@@ -241,6 +245,7 @@ export default function WorkflowTab({ project }) {
       {viewing && <ArtifactModal task={viewing.task} artifactId={viewing.id} onClose={closeViewer} />}
       {transfer && <TaskTransferModal project={project} task={transfer} onClose={() => setTransfer(null)} />}
       {people && <TaskPeopleModal task={people} onClose={closePeople} onSaved={load} />}
+      {retrying && <RetryTaskModal task={retrying} onClose={closeRetry} onDone={load} />}
       <Card title="Akış geçmişi" subtitle="Silinemez kayıt: her teslim, onay, ret ve karar.">
         <ul className="pj-list">
           {flow.events.map((e) => (

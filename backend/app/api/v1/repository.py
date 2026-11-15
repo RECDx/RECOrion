@@ -8,7 +8,7 @@ Proje kod deposu uçları (ADIM 8.5).
 - GET  /projects/{id}/repository/refs|tree|archive|search  ekip: Kod Gezgini (ADIM 16.1) dallar, dosya ağacı, zip, arama
 """
 import uuid
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -43,6 +43,7 @@ async def get_repository(project_id: uuid.UUID, user: CurrentUser = Depends(get_
 
 class RepoModeIn(BaseModel):
     mode: Literal["NONE", "RECORION"]
+    source_project_id: Optional[uuid.UUID] = None  # C3-67: depo, kapanmış/başka bir projenin ana dalındaki kodla başlasın
 
 
 @router.put("/{project_id}/repository")
@@ -54,11 +55,24 @@ async def set_repository(project_id: uuid.UUID, payload: RepoModeIn, user: Curre
     if payload.mode == "RECORION":
         if not code_repo.enabled():
             raise HTTPException(status_code=503, detail="Kod deposu sunucusu yapılandırılmamış; RECDx ile iletişime geçin.")
+        source = None
+        if payload.source_project_id:
+            # Yalnız henüz başlamamış ve deposu hiç açılmamış projede; kaynak aynı şirketin, deposu olan bir projesi
+            if project.status not in psvc.EDITABLE_STATUSES or project.repo_name:
+                raise HTTPException(status_code=409, detail="Başlangıç kodu yalnız deposu henüz açılmamış ve başlamamış projede seçilebilir.")
+            source = await psvc.load(db, user, payload.source_project_id)
+            if (source.id == project.id or source.tenant_id != project.tenant_id or not code_repo.active(source)
+                    or (source.kind or "PROJECT") != "PROJECT"):  # C3-68b: Case kaynak olamaz
+                raise HTTPException(status_code=422, detail="Kaynak proje bulunamadı ya da kod deposu yok.")
         try:
             await code_repo.enable(db, project)
+            seeded = await code_repo.seed_from(project, source) if source else None
         except RepoError as exc:
             _fail(exc)
-        await task_flow.log(db, project, None, "REPO_ENABLED", user.actor_id, project.repo_url)
+        await task_flow.log(db, project, None, "REPO_ENABLED", user.actor_id,
+                            project.repo_url + (f" — başlangıç kodu '{source.name}' projesinin ana dalından ({seeded['files']} dosya)"
+                                                if source else ""),
+                            {"source_project_id": str(source.id), **seeded} if source else None)
     else:
         # Depo silinmez (kayıt ve geçmiş korunur); yeni çıktılar artık commit edilmez
         project.repo_mode = "NONE"
