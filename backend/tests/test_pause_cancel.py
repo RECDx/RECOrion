@@ -6,16 +6,15 @@ import time
 from tests.test_workflow import _flow, _ready_project, _wait, ai, world  # noqa: F401  (fikstürler)
 
 
-def test_pause_holds_step_and_resume_continues(client, world, ai):
+def test_pause_holds_step_and_resume_continues(client, world, ai, monkeypatch):
     w, h = world, world["admin"]["h"]
     slow = ai.chat
+    from app.services.evren_client import evren_client  # modül değil, ağ geçidinin kullandığı nesne
 
     async def slow_chat(model_code, messages, **kw):  # süren AI çağrısı sırasında duraklatma gelsin
         await asyncio.sleep(3)
         return await slow(model_code, messages, **kw)
-    ai.chat = slow_chat
-    from app.services import evren_client
-    evren_client.chat = slow_chat
+    monkeypatch.setattr(evren_client, "chat", slow_chat)
 
     pid, _, _ = _ready_project(client, w, "Duraklatma Projesi")
     try:
