@@ -2,14 +2,51 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Coins, RefreshCw } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, DataTable, EmptyState } from '../../ui/components';
+import { toast } from '../../ui/feedback';
 import { ENTRY_LABELS, fmtCredits, fmtDate, fmtTokens, purposeLabel } from './format';
 import './ai.css';
+
+const fmtDay = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) : '');
+
+/** #746: şirketin harcama ayarları — haftalık sınır (varsayılan kapalı) ve kredi yüklenince kendiliğinden devam. */
+function SpendSettings({ tenantId, settings, onSaved }) {
+  const [on, setOn] = useState(Boolean(settings?.weekly_cap_pct));
+  const [pct, setPct] = useState(settings?.weekly_cap_pct || 35);
+  const [auto, setAuto] = useState(Boolean(settings?.auto_resume_after_topup));
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.putCreditSettings(tenantId, { weekly_cap_pct: on ? Number(pct) : null, auto_resume_after_topup: auto });
+      toast.success('Harcama ayarları kaydedildi.');
+      onSaved?.();
+    } catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <Card title="Harcama ayarları" subtitle="Haftalık sınır şirketin kendi koyduğu frendir; satılmaz ve kredi bitmeden yeni AI işlerini durdurur.">
+      <div className="ai-stack">
+        <label className="pj-hint" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Haftalık harcama sınırı uygula
+        </label>
+        {on && (
+          <label className="pj-hint" htmlFor="cap-pct">Haftada en fazla aylık hakkın %
+            <input id="cap-pct" className="ui-input" type="number" min={5} max={100} value={pct} onChange={(e) => setPct(e.target.value)} style={{ maxWidth: 90, marginLeft: 8 }} />
+          </label>
+        )}
+        <label className="pj-hint" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Kredi yüklenince duraklayan işler kendiliğinden devam etsin
+        </label>
+        <div><Button size="sm" onClick={save} disabled={busy}>Kaydet</Button></div>
+      </div>
+    </Card>
+  );
+}
 
 function Meter({ percent }) {
   const p = Math.min(100, Math.max(0, percent || 0));
   return (
     <div className="ai-meter" role="progressbar" aria-valuenow={p} aria-valuemin={0} aria-valuemax={100}>
-      <div className={`ai-meter-fill ${p >= 100 ? 'danger' : p >= 80 ? 'warn' : ''}`} style={{ width: `${p}%` }} />
+      <div className={`ai-meter-fill ${p >= 95 ? 'danger' : p >= 80 ? 'warn' : ''}`} style={{ width: `${p}%` }} />
     </div>
   );
 }
@@ -32,10 +69,21 @@ function Breakdown({ title, rows, label }) {
 }
 
 /** Şirketin bu dönemki kredi durumu. Şirket yöneticisi ve Süper Admin (yönetim verisi) görür. */
-export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0 }) {
+export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0, canManage = false }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const act = async (fn, okText) => {  // #746
+    setBusy(true);
+    try {
+      const r = await fn();
+      const blocked = r?.blocked || [];
+      if (blocked.length) toast.error(`${blocked.length} iş devam ettirilemedi: ${blocked[0].reason}`);
+      else toast.success(okText);
+      await load();
+    } catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,8 +116,32 @@ export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0
         <div className="ai-stat"><div className="ai-stat-label">Ek kredi</div><div className="ai-stat-value">{fmtCredits(s.topup_balance)}</div><div className="ai-stat-note">Sonraki aylara devreder</div></div>
       </div>
       <Meter percent={s.percent_used} />
-      {s.balance <= 0 && <Badge tone="danger">Kredi tükendi: AI personeller yeni işlem yapamaz</Badge>}
-      {s.balance > 0 && s.percent_used >= 80 && <Badge tone="warning">Aylık kredinin %{s.percent_used}'i kullanıldı</Badge>}
+      {/* #746: kullanım göstergesi — bu hızla ne zaman biter */}
+      <p className="pj-hint" style={{ margin: 0 }}>
+        Bu ayın hakkının %{s.percent_used}'i kullanıldı{s.depletes_on ? `; bu hızla ${fmtDay(s.depletes_on)} tarihinde biter` : ''}.
+        {s.settings?.weekly_cap_pct ? ` Haftalık sınır: aylık hakkın %${s.settings.weekly_cap_pct}'i (bu hafta ${fmtCredits(s.week_used)} kredi).` : ''}
+        {data.parallel_limit ? ` Aynı anda en fazla ${data.parallel_limit} AI adımı çalışır; fazlası sırada bekler (kredi düşmez).` : ''}
+      </p>
+      {s.level === 'EXHAUSTED' && (
+        <div className="pj-note danger" role="alert">
+          <strong>Kredi bitti.</strong> Şirketin aktif proje ve Case'leri duraklatıldı; işler kredi yüklenince kaldığı yerden sürer.
+          Ek kredi ya da paket yükseltme için RECDx ile iletişime geçin (çevrimiçi satın alma yakında bu ekrandan yapılabilecek).
+        </div>
+      )}
+      {s.level !== 'EXHAUSTED' && s.weekly_cap_reached && (
+        <div className="pj-note medium" role="alert">
+          <strong>Haftalık harcama sınırı doldu.</strong> Yeni AI işleri bu hafta başlamaz.
+          {canManage && <> <Button size="sm" variant="secondary" onClick={() => act(() => api.liftWeeklyCap(tenantId), 'Sınır bu hafta için kaldırıldı.')} disabled={busy}>Bu hafta için sınırı kaldır</Button></>}
+        </div>
+      )}
+      {s.level === 'WARN95' && <Badge tone="danger">Aylık kredinin %{s.percent_used}'i kullanıldı</Badge>}
+      {s.level === 'WARN80' && <Badge tone="warning">Aylık kredinin %{s.percent_used}'i kullanıldı</Badge>}
+      {(data.credit_paused || []).length > 0 && (
+        <div className="pj-note medium">
+          Kredi / haftalık sınır nedeniyle duraklayan işler: {data.credit_paused.map((p) => p.name).join(', ')}.
+          {canManage && s.balance > 0 && !s.weekly_cap_reached && <> <Button size="sm" onClick={() => act(() => api.resumeCreditPaused(tenantId), 'İşler kaldığı yerden devam ediyor.')} disabled={busy}>Tümünü devam ettir</Button></>}
+        </div>
+      )}
     </>
   );
 
@@ -84,6 +156,7 @@ export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0
       >
         <div className="ai-stack">{stats}</div>
       </Card>
+      {canManage && !s.unlimited && <SpendSettings tenantId={tenantId} settings={s.settings} onSaved={load} />}
 
       <div className="ai-breakdowns">
         <Breakdown title="Modele göre" rows={data.by_model} label={(r) => r.key || '—'} />

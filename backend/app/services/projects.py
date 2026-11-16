@@ -129,6 +129,14 @@ async def transition(db: AsyncSession, project: Project, action: str, summary: O
         project.status = "PAUSED"
     elif action == "resume":
         need(s == "PAUSED", "Yalnızca duraklatılmış projeler devam ettirilebilir.")
+        # #746: kredi bitti / haftalık sınır nedeniyle duraklayan proje engel kalkmadan devam ettirilemez
+        from app.db.models import Tenant
+        from app.services import credit_control
+
+        reason = await credit_control.pause_reason(db, project)
+        if reason in credit_control.CREDIT_REASONS:
+            msg = await credit_control.blocker(db, await db.get(Tenant, project.tenant_id), reason)
+            need(not msg, msg or "")
         project.status = "ACTIVE"
     elif action == "complete":
         need(s in ("ACTIVE", "PAUSED"), "Yalnızca aktif veya duraklatılmış projeler tamamlanabilir.")

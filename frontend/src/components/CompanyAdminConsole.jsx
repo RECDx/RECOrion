@@ -5183,7 +5183,7 @@ export default function CompanyAdminConsole({
           {activeTab === 'LEARNING' && <LearningPanel tenantId={tenantId} />}
           {activeTab === 'REGULATIONS' && <CompanyRegulations tenantId={tenantId}
             canManage={can(currentUser, 'regulation:manage')} />}
-          {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} />}
+          {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} canManage={can(currentUser, 'tenant:manage')} />}
 
           <HireWizard
             tenantId={tenantId}

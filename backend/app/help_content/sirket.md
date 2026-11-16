@@ -1722,10 +1722,11 @@ Başlık "<paket adı> · sürüm V"; "Kontrol eden: <uzman> · <tarih>"; her ka
 
 **Ekranın bölümleri:**
 
-1. **RECOrion Kredisi** kartı ("Her yapay zeka işlemi model katsayısı × (giriş token/1000 + 2 × çıkış token/1000) kredi harcar."), sağ üstte **Yenile**. Sayaçlar: **Kullanılabilir kredi** ("Aylık + ek kredi"), **Bu ay kullanılan** ("%NN · dönem AAAA-AA"), **Aylık hak** ("Kalan X · ay sonunda silinir"), **Ek kredi** ("Sonraki aylara devreder") ve kullanım çubuğu.
+1. **RECOrion Kredisi** kartı ("Her yapay zeka işlemi model katsayısı × (giriş token/1000 + 2 × çıkış token/1000) kredi harcar."), sağ üstte **Yenile**. Sayaçlar: **Kullanılabilir kredi** ("Aylık + ek kredi"), **Bu ay kullanılan** ("%NN · dönem AAAA-AA"), **Aylık hak** ("Kalan X · ay sonunda silinir"), **Ek kredi** ("Sonraki aylara devreder") ve kullanım çubuğu. Çubuğun altında **"Bu ayın hakkının %NN'i kullanıldı; bu hızla <gün> tarihinde biter."** (bu ayki harcama hızına göre tahmin), haftalık sınır açıksa bu haftaki kullanım ve **"Aynı anda en fazla N AI adımı çalışır; fazlası sırada bekler (kredi düşmez)."** yazar.
 2. Üç kart: **Modele göre** (RECAi kademesine göre), **AI personele göre**, **İşlem türüne göre**; en çok kullanan 8 satır, "X kredi · N işlem".
 3. **Son işlemler** tablosu (sayfa başına 10). Bu dönem başarısız işlem varsa alt başlıkta "Bu dönem N işlem başarısız oldu (kredi düşülmedi)."
 4. **Kredi hareketleri** kartı (hareket varsa).
+5. **Harcama ayarları** kartı (yalnız şirket yöneticisi): **Haftalık harcama sınırı uygula** (varsayılan kapalı; haftada en fazla aylık hakkın %5–100'ü) ve **Kredi yüklenince duraklayan işler kendiliğinden devam etsin**; **Kaydet**.
 
 Token, yapay zekânın okuduğu ve yazdığı metnin ölçü birimidir (kabaca bir kelimenin parçası). Formül şunu söyler: RECAi'nin yazdığı metin, okuduğu metnin iki katı kredi tutar ve kademe katsayısıyla çarpılır.
 
@@ -1733,8 +1734,10 @@ Token, yapay zekânın okuduğu ve yazdığı metnin ölçü birimidir (kabaca b
 
 | Öğe | Anlamı |
 |---|---|
-| **Kredi tükendi: AI personeller yeni işlem yapamaz** (kırmızı) | Bakiye sıfır veya altında. |
-| **Aylık kredinin %NN'i kullanıldı** (sarı) | Aylık hakkın %80'i veya fazlası kullanıldı. |
+| **Kredi bitti.** uyarısı (kırmızı) | Bakiye bir AI adımına yetmiyor (50 kredinin altında). Şirketin aktif proje ve Case'leri **kendiliğinden duraklatılır**; adımlar karantinaya düşmez, kredi yüklenince kaldığı yerden sürer. Şirket yöneticisine ve proje yöneticilerine bildirim gider. |
+| **Haftalık harcama sınırı doldu.** (sarı) | Şirketin koyduğu haftalık sınır doldu; yeni AI işleri bu hafta başlamaz, işler "haftalık sınır" nedeniyle duraklar. |
+| **Aylık kredinin %NN'i kullanıldı** | %80'de sarı, %95'te kırmızı; şirket yöneticisine e-posta, aktif projesi olan proje yöneticilerine kısa bildirim gider (her eşik dönemde bir kez). |
+| **Kredi / haftalık sınır nedeniyle duraklayan işler: …** | Bu nedenle duraklayan proje ve Case'ler. |
 | **Son işlemler** sütunları | **Zaman**, **İşlem**, **Model** (RECAi kademesi), **AI Personel**, **Token (giriş/çıkış)** (B = bin, M = milyon), **Kredi**, **Durum** (**Başarılı** yeşil / **Başarısız** kırmızı, kredi düşülmez). Token dışındaki sütun başlıklarına tıklayarak sıralanır. |
 | **İşlem** türleri | AI personel sohbeti, Beyin AI, Manifesto üretimi, Rol promptu üretimi, Ünvan incelemesi, Derin araştırma, Öğrenme, Hafıza vektörleme, Hafıza sıralama, Sohbet |
 | **Kredi hareketleri** türleri | Aylık kredi hakkı (+), Ek kredi (+), Süresi dolan kredi (−), Düzeltme (±), Kullanım (−); satırda "<tür> · dönem · not" ve tutar |
@@ -1745,8 +1748,10 @@ Token, yapay zekânın okuduğu ve yazdığı metnin ölçü birimidir (kabaca b
 |---|---|---|
 | **Yenile** | Kredi verisini yeniden yükler. | — |
 | **Tekrar dene** | (Hata durumunda) yeniden yükler. | — |
+| **Tümünü devam ettir** | Kredi / haftalık sınır nedeniyle duraklayan işleri kaldığı yerden sürdürür. Yalnız kredi yeterliyse ve sınır kalktıysa görünür. | Engeli süren iş devam etmez, nedeni yazılır. |
+| **Bu hafta için sınırı kaldır** | Haftalık sınırı yalnız bu hafta için kaldırır; sınır nedeniyle duraklayan işler devam eder. | Yeni haftada sınır yeniden geçerli olur. |
 
-Ek kredi satın alma bu ekranda yoktur; RECDx üzerinden yapılır.
+Ek kredi satın alma şimdilik RECDx üzerinden yapılır (çevrimiçi satın alma bu ekrana eklenecek). Kredi nedeniyle duraklayan proje, kredi yüklenmeden **Devam ettir** ile sürdürülemez: **"Şirketin kredisi bitti; kredi yüklenmeden proje devam ettirilemez…"**. Kredi yüklenince **Kredi yüklenince duraklayan işler kendiliğinden devam etsin** açıksa işler kendiliğinden, değilse **Tümünü devam ettir** ile sürer.
 
 **Adım adım örnek:**
 

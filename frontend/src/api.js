@@ -599,6 +599,10 @@ export const api = {
 
   // Kredi ve yapay zeka kullanımı (Adım 4)
   getCompanyCredits: (tenantId) => request(`/company/${tenantId}/credits`),
+  // #746: harcama ayarları, haftalık sınırı bu hafta kaldırma, kredi nedeniyle duraklayan işleri devam ettirme
+  putCreditSettings: (tenantId, data) => request(`/company/${tenantId}/credits/settings`, { method: 'PUT', body: JSON.stringify(data) }),
+  liftWeeklyCap: (tenantId) => request(`/company/${tenantId}/credits/lift-weekly-cap`, { method: 'POST' }),
+  resumeCreditPaused: (tenantId) => request(`/company/${tenantId}/credits/resume-paused`, { method: 'POST' }),
   topupCredits: (tenantId, data) => request(`/tenants/${tenantId}/credits/topup`, { method: 'POST', body: JSON.stringify(data) }),
   getPlatformLLMUsage: () => request('/system/llm/usage'),
   syncEvrenModels: () => request('/models/sync-evren', { method: 'POST' }),

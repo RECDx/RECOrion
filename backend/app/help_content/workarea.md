@@ -536,7 +536,7 @@ Bu mod, projelerin ve Case'lerin açıldığı, planlandığı, yürütüldüğ�
 | **Planlama** | Beyin AI ile plan hazırlanıyor. Plan kaydedilince taslak proje kendiliğinden Planlama'ya geçer. | Planı düzenleyin, onaylayın, ekibi kurun. |
 | **Başlamaya hazır** | Plan onaylı, her adıma personel atanmış, tarihler belli. Başlangıç günü gelince proje yöneticisine e-posta ve Telegram hatırlatması gider. | Projeyi başlatın. |
 | **Aktif** | İş akışı yürüyor; bağımlılıkları biten adımlar AI ve insan personele açılır. | Çıktıları izleyin, onaylayın. |
-| **Duraklatıldı** | O an süren AI çağrısı biter ve sonucu taslak sürüm olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz, yeni adım açılmaz. Devam ettirince kaldığı yerden sürer. Duraklatma ve devam akış geçmişine kaydedilir. | Devam ettirin veya kapatın. |
+| **Duraklatıldı** | O an süren AI çağrısı biter ve sonucu taslak sürüm olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz, yeni adım açılmaz. Devam ettirince kaldığı yerden sürer. Duraklatma ve devam akış geçmişine kaydedilir. Şirketin kredisi biterse ya da haftalık harcama sınırı dolarsa proje **kendiliğinden** duraklar (kırmızı uyarı); bu durumda kredi yüklenmeden / sınır kalkmadan devam ettirilemez. Şirketin aynı anda çalıştırabileceği AI adımı sayısı pakete göre sınırlıdır; sınırdaki adım sırada bekler, kredi düşmez. | Devam ettirin veya kapatın. |
 | **Tamamlandı** | Proje kapandı; yazışma kaydı salt okunur. | Ekleri kurum hafızasına aktarın, şablon olarak kaydedin. |
 | **İptal edildi** | Proje kapandı; açık adımlar da iptal edildi. Gerekçe ve kayıp maliyet kayda geçti ("İptal edilen işler ve kayıp maliyet" raporu). Geri alınamaz. | — |
 

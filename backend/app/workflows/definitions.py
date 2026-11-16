@@ -134,6 +134,14 @@ class TaskWorkflow:
                 out = await workflow.execute_activity(act.ai_work, args=[task_id, feedback], **AI_OPTS)
                 if self.cancelled is not None:
                     return await self._cancel(task_id)
+                # #746 (yalnız yeni sonuç alanlarıyla çalışır; eski akış geçmişleri bu dallara hiç girmez):
+                if not out["ok"] and out.get("queued"):  # EVREN koruma sınırı: sırada bekle, sonra yeniden dene
+                    await workflow.sleep(timedelta(seconds=45))
+                    continue
+                if not out["ok"] and out.get("credit"):  # kredi bitti / haftalık sınır: karantina değil, proje duraklar
+                    await workflow.execute_activity(act.credit_pause, args=[task_id, out["credit"], out.get("error") or ""], **OPTS)
+                    self.paused = True  # proje akışının pause_step sinyali beklenmeden tutulur; devamda resume_step gelir
+                    continue
                 if not out["ok"]:
                     await workflow.execute_activity(act.block_task, args=[task_id, out["error"]], **OPTS)
                     info = await self._quarantined(task_id)
@@ -197,6 +205,7 @@ class ProjectWorkflow:
         self.running: Dict[str, Any] = {}
         self.finished: Set[str] = set()
         self.children_paused = False  # #745: çalışan adımlara iletilen son duraklatma durumu
+        self.resume_requested = False  # #746: devam isteği her durumda çalışan adımlara iletilir (adım kendini tutmuş olabilir)
 
     @workflow.signal
     def pause(self) -> None:
@@ -204,7 +213,7 @@ class ProjectWorkflow:
 
     @workflow.signal
     def resume(self) -> None:
-        self.paused, self.dirty = False, True
+        self.paused, self.dirty, self.resume_requested = False, True, True
 
     @workflow.signal
     def refresh(self) -> None:
@@ -234,6 +243,15 @@ class ProjectWorkflow:
                     await asyncio.gather(*self.running.values(), return_exceptions=True)
                 await workflow.execute_activity(act.cancel_remaining, args=[project_id, self.cancelled], **OPTS)
                 return "CANCELLED"
+            # #746: kredi nedeniyle kendini tutan adım (proje akışına duraklatma ulaşmamış olsa da) devamda serbest kalır
+            if self.resume_requested and not self.paused and workflow.patched("task-resume-746"):
+                for tid in list(self.running):
+                    try:
+                        await workflow.get_external_workflow_handle(task_workflow_id(tid)).signal(TaskWorkflow.resume_step)
+                    except Exception:
+                        pass
+                self.children_paused = False
+            self.resume_requested = False
             # #745: duraklat/devam çalışan adımlara iletilir. patched: bu sürümden önceki akış geçmişleri yeniden oynatılırken
             # (o geçmişlerde bu sinyaller yok) komut üretilmez; yeni çalışmada sinyaller gönderilir.
             if self.paused != self.children_paused and workflow.patched("task-pause-745"):

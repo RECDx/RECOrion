@@ -74,6 +74,12 @@ class LLMUnavailable(LLMError):
 
 class CreditExhausted(LLMError):
     status_code = 402
+    reason = "CREDIT"  # #746: projeler bu nedenle duraklatılır
+
+
+class WeeklyCapReached(CreditExhausted):
+    """#746: şirketin kendi koyduğu haftalık harcama sınırı doldu (kredi bitmedi)."""
+    reason = "WEEKLY_CAP"
 
 
 class ModelNotAllowed(LLMError):
@@ -218,8 +224,13 @@ async def _preflight(db: AsyncSession, tenant: Tenant, model: LLMModel, est_in: 
         return
     await credits.ensure_period_grant(db, tenant)
     bal = await credits.balance(db, tenant.id)
-    if bal <= 0 or bal < credits.credit_cost(model.effort_coefficient, est_in, est_out):
-        raise CreditExhausted("Şirketinizin RECOrion kredisi bu işlem için yetersiz. Yeni dönemi bekleyebilir veya ek kredi için RECDx ile iletişime geçebilirsiniz.")
+    estimate = credits.credit_cost(model.effort_coefficient, est_in, est_out)
+    if bal <= 0 or bal < estimate:
+        raise CreditExhausted("Şirketinizin RECOrion kredisi bu işlem için yetersiz. Şirket yöneticisi Kredi ve Kullanım ekranından "
+                              "ek kredi alabilir ya da paketi yükseltebilir; projeler kredi yüklenince kaldığı yerden sürer.")
+    cap_msg = await credits.weekly_cap_block(db, tenant, estimate)  # #746: şirketin koyduğu haftalık sınır
+    if cap_msg:
+        raise WeeklyCapReached(cap_msg)
 
 
 async def _record(db: AsyncSession, tenant: Tenant, model: LLMModel, ctx: LLMContext, tokens_in: int, tokens_out: int,

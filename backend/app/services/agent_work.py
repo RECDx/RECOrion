@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, Artifact, ChatMessage, Project, Task, TaskEvent, Tenant
 from app.services import code_repo, knowledge, live, llm_gateway, model_router, sandbox, storage, task_flow
-from app.services.llm_gateway import LLMContext, LLMError
+from app.services.llm_gateway import CreditExhausted, LLMContext, LLMError
 
 logger = logging.getLogger("recorion.agent_work")
 
@@ -270,6 +270,8 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
                                                    _runs_tests(project, agent, task) or ("fix" if task.fix_kind == "FIX" else False))},
              {"role": "user", "content": prompt}],
             tooling=(db, agent, project, task))
+    except CreditExhausted as exc:  # #746: kredi bitti / haftalık sınır → adım karantinaya değil, proje duraklamaya
+        return {"ok": False, "error": exc.message, "credit": exc.reason}
     except LLMError as exc:
         return {"ok": False, "error": exc.message}
     except Exception as exc:

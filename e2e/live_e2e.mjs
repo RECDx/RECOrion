@@ -2056,6 +2056,14 @@ try {
       step(/2 izin/.test(created),
         'Şirkete özel rol: yönetici rolü oluşturdu (2 izin), düzenledi (3 izin) ve sildi',
         `${roleName} · kullanıcı formu listesinde: ${inForm ? 'var' : 'form kapalı'}`);
+      // #746: Kredi ve Kullanım — kullanım tahmini, eş zamanlı AI sınırı ve harcama ayarları (ayarlar değiştirilmez)
+      await ra.page.locator('nav.super-admin-nav').getByText('Kredi ve Kullanım').click({ timeout: 30000 });
+      await ra.page.getByText('RECOrion Kredisi').first().waitFor({ timeout: 20000 });
+      const usageNote = await ra.page.getByText(/Bu ayın hakkının %/).first().innerText();
+      const spendCard = await ra.page.locator('.ui-card', { hasText: 'Harcama ayarları' }).count();
+      await shot(ra.page, '45-kredi-kullanim');
+      step(/kullanıldı/.test(usageNote) && /AI adımı çalışır/.test(usageNote) && spendCard === 1,
+        'Kredi ve Kullanım (#746): kullanım tahmini, eş zamanlı AI sınırı ve şirket yöneticisine harcama ayarları görünüyor', usageNote.slice(0, 160));
     } catch (e) {
       await shot(ra.page, '44-sirket-rolleri-hata').catch(() => {});
       throw e;

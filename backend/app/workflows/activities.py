@@ -92,9 +92,37 @@ async def block_task(task_id: str, error: str) -> Dict[str, Any]:
 
 @activity.defn
 async def ai_work(task_id: str, feedback: str = "") -> Dict[str, Any]:
-    """AI personel iş adımının çıktısını üretir (ADIM 7.2)."""
+    """AI personel iş adımının çıktısını üretir (ADIM 7.2). #746: şirketin eş zamanlı AI sınırı doluysa iş başlamaz
+    ({"queued": True}; akış bekleyip yeniden dener, kredi düşmez)."""
+    from app.db.models import Project, Task, Tenant
+    from app.services import credit_control
+
     async with session() as db:
-        return await agent_work.produce(db, task_id, feedback or None)
+        task = await db.get(Task, credit_control.uuid_of(task_id))
+        project = await db.get(Project, task.project_id) if task else None
+        tenant = await db.get(Tenant, project.tenant_id) if project else None
+        if tenant and not await credit_control.acquire_slot(db, tenant, task_id):
+            limit = await credit_control.parallel_limit(db, tenant)
+            return {"ok": False, "queued": True,
+                    "error": f"Şirketin eş zamanlı AI çalışması sınırı ({limit}) dolu; adım sırada bekliyor (kredi düşmez)."}
+        try:
+            return await agent_work.produce(db, task_id, feedback or None)
+        finally:
+            if tenant:
+                await credit_control.release_slot(tenant.id, task_id)
+
+
+@activity.defn
+async def credit_pause(task_id: str, reason: str, detail: str = "") -> Dict[str, Any]:
+    """#746: kredi bitti / haftalık sınır doldu → şirketin aktif proje ve Case'leri duraklatılır (adım karantinaya düşmez)."""
+    from app.db.models import Project, Task
+    from app.services import credit_control
+
+    async with session() as db:
+        task = await db.get(Task, credit_control.uuid_of(task_id))
+        project = await db.get(Project, task.project_id) if task else None
+        paused = await credit_control.pause_tenant(db, project.tenant_id, reason, detail) if project else []
+        return {"paused": paused}
 
 
 @activity.defn
@@ -125,4 +153,4 @@ async def fail_transfer(transfer_id: str, reason: str) -> None:
 
 
 ALL = [run_transfer, fail_transfer, ai_work, ai_review, block_task, next_ready_tasks, project_started, project_finished, cancel_remaining, start_task, submit_task, approve_task, reject_task,
-       release_task, cancel_task]
+       release_task, cancel_task, credit_pause]

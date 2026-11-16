@@ -279,6 +279,9 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{C}/generate-manifesto"): TENANT("manifesto:manage"),
     ("GET", f"{C}/user-quota"): TENANT("tenant:view"),
     ("GET", f"{C}/credits"): TENANT("billing:view"),
+    ("PUT", f"{C}/credits/settings"): TENANT("tenant:manage"),  # #746 harcama ayarları (yönetim verisi)
+    ("POST", f"{C}/credits/lift-weekly-cap"): TENANT("tenant:manage"),
+    ("POST", f"{C}/credits/resume-paused"): TENANT("tenant:manage"),
     ("GET", f"{C}/brain/settings"): TENANT("tenant:view"),
     ("PUT", f"{C}/brain/settings"): TENANT("brain:manage"),
     ("GET", f"{C}/users"): TENANT("tenant:view"),

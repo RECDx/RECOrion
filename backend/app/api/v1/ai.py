@@ -22,7 +22,7 @@ from app.db.models import (
     Tenant, TenantLead,
 )
 from app.db.session import get_db
-from app.services import credits, llm_gateway
+from app.services import credit_control, credits, llm_gateway
 from app.services.llm_gateway import CHAT_TYPES, HQ_SLUG, LLMContext, ModelNotAllowed
 
 router = APIRouter(tags=["AI & Kredi"])
@@ -102,7 +102,45 @@ async def company_credits(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_d
         } for c in recent],
         "ledger": [{"created_at": e.created_at, "entry_type": e.entry_type, "amount": _f(e.amount),
                     "period": e.period, "note": e.note} for e in ledger],
+        # #746: kredi / haftalık sınır nedeniyle duraklayan işler ve EVREN koruma sınırı
+        "credit_paused": [{"id": str(p.id), "name": p.name, "kind": p.kind} for p in await credit_control.credit_paused(db, tenant.id)],
+        "parallel_limit": await credit_control.parallel_limit(db, tenant),
     }
+
+
+class SpendSettingsIn(BaseModel):
+    weekly_cap_pct: Optional[int] = Field(default=None, ge=5, le=100)  # boş = kapalı (varsayılan)
+    auto_resume_after_topup: bool = False
+
+
+async def _credit_settings_write(db: AsyncSession, tenant: Tenant, **values) -> None:
+    settings = dict(tenant.settings or {})
+    settings["credit"] = {**(settings.get("credit") or {}), **values}
+    tenant.settings = settings
+    await db.commit()
+
+
+@router.put("/company/{tenant_id}/credits/settings")
+async def put_spend_settings(tenant_id: uuid.UUID, payload: SpendSettingsIn, db: AsyncSession = Depends(get_db)):
+    """#746: haftalık harcama sınırı (aylık hakkın %'si; boş = kapalı) ve kredi yüklenince kendiliğinden devam."""
+    tenant = await _get_tenant(db, tenant_id)
+    await _credit_settings_write(db, tenant, weekly_cap_pct=payload.weekly_cap_pct, auto_resume_after_topup=payload.auto_resume_after_topup)
+    return credits.spend_settings(tenant)
+
+
+@router.post("/company/{tenant_id}/credits/lift-weekly-cap")
+async def lift_weekly_cap(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """#746: haftalık sınırı yalnız bu hafta için kaldırır; sınır nedeniyle duraklayan işler devam eder."""
+    tenant = await _get_tenant(db, tenant_id)
+    await _credit_settings_write(db, tenant, weekly_cap_lifted_week=credits.week_key())
+    return await credit_control.resume_credit_paused(db, tenant, current.actor_id)
+
+
+@router.post("/company/{tenant_id}/credits/resume-paused")
+async def resume_paused(tenant_id: uuid.UUID, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """#746: kredi yüklendikten sonra kredi / sınır nedeniyle duraklayan işleri tek tıkla devam ettirir."""
+    tenant = await _get_tenant(db, tenant_id)
+    return await credit_control.resume_credit_paused(db, tenant, current.actor_id)
 
 
 class TopupPayload(BaseModel):

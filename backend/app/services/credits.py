@@ -27,6 +27,8 @@ from app.db.models import Actor, CreditLedgerEntry, Plan, Tenant
 logger = logging.getLogger("recorion.credits")
 
 TZ = ZoneInfo("Europe/Istanbul")
+# #746: bakiye bunun altındaysa "kredi bitti" sayılır (bir AI adımı tipik olarak onlarca–yüzlerce kredi harcar)
+EXHAUSTED_BELOW = Decimal(50)
 INPUT_WEIGHT = Decimal("1.0")
 OUTPUT_WEIGHT = Decimal("2.0")
 
@@ -48,6 +50,67 @@ async def _sum(db: AsyncSession, *conditions) -> Decimal:
 
 async def balance(db: AsyncSession, tenant_id: uuid.UUID) -> Decimal:
     return await _sum(db, CreditLedgerEntry.tenant_id == tenant_id)
+
+
+# ---------------------------------------------------------------- #746: harcama ayarları, haftalık sınır, tahmin
+def week_key(now: Optional[datetime] = None) -> str:
+    """ISO hafta anahtarı (İstanbul saati), ör. 2026-W47."""
+    y, w, _ = (now or datetime.now(TZ)).astimezone(TZ).isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def week_start(now: Optional[datetime] = None) -> datetime:
+    from datetime import timedelta
+
+    n = (now or datetime.now(TZ)).astimezone(TZ)
+    return (n - timedelta(days=n.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def spend_settings(tenant: Tenant) -> dict:
+    """Şirketin harcama ayarları (tenant.settings['credit']): haftalık sınır (aylık hakkın %'si; None = kapalı, varsayılan),
+    kredi yüklenince duraklayan işlerin kendiliğinden devam etmesi, bu hafta için sınırın kaldırılması."""
+    c = ((tenant.settings or {}).get("credit") or {})
+    cap = c.get("weekly_cap_pct")
+    return {"weekly_cap_pct": int(cap) if cap not in (None, "", 0) else None,
+            "auto_resume_after_topup": bool(c.get("auto_resume_after_topup", False)),
+            "weekly_cap_lifted_week": c.get("weekly_cap_lifted_week")}
+
+
+async def week_used(db: AsyncSession, tenant_id: uuid.UUID, now: Optional[datetime] = None) -> Decimal:
+    return -await _sum(db, CreditLedgerEntry.tenant_id == tenant_id, CreditLedgerEntry.entry_type == "USAGE",
+                       CreditLedgerEntry.created_at >= week_start(now))
+
+
+async def weekly_cap_block(db: AsyncSession, tenant: Tenant, estimate: Decimal = Decimal(0)) -> Optional[str]:
+    """Haftalık harcama sınırı açık ve bu hafta doluysa kullanıcıya gösterilecek metin; değilse None."""
+    s = spend_settings(tenant)
+    if not s["weekly_cap_pct"] or s["weekly_cap_lifted_week"] == week_key():
+        return None
+    grant = await _sum(db, CreditLedgerEntry.tenant_id == tenant.id, CreditLedgerEntry.period == current_period(),
+                       CreditLedgerEntry.entry_type == "MONTHLY_GRANT")
+    if grant <= 0:
+        return None
+    cap = grant * Decimal(s["weekly_cap_pct"]) / 100
+    used = await week_used(db, tenant.id)
+    if used + estimate <= cap:
+        return None
+    return (f"Şirketin haftalık harcama sınırına ulaşıldı (aylık hakkın %{s['weekly_cap_pct']}'i, {float(cap):,.0f} kredi). "
+            "Yeni AI işleri bu hafta başlamaz; şirket yöneticisi Kredi ve Kullanım ekranından sınırı bu hafta için kaldırabilir.").replace(",", ".")
+
+
+def forecast_depletion(used: Decimal, balance_: Decimal, now: Optional[datetime] = None) -> Optional[str]:
+    """Bu dönemki harcama hızıyla bakiyenin biteceği gün (YYYY-MM-DD); hız yoksa None."""
+    from datetime import timedelta
+
+    n = (now or datetime.now(TZ)).astimezone(TZ)
+    elapsed_days = max((n - n.replace(day=1, hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400, 0.25)
+    rate = used / Decimal(str(elapsed_days))
+    if rate <= 0 or balance_ <= 0:
+        return None
+    days = float(balance_ / rate)
+    if days > 366:
+        return None
+    return (n + timedelta(days=days)).date().isoformat()
 
 
 async def ensure_period_grant(db: AsyncSession, tenant: Tenant) -> None:
@@ -90,6 +153,12 @@ class CreditSummary:
     balance: Decimal
     percent_used: float
     unlimited: bool = False
+    # #746: kullanım göstergesi
+    depletes_on: Optional[str] = None
+    level: str = "OK"  # OK, WARN80, WARN95, EXHAUSTED
+    week_used: Decimal = Decimal(0)
+    settings: Optional[dict] = None
+    weekly_cap_reached: bool = False
 
     def as_dict(self) -> dict:
         return {k: (float(v) if isinstance(v, Decimal) else v) for k, v in self.__dict__.items()}
@@ -103,10 +172,15 @@ async def summary(db: AsyncSession, tenant: Tenant, unlimited: bool = False) -> 
                        CreditLedgerEntry.entry_type == "USAGE")
     total = await balance(db, tenant.id)
     monthly_remaining = max(Decimal(0), grant - used)
+    pct = round(float(used / grant * 100), 1) if grant > 0 else 0.0
+    level = "EXHAUSTED" if (not unlimited and total < EXHAUSTED_BELOW) else ("WARN95" if pct >= 95 else ("WARN80" if pct >= 80 else "OK"))
     return CreditSummary(
         period=period, monthly_grant=grant, used_this_period=used, monthly_remaining=monthly_remaining,
         topup_balance=max(Decimal(0), total - monthly_remaining), balance=total,
-        percent_used=round(float(used / grant * 100), 1) if grant > 0 else 0.0, unlimited=unlimited,
+        percent_used=pct, unlimited=unlimited,
+        depletes_on=None if unlimited else forecast_depletion(used, total), level="OK" if unlimited else level,
+        week_used=await week_used(db, tenant.id), settings=spend_settings(tenant),
+        weekly_cap_reached=False if unlimited else bool(await weekly_cap_block(db, tenant)),
     )
 
 
@@ -121,6 +195,11 @@ async def topup(db: AsyncSession, tenant: Tenant, amount: Decimal, actor_id: Opt
     db.add(CreditLedgerEntry(tenant_id=tenant.id, entry_type="TOPUP", amount=amount, period=current_period(),
                              created_by_actor_id=actor_id, note=note or "Ek kredi yüklemesi"))
     await db.commit()
+    # #746: şirket ayarı açıksa kredi nedeniyle duraklayan işler yüklemeden sonra kendiliğinden devam eder
+    if spend_settings(tenant)["auto_resume_after_topup"]:
+        from app.services import credit_control
+
+        await credit_control.resume_credit_paused(db, tenant, actor_id)
 
 
 async def check_alerts(db: AsyncSession, tenant: Tenant) -> None:
@@ -133,6 +212,8 @@ async def check_alerts(db: AsyncSession, tenant: Tenant) -> None:
         return
     if s.balance <= 0:
         level, code = "100", "CREDIT_EXHAUSTED"
+    elif s.percent_used >= 95:  # #746
+        level, code = "95", "CREDIT_LOW"
     elif s.percent_used >= 80:
         level, code = "80", "CREDIT_LOW"
     else:
@@ -154,3 +235,19 @@ async def check_alerts(db: AsyncSession, tenant: Tenant) -> None:
         "company_name": tenant.name, "period": s.period,
         "percent": int(s.percent_used), "remaining": f"{float(s.balance):,.0f}".replace(",", "."),
     })
+    # #746: aktif projesi olan proje yöneticilerine de kısa bildirim (tercih ettikleri kanaldan)
+    from app.db.models import Project
+    from app.services import task_flow
+
+    pms = {pm for (pm,) in (await db.execute(select(Project.manager_actor_id).where(
+        Project.tenant_id == tenant.id, Project.status.in_(("ACTIVE", "PAUSED")), Project.manager_actor_id.isnot(None)))).all()}
+    pms.discard(admin.id if admin else None)
+    text = (f"RECOrion: {tenant.name} kredisi bitti; projeler duraklatılır. Ek kredi için şirket yöneticinize başvurun."
+            if level == "100" else
+            f"RECOrion: {tenant.name} bu ayın kredi hakkının %{int(s.percent_used)}'ini kullandı"
+            + (f"; bu hızla {s.depletes_on} tarihinde biter." if s.depletes_on else "."))
+    for pm in pms:
+        try:
+            await task_flow.notify(db, pm, text)
+        except Exception as exc:  # bildirim hatası kullanımı engellemez
+            logger.warning("Kredi bildirimi gönderilemedi (%s): %s", pm, exc)

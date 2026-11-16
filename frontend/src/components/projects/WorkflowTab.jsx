@@ -167,7 +167,13 @@ export default function WorkflowTab({ project }) {
             describe={(st) => ({ agent: st._t.assignee?.name, reviewer: st._t.reviewer?.name, approver: st._t.approver?.name,
               status: st._t.status, statusLabel: st._t.status_label })} />
         )}
-        {project.status === 'PAUSED' && <div className="pj-note medium">Proje duraklatıldı: o an süren AI çağrısı biter ve sonucu taslak olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz. Devam ettirince kaldığı yerden sürer.</div>}
+        {project.status === 'PAUSED' && (project.pause_reason === 'CREDIT' || project.pause_reason === 'WEEKLY_CAP' ? (
+          <div className="pj-note danger" role="alert">
+            {project.pause_reason === 'CREDIT'
+              ? 'Şirketin kredisi bittiği için proje duraklatıldı. Şirket yöneticisi Kredi ve Kullanım ekranından ek kredi yükleyince proje kaldığı yerden sürer.'
+              : 'Şirketin haftalık harcama sınırı dolduğu için proje duraklatıldı. Şirket yöneticisi sınırı bu hafta için kaldırabilir; yeni haftada devam ettirilebilir.'}
+          </div>
+        ) : <div className="pj-note medium">Proje duraklatıldı: o an süren AI çağrısı biter ve sonucu taslak olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz. Devam ettirince kaldığı yerden sürer.</div>)}
         {view === 'list' && flow.tasks.map((t) => (
           <div key={t.id} className="pj-step">
             <div className="pj-step-key">{t.order_index}</div>
