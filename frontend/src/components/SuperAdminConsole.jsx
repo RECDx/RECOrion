@@ -68,6 +68,7 @@ import { confirmDialog, notify, promptDialog, toast } from '../ui/feedback';
 import ThemeToggle from '../ui/ThemeToggle';
 import { RecorionLogo, RecorionMark } from '../ui/Brand';
 import OdooProductPicker from './OdooProductPicker';
+import CreditPacksAdmin from './CreditPacksAdmin';
 import PlanAppOffers from './integrations/PlanAppOffers';
 import CatalogAdmin from './catalog/CatalogAdmin';
 import TemplatesAdmin from './projects/TemplatesAdmin';
@@ -100,6 +101,7 @@ const TAB_SLUG_MAP = {
   REGULATIONS: 'regulations',
   INTEGRATION_CATALOG: 'integration-catalog',
   APP_REQUESTS: 'app-requests',
+  CREDIT_STORE: 'credit-store',  // #747
   PERMISSIONS: 'permissions',
   ROLES: 'roles',
   PLANS: 'plans',
@@ -123,6 +125,7 @@ const SLUG_TAB_MAP = {
   'regulations': 'REGULATIONS',
   'integration-catalog': 'INTEGRATION_CATALOG',
   'app-requests': 'APP_REQUESTS',
+  'credit-store': 'CREDIT_STORE',  // #747
   'permissions': 'PERMISSIONS',
   'roles': 'ROLES',
   'plans': 'PLANS',
@@ -2239,6 +2242,18 @@ export default function SuperAdminConsole({
               )}
             </button>
 
+            {/* #747 KREDİ PAKETLERİ VE SİPARİŞLERİ */}
+            <button
+              onClick={() => { switchTab('CREDIT_STORE'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'CREDIT_STORE' ? 'active' : ''}`}
+              title="Kredi Paketleri ve Siparişleri"
+            >
+              <div className="super-admin-nav-item-left">
+                <Coins style={{ width: 17, height: 17, color: 'var(--ac-34d399)' }} />
+                {!sidebarCollapsed && <span>Kredi Paketleri ve Siparişleri</span>}
+              </div>
+            </button>
+
             {/* İZİN KATALOĞU */}
             <button
               onClick={() => { switchTab('PERMISSIONS'); setSearchQuery(''); }}
@@ -2475,6 +2490,7 @@ export default function SuperAdminConsole({
               {activeTab === 'PERMISSIONS' && 'Sistem Yetki Kataloğu (RBAC)'}
               {activeTab === 'ROLES' && 'Yetki Rolleri Yönetimi (RBAC)'}
               {activeTab === 'PLANS' && 'Kiralama Paketleri Yönetimi'}
+              {activeTab === 'CREDIT_STORE' && 'Kredi Paketleri ve Siparişleri'}
               {activeTab === 'MODELS' && 'RECAi Adları ve EVREN Model Kataloğu'}
               {activeTab === 'LLM_PRICES' && 'LLM TL Fiyatları'}
               {activeTab === 'AI_MODEL_SETTINGS' && 'Genel AI Modelleri & Yapay Zeka Kullanımı'}
@@ -4611,6 +4627,7 @@ export default function SuperAdminConsole({
           {activeTab === 'REGULATIONS' && <RegulationAdmin />}
           {activeTab === 'INTEGRATION_CATALOG' && <IntegrationCatalogAdmin />}
           {activeTab === 'APP_REQUESTS' && <AppRequestsAdmin />}
+          {activeTab === 'CREDIT_STORE' && <CreditPacksAdmin />}
           {activeTab === 'MODEL_ROUTER' && <ModelRouterPanel />}
 
           {/* TAB 6: EVREN MODELLERİ (Madde 8) */}
@@ -7037,6 +7054,19 @@ export default function SuperAdminConsole({
                       min="0"
                       value={planForm.features?.max_documents_per_agent ?? 20}
                       onChange={(e) => setPlanForm({ ...planForm, features: { ...planForm.features, max_documents_per_agent: Number(e.target.value) } })}
+                      className="super-admin-input"
+                      style={{ marginTop: 4 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                    Aynı anda en fazla AI adımı (EVREN koruma sınırı, #746)
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      placeholder={({ STARTER: '2', PRO: '5', ENTERPRISE: '10' })[planForm.code] || '5'}
+                      value={planForm.features?.max_parallel_ai ?? ''}
+                      onChange={(e) => setPlanForm({ ...planForm, features: { ...planForm.features, max_parallel_ai: e.target.value === '' ? null : Number(e.target.value) } })}
                       className="super-admin-input"
                       style={{ marginTop: 4 }}
                     />

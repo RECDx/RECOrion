@@ -282,6 +282,18 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{C}/credits/settings"): TENANT("tenant:manage"),  # #746 harcama ayarları (yönetim verisi)
     ("POST", f"{C}/credits/lift-weekly-cap"): TENANT("tenant:manage"),
     ("POST", f"{C}/credits/resume-paused"): TENANT("tenant:manage"),
+    ("GET", f"{C}/credit-store"): TENANT("billing:view"),  # #747 ek kredi satın alma (yönetim verisi)
+    ("POST", f"{C}/credit-orders"): TENANT("tenant:manage"),
+    ("POST", f"{C}/plan-upgrade-orders"): TENANT("tenant:manage"),  # #747 ek
+    ("POST", f"{C}/credit-orders/{{order_id}}/cancel"): TENANT("tenant:manage"),
+    ("GET", f"{P}/system/credit-packs"): SUPER_ADMIN,
+    ("POST", f"{P}/system/credit-packs"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/credit-packs/{{pack_id}}"): SUPER_ADMIN,
+    ("GET", f"{P}/system/credit-orders"): SUPER_ADMIN,
+    ("POST", f"{P}/system/credit-orders/{{order_id}}/load"): SUPER_ADMIN,
+    ("POST", f"{P}/system/credit-orders/{{order_id}}/cancel"): SUPER_ADMIN,
+    ("GET", f"{P}/system/billing-settings"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/billing-settings"): SUPER_ADMIN,
     ("GET", f"{C}/brain/settings"): TENANT("tenant:view"),
     ("PUT", f"{C}/brain/settings"): TENANT("brain:manage"),
     ("GET", f"{C}/users"): TENANT("tenant:view"),

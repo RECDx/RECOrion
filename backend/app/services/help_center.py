@@ -37,7 +37,7 @@ SCREENS: Dict[Tuple[str, str], List[str]] = {
     ("merkez", "Meslek Tanımları"): ["super/PROFESSIONS"], ("merkez", "Departman & Unvan"): ["super/CATALOG"],
     ("merkez", "Proje Şablonları"): ["super/PROJECT_TEMPLATES"], ("merkez", "Mevzuat Paketleri"): ["super/REGULATIONS"],
     ("merkez", "Bağlantı Kataloğu"): ["super/INTEGRATION_CATALOG"], ("merkez", "Uygulama Talepleri"): ["super/APP_REQUESTS"],
-    ("merkez", "Kiralama Paketleri"): ["super/PLANS"], ("merkez", "İzin Kataloğu (RBAC)"): ["super/PERMISSIONS"],
+    ("merkez", "Kiralama Paketleri"): ["super/PLANS"], ("merkez", "Kredi Paketleri ve Siparişleri"): ["super/CREDIT_STORE"], ("merkez", "İzin Kataloğu (RBAC)"): ["super/PERMISSIONS"],
     ("merkez", "Yetki Rolleri"): ["super/ROLES"], ("merkez", "E-Posta Şablonları"): ["super/EMAIL_TEMPLATES"],
     ("merkez", "Zamanlayıcılar (Schedules)"): ["super/SCHEDULES"], ("merkez", "Model Yönlendirici"): ["super/MODEL_ROUTER"],
     ("merkez", "Genel AI Modelleri"): ["super/AI_MODEL_SETTINGS"], ("merkez", "Yönetici Asistanı"): ["super/AI_ASSISTANT"],

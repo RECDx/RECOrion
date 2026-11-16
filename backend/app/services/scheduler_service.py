@@ -150,6 +150,11 @@ async def scheduler_loop() -> None:
                 started = await send_project_start_reminders()
                 if started:
                     logger.info("Zamanlayıcı %s proje başlangıç bildirimi gönderdi.", started)
+                from app.services import credit_store  # #747: ödeme süresi dolan ek kredi siparişleri iptal
+                async with AsyncSessionLocal() as db:
+                    expired = await credit_store.expire_due(db)
+                if expired:
+                    logger.info("Zamanlayıcı ödeme süresi dolan %s kredi siparişini iptal etti.", expired)
         except asyncio.CancelledError:
             raise
         except Exception as exc:

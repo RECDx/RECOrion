@@ -232,6 +232,24 @@ class OdooService:
             return False
 
     @classmethod
+    def create_invoice_draft(cls, order_id: int) -> Dict[str, Any]:
+        """#747: onaylanmış satış siparişinden taslak fatura (muhasebe kontrol edip keser). Odoo'nun "Fatura oluştur"
+        sihirbazı (sale.advance.payment.inv, 'delivered') kullanılır; fatura kesilmez, taslak kalır."""
+        uid, models, cfg = cls._get_connection()
+        if not uid or not models:
+            return {"success": False, "error": "Odoo bağlantısı kurulamadı"}
+        ctx = {"context": {"active_model": "sale.order", "active_ids": [order_id], "active_id": order_id}}
+        try:
+            wiz = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.advance.payment.inv', 'create',
+                                    [{'advance_payment_method': 'delivered'}], ctx)
+            models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.advance.payment.inv', 'create_invoices', [[wiz]], ctx)
+            order = models.execute_kw(cfg['db'], uid, cfg['password'], 'sale.order', 'read', [[order_id]], {'fields': ['invoice_ids']})
+            return {"success": True, "invoice_ids": (order[0].get('invoice_ids') if order else []) or []}
+        except Exception as e:
+            logger.warning(f"Odoo taslak fatura oluşturulamadı (Order ID={order_id}): {e}")
+            return {"success": False, "error": str(e)}
+
+    @classmethod
     def confirm_sale_order(cls, order_id: int) -> bool:
         """
         Ödeme onaylandığında Odoo siparişini onaylar (action_confirm).

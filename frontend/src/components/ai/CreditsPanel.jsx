@@ -3,6 +3,7 @@ import { Coins, RefreshCw } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, DataTable, EmptyState } from '../../ui/components';
 import { toast } from '../../ui/feedback';
+import CreditOrders from './BuyCredits';
 import { ENTRY_LABELS, fmtCredits, fmtDate, fmtTokens, purposeLabel } from './format';
 import './ai.css';
 
@@ -125,7 +126,8 @@ export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0
       {s.level === 'EXHAUSTED' && (
         <div className="pj-note danger" role="alert">
           <strong>Kredi bitti.</strong> Şirketin aktif proje ve Case'leri duraklatıldı; işler kredi yüklenince kaldığı yerden sürer.
-          Ek kredi ya da paket yükseltme için RECDx ile iletişime geçin (çevrimiçi satın alma yakında bu ekrandan yapılabilecek).
+          {canManage ? 'Aşağıdaki "Ek kredi" kartından ek kredi alabilirsiniz; paket yükseltme için RECDx ile iletişime geçin.'
+            : 'Ek kredi için şirket yöneticinize başvurun.'}
         </div>
       )}
       {s.level !== 'EXHAUSTED' && s.weekly_cap_reached && (
@@ -156,6 +158,7 @@ export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0
       >
         <div className="ai-stack">{stats}</div>
       </Card>
+      {!s.unlimited && <CreditOrders tenantId={tenantId} canManage={canManage} onChanged={load} />}
       {canManage && !s.unlimited && <SpendSettings tenantId={tenantId} settings={s.settings} onSaved={load} />}
 
       <div className="ai-breakdowns">

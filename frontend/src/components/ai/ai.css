@@ -79,3 +79,10 @@
 /* #744 Beyin AI rapor bloğu */
 .ai-report { margin-top: 10px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-card); }
 .ai-report .ui-table { font-size: 0.8rem; }
+
+/* #747: ek kredi paket seçimi ve havale bilgisi */
+.ai-pick { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.ai-pick:hover { border-color: var(--text-dim); }
+.ai-pick.active { border-color: var(--ac-818cf8, #818cf8); box-shadow: 0 0 0 1px var(--ac-818cf8, #818cf8); }
+.ai-pre { white-space: pre-wrap; margin: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-subtle);
+  background: rgb(var(--rgb-ov) / 0.03); color: var(--text-main); font-family: inherit; font-size: 0.85rem; }

@@ -844,6 +844,51 @@ class CreditLedgerEntry(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class CreditPack(Base):
+    """İSTEK #747: satılan ek kredi paketi (Merkez tanımı). Fiyat KDV hariç; Odoo ürünü satış siparişi satırıdır."""
+    __tablename__ = "credit_packs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(32), nullable=False, unique=True)
+    name = Column(String(128), nullable=False)
+    credits = Column(Integer, nullable=False)
+    price_try = Column(Numeric(14, 2))
+    odoo_product_id = Column(Integer)
+    plan_codes = Column(JSONB, nullable=False, default=list)  # boş = tüm paketler
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CreditOrder(Base):
+    """İSTEK #747: ek kredi siparişi. Havale/EFT'de Merkez onayıyla, kartta ödeme bildirimiyle tek bir TOPUP yazar."""
+    __tablename__ = "credit_orders"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    pack_id = Column(UUID(as_uuid=True), ForeignKey("credit_packs.id", ondelete="SET NULL"))
+    pack_name = Column(String(128), nullable=False)
+    credits = Column(Integer, nullable=False)
+    price_try = Column(Numeric(14, 2), nullable=False)
+    payment_method = Column(String(16), nullable=False)  # TRANSFER, CARD
+    kind = Column(String(16), nullable=False, default="CREDIT")  # CREDIT, PLAN_UPGRADE (#747 ek: hemen geçerli, oransal)
+    target_plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL"))
+    from_plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL"))
+    status = Column(String(16), nullable=False, default="PENDING", index=True)  # PENDING, LOADED, CANCELLED, EXPIRED
+    odoo_order_id = Column(Integer)
+    odoo_order_name = Column(String(64))
+    odoo_invoice_ids = Column(JSONB)
+    ledger_entry_id = Column(UUID(as_uuid=True), unique=True)
+    created_by_actor_id = Column(UUID(as_uuid=True))
+    decided_by_actor_id = Column(UUID(as_uuid=True))
+    decided_at = Column(DateTime(timezone=True))
+    expires_at = Column(DateTime(timezone=True))
+    note = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class IntegrationConnection(Base):
     """Şirketin dış sistem bağlantısı (ADIM 10.1). secret kimlik kasasında şifreli; API'de asla dönmez."""
     __tablename__ = "integration_connections"

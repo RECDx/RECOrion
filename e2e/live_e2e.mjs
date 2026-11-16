@@ -2064,6 +2064,17 @@ try {
       await shot(ra.page, '45-kredi-kullanim');
       step(/kullanıldı/.test(usageNote) && /AI adımı çalışır/.test(usageNote) && spendCard === 1,
         'Kredi ve Kullanım (#746): kullanım tahmini, eş zamanlı AI sınırı ve şirket yöneticisine harcama ayarları görünüyor', usageNote.slice(0, 160));
+      // #747: Ek kredi kartı ve Paketi yükselt penceresi (sipariş VERİLMEZ: gerçek Odoo'da satış siparişi açılmasın)
+      const extraCard = ra.page.locator('.ui-card', { hasText: 'Ek kredi' }).filter({ has: ra.page.getByRole('button', { name: 'Ek kredi al' }) });
+      await extraCard.waitFor({ timeout: 20000 });
+      await extraCard.getByRole('button', { name: 'Paketi yükselt' }).click();
+      const upDlg = ra.page.getByRole('dialog');
+      await upDlg.getByText(/Şu anki paketiniz|geçebileceğiniz üst paket yok/).first().waitFor({ timeout: 20000 });
+      const upText = (await upDlg.innerText()).replace(/\s+/g, ' ');
+      await shot(ra.page, '46-paket-yukselt');
+      await upDlg.getByRole('button', { name: 'Vazgeç' }).click().catch(() => upDlg.getByRole('button', { name: 'Kapat' }).click());
+      step(/Ek kredi al/.test(await extraCard.innerText()) && /(gün\) fark|üst paket yok)/.test(upText),
+        'Ek kredi (#747): Ek kredi al ve Paketi yükselt (oransal fark) şirket yöneticisine açık; sipariş verilmedi', upText.slice(0, 160));
     } catch (e) {
       await shot(ra.page, '44-sirket-rolleri-hata').catch(() => {});
       throw e;

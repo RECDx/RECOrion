@@ -152,6 +152,7 @@ Bazı menülerin sağında sayı görünür:
 | Kayıtlı Şirketler | Toplam şirket sayısı |
 | Sektör Tanımları / Meslek Tanımları | Tanımlı sektör / meslek sayısı |
 | Kiralama Paketleri | Paket sayısı |
+| Kredi Paketleri ve Siparişleri | — (ek kredi paketleri, kredi ve paket yükseltme siparişleri, banka bilgisi) |
 | İzin Kataloğu (RBAC) | İzin sayısı |
 | Yetki Rolleri | Sistem rolü sayısı |
 | E-Posta Şablonları / Zamanlayıcılar (Schedules) | Şablon / kural sayısı |
@@ -1314,6 +1315,29 @@ Silinemeyen pakette "⚠️ KİRALAMA PAKETİ SİLİNEMEZ! '<ad>' (<kod>) kirala
 7. **Paketi Kaydet**. Paket resmi sitede ve şirket kartlarında seçilebilir olur.
 
 > **Dikkat:** Paketten bir RECAi adını ya da yeteneği kaldırırsanız bu paketteki şirketler o adı ve yeteneği hemen kaybeder.
+
+## Kredi Paketleri ve Siparişleri
+
+**Bu ekran ne işe yarar?** Müşterilerin satın aldığı ek kredi paketlerini tanımlarsınız, havale/EFT ile verilen kredi ve paket yükseltme siparişlerinde ödeme gelince krediyi yüklersiniz ve müşteriye gösterilen banka bilgilerini girersiniz (İSTEK #747).
+
+**Ne zaman kullanırım?** Kredi paketi fiyatı veya Odoo ürünü değişince; havale/EFT ödemesi hesaba geçince; müşteri sipariş iptali istediğinde.
+
+**Ekranın bölümleri:**
+
+1. **Kredi paketleri** tablosu: **Ad** (kod), **Kredi**, **Fiyat (KDV hariç)**, **Odoo ürünü**, **Geçerli paketler** (boşsa tümü), **Durum** (**Satışta** / **Eksik bilgi** / **Kapalı**), **Düzenle**; sağ üstte **Yeni kredi paketi**. Başlangıçta 5.000 / 10.000 / 15.000 / 20.000 kredilik paketler fiyatsız ve kapalı gelir.
+2. **Kredi siparişleri** tablosu: **Tarih**, **Şirket**, **Sipariş** (kredi paketi ya da "Paket yükseltme: …"), **Odoo sipariş**, **Tutar (KDV hariç)**, **Ödeme** (Havale/EFT, Kart), **Durum** (**Ödeme bekleniyor**, **Kredi yüklendi**, **İptal edildi**, **Süresi doldu**); süzgeç: **Ödeme bekleyenler** / **Kredi yüklenenler** / **Tümü**.
+3. **Havale/EFT banka bilgileri**: müşteriye sipariş anında ekranda ve e-postada gösterilen metin; **Kaydet**. Altında kartla ödemenin açık/kapalı olduğu yazar.
+
+**Kredi paketi formu:** **Kod**, **Ad**, **Kredi miktarı** (en az 100), **Fiyat (₺, KDV hariç; boşsa satışa kapalı)**, **Odoo satış ürünü** (Kiralama Paketleri'ndeki gibi Odoo ürün listesinden seçilir; satış siparişi satırı bu üründür), **Geçerli abonelik paketleri** (Başlangıç / Profesyonel / Kurumsal; hiçbiri işaretlenmezse tümü), **Sıra**, **Satışta**. Fiyat ve Odoo ürünü olmadan satışa açılamaz: **"Satışa açmak için fiyat ve Odoo ürünü girilmeli."**
+
+| Düğme | Ne yapar | Dikkat |
+|---|---|---|
+| **Ödeme alındı, krediyi yükle** | Odoo satış siparişini onaylar, Odoo'da taslak fatura oluşturur (muhasebe kontrol edip keser), şirketin kredi defterine tek bir **Ek kredi** kaydı yazar ve müşteriye e-posta gönderir. Paket yükseltme siparişinde şirketin paketi hemen değişir ve bu ayın oransal kredi farkı yüklenir. | Bir sipariş yalnız bir kez yüklenir. Şirket "kredi yüklenince duraklayan işler kendiliğinden devam etsin" ayarını açtıysa duraklayan projeler kendiliğinden sürer. |
+| **İptal** | Siparişi gerekçeyle iptal eder; Odoo siparişi de iptal edilir. | Yalnız ödemesi beklenen sipariş. |
+
+**Bakiye nerede güncellenir?** Kredi bakiyesi şirket kartında tutulmaz; kredi defterinden hesaplanır. Kredi yüklemek deftere **Ek kredi** (TOPUP) kaydı eklemektir; şirket kartı, Kredi ve Kullanım ekranı ve raporlar bakiyeyi defterden okur. Ek krediler dönem sonunda silinmez.
+
+**Kendiliğinden olanlar:** Ödemesi 7 gün içinde gelmeyen sipariş zamanlayıcı tarafından **Süresi doldu** yapılır ve Odoo siparişi iptal edilir. Kartla ödeme (sanal POS) sağlayıcı seçilip açılınca ödeme bildirimiyle kredi senin onayın gerekmeden yüklenir.
 
 ## İzin Kataloğu (RBAC)
 
