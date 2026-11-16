@@ -260,3 +260,21 @@ def test_step_done_auto_proposal(client, db, world, odoo_db, fake_extract):
     client.portal.call(done)
     rows = _wait(client, h, pid, lambda rs: len(rs) == 3)
     assert {x["trigger"] for x in rows} == {"STEP_DONE"} and {x["created_by_name"] for x in rows} == {"RECAi"}
+
+
+def test_stale_extracting_marked_failed(client, db, world, odoo_db, fake_extract):
+    """Arka plan işi kaybolursa (EVREN bağlantısı takıldı, sunucu yeniden başladı) kayıt sonsuza dek "hazırlanıyor" kalmaz."""
+    w = world
+    h = w["admin"]["h"]
+    mid, _ = _active_mapping(client, w)
+    pid, task_id = _project_with_done_step(client, db, w)
+    assert client.post(f"/api/v1/tasks/{task_id}/transfers", headers=h, json={"mapping_id": mid}).status_code == 202
+    rows = _wait(client, h, pid, lambda rs: len(rs) == 3 and all(x["status"] != "EXTRACTING" for x in rs))
+    fresh, stale = rows[0]["id"], rows[1]["id"]
+    _exec(db, "UPDATE integration_transfers SET status = 'EXTRACTING', created_at = now() - interval '30 minutes' WHERE id = %s", stale)
+    _exec(db, "UPDATE integration_transfers SET status = 'EXTRACTING', created_at = now() WHERE id = %s", fresh)
+    by = {x["id"]: x for x in client.get(f"/api/v1/projects/{pid}/transfers", headers=h).json()}
+    assert by[stale]["status"] == "FAILED" and "yeniden başlatın" in by[stale]["error"]
+    assert by[fresh]["status"] == "EXTRACTING"
+    log = client.get(f"/api/v1/company/{w['tenant']}/transfers", headers=h).json()
+    assert next(x for x in log if x["id"] == stale)["status"] == "FAILED"

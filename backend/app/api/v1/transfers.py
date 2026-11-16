@@ -75,8 +75,8 @@ async def transfer_options(project_id: uuid.UUID, user: CurrentUser = Depends(ge
 async def project_transfers(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await psvc.load(db, user, project_id)
     rows = (await db.execute(select(IntegrationTransfer).where(IntegrationTransfer.project_id == project_id)
-                             .order_by(IntegrationTransfer.created_at.desc()))).scalars()
-    return [tsvc.out(t) for t in rows]
+                             .order_by(IntegrationTransfer.created_at.desc()))).scalars().all()
+    return [tsvc.out(t) for t in await tsvc.expire_stale(db, list(rows))]
 
 
 class ProposeIn(BaseModel):
@@ -218,7 +218,8 @@ async def company_transfers(tenant_id: uuid.UUID, status: Optional[str] = None, 
     stmt = select(IntegrationTransfer).where(IntegrationTransfer.tenant_id == tenant_id)
     if status:
         stmt = stmt.where(IntegrationTransfer.status == status.upper())
-    return [tsvc.out(t) for t in (await db.execute(stmt.order_by(IntegrationTransfer.created_at.desc()).limit(limit))).scalars()]
+    rows = (await db.execute(stmt.order_by(IntegrationTransfer.created_at.desc()).limit(limit))).scalars().all()
+    return [tsvc.out(t) for t in await tsvc.expire_stale(db, list(rows))]
 
 
 @router.get("/me/transfer-approvals")

@@ -21,7 +21,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -43,10 +43,25 @@ OUTPUT_LIMIT = 30000
 CANCEL_METHODS = {"sale.order": "action_cancel", "purchase.order": "button_cancel"}
 OPEN = ("EXTRACTING", "NEEDS_FIX", "PENDING_APPROVAL", "APPROVED", "RUNNING")
 _tasks: set = set()
+# en kötü durum: asıl model 240 sn zaman aşımı + yedek model 240 sn, iki deneme (~16 dk); bundan uzun "hazırlanıyor" kalan kayıt
+# arka plan işi kaybolmuş (sunucu yeniden başlatıldı/bağlantı takıldı) demektir
+STALE_EXTRACTING = timedelta(minutes=20)
 
 
 class TransferFailed(Exception):
     """İş mantığı hatası (hedef sistem kaydı reddetti): yeniden denenmez."""
+
+
+async def expire_stale(db: AsyncSession, rows: List[IntegrationTransfer]) -> List[IntegrationTransfer]:
+    """Süresi geçmiş "hazırlanıyor" kayıtlarını hatalı işaretler; kullanıcı sonsuza dek beklemez, yeniden başlatabilir."""
+    limit, changed = now() - STALE_EXTRACTING, False
+    for t in rows:
+        if t.status == "EXTRACTING" and t.created_at and t.created_at < limit:
+            t.status, t.error = "FAILED", "Öneri zamanında hazırlanamadı (RECAi yanıt vermedi). Aktarımı yeniden başlatın."
+            changed = True
+    if changed:
+        await db.commit()
+    return rows
 
 
 def now() -> datetime:

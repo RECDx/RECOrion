@@ -725,8 +725,9 @@ try {
   await adm.page.getByRole('heading', { name: 'Günlük kredi tüketimi' }).waitFor({ timeout: 30000 });
   const dash = await adm.page.locator('.dash-root').innerText();
   const completed = Number((dash.match(/TAMAMLANAN\s*\n\s*(\d+)/i) || [])[1] || 0);
-  const budgetRow = adm.page.locator('.viz-bars li', { hasText: NAME });
-  const budgetText = (await budgetRow.count()) ? await budgetRow.first().innerText() : '';
+  // bütçe çubukta dikey çizgiyle gösterilir; tutarı "Tablo olarak göster" satırında (kapalı details: textContent)
+  const budgetRow = adm.page.locator('.viz-table tr', { hasText: NAME });
+  const budgetText = (await budgetRow.count()) ? await budgetRow.first().evaluate((el) => [...el.cells].map((c) => c.textContent).join(' ')) : '';
   const realModel = dash.match(/deepseek|mimo|qwen|gemma|glm/i);
   step(completed >= 1 && /RECAi/.test(dash) && !realModel && /3\.500|15\.000/.test(budgetText + dash),
     'Şirket panosu proje durumlarını, RECAi kırılımını (gerçek model adı olmadan) ve bu koşunun bütçesini gösteriyor',
@@ -1424,7 +1425,8 @@ try {
   const trList = trDlg2.getByRole('list', { name: 'Bu adımın aktarımları' });
   await trList.waitFor({ timeout: 20000 });
   let trRows = [];
-  for (let i = 0; i < 180; i++) {
+  // EVREN meşgulse asıl model 240 sn zaman aşımı + yedek model: 6 dk yetmeyebilir (e2e750'de böyle kaldı); 15 dk beklenir
+  for (let i = 0; i < 450; i++) {
     trRows = ((await api(tx.page, `/api/v1/projects/${trProj.id}/transfers`)).body || []).filter((x) => x.connection_name === otName);
     if (trRows.length && trRows.every((x) => x.status !== 'EXTRACTING')) break;
     await tx.page.waitForTimeout(2000);

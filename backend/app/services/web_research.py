@@ -35,6 +35,7 @@ from app.services.documents import pii
 from app.services.llm_gateway import LLMContext
 
 logger = logging.getLogger("recorion.web_research")
+_tasks: set = set()
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080")
 UA = {"User-Agent": "Mozilla/5.0 (compatible; RECOrionResearch/1.0)"}
@@ -170,7 +171,9 @@ async def start(db: AsyncSession, project: Project, actor_id, question: str, dep
                         f"Web araştırması başlatıldı ({DEPTHS[depth]['label']}, en fazla {cap:.0f} kredi): {masked[:300]}",
                         {"research_id": str(r.id), "max_credits": float(cap)})
     await db.commit()
-    asyncio.get_running_loop().create_task(run(r.id))
+    t = asyncio.get_running_loop().create_task(run(r.id))
+    _tasks.add(t)  # referans tutulmazsa görev çöp toplayıcıyla yarıda kaybolabilir
+    t.add_done_callback(_tasks.discard)
     return r
 
 
