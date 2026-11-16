@@ -121,7 +121,7 @@ Ayrıntılar için Work Space bölümündeki **Üst çubuk ve mod çubuğu** ba�
 ## Bildirimler ve onay pencereleri
 
 - **Kısa bildirimler:** Bir işlem başarılı olunca ekranın köşesinde yeşil, uyarı gerektiğinde sarı, hata olduğunda kırmızı kısa bir mesaj belirir ve birkaç saniye sonra kaybolur. Örnek: **"Proje bilgileri kaydedildi."**
-- **Onay pencereleri:** Geri alınamayan veya önemli işlemlerden önce bir soru penceresi açılır (ör. **"Proje iptal edilsin mi? Bu işlem geri alınamaz."**). **Tamam**/onay düğmesiyle işlem yapılır, **Vazgeç** ile hiçbir şey değişmez. Tehlikeli işlemlerde onay düğmesi kırmızıdır.
+- **Onay pencereleri:** Geri alınamayan veya önemli işlemlerden önce bir soru penceresi açılır (ör. **"Proje tamamlandı olarak kapatılsın mı? Bu işlem geri alınamaz."**). **Tamam**/onay düğmesiyle işlem yapılır, **Vazgeç** ile hiçbir şey değişmez. Tehlikeli işlemlerde onay düğmesi kırmızıdır.
 - **Not/gerekçe pencereleri:** Revizyon, ret veya teslimde bir metin kutusu açılır. Kutuya yazıp onaylarsınız. Gerekçenin zorunlu olduğu yerde boş bırakırsanız işlem yapılmaz.
 - **E-posta ve Telegram:** Onay istekleri, revizyonlar, duran adımlar, proje bitişi ve RECSlip kararları için size e-posta ve (bağladıysanız) Telegram mesajı gelir. Hangi kanaldan alacağınızı proje ekranının **Hazırlık & Bildirim** sekmesinde seçersiniz.
 
@@ -536,9 +536,9 @@ Bu mod, projelerin ve Case'lerin açıldığı, planlandığı, yürütüldüğ�
 | **Planlama** | Beyin AI ile plan hazırlanıyor. Plan kaydedilince taslak proje kendiliğinden Planlama'ya geçer. | Planı düzenleyin, onaylayın, ekibi kurun. |
 | **Başlamaya hazır** | Plan onaylı, her adıma personel atanmış, tarihler belli. Başlangıç günü gelince proje yöneticisine e-posta ve Telegram hatırlatması gider. | Projeyi başlatın. |
 | **Aktif** | İş akışı yürüyor; bağımlılıkları biten adımlar AI ve insan personele açılır. | Çıktıları izleyin, onaylayın. |
-| **Duraklatıldı** | Süren adımlar devam eder, yeni adım açılmaz. | Devam ettirin veya kapatın. |
+| **Duraklatıldı** | O an süren AI çağrısı biter ve sonucu taslak sürüm olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz, yeni adım açılmaz. Devam ettirince kaldığı yerden sürer. Duraklatma ve devam akış geçmişine kaydedilir. | Devam ettirin veya kapatın. |
 | **Tamamlandı** | Proje kapandı; yazışma kaydı salt okunur. | Ekleri kurum hafızasına aktarın, şablon olarak kaydedin. |
-| **İptal edildi** | Proje kapandı; başlamamış adımlar da iptal edildi. Geri alınamaz. | — |
+| **İptal edildi** | Proje kapandı; açık adımlar da iptal edildi. Gerekçe ve kayıp maliyet kayda geçti ("İptal edilen işler ve kayıp maliyet" raporu). Geri alınamaz. | — |
 
 **Durum geçişleri** (yalnız projenin yöneticisi veya **Tüm Projeleri Yönetme** izni olan yapar):
 
@@ -548,10 +548,12 @@ Bu mod, projelerin ve Case'lerin açıldığı, planlandığı, yürütüldüğ�
 | Planlama → Başlamaya hazır | **Başlamaya hazır yap** (Hazırlık & Bildirim) | Plan onaylı ve adım var (**"Önce iş adımlarını onaylayın."**), başlangıç ve bitiş tarihi var (**"Başlangıç ve bitiş tarihlerini belirleyin."**), bitiş başlangıçtan önce değil, her adıma personel atanmış (**"Atanmamış iş adımları var: …"**). Koşullar sağlanmadan düğme pasiftir. | Yok |
 | Başlamaya hazır → Planlama | **Planlamaya geri al** (Hazırlık & Bildirim) | Proje Başlamaya hazır durumunda. | **"Proje yeniden planlamaya alınsın mı?"** |
 | Başlamaya hazır → Aktif | **Başlat** (başlık) veya **Projeyi şimdi başlat** (Hazırlık & Bildirim) | Proje Başlamaya hazır durumunda. | **"Proje başlatılsın mı? Bağımlılığı olmayan iş adımları AI personele açılır."** |
-| Aktif → Duraklatıldı | **Duraklat** (başlık) | Proje Aktif. | **"Proje duraklatılsın mı?"** |
+| Aktif → Duraklatıldı | **Duraklat** (başlık) | Proje Aktif. | **"Proje duraklatılsın mı? O an süren AI çağrısı tamamlanır ve sonucu taslak olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz. Devam ettirince kaldığı yerden sürer."** |
 | Duraklatıldı → Aktif | **Devam ettir** (başlık) | Proje Duraklatıldı. | Yok |
-| Aktif / Duraklatıldı → Tamamlandı | **Projeyi tamamla** (Kapanış) | Proje Aktif veya Duraklatıldı. | **"Proje tamamlandı olarak kapatılsın mı?"** |
-| Açık herhangi bir durum → İptal edildi | **İptal et** (Kapanış) | Proje kapanmamış. | **"Proje iptal edilsin mi? Bu işlem geri alınamaz."** |
+| Aktif / Duraklatıldı → Tamamlandı | **Projeyi tamamla** (Kapanış) | Proje Aktif veya Duraklatıldı. | **"Proje tamamlandı olarak kapatılsın mı? Bu işlem geri alınamaz."** |
+| Açık herhangi bir durum → İptal edildi | **İptal et** (Kapanış) | Proje kapanmamış. | **"Projeyi iptal et"** penceresi: harcanan toplam, teslimata dönüşen ve **kayıp maliyet** (kredi ve ₺), saklanacak tamamlanmış teslimatlar ve iptal edilecek açık adımlar. **İptal gerekçesi** zorunludur; **"Bu işlemin geri alınamayacağını ve kayıp maliyetin raporlanacağını anladım."** kutusu işaretlenmeden **İptal et** pasiftir. Gerekçe yazılmadan istenirse: **"İptal gerekçesini yazın; gerekçe kayıp maliyetle birlikte kayda geçer."** |
+
+**Kayıp maliyet:** onaylanmamış, iptal edilen ya da yarım kalan adımların ve planlamanın AI (kredi) maliyetidir. Onaylanmış adımların maliyeti "teslimata dönüşen" olarak ayrılır; personel ve diğer giderler Maliyet sekmesinde ayrıca görünür. İptal edilen işler Beyin AI raporlarında **"İptal edilen işler ve kayıp maliyet"** raporuyla listelenir (Kredi ve Kullanım yetkisi gerekir).
 
 Başarı bildirimleri: **"Planlamaya alındı."** · **"Proje başlamaya hazır."** · **"Proje başlatıldı."** · **"Proje duraklatıldı."** · **"Proje devam ediyor."** · **"Proje tamamlandı."** · **"Proje iptal edildi."** · **"Proje planlamaya geri alındı."** İşlem o an tamamlanamazsa durum değişmez ve hata gösterilir; yeniden deneyebilirsiniz.
 
@@ -716,7 +718,7 @@ Sekmelerin görünürlüğü: **Maliyet** yalnız proje yöneticisi ve **Tüm Pr
 | **← Projeler** | Her zaman | Listeye döner. | — |
 | **Planlamaya başla** | Yönetici, proje Taslak | Planlama'ya alır. | İsterler yazılmış olmalı. |
 | **Başlat** | Yönetici, proje Başlamaya hazır | Projeyi başlatır. | Onay penceresi açılır. |
-| **Duraklat** | Yönetici, proje Aktif | Projeyi duraklatır. | Onay penceresi açılır. |
+| **Duraklat** | Yönetici, proje Aktif | Projeyi duraklatır: süren AI çağrısı biter, yeni AI çalışması, kontrol ve teslim başlamaz. | Onay penceresi açılır. |
 | **Devam ettir** | Yönetici, proje Duraklatıldı | Yeniden Aktif yapar. | — |
 | **Çalışma alanında aç** | Proje Aktif, Duraklatıldı veya Tamamlandı | Bu projeyi Çalışma Alanı'nda açar. | — |
 | **Şablon olarak kaydet** | Yönetici, planda en az bir adım var | Şablon olarak kaydet penceresini açar. | — |
@@ -963,7 +965,7 @@ Telegram kurulumda etkin değilse: **"Telegram bildirimleri bu kurulumda henüz 
 
 1. **İstatistikler:** **Çalışılıyor**, **Onay bekliyor**, **Karantina**, **Tamamlandı** (n / toplam).
 2. **Canlı şerit:** **Canlı** veya **Bağlanıyor…** ve o an RECAi'nin yaptığı iş ("<adım>: <düşünce>"); iş yoksa "Adımlar ilerledikçe bu ekran kendiliğinden güncellenir."
-3. **Liste** / **Akış şeması** seçici. Proje duraklatıldıysa: "Proje duraklatıldı: süren adımlar devam eder, yeni adım açılmaz."
+3. **Liste** / **Akış şeması** seçici. Proje duraklatıldıysa: "Proje duraklatıldı: o an süren AI çağrısı biter ve sonucu taslak olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz. Devam ettirince kaldığı yerden sürer."
 4. **Adım kartları:** sıra no, ad, durum rozeti; "Personel: <ad> (AI)", "Kontrol: <ad>", "Onaylayıcı: <ad>", "Ret: n / m", "Önce: <adımlar>", "Bitiş: <tarih>". AI çalışıyorsa "<ad> çalışıyor (geri bildirime göre düzeltiyor)…". Karantinadaysa "n kez reddedildi. Yeniden denemek ret sayacını sıfırlar; gerekirse önce Ekip sekmesinden başka personel ekleyin."
 5. **Akış geçmişi** ("Silinemez kayıt: her teslim, onay, ret ve karar."): olay · adım · not · zaman · kişi.
 
@@ -1286,7 +1288,7 @@ Genel ayarlar:
 | Düğme | Ne yapar | Dikkat |
 |---|---|---|
 | **Projeyi tamamla** | Projeyi Tamamlandı yapar; kapanışta önerilecek aktarımlar onaya düşer. | **"Proje tamamlandı olarak kapatılsın mı?"** Geri alınamaz. |
-| **İptal et** | Projeyi İptal edildi yapar; başlamamış adımlar da iptal edilir. | **"Proje iptal edilsin mi? Bu işlem geri alınamaz."** |
+| **İptal et** | **"Projeyi iptal et"** penceresini açar: harcanan, teslimata dönüşen ve kayıp maliyet; zorunlu gerekçe; geri alınamaz onay kutusu. Onaylanınca proje İptal edildi olur, açık adımlar gerekçeyle iptal edilir. Kapanış özeti kutusuna yazdığınız metin gerekçe olarak pencereye gelir. | Gerekçe ve onay kutusu olmadan **İptal et** pasiftir. |
 | **Excel raporu** | Maliyet raporunu indirir. | — |
 | **Seçilenleri Kurum Hafızasına aktar (n)** | Seçilen ekleri şirket geneline taşır: **"n ek Kurum Hafızasına aktarıldı; artık şirketin tüm AI personeli yararlanır."** | Onay sormaz. |
 

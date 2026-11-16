@@ -179,7 +179,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       {tab === 'ready' && <ReadinessTab project={project} onAction={action} busy={busy} />}
       {tab === 'flow' && <WorkflowTab project={project} />}
       {tab === 'cost' && project.can_manage && <CostTab project={project} />}
-      {tab === 'repo' && <CodeRepoTab project={project} />}
+      {tab === 'repo' && <CodeRepoTab project={project} onChanged={reload} />}
       {tab === 'tests' && <TestRunsTab project={project} />}
       {tab === 'recslip' && <RecslipCaseTab project={project} />}
       {tab === 'close' && <CloseTab project={project} currentUser={currentUser} onAction={action} busy={busy} />}

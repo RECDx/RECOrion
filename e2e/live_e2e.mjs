@@ -208,7 +208,7 @@ try {
     (await page.locator('.pj-flow-node .ui-badge').allTextContents()).join(', '));
   await shot(page, '02b-canli-sema');
   await page.getByRole('button', { name: 'Liste', exact: true }).click();
-  const versionOf = async (title) => Number(((await stepCard(page, title).getByRole('button', { name: /Çıktıyı gör/ }).textContent()) || '').match(/sürüm (\d+)/)?.[1] || 0);
+  const versionOf = async (title) => Number(((await stepCard(page, title).getByRole('button', { name: /çıktıyı gör/i }).textContent()) || '').match(/sürüm (\d+)/)?.[1] || 0);
   // Onaya gelene kadar bekle; kontrol personeli 3 kez reddederse karantina olur (raporlanır, bir kez yeniden denenir)
   // 8.2: İş Akışı ekranında AI'ın o anki adımı (canlı akış) sayfa yenilemeden görünüyor mu
   const liveSeen = new Set();
@@ -226,6 +226,7 @@ try {
         retried += 1;
         step(false, `'${title}' kontrol personelinin 3 reddiyle karantinaya düştü`, 'yönetici yeniden deniyor');
         await stepCard(page, title).getByRole('button', { name: 'Yeniden dene' }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Yeniden dene' }).click();  // C3-50: not/personel penceresi
       }
       await page.waitForTimeout(3000);
     }
@@ -240,7 +241,7 @@ try {
   step(liveSeen.has('canlı') && liveSeen.size > 1, "İş Akışı canlı: AI'ın o anki adımı sayfa yenilemeden göründü", [...liveSeen].join(', '));
   const noSubmit = await stepCard(page, first).getByRole('button', { name: /teslim et/ }).count();
   step(noSubmit === 0, 'AI adımında elle teslim butonu yok (AI kendi teslim eder)');
-  await stepCard(page, first).getByRole('button', { name: /Çıktıyı gör/ }).click();
+  await stepCard(page, first).getByRole('button', { name: /çıktıyı gör/i }).click();
   const modal = page.getByRole('dialog');
   await modal.locator('.ui-modal-body').waitFor({ timeout: 15000 });
   await page.waitForTimeout(1500);
@@ -268,7 +269,7 @@ try {
   await m.page.getByRole('tab', { name: /İş Akışı/ }).click();
   await m.page.locator('.pj-step').first().waitFor({ timeout: 15000 });
   const memberApprove = await m.page.getByRole('button', { name: 'Onayla', exact: true }).count();
-  const memberView = await m.page.getByRole('button', { name: /Çıktıyı gör/ }).count();
+  const memberView = await m.page.getByRole('button', { name: /çıktıyı gör/i }).count();
   step(memberApprove === 0 && memberView > 0, 'Ekip üyesi çıktıyı görüyor ama onaylayamıyor', `Onayla: ${memberApprove}, Çıktıyı gör: ${memberView}`);
 
   // 8.2 İki kişi aynı anda: yönetici Çalışma Alanında soru yazar, açık duran ekip üyesi ekranında sayfa yenilemeden görür
@@ -303,7 +304,7 @@ try {
   const right = m.page.locator('aside.pane').last();
   const memberDecide = await right.getByRole('button', { name: /Onayla & İlerlet/ }).count();
   const decider = await right.getByText(/tarafından verilecek/).count();
-  await right.getByRole('button', { name: /Çıktıyı gör/ }).click();
+  await right.getByRole('button', { name: /çıktıyı gör/i }).click();
   const artModal = m.page.getByRole('dialog');
   await artModal.locator('.ui-modal-body').waitFor({ timeout: 15000 });
   await m.page.waitForTimeout(1500);
@@ -414,7 +415,7 @@ try {
     await page.waitForTimeout(3000);
   }
   const v2 = await versionOf(first);
-  await stepCard(page, first).getByRole('button', { name: /Çıktıyı gör/ }).click();
+  await stepCard(page, first).getByRole('button', { name: /çıktıyı gör/i }).click();
   await page.waitForTimeout(2000);
   const out2 = await page.getByRole('dialog').locator('.ui-modal-body').innerText();
   await page.getByRole('dialog').getByRole('button', { name: 'Kapat' }).click();
@@ -460,11 +461,15 @@ try {
       approved += 1;
     } else if (await waiting.count()) {
       await waiting.first().getByRole('button', { name: 'Onayla', exact: true }).click();
+      await dialogOk(page);  // C3-28: isteğe bağlı onay notu penceresi (alertdialog)
+      const gate = page.getByRole('alertdialog').getByRole('button', { name: 'Yine de onayla' });  // #734 kabul kapısı uyarısı
+      if (await gate.waitFor({ timeout: 4000 }).then(() => true).catch(() => false)) await gate.click();
       approved += 1;
       await page.waitForTimeout(2500);
     } else if (await quarantined.count() && released < 2) {
       released += 1;
       await quarantined.first().getByRole('button', { name: 'Yeniden dene' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Yeniden dene' }).click();  // C3-50: not/personel penceresi
       await page.waitForTimeout(2500);
     } else {
       const done = await page.locator('.pj-step .ui-badge', { hasText: 'Tamamlandı' }).count();
@@ -1993,6 +1998,24 @@ try {
       const src16 = await v16.innerText();
       await shot(pm.page, '43-kod-gezgini');
       step(/cakisiyor_mu/.test(src16.replace(/ /g, ' ')), 'Kod Gezgini: depodaki dosya ağaçtan açıldı, kod renklendirilmiş salt okuma görüntüleyicide', 'randevu.py');
+      // #745: iptal penceresi — kayıp maliyet, zorunlu gerekçe, geri alınamaz onayı; akış geçmişine gerekçeyle düşer
+      await pm.page.getByRole('tab', { name: /Kapanış/ }).click();
+      await pm.page.getByRole('button', { name: 'İptal et' }).click();
+      const cdlg = pm.page.getByRole('dialog');
+      await cdlg.getByText('Kayıp maliyet').first().waitFor({ timeout: 20000 });
+      const cbtn = cdlg.getByRole('button', { name: 'İptal et' });
+      const disabledBefore = await cbtn.isDisabled();
+      await cdlg.locator('#cancel-reason').fill('Canlı test bitti: iptal penceresi denemesi');
+      await cdlg.getByRole('checkbox').check();
+      await shot(pm.page, '44-iptal-penceresi');
+      await cbtn.click();
+      await pm.page.locator('.ui-badge', { hasText: 'İptal edildi' }).first().waitFor({ timeout: 20000 });
+      const ev16 = await api(pm.page, `/api/v1/projects/${pid16}/workflow`);
+      const cancelEv = (ev16.body?.events || []).find((e) => e.kind === 'PROJECT_CANCELLED');
+      step(disabledBefore && /iptal penceresi/.test(cancelEv?.note || ''),
+        'İptal penceresi (#745): gerekçe ve onay kutusu olmadan İptal et pasif; proje gerekçesiyle iptal edildi ve akış geçmişine yazıldı',
+        cancelEv?.note || 'kayıt yok');
+      pid16 = null;  // arayüzden iptal edildi; temizlikte tekrar iptal edilmez
     } catch (e) {
       await shot(pm.page, '42-testler-hata').catch(() => {});
       throw e;
@@ -2120,6 +2143,13 @@ try {
 } catch (e) {
   ok = false;
   step(false, 'Beklenmeyen hata', e.message.split('\n')[0]);
+  // Beklenmeyen hatada açık tüm sayfaların görüntüsü ve hatanın yeri (tanı için)
+  let n = 0;
+  for (const pg of browser.contexts().flatMap((c) => c.pages())) {
+    n += 1;
+    await pg.screenshot({ path: path.join(OUT, `hata-${n}.png`), fullPage: true }).catch(() => {});
+  }
+  console.log((e.stack || '').split('\n').slice(0, 6).join('\n'));
 }
 await browser.close();
 fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ name: NAME, report, problems, seconds: Math.round((Date.now() - t0) / 1000) }, null, 2));

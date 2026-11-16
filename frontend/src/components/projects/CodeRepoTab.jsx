@@ -16,7 +16,7 @@ const DiffModal = lazy(() => import('./CodeExplorer').then((m) => ({ default: m.
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 /** Kod Deposu (ADIM 8.5): RECOrion Gitea deposu; AI personel adım dalına çalışır, ana dala birleştirme insan onayıyla. */
-export default function CodeRepoTab({ project }) {
+export default function CodeRepoTab({ project, onChanged }) {
   const [repo, setRepo] = useState(null);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState('explorer');
@@ -45,6 +45,7 @@ export default function CodeRepoTab({ project }) {
       toast.success(mode === 'RECORION'
         ? (source ? 'Kod deposu seçilen projenin kodundan açıldı; AI personel bu kod üzerinde çalışacak.' : 'Kod deposu açıldı; AI personelin kod çıktıları adım dallarına commit edilecek.')
         : 'Kod deposu kullanımı kapatıldı.');
+      onChanged?.();  // proje bilgisi (repo_mode) yenilensin: Hazırlık sekmesi eski "depo yok" uyarısını göstermesin
     } catch (e) { toast.error(e.message); } finally { setBusy(false); }
   };
   const merge = async (s) => {
