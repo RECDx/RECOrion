@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { Badge, Button, Card, EmptyState } from '../../ui/components';
 import { promptDialog, toast } from '../../ui/feedback';
 import { isPlanning } from './projectMeta';
+import ResearchPanel from './ResearchPanel';
 
 const STATUS = { NOT_STARTED: ['Başlamadı', 'neutral'], IN_PROGRESS: ['Görüşme sürüyor', 'warning'], APPROVED: ['Onaylandı', 'success'], SKIPPED: ['Atlandı', 'neutral'] };
 const LIST_KEYS = [
@@ -113,6 +114,8 @@ export default function DiscoveryTab({ project, onChanged, onGoPlan }) {
             <div className="pj-actions" style={{ marginTop: 10 }}><Button icon={Brain} onClick={onGoPlan}>Beyin AI Planlamaya geç</Button></div>
           )}
         </Card>
+        {/* #750: yönetici onaylı web araştırması; bulgular sonraki keşif turuna ve plana girer */}
+        <ResearchPanel project={project} suggestions={done ? [] : (d.research_suggestions || [])} />
         {(d.rounds || []).length > 0 && (
           <Card title="Görüşme geçmişi" subtitle={`${d.rounds.length} tur`}>
             <div className="pj-steps">

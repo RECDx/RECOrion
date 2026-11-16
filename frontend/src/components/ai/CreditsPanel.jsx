@@ -43,6 +43,42 @@ function SpendSettings({ tenantId, settings, onSaved }) {
   );
 }
 
+/** #750: web araştırması aç/kapa ve site listeleri (şirket yöneticisi). */
+function WebResearchSettings({ tenantId }) {
+  const [s, setS] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.getWebResearchSettings(tenantId).then((x) => setS({ ...x, allow: x.allow_domains.join('\n'), deny: x.deny_domains.join('\n') }))
+      .catch(() => setS(null));
+  }, [tenantId]);
+  if (!s) return null;
+  const lines = (t) => t.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean);
+  const save = async () => {
+    setBusy(true);
+    try {
+      const x = await api.putWebResearchSettings(tenantId, { enabled: s.enabled, allow_domains: lines(s.allow), deny_domains: lines(s.deny) });
+      setS({ ...x, allow: x.allow_domains.join('\n'), deny: x.deny_domains.join('\n') });
+      toast.success('Web araştırması ayarları kaydedildi.');
+    } catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <Card title="Web araştırması" subtitle="Beyin AI yalnız proje yöneticisinin onayıyla web'de araştırır; harcama Kredi ve Kullanım'da 'Web araştırması' olarak görünür.">
+      <div className="ai-stack">
+        <label className="pj-hint" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} /> Web araştırmasına izin ver
+        </label>
+        <label className="pj-hint" htmlFor="wr-allow">İzinli siteler (doluysa yalnız bunlar; her satıra bir alan adı)
+          <textarea id="wr-allow" className="ui-input" rows={2} value={s.allow} onChange={(e) => setS({ ...s, allow: e.target.value })} placeholder="mevzuat.gov.tr" />
+        </label>
+        <label className="pj-hint" htmlFor="wr-deny">Yasaklı siteler
+          <textarea id="wr-deny" className="ui-input" rows={2} value={s.deny} onChange={(e) => setS({ ...s, deny: e.target.value })} placeholder="ornek-forum.com" />
+        </label>
+        <div><Button size="sm" onClick={save} disabled={busy}>Kaydet</Button></div>
+      </div>
+    </Card>
+  );
+}
+
 function Meter({ percent }) {
   const p = Math.min(100, Math.max(0, percent || 0));
   return (
@@ -160,6 +196,7 @@ export default function CreditsPanel({ tenantId, compact = false, refreshKey = 0
       </Card>
       {!s.unlimited && <CreditOrders tenantId={tenantId} canManage={canManage} onChanged={load} />}
       {canManage && !s.unlimited && <SpendSettings tenantId={tenantId} settings={s.settings} onSaved={load} />}
+      {canManage && <WebResearchSettings tenantId={tenantId} />}
 
       <div className="ai-breakdowns">
         <Breakdown title="Modele göre" rows={data.by_model} label={(r) => r.key || '—'} />

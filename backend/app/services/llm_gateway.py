@@ -169,7 +169,7 @@ async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requeste
             m = await db.get(LLMModel, actor.preferred_model_id)
             if m:
                 candidates.append(m.model_code)
-    if purpose == "BRAIN":
+    if purpose in ("BRAIN", "WEB_RESEARCH"):  # #750: web araştırması Beyin modeliyle
         if tenant.brain_tier and tenant.brain_tier in all_tiers:
             candidates += recai.models_of(all_tiers[tenant.brain_tier])
         elif tenant.brain_model_code:
@@ -178,7 +178,7 @@ async def resolve_model(db: AsyncSession, tenant: Tenant, purpose: str, requeste
         candidates += recai.models_of(all_tiers[recai.PURPOSE_TIER[purpose]])
     # Model yönlendirici (ADIM 11.4): Süper Admin'in iş türü için onayladığı model, platform varsayılanından önce gelir
     # (açık seçim, AI personelin modeli ve şirketin Beyin modeli her zaman önce)
-    route_type = task_type or ("STRUCTURED" if purpose == "BRAIN" else None)
+    route_type = task_type or ("STRUCTURED" if purpose in ("BRAIN", "WEB_RESEARCH") else None)
     if route_type and not infra and purpose != "QUALITY_TEST" and (routed := await _setting(db, f"model.route.{route_type}")):
         candidates.append(routed)
     for key in (PURPOSE_SETTING.get(purpose), DEFAULT_CHAT_SETTING if not infra else None):

@@ -282,6 +282,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{C}/credits/settings"): TENANT("tenant:manage"),  # #746 harcama ayarları (yönetim verisi)
     ("POST", f"{C}/credits/lift-weekly-cap"): TENANT("tenant:manage"),
     ("POST", f"{C}/credits/resume-paused"): TENANT("tenant:manage"),
+    ("GET", f"{C}/web-research/settings"): TENANT("billing:view"),  # #750 aç/kapa, izinli/yasaklı siteler
+    ("PUT", f"{C}/web-research/settings"): TENANT("tenant:manage"),
     ("GET", f"{C}/credit-store"): TENANT("billing:view"),  # #747 ek kredi satın alma (yönetim verisi)
     ("POST", f"{C}/credit-orders"): TENANT("tenant:manage"),
     ("POST", f"{C}/plan-upgrade-orders"): TENANT("tenant:manage"),  # #747 ek
@@ -349,6 +351,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("DELETE", f"{P}/projects/{{project_id}}/members/{{actor_id}}"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/plan/suggest"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/discovery"): HANDLER(),  # #749 keşif ve Proje Tanım Belgesi
+    ("POST", f"{P}/projects/{{project_id}}/research/estimate"): HANDLER(),  # #750 web derin araştırma (proje yetkisi uçta)
+    ("GET", f"{P}/projects/{{project_id}}/research"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/research"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/research/{{research_id}}/cancel"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/discovery/round"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/discovery/approve"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/discovery/skip"): HANDLER(),

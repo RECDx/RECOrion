@@ -1727,6 +1727,7 @@ Başlık "<paket adı> · sürüm V"; "Kontrol eden: <uzman> · <tarih>"; her ka
 3. **Son işlemler** tablosu (sayfa başına 10). Bu dönem başarısız işlem varsa alt başlıkta "Bu dönem N işlem başarısız oldu (kredi düşülmedi)."
 4. **Kredi hareketleri** kartı (hareket varsa).
 5. **Harcama ayarları** kartı (yalnız şirket yöneticisi): **Haftalık harcama sınırı uygula** (varsayılan kapalı; haftada en fazla aylık hakkın %5–100'ü) ve **Kredi yüklenince duraklayan işler kendiliğinden devam etsin**; **Kaydet**.
+6. **Web araştırması** kartı (yalnız şirket yöneticisi): **Web araştırmasına izin ver** (varsayılan açık; kapalıyken proje yöneticileri Beyin AI'ya web araştırması yaptıramaz), **İzinli siteler** (doluysa Beyin AI yalnız bu alan adlarından ve alt alan adlarından kaynak okur; her satıra bir alan adı, ör. mevzuat.gov.tr) ve **Yasaklı siteler** (bu alan adları hiç okunmaz); **Kaydet**. Web araştırması yalnız proje yöneticisinin onayıyla başlar; harcama bu ekranda **Web araştırması** işlem türü olarak ayrı görünür.
 
 Token, yapay zekânın okuduğu ve yazdığı metnin ölçü birimidir (kabaca bir kelimenin parçası). Formül şunu söyler: RECAi'nin yazdığı metin, okuduğu metnin iki katı kredi tutar ve kademe katsayısıyla çarpılır.
 

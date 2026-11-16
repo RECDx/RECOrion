@@ -843,6 +843,32 @@ Olası notlar: "Doküman işleniyor: metin ve görseller okunuyor, kişisel veri
 
 **Görüşme geçmişi:** Her turun soruları, yanıtları, notu, puanı ve RECAi kademesi saklanır. Her tur Beyin AI kredisi harcar.
 
+#### Web araştırması kartı
+
+[[EKRAN: wa-web-arastirmasi | Keşif & Tanım sekmesindeki Web araştırması kartı: Web'de araştır düğmesi, Beyin AI'nın önerdiği konular, tamamlanmış bir araştırmanın bulguları ([1] kaynak bağlantıları, "doğrulanmadı" rozeti), çelişkiler, projeye etkisi ve kaynak listesi | Planlama durumundaki projede "Keşif & Tanım" sekmesini açın; bir web araştırması tamamlanmış olsun]]
+
+**Ne işe yarar?** Beyin AI web'de çok adımlı araştırma yapar: soruyu alt sorulara böler, her biri için arar, kaynak sayfaları okur, kaynakları karşılaştırır ve çelişkileri not eder. Sonuç kaynak bağlantılarıyla gelir. Tamamlanan araştırmaların bulguları sonraki keşif turlarına ve Beyin AI'nın plan önerisine girer (ör. güncel mevzuat, sektördeki benzer çözümler, tipik teslimatlar ve süreler, benzer projelerde yaşanmış sorunlar).
+
+**Araştırma kendiliğinden başlamaz.** Beyin AI keşif sırasında gerekli gördüğü konuları önerir ("Beyin AI şu konularda araştırma öneriyor"); başlatmak için siz seçer ve onaylarsınız. Yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar başlatabilir; ekipteki diğer kişiler sonuçları görür.
+
+**Nasıl başlatılır?**
+
+1. **Web'de araştır** düğmesine ya da Beyin AI'nın önerdiği bir konuya basın.
+2. **Araştırma sorusu**nu yazın. Soruda kişi veya müşteri bilgisi yazmayın; e-posta, telefon, kimlik ve IBAN gibi kişisel veriler maskelenir ve arama motoruna gitmez.
+3. **Derinlik** seçin: **Hızlı** (3 alt soru), **Standart** (5 alt soru), **Derin** (8 alt soru). Pencere tahmini maliyeti, kalan kredinizi ve **En fazla kredi** üst sınırını gösterir; üst sınırı değiştirebilirsiniz.
+4. **Onayla ve başlat.** Araştırma birkaç dakika sürer; kartta aşaması görünür ("Web'de aranıyor", "Kaynaklar okunuyor (2/5)"…). **Durdur** ile kesebilirsiniz; o ana kadar harcanan kredi geri gelmez.
+
+**Sonuç:** Özet · **Bulgular** (her bulgunun yanında [1], [2] kaynak bağlantıları; kaynağı olmayan çıkarımlar **doğrulanmadı** rozetiyle) · **Çelişkiler ve belirsizlikler** · **Projeye etkisi** · **Kaynaklar** listesi. Harcama hiçbir zaman üst sınırı aşmaz; sınıra gelinirse kalan alt sorular atlanır ve bu sonuçta yazılır.
+
+**Güvenlik:** Web sayfalarındaki metinler talimat olarak değil, yalnız bilgi olarak işlenir. Şirket yöneticisi özelliği kapatabilir ve izinli/yasaklı site listesi tanımlayabilir (Kredi ve Kullanım ekranı). Harcama Kredi ve Kullanım ekranında **Web araştırması** işlem türü olarak ayrı görünür.
+
+| Mesaj | Anlamı |
+|---|---|
+| "Web araştırması şirketinizde kapalı…" | Şirket yöneticisi özelliği kapatmış. |
+| "Bu projede süren bir web araştırması var…" | Projede aynı anda bir araştırma yürür. |
+| "Kalan kredi … tahmini maliyetine … yetmiyor" | Ek kredi alın ya da daha hızlı bir derinlik seçin. |
+| "Üst sınır bu derinlik için çok düşük…" | Üst sınırı yükseltin ya da derinliği düşürün. |
+
 | Düğme | Ne yapar | Dikkat |
 |---|---|---|
 | **Keşfe başla** | İlk keşif turunu başlatır. | İsterler boşsa pasiftir. |

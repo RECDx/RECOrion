@@ -114,6 +114,9 @@ async def run_round(db: AsyncSession, project: Project, answers: List[Dict[str, 
     history = "\n".join(f"- [{x['topic']}] {x['question']} → {x['answer']}" for r in d["rounds"] for x in r.get("qa", []) if x.get("answer"))
     now_qa = "\n".join(f"- [{x['topic']}] {x['question']} → {x['answer'] or '(yanıtlanmadı)'}" for x in qa)
     skeleton = "\n".join(f"- {t}: {q}" for t, q in SKELETON)
+    from app.services import web_research  # #750: yöneticinin onayladığı web araştırmalarının kaynaklı bulguları
+
+    research = await web_research.context_text(db, project)
     prompt = f"""Sen {tenant.name} şirketinin Beyin AI'sısın ve bir iş analisti gibi proje yöneticisiyle {'Case' if project.kind == 'CASE' else 'proje'} keşif görüşmesi yapıyorsun.
 Amaç: plan yapılmadan önce işin ne olduğunu netleştirmek. Kısa brifle başlayan yöneticinin düşünmediği konuları sen getirirsin.
 Bu yalnız yazılım için değildir; şirketin sektörüne ve işin türüne uygun sorular sor (üretim, hizmet, sağlık, kalite, ERP, kampanya…).
@@ -137,6 +140,9 @@ Bütçe: {project.budget_try or 'belirtilmedi'} TL · Hedef tarihler: {project.s
 Yanıtlanmadan geçilen sorular: {'; '.join(skipped) or 'yok'}
 Yöneticinin ek notu: {(note or 'yok')[:2000]}
 
+# Web araştırması bulguları (yöneticinin onayıyla yapıldı; kaynaklı)
+{research or 'yok'}
+
 # Mevcut tanım belgesi
 {json.dumps(d['charter'], ensure_ascii=False)[:6000] if d['charter'] else 'yok'}
 
@@ -148,6 +154,8 @@ Görevin:
 3) Sıradaki en önemli en fazla {MAX_QUESTIONS} soruyu sor; önce iskeletteki kapsanmamış konular, sonra sektöre özgü ve sık atlanan konular.
    Her sorunun neden önemli olduğunu bir cümleyle yaz. Belge yeterince olgunsa (puan 85+) soru sorma.
 4) "Bunu düşündünüz mü?" türünden en fazla 3 kısa hatırlatma yaz (sık atlanan gereksinimler, gerçekçi olmayan süre/bütçe uyarısı).
+5) Web'de araştırılması belgeyi belirgin biçimde güçlendirecek en fazla 2 konu öner (ör. güncel mevzuat, sektördeki benzer çözümler,
+   tipik teslimatlar). Araştırmayı sen başlatmazsın; yönetici onaylarsa yapılır. Gerek yoksa boş bırak. Konu metninde kişi/şirket adı olmasın.
 
 Sadece şu JSON'u döndür:
 {{"charter": {{"goal": "amaç", "success_criteria": ["ölçülebilir başarı ölçütü"], "stakeholders": ["paydaş"], "users_roles": ["kullanıcı/rol"],
@@ -156,11 +164,12 @@ Sadece şu JSON'u döndür:
   "workflows": ["kullanıcı akışı"], "risks": ["risk"], "assumptions": ["varsayım"], "open_questions": ["açık soru"]}},
  "maturity": {{"score": 0, "missing": ["eksik"]}},
  "questions": [{{"topic": "Kapsam", "text": "soru", "why": "neden önemli"}}],
- "reminders": ["Bunu düşündünüz mü: …"]}}"""
-    result = await llm_gateway.chat(LLMContext(tenant_id=project.tenant_id, purpose="BRAIN", project_id=project.id),
-                                    [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=5000, timeout=300, fallback=True)
+ "reminders": ["Bunu düşündünüz mü: …"], "research_suggestions": ["web'de araştırılacak konu"]}}"""
+    from app.services import llm_json  # bozuk/yarım JSON'da bir kez onarım ister (canlı test 16.11)
+
     try:
-        out = _parse(result.content)
+        out, result = await llm_json.chat_json(LLMContext(tenant_id=project.tenant_id, purpose="BRAIN", project_id=project.id),
+                                               [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=5000, timeout=300)
         charter = _clean_charter(out.get("charter") or {})
         mat = out.get("maturity") or {}
         score = max(0, min(100, int(mat.get("score") or 0)))
@@ -172,6 +181,7 @@ Sadece şu JSON'u döndür:
                         "model_code": result.public_model, "credits": float(result.credits or 0)})
     d.update(charter=charter, maturity={"score": score, "missing": [str(m)[:300] for m in (mat.get("missing") or [])][:15]},
              pending=questions, reminders=[str(r)[:400] for r in (out.get("reminders") or [])][:3],
+             research_suggestions=[str(r)[:200] for r in (out.get("research_suggestions") or []) if str(r).strip()][:2],
              status="IN_PROGRESS", approved_at=None, approved_by=None, approve_reason=None)
     _save(project, d)
     if project.status == "DRAFT":

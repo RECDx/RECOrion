@@ -1431,3 +1431,27 @@ class HelpPage(Base):
     search = Column(TSVECTOR, Computed("setweight(to_tsvector('turkish', coalesce(title, '')), 'A') || "
                                        "setweight(to_tsvector('turkish', coalesce(section, '')), 'B') || "
                                        "setweight(to_tsvector('turkish', coalesce(body, '')), 'C')", persisted=True))
+
+
+class WebResearch(Base):
+    """İSTEK #750: Beyin AI web derin araştırması (yönetici onaylı; harcama üst sınırı aşılmaz)."""
+    __tablename__ = "web_research"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    requested_by = Column(UUID(as_uuid=True))
+    question = Column(Text, nullable=False)
+    masked_question = Column(Text, nullable=False)  # dış arama motoruna ve modele giden (KVKK maskeli)
+    pii = Column(JSONB)
+    depth = Column(String(16), nullable=False)  # QUICK, STANDARD, DEEP
+    origin = Column(String(16), nullable=False, default="MANAGER")  # MANAGER, BRAIN_SUGGESTION
+    status = Column(String(16), nullable=False, default="RUNNING")  # RUNNING, DONE, FAILED, CANCELLED
+    stage = Column(String(16))  # PLANNING, SEARCHING, READING, SYNTHESIZING
+    estimated_credits = Column(Numeric(14, 4))
+    max_credits = Column(Numeric(14, 4), nullable=False)
+    spent_credits = Column(Numeric(14, 4), nullable=False, default=0)
+    result = Column(JSONB)  # summary, findings[{text, sources, verified}], contradictions, implications, sources[{n,title,url}]
+    error = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    finished_at = Column(DateTime(timezone=True))

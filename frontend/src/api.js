@@ -146,6 +146,13 @@ export const api = {
   changeProjectStatus: (projectId, action, summary) => request(`/projects/${projectId}/status`, { method: 'POST', body: JSON.stringify({ action, summary }) }),
   addProjectMember: (projectId, actorId, role) => request(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ actor_id: actorId, role }) }),
   removeProjectMember: (projectId, actorId) => request(`/projects/${projectId}/members/${actorId}`, { method: 'DELETE' }),
+  // #750 web derin araştırma
+  getProjectResearch: (projectId) => request(`/projects/${projectId}/research`),
+  estimateProjectResearch: (projectId, depth) => request(`/projects/${projectId}/research/estimate`, { method: 'POST', body: JSON.stringify({ depth }) }),
+  startProjectResearch: (projectId, data) => request(`/projects/${projectId}/research`, { method: 'POST', body: JSON.stringify(data) }),
+  cancelProjectResearch: (projectId, rid) => request(`/projects/${projectId}/research/${rid}/cancel`, { method: 'POST' }),
+  getWebResearchSettings: (tenantId) => request(`/company/${tenantId}/web-research/settings`),
+  putWebResearchSettings: (tenantId, data) => request(`/company/${tenantId}/web-research/settings`, { method: 'PUT', body: JSON.stringify(data) }),
   // #749 keşif görüşmesi ve Proje Tanım Belgesi
   getProjectDiscovery: (projectId) => request(`/projects/${projectId}/discovery`),
   discoveryRound: (projectId, answers, note) => request(`/projects/${projectId}/discovery/round`, { method: 'POST', body: JSON.stringify({ answers, note }) }),

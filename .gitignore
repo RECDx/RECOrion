@@ -46,3 +46,6 @@ edge_agent/edge_config.json
 edge_agent/templates.json
 edge_agent/*.db
 edge_agent/edge_audit.log
+
+# #750 SearXNG gizli anahtarı (yerelde üretilir)
+searxng/secret.env

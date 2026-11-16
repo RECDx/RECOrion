@@ -118,6 +118,32 @@ try {
   await page.getByText('Proje Tanım Belgesi').first().waitFor({ timeout: 30000 });
   const qn = await questions.count();
   step(qn > 0, 'Beyin AI keşif soruları sordu', `${qn} soru, ${Math.round((Date.now() - tDisc) / 1000)} sn`);
+  // #750 Web araştırması: yönetici onayıyla (tahmini/en fazla kredi gösterilir), bulgular ikinci keşif turuna girer
+  {
+    const tWeb = Date.now();
+    await page.getByRole('button', { name: "Web'de araştır" }).click();
+    const modal = page.getByRole('dialog', { name: 'Web araştırması' });
+    await modal.locator('#wr-q').fill('Bayi sipariş portallarında sık görülen özellikler ve B2B e-ticarette dikkat edilecek mevzuat nelerdir?');
+    await modal.getByRole('button', { name: 'Hızlı' }).click();
+    await modal.getByText(/Tahmini maliyet/).waitFor({ timeout: 30000 });
+    const maxCred = await modal.locator('#wr-max').inputValue();
+    step(Number(maxCred) > 0, 'Web araştırması öncesi tahmini ve en fazla kredi gösterildi', `en fazla ${maxCred} kredi`);
+    await modal.getByRole('button', { name: 'Onayla ve başlat' }).click();
+    await modal.waitFor({ state: 'detached', timeout: 15000 });
+    const item = page.locator('.pj-research').first();
+    let webStatus = '';
+    for (let i = 0; i < 25 * 6 && !/Tamamlandı|Başarısız|Durduruldu/.test(webStatus); i += 1) {
+      await page.waitForTimeout(10000);
+      webStatus = await item.locator('summary .ui-badge').innerText().catch(() => '');
+    }
+    const srcCount = await item.locator('.pj-sources li').count();
+    step(/Tamamlandı/.test(webStatus) && srcCount > 0, 'Web araştırması kaynaklı sonuç verdi',
+      `${webStatus || 'sürüyor'}, ${srcCount} kaynak, ${Math.round((Date.now() - tWeb) / 1000)} sn`);
+    if (!/Tamamlandı|Başarısız|Durduruldu/.test(webStatus)) {  // EVREN çok yavaşsa kullanıcı gibi durdurur
+      await item.getByRole('button', { name: 'Durdur' }).click();
+      await dialogOk(page);
+    }
+  }
   // İlk soruya yanıt, ikinciyi boş geçme (kullanıcı gibi); ikinci tur
   if (qn) await questions.first().fill('Kullanıcılar bayiler ve merkezdeki satış ekibi; sipariş onayını satış ekibi verir. Ödeme kapsam dışı.');
   const r2 = page.waitForResponse((r) => r.url().includes('/discovery/round') && r.request().method() === 'POST', { timeout: 11 * 60000 });
@@ -159,9 +185,14 @@ try {
   // Personeli atanmamış adımlara havuzdan personel ata
   const selects = page.locator('.pj-step select[aria-label="İşi yapan personel"]');
   let assigned = 0;
+  let humanSteps = 0;
   for (let i = 0; i < await selects.count(); i += 1) {
-    if (!(await selects.nth(i).inputValue())) { await selects.nth(i).selectOption({ index: 1 + (i % 2) }); assigned += 1; }
+    const v = await selects.nth(i).inputValue();
+    if (v.startsWith('h:')) humanSteps += 1;
+    // İnsan adımı (#749) AI personele aktarılır: sonraki adımlar AI'nın işi bitirmesini bekler
+    if (!v || v.startsWith('h:')) { await selects.nth(i).selectOption({ index: 1 + (i % 2) }); assigned += 1; }
   }
+  if (humanSteps) step(true, 'Beyin AI insan adımı önerdi (#749)', `${humanSteps} adım; testte AI personele aktarıldı`);
   if (assigned) step(true, 'Boş adımlara personel atandı', `${assigned} adım`);
   // Kontrol personeli (7.2): yalnızca ilk adımda (süre ve kredi sınırlı kalsın)
   const reviewers = page.locator('.pj-step select', { has: page.locator('option', { hasText: 'Kontrol yok' }) });
@@ -204,10 +235,16 @@ try {
 
   // 3. Ekip ve simülasyon
   await page.getByRole('tab', { name: /Ekip & Simülasyon/ }).click();
-  await page.locator('select[aria-label="Eklenecek personel"]').selectOption({ label: 'Canlı Test Uzmanı' });
-  await page.getByRole('button', { name: 'Ekle', exact: true }).click();
-  await page.locator('.pj-list li', { hasText: 'Canlı Test Uzmanı' }).waitFor({ timeout: 10000 });
-  step(true, 'İnsan personel ekibe eklendi');
+  // #749: Beyin AI insan adımını (ör. kabul testi) uzmana atadıysa uzman plan onayıyla ekibe zaten girmiştir
+  await page.locator('.pj-list li').first().waitFor({ timeout: 15000 });
+  if (await page.locator('.pj-list li', { hasText: 'Canlı Test Uzmanı' }).count()) {
+    step(true, 'İnsan personel plan onayıyla ekibe girdi (insan adımı)');
+  } else {
+    await page.locator('select[aria-label="Eklenecek personel"]').selectOption({ label: 'Canlı Test Uzmanı' });
+    await page.getByRole('button', { name: 'Ekle', exact: true }).click();
+    await page.locator('.pj-list li', { hasText: 'Canlı Test Uzmanı' }).waitFor({ timeout: 10000 });
+    step(true, 'İnsan personel ekibe eklendi');
+  }
   await page.locator('input[aria-label="Başlangıç tarihi"]').fill(new Date().toISOString().slice(0, 10));
   await page.getByRole('button', { name: 'Simüle et' }).click();
   await page.locator('.pj-stat', { hasText: 'Tahmini bitiş' }).waitFor({ timeout: 20000 });

@@ -274,6 +274,21 @@ services:
       - sandbox_net
 
   # ----------------------------------------------------------------------------
+  # Web arama (İSTEK #750): Beyin AI web derin araştırması için kendi sunucumuzdaki SearXNG.
+  # Dışarı port açılmaz; backend http://searxng:8080 üzerinden JSON arar.
+  # ----------------------------------------------------------------------------
+  searxng:
+    image: searxng/searxng:latest
+    container_name: recorion_searxng
+    restart: unless-stopped
+    env_file:
+      - ./searxng/secret.env
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    networks:
+      - recorion_net
+
+  # ----------------------------------------------------------------------------
   # 8. React + Vite Frontend (Work Area Tri-Pane Modern Arayüz)
   # ----------------------------------------------------------------------------
   frontend:

@@ -6,6 +6,7 @@ export const PURPOSE_LABELS = {
   ROLE_PROMPT: 'Rol promptu üretimi',
   TITLE_REVIEW: 'Ünvan incelemesi',
   DEEP_SEARCH: 'Derin araştırma',
+  WEB_RESEARCH: 'Web araştırması',
   LEARNING: 'Öğrenme',
   EMBEDDING: 'Hafıza vektörleme',
   RERANK: 'Hafıza sıralama',

@@ -155,6 +155,9 @@ async def suggest_plan(db: AsyncSession, project: Project, feedback: Optional[st
                                                    Actor.status != "DISABLED"))).scalars().all()
     human_text = "\n".join(f"- human_id={h.id} | {h.display_name} | {h.role}" for h in humans) or "- yok"
     charter = discovery.charter_text(project)
+    from app.services import web_research  # #750
+
+    research = await web_research.context_text(db, project, limit=4000)
     prompt = f"""Sen {ctx['tenant'].name} şirketinin Beyin AI'sısın ve proje yöneticisiyle birlikte bir {'Case' if project.kind == 'CASE' else 'proje'} planlıyorsun.
 Görevin: isterlere göre uygulanabilir iş adımlarını çıkarmak ve her adım için departman + unvan bazında şirketin AI personel
 havuzundan en uygun personeli önermek. Havuzda uygun personel yoksa agent_id boş bırak ve hire_suggestions'a gereken unvanı yaz.
@@ -191,6 +194,9 @@ Hedef tarihler: {project.start_date or 'belirlenmedi'} - {project.end_date or 'b
 
 # Onaylı Proje Tanım Belgesi (planın dayanağı; teslimatlar, akışlar, kabul ölçütleri)
 {charter or 'yok (keşif atlandı ya da şablondan gelen proje)'}
+
+# Web araştırması bulguları (yöneticinin onayıyla; kaynaklı — tipik teslimatlar, süreler, mevzuat, riskler için kullan)
+{research or 'yok'}
 {ctx['knowledge']}
 
 # Mevcut plan taslağı
@@ -209,10 +215,14 @@ Sadece şu JSON'u döndür:
   "risks": ["risk"], "questions": ["yöneticiye soru"]}}"""
     llm_ctx = LLMContext(tenant_id=project.tenant_id, purpose="BRAIN", project_id=project.id)
     # Beyin AI modeli meşgul/yanıtsızsa paketteki yedek modelle önerir
-    result = await llm_gateway.chat(llm_ctx, [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=300, fallback=True)
+    from app.services import llm_json  # bozuk/yarım JSON'da bir kez onarım ister
+
     try:
-        plan = validate_plan(_parse(result.content), {p["agent_id"] for p in ctx["pool"]}, {str(h.id) for h in humans})
-    except (ValueError, KeyError) as exc:
+        plan, result = await llm_json.chat_json(
+            llm_ctx, [{"role": "user", "content": prompt}],
+            validate=lambda d: validate_plan(d, {p["agent_id"] for p in ctx["pool"]}, {str(h.id) for h in humans}),
+            temperature=0.3, max_tokens=6000, timeout=300)
+    except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=502, detail="Beyin AI geçerli bir plan üretemedi; lütfen tekrar deneyin.") from exc
     if not plan["steps"]:
         raise HTTPException(status_code=502, detail="Beyin AI iş adımı üretemedi; isterleri biraz daha ayrıntılandırıp tekrar deneyin.")
