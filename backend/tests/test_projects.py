@@ -111,7 +111,7 @@ def test_project_quota(client, world):
     assert r.status_code == 403 and "3 açık proje" in r.json()["detail"]
     for p in client.get(f"/api/v1/projects?tenant_id={world['tenant']}", headers=world["admin"]["h"]).json():
         if p["name"].startswith("Ek "):
-            client.post(f"/api/v1/projects/{p['id']}/status", headers=world["admin"]["h"], json={"action": "cancel"})
+            client.post(f"/api/v1/projects/{p['id']}/status", headers=world["admin"]["h"], json={"action": "cancel", "summary": "Test temizliği"})
 
 
 def test_plan_suggest_approve_simulate_and_start(client, db, world, brain):
@@ -169,7 +169,7 @@ def test_plan_chat(client, world, brain):
     assert [m["role"] for m in hist] == ["user", "assistant"]
     client.post(f"/api/v1/projects/{pid}/plan/suggest", headers=h, json={"use_chat": True})
     assert "Nereden başlayalım?" in brain[-1]  # konuşma plana geri bildirim olarak girer
-    client.post(f"/api/v1/projects/{pid}/status", headers=h, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=h, json={"action": "cancel", "summary": "Test temizliği"})
 
 
 def test_start_reminder_email_and_telegram(client, db, world, monkeypatch):

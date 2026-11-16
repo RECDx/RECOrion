@@ -210,6 +210,20 @@ async def rows_platform_usage(db, frm, to):
     return out
 
 
+async def rows_platform_cancellations(db, frm, to):
+    """#745: Merkez için toplu iptal ve kayıp maliyet (içerik yok: gerekçe ve proje adı girmez; k-anonimlik uygulanır)."""
+    from app.db.models import TaskEvent
+
+    out = []
+    for e in (await db.execute(select(TaskEvent).where(TaskEvent.kind == "PROJECT_CANCELLED").limit(MAX_ROWS))).scalars():
+        if not _in_range(e.created_at, frm, to):
+            continue
+        d = e.data or {}
+        out.append({"_tenant": e.tenant_id, "kind": "Case" if d.get("kind") == "CASE" else "Proje", "month": _month(e.created_at),
+                    "count": 1, "lost_credits": float((d.get("lost") or {}).get("credits") or 0)})
+    return out
+
+
 async def rows_tenant_health(db, frm, to):
     since = datetime.now(timezone.utc) - timedelta(days=30)
     from sqlalchemy import func
@@ -223,6 +237,29 @@ async def rows_tenant_health(db, frm, to):
         la = last.get(tid)
         out.append({"tenant": name, "count": 1, "credits_30d": float(q30.get(tid) or 0), "quarantined": int(quar.get(tid, 0)),
                     "idle_days": (datetime.now(timezone.utc) - la).days if la else 9999})
+    return out
+
+
+async def rows_cancellations(db, tenant_id, user, frm, to):
+    """#745: iptal edilen proje/Case'ler ve kayıp maliyet. Kaynak: iptal anında yazılan PROJECT_CANCELLED olayı
+    (harcanan, teslimata dönüşen, kayıp kredi/TL ve gerekçe)."""
+    from app.db.models import TaskEvent
+
+    visible = {p.id: p for p in await _visible_projects(db, user, tenant_id)}
+    names = await _names(db, tenant_id)
+    evs = (await db.execute(select(TaskEvent).where(TaskEvent.tenant_id == tenant_id, TaskEvent.kind == "PROJECT_CANCELLED")
+                            .limit(MAX_ROWS))).scalars().all()
+    out = []
+    for e in evs:
+        p = visible.get(e.project_id)
+        if not p or not _in_range(e.created_at, frm, to):
+            continue
+        d = e.data or {}
+        lost, spent = d.get("lost") or {}, d.get("spent") or {}
+        out.append({"project": p.name, "kind": "Case" if p.kind == "CASE" else "Proje", "manager": names.get(p.manager_actor_id, "—"),
+                    "cancelled_by": names.get(e.actor_id, "—"), "reason": (e.note or "—")[:200], "month": _month(e.created_at),
+                    "count": 1, "lost_credits": float(lost.get("credits") or 0), "lost_try": float(lost.get("try") or 0),
+                    "spent_credits": float(spent.get("credits") or 0), "spent_try": float(spent.get("try") or 0)})
     return out
 
 
@@ -247,6 +284,11 @@ CATALOG: Dict[str, Dict[str, Any]] = {
                  "dims": _dims(agent="AI personel", job_title="Ünvan", label="Etiket", cause="Neden", source="Kaynak", month="Ay"),
                  "measures": {"count": ("Kayıt", "sum"), "ok": ("Doğru", "sum"), "wrong": ("Yanlış", "sum"),
                               "ai_errors": ("AI hatası", "sum")}},
+    "cancellations": {"title": "İptal edilen işler ve kayıp maliyet", "rows": rows_cancellations, "perm": "billing:view",  # #745
+                      "dims": _dims(project="Proje", kind="Tür", manager="Proje yöneticisi", cancelled_by="İptal eden", reason="Gerekçe",
+                                    month="Ay"),
+                      "measures": {"count": ("İptal sayısı", "sum"), "lost_try": ("Kayıp maliyet (TL)", "sum"),
+                                   "lost_credits": ("Kayıp kredi", "sum"), "spent_try": ("Harcanan (TL)", "sum")}},
     "transfers": {"title": "Sisteme aktarımlar", "rows": rows_transfers, "perm": ("integration:approve", "integration:manage", "mapping:manage"),
                   "dims": _dims(status="Durum", object_type="Nesne", connection="Bağlantı", month="Ay"),
                   "measures": {"count": ("Aktarım", "sum"), "amount": ("Tutar", "sum")}},
@@ -259,6 +301,9 @@ PLATFORM_CATALOG: Dict[str, Dict[str, Any]] = {
     "platform_usage": {"title": "RECAi çağrıları (toplu)", "rows": rows_platform_usage, "k": True,
                        "dims": _dims(purpose="İş türü", month="Ay"),
                        "measures": {"calls": ("Çağrı", "sum"), "latency_s": ("Ort. süre (sn)", "avg"), "errors": ("Hata", "sum")}},
+    "platform_cancellations": {"title": "İptal edilen işler ve kayıp kredi (toplu)", "rows": rows_platform_cancellations, "k": True,  # #745
+                               "dims": _dims(kind="Tür", month="Ay"),
+                               "measures": {"count": ("İptal sayısı", "sum"), "lost_credits": ("Kayıp kredi", "sum")}},
     "tenant_health": {"title": "Şirket sağlığı (işletim bilgisi)", "rows": rows_tenant_health, "k": False,
                       "dims": _dims(tenant="Şirket"),
                       "measures": {"credits_30d": ("Son 30 gün kredi", "sum"), "quarantined": ("Karantinadaki adım", "sum"),

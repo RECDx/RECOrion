@@ -51,7 +51,7 @@ def fake_sandbox(monkeypatch):
 
 
 def _cleanup(client, admin, pid, base):
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
     info = client.get(base, headers=admin).json()
     if info.get("url"):
         owner, repo = info["url"].rstrip("/").split("/")[-2:]

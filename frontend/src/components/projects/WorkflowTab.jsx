@@ -25,7 +25,10 @@ const EVENT = { PROJECT_STARTED: 'Proje akışı başladı', TASK_STARTED: 'Adı
   REPO_MIRROR_SET: 'Kod deposu yansıtması kuruldu', REPO_MIRROR_CLEARED: 'Kod deposu yansıtması kaldırıldı',
   TEST_FIX_UPDATED: 'Testler yine kaldı: açık düzeltme turu güncel sonuçla sürüyor', TEST_FIX_CLOSED: 'Testler geçti: gereksiz düzeltme turları kapatıldı',
   TEST_GATE_OVERRIDE: 'Kabul öncesi denetim uyarısına rağmen onaylandı', PEOPLE_CHANGED: 'Adımın kişileri değiştirildi',
-  QUARANTINE_APPROVED: 'Karantinadaki son sürüm yönetici tarafından kabul edildi' };
+  QUARANTINE_APPROVED: 'Karantinadaki son sürüm yönetici tarafından kabul edildi',
+  // #745 ve C3-46: proje durum değişiklikleri ile ham görünen olaylar
+  PROJECT_PAUSED: 'Proje duraklatıldı', PROJECT_RESUMED: 'Proje devam ettirildi', PROJECT_COMPLETED: 'Proje tamamlandı',
+  PROJECT_CANCELLED: 'Proje iptal edildi', RESUMED: 'Yarıda kalan adım yeniden başlatıldı', REPO_UPDATED: 'Adımın dalı ana dalla güncellendi' };
 const fmtTime = (d) => (d ? new Date(d).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
 /** İş Akışı (ADIM 7.1): adımların canlı akış durumu, teslim/onay/karantina kararları ve olay geçmişi. */
@@ -164,7 +167,7 @@ export default function WorkflowTab({ project }) {
             describe={(st) => ({ agent: st._t.assignee?.name, reviewer: st._t.reviewer?.name, approver: st._t.approver?.name,
               status: st._t.status, statusLabel: st._t.status_label })} />
         )}
-        {project.status === 'PAUSED' && <div className="pj-note medium">Proje duraklatıldı: süren adımlar devam eder, yeni adım açılmaz.</div>}
+        {project.status === 'PAUSED' && <div className="pj-note medium">Proje duraklatıldı: o an süren AI çağrısı biter ve sonucu taslak olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz. Devam ettirince kaldığı yerden sürer.</div>}
         {view === 'list' && flow.tasks.map((t) => (
           <div key={t.id} className="pj-step">
             <div className="pj-step-key">{t.order_index}</div>

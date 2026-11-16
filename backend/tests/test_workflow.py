@@ -254,9 +254,11 @@ def test_reviewer_loop_and_blocked_agent(client, world, ai):
     assert client.post(f"/api/v1/tasks/{t['id']}/release", headers=admin, json={"action": "retry"}).status_code == 200
     _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "WAITING_APPROVAL", "yeniden denemede çıktı üretmeli", timeout=45)
     for i in range(1, 4):  # yöneticinin 3 revizyonu → karantina, ardından son sürümü kabul
-        if i > 1:
-            _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "WAITING_APPROVAL", f"kabul öncesi revizyon {i}", timeout=45)
-        client.post(f"/api/v1/tasks/{t['id']}/decision", headers=admin, json={"approve": False, "note": f"Tekrar {i}"})
+        if i > 1:  # önceki revizyon işlenmeden (durum hâlâ eski "Onay bekliyor"ken) yeni karar gönderilmesin: sayacı da bekle
+            _wait(client, admin, pid, lambda x, f, i=i: x["AI adımı"]["status"] == "WAITING_APPROVAL"
+                  and (x["AI adımı"]["manager_revisions"] or {}).get("used") == i - 1, f"kabul öncesi revizyon {i}", timeout=45)
+        r = client.post(f"/api/v1/tasks/{t['id']}/decision", headers=admin, json={"approve": False, "note": f"Tekrar {i}"})
+        assert r.status_code == 200, r.text
     tasks, _ = _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "QUARANTINED", "karantina", timeout=45)
     assert tasks["AI adımı"]["blocked_reason"] is None  # son durma nedeni retten sonra gösterilmez (yeniden denemeden sonra)
     rel = lambda body: client.post(f"/api/v1/tasks/{t['id']}/release", headers=admin, json=body)  # noqa: E731
@@ -264,7 +266,7 @@ def test_reviewer_loop_and_blocked_agent(client, world, ai):
     assert rel({"action": "approve", "note": "Teknik olarak yeterli, kabul"}).status_code == 200
     _, flow = _wait(client, admin, pid, lambda x, f: x["AI adımı"]["status"] == "DONE", "son sürüm kabul edilmeli", timeout=45)
     assert any(e["kind"] == "QUARANTINE_APPROVED" for e in flow["events"])
-    assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"}).status_code == 200
+    assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"}).status_code == 200
 
 
 def test_workflow_pause_and_cancel(client, world, db, ai):
@@ -295,7 +297,7 @@ def test_unreadable_review_is_retried_or_recorded(client, world, ai):
     tasks, flow = _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "yeniden istenen kontrolle onaya gelmeli", 45)
     kinds = [e["kind"] for e in flow["events"] if e["task_id"] == tasks["AI adımı"]["id"]]
     assert "REVIEW_PASSED" in kinds and "REVIEW_SKIPPED" not in kinds
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
 
     ai.bad_reviews = 2  # iki yanıt da bozuk: kayda düşer, karar onaylayıcıya kalır
     pid, _, _ = _ready_project(client, w, "Okunamayan Kontrol 2", reviewer=True)
@@ -303,4 +305,4 @@ def test_unreadable_review_is_retried_or_recorded(client, world, ai):
     tasks, flow = _wait(client, admin, pid, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "kontrol yapılamadan onaya gelmeli", 45)
     skipped = [e for e in flow["events"] if e["task_id"] == tasks["AI adımı"]["id"] and e["kind"] == "REVIEW_SKIPPED"]
     assert len(skipped) == 1 and "okunamadı" in skipped[0]["note"] and skipped[0]["actor"]["id"] == w["reviewer"]
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

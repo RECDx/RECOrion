@@ -106,7 +106,7 @@ def test_workflow_decisions_become_labeled_records(client, db, world, ai, monkey
     assert client.get(f"/api/v1/company/{w['tenant']}/learning/records", headers=_super(client, db)).status_code == 403
     assert client.get(f"/api/v1/company/{w['tenant']}/learning/records", headers=w["member"]["h"]).status_code == 403
     assert client.get(f"/api/v1/company/{w['tenant']}/learning/records", headers=w["outsider"]["h"]).status_code == 403
-    assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"}).status_code == 200
+    assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"}).status_code == 200
 
 
 def db_row(db, sql, *args):

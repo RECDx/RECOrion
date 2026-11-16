@@ -66,6 +66,22 @@ class TaskWorkflow:
         self.decision: Optional[Dict[str, Any]] = None
         self.released: Optional[Dict[str, Any]] = None
         self.cancelled: Optional[Dict[str, Any]] = None
+        self.paused = False  # #745: proje duraklatılınca adım bir sonraki güvenli noktada bekler
+
+    @workflow.signal
+    def pause_step(self) -> None:
+        self.paused = True
+
+    @workflow.signal
+    def resume_step(self) -> None:
+        self.paused = False
+
+    async def _hold(self) -> bool:
+        """#745: proje duraklatıldıysa bir sonraki AI çağrısı / teslim öncesinde bekler (o an süren çağrı biter, yenisi
+        başlamaz; üretilen sürüm taslak olarak durur). Duraklatma yoksa komut üretmeden hemen döner (eski geçmişlerle uyumlu).
+        İptal gelirse True döner."""
+        await workflow.wait_condition(lambda: not self.paused or self.cancelled is not None)
+        return self.cancelled is not None
 
     @workflow.signal
     def submit(self, payload: Dict[str, Any]) -> None:
@@ -113,6 +129,8 @@ class TaskWorkflow:
         while True:
             # 1. Çalışma: AI personel kendisi üretir; insan personel teslim eder
             if info.get("assignee_type") == "AI_AGENT":
+                if await self._hold():  # #745: duraklatılmış projede yeni AI çalışması başlamaz
+                    return await self._cancel(task_id)
                 out = await workflow.execute_activity(act.ai_work, args=[task_id, feedback], **AI_OPTS)
                 if self.cancelled is not None:
                     return await self._cancel(task_id)
@@ -131,6 +149,8 @@ class TaskWorkflow:
                     return await self._cancel(task_id)
             # 2. Kontrol personeli (tanımlıysa): geçemezse ret sayılır ve geri döner
             if info.get("has_reviewer"):
+                if await self._hold():  # #745: kontrol personeli de duraklamada beklemeye geçer
+                    return await self._cancel(task_id)
                 rv = await workflow.execute_activity(act.ai_review, task_id, **AI_OPTS)
                 if self.cancelled is not None:
                     return await self._cancel(task_id)
@@ -147,6 +167,8 @@ class TaskWorkflow:
                     continue
                 # Değerlendirme yapılamadıysa (rv ok=False) karar insan onaylayıcıya bırakılır
             # 3. Teslim ve insan onayı
+            if await self._hold():  # #745: duraklamada teslim/onay kuyruğuna geçmez; devamda kaldığı yerden sürer
+                return await self._cancel(task_id)
             result = await workflow.execute_activity(act.submit_task, args=[task_id, work], **OPTS)
             if result["status"] == "DONE":
                 return "DONE"
@@ -174,10 +196,11 @@ class ProjectWorkflow:
         self.dirty = False
         self.running: Dict[str, Any] = {}
         self.finished: Set[str] = set()
+        self.children_paused = False  # #745: çalışan adımlara iletilen son duraklatma durumu
 
     @workflow.signal
     def pause(self) -> None:
-        self.paused = True
+        self.paused, self.dirty = True, True  # #745: döngü uyanır ve çalışan adımlara iletir
 
     @workflow.signal
     def resume(self) -> None:
@@ -211,6 +234,16 @@ class ProjectWorkflow:
                     await asyncio.gather(*self.running.values(), return_exceptions=True)
                 await workflow.execute_activity(act.cancel_remaining, args=[project_id, self.cancelled], **OPTS)
                 return "CANCELLED"
+            # #745: duraklat/devam çalışan adımlara iletilir. patched: bu sürümden önceki akış geçmişleri yeniden oynatılırken
+            # (o geçmişlerde bu sinyaller yok) komut üretilmez; yeni çalışmada sinyaller gönderilir.
+            if self.paused != self.children_paused and workflow.patched("task-pause-745"):
+                for tid in list(self.running):
+                    handle = workflow.get_external_workflow_handle(task_workflow_id(tid))
+                    try:
+                        await handle.signal(TaskWorkflow.pause_step if self.paused else TaskWorkflow.resume_step)
+                    except Exception:  # adım bu arada bittiyse sinyal gerekmez
+                        pass
+                self.children_paused = self.paused
             if not self.paused:
                 state = await workflow.execute_activity(act.next_ready_tasks, args=[project_id, list(self.running)], **OPTS)
                 for tid in state["ready"]:

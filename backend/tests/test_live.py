@@ -129,4 +129,4 @@ def test_workflow_events_stream_live(client, world, ai):
         out = _until(ws, lambda e: e["type"] == "message" and e["message"]["role"] == "assistant", "AI çıktısı", limit=40)
         assert out["message"]["sender_name"] == "Kodcu" and "AI adımı çıktısı" in out["message"]["content"]
         _until(ws, lambda e: e["type"] == "task_event" and e["kind"] == "AI_OUTPUT", "AI çıktı olayı", limit=40)
-    client.post(f"/api/v1/projects/{pid}/status", headers=w["admin"]["h"], json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=w["admin"]["h"], json={"action": "cancel", "summary": "Test temizliği"})

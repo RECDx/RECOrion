@@ -72,4 +72,4 @@ def test_flow_settings_applied(client, db, world, ai):
     flow_tasks, flow = _wait(client, admin, pid, lambda t, f: t["Onaysız adım"]["status"] == "DONE", "B onaysız tamamlanmalı")
     b_events = [e["kind"] for e in flow["events"] if e["task_id"] == flow_tasks["Onaysız adım"]["id"]]
     assert "AI_OUTPUT" in b_events and "APPROVED" not in b_events and "DONE" in b_events
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

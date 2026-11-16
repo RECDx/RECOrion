@@ -1009,7 +1009,7 @@ try {
       body: JSON.stringify({ status: 'DISABLED', secrets: { api_key: 'silindi' } }) });
   }
   await od.ctx.close();
-  await api(tm.page, `/api/v1/projects/${tProj.body.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+  await api(tm.page, `/api/v1/projects/${tProj.body.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel', summary: 'Canlı test temizliği' }) });
   await tm.ctx.close();
 
   // 11.1 Proje şablonları: proje yöneticisi RECDx'in hazır "Müşteri şikâyeti vakası" şablonundan Case açar (plan taslak gelir),
@@ -1048,7 +1048,7 @@ try {
   // Temizlik: test şablonu arşivlenir, test Case'i iptal edilir (test şirketinde birikmesin)
   if (myTpl) await api(tp.page, `/api/v1/project-templates/${myTpl.id}`, { method: 'PUT', body: JSON.stringify({ status: 'ARCHIVED' }) });
   const tplProj = ((await api(tp.page, '/api/v1/projects/?scope=mine')).body || []).find((x) => x.name === tplProject);
-  if (tplProj) await api(tp.page, `/api/v1/projects/${tplProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+  if (tplProj) await api(tp.page, `/api/v1/projects/${tplProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel', summary: 'Canlı test temizliği' }) });
   await tp.ctx.close();
 
   // 11.2 Mevzuat paketleri: canlı ortamda YAYIMLANMAZ (yayın tüm müşterilere açılır; uzman kontrolü şart — kullanıcı kararı).
@@ -1121,7 +1121,7 @@ try {
   step(mtPlanSteps === draftSteps, 'Toplantıdan proje oluştu; önerilen adımlar onay bekleyen plan taslağı olarak geldi',
     `${mtPlanSteps} adım`);
   const mtProj = ((await api(mt.page, '/api/v1/projects/?scope=mine')).body || []).find((x) => x.name === mtName);
-  if (mtProj) await api(mt.page, `/api/v1/projects/${mtProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+  if (mtProj) await api(mt.page, `/api/v1/projects/${mtProj.id}/status`, { method: 'POST', body: JSON.stringify({ action: 'cancel', summary: 'Canlı test temizliği' }) });
   await mt.ctx.close();
 
   // 11.4 Model yönlendirici: canlıda ONAY VERİLMEZ (platform varsayılanını tüm müşteriler için değiştirir). Süper Admin ekranda

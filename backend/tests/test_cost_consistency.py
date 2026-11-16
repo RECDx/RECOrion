@@ -44,4 +44,4 @@ def test_cost_consistency(client, world):  # noqa: F811
         t = c["totals"]
         assert abs(t["budget_variance"] - (5000 - t["actual"])) < 0.011
     finally:
-        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

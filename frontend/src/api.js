@@ -142,6 +142,7 @@ export const api = {
   // Proje/Case (Adım 6)
   getProject: (projectId) => request(`/projects/${projectId}`),
   updateProject: (projectId, data) => request(`/projects/${projectId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getProjectCancelPreview: (projectId) => request(`/projects/${projectId}/cancel-preview`),  // #745
   changeProjectStatus: (projectId, action, summary) => request(`/projects/${projectId}/status`, { method: 'POST', body: JSON.stringify({ action, summary }) }),
   addProjectMember: (projectId, actorId, role) => request(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ actor_id: actorId, role }) }),
   removeProjectMember: (projectId, actorId) => request(`/projects/${projectId}/members/${actorId}`, { method: 'DELETE' }),

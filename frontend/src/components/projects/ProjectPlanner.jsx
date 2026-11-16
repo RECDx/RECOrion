@@ -13,6 +13,7 @@ import TestRunsTab from './TestRunsTab';
 import RecslipCaseTab from './RecslipCaseTab';
 import { CloseTab, ReadinessTab, TeamSimTab } from './ProjectTabs';
 import { SaveTemplateModal } from './Templates';
+import CancelProjectModal from './CancelProjectModal';
 import { ProjectFields } from './ProjectHub';
 import { KIND, fmtDay, isEditable, statusOf } from './projectMeta';
 import './projects.css';
@@ -32,9 +33,9 @@ const TABS = [
 ];
 const CONFIRM = {
   start: 'Proje başlatılsın mı? Bağımlılığı olmayan iş adımları AI personele açılır.',
-  pause: 'Proje duraklatılsın mı?',
-  complete: 'Proje tamamlandı olarak kapatılsın mı?',
-  cancel: 'Proje iptal edilsin mi? Bu işlem geri alınamaz.',
+  // #745: o an süren AI çağrısı biter, yeni AI çalışması / kontrol / teslim başlamaz; Devam ettir ile kaldığı yerden sürer
+  pause: 'Proje duraklatılsın mı? O an süren AI çağrısı tamamlanır ve sonucu taslak olarak saklanır; yeni AI çalışması, kontrol ve teslim başlamaz. Devam ettirince kaldığı yerden sürer.',
+  complete: 'Proje tamamlandı olarak kapatılsın mı? Bu işlem geri alınamaz.',
   reopen_planning: 'Proje yeniden planlamaya alınsın mı?',
 };
 const DONE_MSG = { start_planning: 'Planlamaya alındı.', mark_ready: 'Proje başlamaya hazır.', start: 'Proje başlatıldı.', pause: 'Proje duraklatıldı.',
@@ -75,8 +76,11 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
   const loadDocs = useCallback(() => api.getProjectDocuments(projectId), [projectId]);
   const uploadDoc = useCallback((fd) => api.uploadProjectDocument(projectId, fd), [projectId]);
 
-  const action = async (name, summary) => {
-    if (CONFIRM[name] && !(await confirmDialog({ message: CONFIRM[name] }))) return;
+  const [cancelling, setCancelling] = useState(null);  // #745: iptal penceresi (kayıp maliyet + gerekçe)
+  const closeCancel = useCallback(() => setCancelling(null), []);
+  const action = async (name, summary, confirmed = false) => {
+    if (name === 'cancel' && !confirmed) { setCancelling({ reason: summary || '' }); return; }
+    if (!confirmed && CONFIRM[name] && !(await confirmDialog({ message: CONFIRM[name] }))) return;
     setBusy(true);
     try {
       await api.changeProjectStatus(project.id, name, summary);
@@ -144,6 +148,8 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
         </div>
       </div>
       {savingTemplate && <SaveTemplateModal project={project} onClose={() => setSavingTemplate(false)} />}
+      {cancelling && <CancelProjectModal project={project} initialReason={cancelling.reason} onClose={closeCancel}
+        onConfirm={async (reason) => { await action('cancel', reason, true); closeCancel(); }} />}
 
       <div className="pj-tabs" role="tablist">
         {TABS.filter(([k]) => (k !== 'cost' || project.can_manage) && (k !== 'recslip' || project.source_ref?.startsWith('recslip:'))).map(([k, l]) => (

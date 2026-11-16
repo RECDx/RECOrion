@@ -69,7 +69,7 @@ def test_labor_and_token_costs(client, db, world, ai):
         ai = c["totals"]["ai_credit_try"] if c["totals"]["credit_unit_try"] is not None else tokens
         assert c["totals"]["labor"] == 2700.0 and abs(c["totals"]["actual"] - (2700 + ai)) < 0.011
         assert c["by_model"] and c["by_model"][0]["calls"] >= 1 and c["currency"] == "TRY" and c["vat_included"] is False
-        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
 
         # Fiyatı tanımsız modelle yapılan çağrı fiyatsız sayılır
         _exec(db, "DELETE FROM llm_model_prices WHERE model_id = %s", model_id)
@@ -86,7 +86,7 @@ def test_labor_and_token_costs(client, db, world, ai):
         assert client.put(f"/api/v1/projects/{pid2}/budget", headers=admin, json={"budget_try": 5000}).status_code == 200
         c3 = client.get(f"/api/v1/projects/{pid2}/costs", headers=admin).json()["totals"]
         assert abs(c3["budget_variance"] - (5000 - c3["actual"])) < 0.011
-        client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
     finally:
         _exec(db, "DELETE FROM llm_model_prices WHERE model_id = %s", model_id)
         _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE id IN (%s, %s)", w["member"]["id"], w["agent"])

@@ -90,7 +90,7 @@ def test_chat_access_requires_project_membership(client, db, world):
     assert client.post("/api/v1/chat/send", headers=member, json={**send, "content": ""}).status_code == 422
     assert client.post("/api/v1/chat/send", headers=member, json={**send, "content": "x" * 20001}).status_code == 422
 
-    assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"}).status_code == 200
+    assert client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"}).status_code == 200
     r = client.post("/api/v1/chat/send", headers=admin, json=send)
     assert r.status_code == 409 and "salt okunur" in r.json()["detail"]
     assert client.get(f"/api/v1/chat/history/{human_id}", headers=member).status_code == 200  # kayıt okunabilir kalır

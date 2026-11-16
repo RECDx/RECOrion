@@ -135,7 +135,7 @@ def test_repository_lifecycle(client, world, coder):
         assert "def main" in client.get(f"{base}/file", headers=member, params={"ref": "main", "path": "src/app/main.py"}).json()["content"]
         assert client.post(f"{base}/steps/{ai_id}/merge", headers=member).status_code == 403
     finally:
-        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
         if owner and repo:
             _gitea("DELETE", f"/repos/{owner}/{repo}")
             if not _gitea("GET", f"/orgs/{owner}/repos").json():
@@ -195,7 +195,7 @@ def test_repository_mirror_to_company_account(client, world):
     finally:
         if cid:  # kasadaki gerçek token test kaydında kalmasın
             client.put(f"{ig}/{cid}", headers=admin, json={"status": "DISABLED", "secrets": {"token": "silindi"}})
-        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
         _gitea("DELETE", f"/repos/{org}/hedef")
         _gitea("DELETE", f"/orgs/{org}")
         if owner and repo:
@@ -239,6 +239,6 @@ def test_repository_seeded_from_another_project(client, world, coder):
         assert _gitea("GET", f"/repos/{so}/{sr}/contents/src/app.py").status_code == 200
     finally:
         for pid in (src_id, dst_id):
-            client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+            client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
         for o, n in repos:
             _gitea("DELETE", f"/repos/{o}/{n}")

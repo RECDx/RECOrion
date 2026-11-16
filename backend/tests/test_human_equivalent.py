@@ -42,4 +42,4 @@ def test_project_costs_show_ai_credit_try_and_human_equivalent(client, db, world
     t = c["totals"]
     assert abs(t["credit_unit_try"] - 1.596) < 0.001 and t["human_cost"] > t["ai_credit_try"] and t["saving"] > 0
     assert "iş günü" in t["cost_basis_note"]
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

@@ -85,7 +85,7 @@ def test_email_link_decision_and_queue(client, db, world, ai, telegram):
     assert approved["data"]["channel"] == "EMAIL" and approved["actor"]["id"] == w["admin"]["id"]
     assert client.post(f"/api/v1/approvals/{raw}", json={"approve": True}).status_code == 410  # tek kullanımlık
     assert client.get(f"/api/v1/approvals/{raw}").status_code == 410
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
 
 
 def test_telegram_buttons_and_prefs(client, db, world, ai, telegram):
@@ -130,11 +130,11 @@ def test_telegram_buttons_and_prefs(client, db, world, ai, telegram):
     admin_email = _email_of(db, w["admin"]["id"])
     before = len([m for m in ns.OUTBOX if m["to"] == admin_email])
     tg_before = len(telegram)
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
     pid2, _, _ = _ready_project(client, w, "Tercih Projesi")
     client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "start"})
     _wait(client, admin, pid2, lambda t, f: t["AI adımı"]["status"] == "WAITING_APPROVAL", "onaya gelmeli")
     _until(lambda: any(m == "sendMessage" for m, _ in telegram[tg_before:]), "tercih açıkken Telegram bildirimi")
     assert len([m for m in ns.OUTBOX if m["to"] == admin_email]) == before
     client.put("/api/v1/auth/notification-prefs", headers=admin, json={"email": True, "telegram": True})
-    client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid2}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

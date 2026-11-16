@@ -73,7 +73,7 @@ def test_code_explorer(client, world, coder):  # noqa: F811
         assert client.get(f"{base}/tree", headers=member, params={"ref": "../main"}).status_code == 422
         assert client.get(f"{base}/tree", headers=member, params={"ref": "yok-boyle-dal"}).status_code == 404
     finally:
-        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
         if owner and repo:
             _gitea("DELETE", f"/repos/{owner}/{repo}")
             if not _gitea("GET", f"/orgs/{owner}/repos").json():

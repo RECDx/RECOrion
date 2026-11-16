@@ -200,6 +200,30 @@ async def project_costs(db: AsyncSession, project: Project) -> Dict[str, Any]:
     }
 
 
+async def cancel_preview(db: AsyncSession, project: Project) -> Dict[str, Any]:
+    """#745: iptal penceresi. Harcanan toplam = teslimata dönüşen (onaylanmış adımlar) + kayıp maliyet (onaylanmamış, iptal
+    edilen ve yarım kalan adımlar ile adıma bağlı olmayan proje çağrıları, ör. Beyin planlama). Diğer maliyet kalemleri
+    (insan, gider) ayrıca gösterilir; kayıp maliyet yalnız AI (kredi) tarafıdır."""
+    c = await project_costs(db, project)
+    unit = c["totals"].get("credit_unit_try")
+    done = [t for t in c["tasks"] if t["status"] == "DONE"]
+    open_ = [t for t in c["tasks"] if t["status"] not in ("DONE", "CANCELLED")]
+    total_cr = _d(c["totals"]["credits"])
+    delivered_cr = sum((_d(t["tokens"]["credits"]) for t in done), ZERO)
+    lost_cr = total_cr - delivered_cr
+    to_try = (lambda v: float((v * _d(unit)).quantize(Decimal("0.01")))) if unit is not None else (lambda v: None)
+    return {
+        "project_id": str(project.id), "status": project.status,
+        "spent": {"credits": float(total_cr), "try": to_try(total_cr)},
+        "delivered": {"credits": float(delivered_cr), "try": to_try(delivered_cr)},
+        "lost": {"credits": float(lost_cr), "try": to_try(lost_cr)},
+        "other_costs_try": c["totals"]["other"] + c["totals"]["labor"],
+        "done_steps": [{"title": t["title"], "credits": t["tokens"]["credits"]} for t in done],
+        "open_steps": [{"title": t["title"], "status": t["status"], "credits": t["tokens"]["credits"]} for t in open_],
+        "has_repo": bool(project.repo_mode == "RECORION"),
+    }
+
+
 def _ai_try(credits: Decimal, unit: Decimal) -> Decimal:
     return (credits * unit).quantize(Decimal("0.01"))
 

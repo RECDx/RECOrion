@@ -108,8 +108,8 @@ def test_cost_items_attachment_budget(client, db, world, store):
         _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE id = %s", w["member"]["id"])
 
     # Kapanmış projede kilit
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
     assert client.post(base, headers=admin, json={"category": "DIGER", "description": "Geç", "quantity": 1, "unit_price_try": 1}).status_code == 409
     assert client.put(f"/api/v1/projects/{pid}/budget", headers=admin, json={"budget_try": 1}).status_code == 409
     assert client.get(base, headers=admin).status_code == 200  # okuma serbest
-    client.post(f"/api/v1/projects/{other_pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{other_pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

@@ -24,4 +24,4 @@ def test_agent_to_agent_messages_need_permission(client, world, db):
         r = client.get(proj, headers=admin, params={"message_type": "AGENT_TO_AGENT"})
         assert r.status_code == 200 and [m["content"] for m in r.json()] == ["Kodcu → Kontrolcu: kapsamı daraltalım"]
     finally:
-        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

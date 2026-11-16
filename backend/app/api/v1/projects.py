@@ -211,6 +211,10 @@ async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentU
                         db: AsyncSession = Depends(get_db)):
     project = await svc.load(db, user, project_id, manage=True)
     previous = project.status
+    from app.services import costs as cost_svc, task_flow
+
+    # #745: iptalde kayıp maliyet, durum değişmeden önceki hâliyle hesaplanır ve kayda geçer
+    preview = await cost_svc.cancel_preview(db, project) if payload.action == "cancel" and previous not in ("COMPLETED", "CANCELLED") else None
     await svc.transition(db, project, payload.action, payload.summary)
     try:
         await _sync_workflow(project, payload.action, user)
@@ -224,14 +228,37 @@ async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentU
         await db.commit()
         raise
     await db.commit()
+    reason = (payload.summary or "").strip()
+    # #745 / C3-66c / C3-75: durum değişiklikleri akış geçmişine düşer (kim, ne zaman, neden)
+    if payload.action == "pause":
+        await task_flow.log(db, project, None, "PROJECT_PAUSED", user.actor_id, reason or "Proje yöneticisi duraklattı.", {"reason": "MANAGER"})
+    elif payload.action == "resume":
+        await task_flow.log(db, project, None, "PROJECT_RESUMED", user.actor_id, reason or "Proje kaldığı yerden devam ediyor.")
+    elif payload.action == "complete":
+        await task_flow.log(db, project, None, "PROJECT_COMPLETED", user.actor_id, reason or "Proje tamamlandı.")
+    elif payload.action == "cancel":
+        await task_flow.log(db, project, None, "PROJECT_CANCELLED", user.actor_id, reason,
+                            {"spent": preview["spent"], "delivered": preview["delivered"], "lost": preview["lost"],
+                             "open_steps": len(preview["open_steps"]), "kind": project.kind} if preview else {"kind": project.kind})
+    await db.commit()
     if payload.action in ("complete", "cancel"):
         # F112: akış bitmiş/kapalı olsa da kapanışta açık kalan adımlar iptal edilir (maliyette "sürüyor" görünmez)
-        from app.services import task_flow
-        await task_flow.cancel_remaining(db, project.id, {"actor_id": str(user.actor_id), "note": "Proje kapatıldı; açık adım iptal edildi."})
+        note = f"Proje iptal edildi: {reason}" if payload.action == "cancel" else "Proje kapatıldı; açık adım iptal edildi."  # C3-80b
+        await task_flow.cancel_remaining(db, project.id, {"actor_id": str(user.actor_id), "note": note})
     if payload.action == "complete":  # ADIM 12.4: kapanışta tanımlı aktarım önerileri (onaya düşer)
         from app.services import transfers
         await transfers.after_project_closed(project)
     return _out(project)
+
+
+@router.get("/{project_id}/cancel-preview")
+async def cancel_preview(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """#745: iptal penceresi için harcanan / teslimata dönüşen / kayıp maliyet ve açık adımlar (proje yöneticisi)."""
+    project = await svc.load(db, user, project_id, manage=True)
+    if project.status in ("COMPLETED", "CANCELLED"):
+        raise HTTPException(status_code=409, detail="Bu proje zaten kapanmış.")
+    from app.services import costs as cost_svc
+    return await cost_svc.cancel_preview(db, project)
 
 
 async def _sync_workflow(project: Project, action: str, user: CurrentUser) -> None:

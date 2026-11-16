@@ -103,7 +103,7 @@ def test_agent_scorecard_and_roi(client, db, world, ai):
     # Kişi başı ücret alanı dönmez; ortalama yalnızca en az 3 kişiden hesaplanır (tutarlar toplam/proje/adım düzeyinde)
     assert "daily_cost" not in text and "labor_rate" not in text and "avg_rate" not in text
     _exec(db, "UPDATE actors SET daily_cost_try = NULL WHERE tenant_id = %s", w["tenant"])
-    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+    client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})
 
 
 def test_department_dashboard(client, db, world):

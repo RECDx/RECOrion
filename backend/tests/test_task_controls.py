@@ -45,4 +45,4 @@ def test_people_and_cancel(client, world):  # noqa: F811
         assert t["Bağımlı adım"]["status"] == "CANCELLED"
         assert client.post(f"/api/v1/tasks/{dep_id}/cancel", headers=admin, json={"note": "x"}).status_code == 409
     finally:
-        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel"})
+        client.post(f"/api/v1/projects/{pid}/status", headers=admin, json={"action": "cancel", "summary": "Test temizliği"})

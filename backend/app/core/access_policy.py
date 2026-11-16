@@ -329,6 +329,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/projects/{{project_id}}"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/status"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/cancel-preview"): HANDLER(),  # #745 (yönetim yetkisi svc.load manage=True)
     ("POST", f"{P}/projects/{{project_id}}/members"): HANDLER(),
     ("DELETE", f"{P}/projects/{{project_id}}/members/{{actor_id}}"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/plan/suggest"): HANDLER(),

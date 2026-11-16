@@ -135,6 +135,8 @@ async def transition(db: AsyncSession, project: Project, action: str, summary: O
         project.status, project.closed_at, project.close_summary = "COMPLETED", now(), (summary or "").strip() or None
     elif action == "cancel":
         need(s not in ("COMPLETED", "CANCELLED"), "Bu proje zaten kapanmış.")
+        # #745: iptal gerekçesi zorunlu; kayıp maliyetle birlikte kayda geçer ve raporlanır
+        need(bool((summary or "").strip()), "İptal gerekçesini yazın; gerekçe kayıp maliyetle birlikte kayda geçer.")
         project.status, project.closed_at, project.close_summary = "CANCELLED", now(), (summary or "").strip() or None
     else:
         raise HTTPException(status_code=400, detail="Bilinmeyen işlem.")
