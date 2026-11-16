@@ -93,3 +93,8 @@
 /* #742 öğrenme kaydı ayrıntısı: girdi/çıktı metni */
 .pj-pre { white-space: pre-wrap; font-family: inherit; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-subtle);
   border-radius: 6px; padding: 8px; color: var(--text-main); max-height: 280px; overflow-y: auto; margin: 4px 0 10px; }
+
+/* #749 keşif: tanım belgesi olgunluk çubuğu */
+.pj-meter { height: 10px; border-radius: 999px; background: rgb(var(--rgb-ov) / 0.08); overflow: hidden; }
+.pj-meter-fill { height: 100%; border-radius: 999px; background: var(--gradient-brand); transition: width 0.4s ease; }
+.pj-meter-fill.warn { background: var(--ac-fbbf24, #fbbf24); }

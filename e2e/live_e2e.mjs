@@ -99,8 +99,43 @@ try {
   await page.getByRole('heading', { name: NAME }).waitFor({ timeout: 15000 });
   step(true, 'Proje oluşturuldu (Taslak)', NAME);
 
-  // 2. Beyin AI planı (gerçek EVREN çağrısı)
+  // 2a. #749 Keşif & Tanım: Beyin AI soru sorar, yanıtlarla Proje Tanım Belgesi ve olgunluk puanı oluşur
   await page.getByRole('tab', { name: /Beyin AI Planlama/ }).click();
+  // Kullanıcı gibi: keşif yapmadan plan istemek engellenir
+  const blocked = await page.getByText(/Önce Keşif & Tanım sekmesinde/).isVisible().catch(() => false);
+  step(blocked && await page.getByRole('button', { name: 'Beyin AI plan önersin' }).isDisabled(), 'Keşif yapılmadan plan önerisi kapalı');
+  await page.getByRole('tab', { name: /Keşif & Tanım/ }).click();
+  const tDisc = Date.now();
+  let discOk = false;
+  for (let tries = 1; !discOk && tries <= 3; tries += 1) {
+    const resp = page.waitForResponse((r) => r.url().includes('/discovery/round') && r.request().method() === 'POST', { timeout: 11 * 60000 });
+    await page.getByRole('button', { name: 'Keşfe başla' }).click();
+    if ((await resp).status() < 400) discOk = true;
+    else if (tries < 3) await page.waitForTimeout(60000);
+  }
+  if (!discOk) throw new Error('Beyin AI keşif sorularını üretemedi (EVREN yanıt vermiyor)');
+  const questions = page.locator('textarea[id^="dq-q"]');
+  await page.getByText('Proje Tanım Belgesi').first().waitFor({ timeout: 30000 });
+  const qn = await questions.count();
+  step(qn > 0, 'Beyin AI keşif soruları sordu', `${qn} soru, ${Math.round((Date.now() - tDisc) / 1000)} sn`);
+  // İlk soruya yanıt, ikinciyi boş geçme (kullanıcı gibi); ikinci tur
+  if (qn) await questions.first().fill('Kullanıcılar bayiler ve merkezdeki satış ekibi; sipariş onayını satış ekibi verir. Ödeme kapsam dışı.');
+  const r2 = page.waitForResponse((r) => r.url().includes('/discovery/round') && r.request().method() === 'POST', { timeout: 11 * 60000 });
+  await page.getByRole('button', { name: 'Yanıtları gönder' }).click();
+  const r2s = (await r2).status();
+  step(r2s < 400, 'Yanıtlarla tanım belgesi güncellendi', `HTTP ${r2s}`);
+  const score = Number(await page.getByRole('progressbar', { name: 'Olgunluk puanı' }).getAttribute('aria-valuenow'));
+  await page.getByRole('button', { name: 'Tanım belgesini onayla' }).click();
+  await page.waitForTimeout(800);
+  if (await page.getByRole('alertdialog').isVisible().catch(() => false)) {
+    // Eşik altı: gerekçesiz onay olmaz; gerekçe yazılır
+    await dialogOk(page, 'Canlı test: küçük kapsam, eksikler bilinçli kabul edildi');
+  }
+  await page.getByText(/Tanım belgesi onaylandı/).first().waitFor({ timeout: 20000 });
+  step(true, 'Proje Tanım Belgesi onaylandı', `olgunluk %${score}`);
+  await page.getByRole('button', { name: 'Beyin AI Planlamaya geç' }).click();
+
+  // 2b. Beyin AI planı (gerçek EVREN çağrısı; onaylı tanım belgesine dayanır)
   const t1 = Date.now();
   // Kullanıcı gibi: EVREN yoğunluğunda "yapay zeka şu anda yanıt veremiyor" görürse bir dakika bekleyip yeniden dener (en fazla 3 kez)
   let planTries = 0;
@@ -122,7 +157,7 @@ try {
     `${stepCount} adım, ${Math.round((Date.now() - t1) / 1000)} sn${planTries > 1 ? ` (EVREN yoğun: ${planTries}. denemede)` : ''}`);
   if (!planOk) throw new Error(`Beyin AI ${planTries} denemede plan öneremedi (EVREN yanıt vermiyor)`);
   // Personeli atanmamış adımlara havuzdan personel ata
-  const selects = page.locator('select[aria-label="AI personel"]');
+  const selects = page.locator('.pj-step select[aria-label="İşi yapan personel"]');
   let assigned = 0;
   for (let i = 0; i < await selects.count(); i += 1) {
     if (!(await selects.nth(i).inputValue())) { await selects.nth(i).selectOption({ index: 1 + (i % 2) }); assigned += 1; }

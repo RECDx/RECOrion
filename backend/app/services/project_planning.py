@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Actor, ChatMessage, Department, JobTitle, LLMModel, Project, Task, Tenant
-from app.services import credits, knowledge, llm_gateway
+from app.services import credits, discovery, knowledge, llm_gateway
 from app.services import projects as psvc
 from app.services.llm_gateway import LLMContext
 
@@ -98,11 +98,16 @@ def validate_plan(plan: Dict[str, Any], pool_ids: set, human_ids: Optional[set] 
             days = 1.0
         agent = str(s.get("agent_id") or "") or None
         reviewer = str(s.get("reviewer_agent_id") or "") or None
+        # #749 (C3-79): adımı insan personel de yapabilir (AI personel yerine)
+        human = str(s.get("assignee_human_id") or "") or None
+        human = human if (human_ids is not None and human in human_ids) else None
+        if human:
+            agent = None
         steps.append({
             "key": key, "title": title, "description": str(s.get("description") or "").strip()[:4000],
             "acceptance_criteria": str(s.get("acceptance_criteria") or "").strip()[:2000],
             "department": (str(s.get("department") or "").strip() or None), "job_title": (str(s.get("job_title") or "").strip() or None),
-            "agent_id": agent if agent in pool_ids else None, "estimated_days": max(0.5, min(days, 60.0)),
+            "agent_id": agent if agent in pool_ids else None, "assignee_human_id": human, "estimated_days": max(0.5, min(days, 60.0)),
             # Kontrol personeli (ADIM 7.2): havuzdan, işi yapan personelden farklı bir AI personel
             "reviewer_agent_id": reviewer if reviewer in pool_ids and reviewer != agent else None,
             # Akış ayarları (ADIM 7.4): onaylayıcı (boş: proje yöneticisi), onay gerekliliği, ret sınırı, şema konumu
@@ -143,6 +148,13 @@ async def suggest_plan(db: AsyncSession, project: Project, feedback: Optional[st
     pool_text = "\n".join(f"- agent_id={p['agent_id']} | {p['name']} | {p['title']} | {p['department'] or '-'} | başka projelerde açık iş: {p['open_tasks_elsewhere']}"
                           for p in ctx["pool"]) or "- (şirkette henüz AI personel yok)"
     current = json.dumps({"steps": (project.plan or {}).get("steps", [])}, ensure_ascii=False)[:6000] if project.plan else "yok"
+    # #749: insan personel de adım alabilir; plan onaylı Proje Tanım Belgesine dayanır
+    from app.services import discovery
+
+    humans = (await db.execute(select(Actor).where(Actor.tenant_id == project.tenant_id, Actor.actor_type == "HUMAN",
+                                                   Actor.status != "DISABLED"))).scalars().all()
+    human_text = "\n".join(f"- human_id={h.id} | {h.display_name} | {h.role}" for h in humans) or "- yok"
+    charter = discovery.charter_text(project)
     prompt = f"""Sen {ctx['tenant'].name} şirketinin Beyin AI'sısın ve proje yöneticisiyle birlikte bir {'Case' if project.kind == 'CASE' else 'proje'} planlıyorsun.
 Görevin: isterlere göre uygulanabilir iş adımlarını çıkarmak ve her adım için departman + unvan bazında şirketin AI personel
 havuzundan en uygun personeli önermek. Havuzda uygun personel yoksa agent_id boş bırak ve hire_suggestions'a gereken unvanı yaz.
@@ -153,6 +165,13 @@ personel; yoksa kabul adımına dahil et): uygulama README'deki talimatla temiz 
 denetimlerle giriş ve temel akış (web arayüzü varsa arayüzden) gerçekten denenir; ölçütü "uygulama açıldı, denetimler geçti,
 README eksiksiz" olsun. Kabul/teslim adımının ölçütü de bu gerçek sonuca dayanmalı, yalnız rapor yazmak yetmez.
 Bilmediğin bilgiyi uydurma; eksikleri "questions" içinde yöneticiye sor.
+Planı teknik katmanlara (Backend/Frontend/Test) göre DEĞİL, Proje Tanım Belgesindeki teslimatlara ve kullanıcı akışlarına göre kur:
+her adım bir teslimatı ya da bir akışı uçtan uca tamamlasın; adımın kabul ölçütü o teslimatın kabul ölçütü ve doğrulama yöntemiyle
+aynı olsun (ör. "Turlar sayfasında 'Yurt dışı' seçilince yalnız yurt dışı turları görünür"). Yazılım projesinde plana bir
+"Arayüz/kullanım tasarımı" (ekranlar, menü/gezinme haritası, tasarım dili) adımı ve teslimden önce tanım belgesindeki tüm akışları
+gerçek arayüzde deneyen bir "Kullanıcı kabul testi" adımı ekle. Başka sektörlerde bunların karşılığını (ör. saha kabul, pilot,
+eğitim, canlıya geçiş) ekle. İnsan yapması gereken işleri (onay toplantısı, saha ölçümü, satın alma, eğitim vermek, imza) AI'ya
+verme: bu adımlara assignee_human_id ile insan personel ata. Gerçekçi olmayan tarih/bütçe görürsen "risks" içinde açıkça yaz.
 
 # Proje
 Adı: {project.name}
@@ -166,6 +185,12 @@ Hedef tarihler: {project.start_date or 'belirlenmedi'} - {project.end_date or 'b
 
 # AI personel havuzu
 {pool_text}
+
+# İnsan personel (insan adımları için)
+{human_text}
+
+# Onaylı Proje Tanım Belgesi (planın dayanağı; teslimatlar, akışlar, kabul ölçütleri)
+{charter or 'yok (keşif atlandı ya da şablondan gelen proje)'}
 {ctx['knowledge']}
 
 # Mevcut plan taslağı
@@ -177,7 +202,7 @@ Hedef tarihler: {project.start_date or 'belirlenmedi'} - {project.end_date or 'b
 Sadece şu JSON'u döndür:
 {{"summary": "planın 3-5 cümlelik özeti (toplam gün veya bitiş tarihi YAZMA; süreyi sistem simülasyonla hesaplar)",
   "steps": [{{"key": "S1", "title": "adım adı", "description": "ne yapılacak", "acceptance_criteria": "tamam sayılma ölçütü",
-             "department": "departman", "job_title": "gereken unvan", "agent_id": "havuzdan agent_id veya boş",
+             "department": "departman", "job_title": "gereken unvan", "agent_id": "havuzdan agent_id veya boş", "assignee_human_id": "insan adımıysa human_id, değilse boş",
              "reviewer_agent_id": "çıktıyı kontrol edecek, işi yapandan farklı havuz agent_id'si veya boş",
              "estimated_days": 2, "depends_on": ["önceki adım key"], "priority": "HIGH|MEDIUM|LOW"}}],
   "hire_suggestions": [{{"job_title": "unvan", "department": "departman", "reason": "neden gerekli"}}],
@@ -186,7 +211,7 @@ Sadece şu JSON'u döndür:
     # Beyin AI modeli meşgul/yanıtsızsa paketteki yedek modelle önerir
     result = await llm_gateway.chat(llm_ctx, [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=6000, timeout=300, fallback=True)
     try:
-        plan = validate_plan(_parse(result.content), {p["agent_id"] for p in ctx["pool"]})
+        plan = validate_plan(_parse(result.content), {p["agent_id"] for p in ctx["pool"]}, {str(h.id) for h in humans})
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=502, detail="Beyin AI geçerli bir plan üretemedi; lütfen tekrar deneyin.") from exc
     if not plan["steps"]:
@@ -233,8 +258,12 @@ async def plan_chat(db: AsyncSession, project: Project, actor_id: uuid.UUID, con
     system = f"""Sen {ctx['tenant'].name} şirketinin Beyin AI'sısın. Proje yöneticisiyle "{project.name}" projesini planlıyorsun.
 İsterleri netleştir, eksikleri sor, iş adımları ve AI personel seçimi hakkında öneri yap. Kısa ve uygulanabilir yanıt ver.
 Planı değiştirmek gerekiyorsa yöneticiye "Planı bu konuşmaya göre güncelle" butonunu kullanmasını öner.
+Rehber gibi davran (#749): gerçekçi olmayan tarih ya da bütçeyi gerekçesiyle söyle; sektörde sık atlanan konuları "Bunu
+düşündünüz mü?" diye hatırlat; seçeneklerin artısını ve eksisini açıkla ama kararı yöneticiye bırak; hangi işin insanda, hangisinin
+AI personelde kalması gerektiğini öner; plan Proje Tanım Belgesindeki teslimat ve akışlardan birini karşılamıyorsa söyle.
 
 İsterler: {(project.requirements or '-')[:5000]}
+Onaylı Proje Tanım Belgesi: {discovery.charter_text(project, 4000) or 'yok'}
 Mevcut plan: {plan_text}
 AI personel: {', '.join(f"{p['name']} ({p['title']})" for p in ctx['pool']) or 'yok'}
 {ctx['knowledge']}"""
@@ -278,6 +307,10 @@ async def approve_plan(db: AsyncSession, project: Project, actor_id: uuid.UUID) 
         agent = await db.get(Actor, uuid.UUID(s["agent_id"])) if s.get("agent_id") else None
         if agent and agent.tenant_id != project.tenant_id:
             agent = None
+        if not agent and s.get("assignee_human_id"):  # #749: insan adımı
+            agent = await db.get(Actor, uuid.UUID(s["assignee_human_id"]))
+            if agent and (agent.tenant_id != project.tenant_id or agent.actor_type != "HUMAN"):
+                agent = None
         approver = await db.get(Actor, uuid.UUID(s["approver_actor_id"])) if s.get("approver_actor_id") else None
         if approver and (approver.tenant_id != project.tenant_id or approver.actor_type != "HUMAN"):
             approver = None

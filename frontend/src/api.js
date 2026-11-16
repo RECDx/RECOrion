@@ -146,6 +146,11 @@ export const api = {
   changeProjectStatus: (projectId, action, summary) => request(`/projects/${projectId}/status`, { method: 'POST', body: JSON.stringify({ action, summary }) }),
   addProjectMember: (projectId, actorId, role) => request(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ actor_id: actorId, role }) }),
   removeProjectMember: (projectId, actorId) => request(`/projects/${projectId}/members/${actorId}`, { method: 'DELETE' }),
+  // #749 keşif görüşmesi ve Proje Tanım Belgesi
+  getProjectDiscovery: (projectId) => request(`/projects/${projectId}/discovery`),
+  discoveryRound: (projectId, answers, note) => request(`/projects/${projectId}/discovery/round`, { method: 'POST', body: JSON.stringify({ answers, note }) }),
+  discoveryApprove: (projectId, reason) => request(`/projects/${projectId}/discovery/approve`, { method: 'POST', body: JSON.stringify({ reason: reason || null }) }),
+  discoverySkip: (projectId, reason) => request(`/projects/${projectId}/discovery/skip`, { method: 'POST', body: JSON.stringify({ reason }) }),
   suggestProjectPlan: (projectId, feedback, useChat = false) => request(`/projects/${projectId}/plan/suggest`, { method: 'POST', body: JSON.stringify({ feedback: feedback || null, use_chat: useChat }) }),
   saveProjectPlan: (projectId, plan) => request(`/projects/${projectId}/plan`, { method: 'PUT', body: JSON.stringify(plan) }),
   approveProjectPlan: (projectId) => request(`/projects/${projectId}/plan/approve`, { method: 'POST' }),

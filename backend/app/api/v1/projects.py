@@ -172,9 +172,12 @@ async def get_project(project_id: uuid.UUID, user: CurrentUser = Depends(get_cur
         AgentDocument.project_id == project.id, AgentDocument.status.notin_(("DELETED",))))).scalar() or 0
     can_manage = user.has("project:manage") or project.manager_actor_id == user.actor_id
     from app.services import credit_control  # #746: duraklatma nedeni (MANAGER / CREDIT / WEEKLY_CAP)
+    from app.services import discovery
     return {**_out(project), "pause_reason": await credit_control.pause_reason(db, project), "plan": project.plan, "simulation": project.simulation, "close_summary": project.close_summary, "transfer_on_close": project.transfer_on_close or [],
             "members": await svc.members_out(db, project.id), "tasks": [TaskResponse.model_validate(t).model_dump() for t in tasks],
-            "document_count": docs, "can_manage": can_manage}
+            "document_count": docs, "can_manage": can_manage,
+            # #749: keşif durumu ve plan önerisine engel (PlanTab bilgilendirir)
+            "discovery_status": discovery.state(project)["status"], "plan_blocked": discovery.ready_for_plan(project)}
 
 
 @router.put("/{project_id}")
@@ -373,6 +376,11 @@ async def suggest_plan(project_id: uuid.UUID, payload: SuggestIn, user: CurrentU
         raise HTTPException(status_code=409, detail="Plan yalnızca taslak veya planlama aşamasında oluşturulabilir.")
     if not (project.requirements or "").strip():
         raise HTTPException(status_code=422, detail="Önce projenin isterlerini yazın.")
+    from app.services import discovery  # #749: plan onaylı Proje Tanım Belgesine dayanır
+
+    blocked = discovery.ready_for_plan(project)
+    if blocked:
+        raise HTTPException(status_code=409, detail=blocked)
     feedback = payload.feedback
     if payload.use_chat:
         feedback = "\n".join(filter(None, [feedback, await planning.plan_feedback_from_chat(db, project)]))
@@ -415,6 +423,63 @@ async def approve_plan(project_id: uuid.UUID, user: CurrentUser = Depends(get_cu
     project = await svc.load(db, user, project_id, manage=True)
     tasks = await planning.approve_plan(db, project, user.actor_id)
     return {"success": True, "task_count": len(tasks), "unassigned": sum(1 for t in tasks if not t.assignee_actor_id)}
+
+
+# ---------------------------------------------------------------- #749 keşif görüşmesi ve Proje Tanım Belgesi
+class DiscoveryAnswer(BaseModel):
+    id: str = Field(..., max_length=40)
+    answer: str = Field("", max_length=3000)
+
+
+class DiscoveryRoundIn(BaseModel):
+    answers: List[DiscoveryAnswer] = []
+    note: Optional[str] = Field(None, max_length=2000)
+
+
+class ReasonIn(BaseModel):
+    reason: Optional[str] = Field(None, max_length=1000)
+
+
+@router.get("/{project_id}/discovery")
+async def get_discovery(project_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Keşif durumu: sorular, yanıtlar, Proje Tanım Belgesi, olgunluk puanı ve eksikler."""
+    from app.services import discovery
+
+    project = await svc.load(db, user, project_id)
+    return {**discovery.state(project), "threshold": discovery.THRESHOLD, "plan_blocked": discovery.ready_for_plan(project)}
+
+
+@router.post("/{project_id}/discovery/round")
+async def discovery_round(project_id: uuid.UUID, payload: DiscoveryRoundIn, user: CurrentUser = Depends(get_current_user),
+                          db: AsyncSession = Depends(get_db)):
+    """Yanıtları gönderir: Beyin AI tanım belgesini ve olgunluk puanını günceller, sıradaki soruları sorar (ilk tur: yanıtsız)."""
+    from app.services import discovery
+
+    project = await svc.load(db, user, project_id, manage=True)
+    d = await discovery.run_round(db, project, [a.model_dump() for a in payload.answers], payload.note)
+    return {**d, "threshold": discovery.THRESHOLD, "plan_blocked": discovery.ready_for_plan(project)}
+
+
+@router.post("/{project_id}/discovery/approve")
+async def discovery_approve(project_id: uuid.UUID, payload: ReasonIn, user: CurrentUser = Depends(get_current_user),
+                            db: AsyncSession = Depends(get_db)):
+    """Proje Tanım Belgesini onaylar (olgunluk eşiğin altındaysa gerekçe zorunlu); ardından Beyin AI plan önerebilir."""
+    from app.services import discovery
+
+    project = await svc.load(db, user, project_id, manage=True)
+    d = await discovery.approve(db, project, user.actor_id, payload.reason)
+    return {**d, "threshold": discovery.THRESHOLD, "plan_blocked": discovery.ready_for_plan(project)}
+
+
+@router.post("/{project_id}/discovery/skip")
+async def discovery_skip(project_id: uuid.UUID, payload: ReasonIn, user: CurrentUser = Depends(get_current_user),
+                         db: AsyncSession = Depends(get_db)):
+    """Keşfi gerekçeyle atlar (kayda geçer); plan isterlerden kurulur."""
+    from app.services import discovery
+
+    project = await svc.load(db, user, project_id, manage=True)
+    d = await discovery.skip(db, project, user.actor_id, payload.reason or "")
+    return {**d, "threshold": discovery.THRESHOLD, "plan_blocked": discovery.ready_for_plan(project)}
 
 
 @router.get("/{project_id}/plan/chat")

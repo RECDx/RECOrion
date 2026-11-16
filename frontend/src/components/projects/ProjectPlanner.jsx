@@ -6,6 +6,7 @@ import { Badge, Button, Card } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
 import DocumentLibrary from '../docs/DocumentLibrary';
 import PlanTab from './PlanTab';
+import DiscoveryTab from './DiscoveryTab';
 import WorkflowTab from './WorkflowTab';
 import CostTab from './CostTab';
 import CodeRepoTab from './CodeRepoTab';
@@ -21,6 +22,7 @@ import './projects.css';
 const TABS = [
   ['info', 'Bilgiler & İsterler'],
   ['docs', 'Proje Ekleri'],
+  ['discovery', 'Keşif & Tanım'],  // #749: plandan önce Beyin AI keşif görüşmesi
   ['plan', 'Beyin AI Planlama'],
   ['team', 'Ekip & Simülasyon'],
   ['ready', 'Hazırlık & Bildirim'],
@@ -152,7 +154,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
         onConfirm={async (reason) => { await action('cancel', reason, true); closeCancel(); }} />}
 
       <div className="pj-tabs" role="tablist">
-        {TABS.filter(([k]) => (k !== 'cost' || project.can_manage) && (k !== 'recslip' || project.source_ref?.startsWith('recslip:'))).map(([k, l]) => (
+        {TABS.filter(([k]) => (k !== 'cost' || project.can_manage) && (k !== 'discovery' || project.kind !== 'CASE') && (k !== 'recslip' || project.source_ref?.startsWith('recslip:'))).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`pj-tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
             {l}{counts[k] ? <small>{counts[k]}</small> : null}
           </button>
@@ -174,6 +176,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
             emptyText="Proje kapanışında onaylı ekleri Kurum Hafızasına aktarabilirsiniz." />
         </Card>
       )}
+      {tab === 'discovery' && <DiscoveryTab project={project} onChanged={reload} onGoPlan={() => setTab('plan')} />}
       {tab === 'plan' && <PlanTab project={project} agents={agents} humans={humans} onChanged={reload} />}
       {tab === 'team' && <TeamSimTab project={project} actors={actors} onChanged={reload} />}
       {tab === 'ready' && <ReadinessTab project={project} onAction={action} busy={busy} />}

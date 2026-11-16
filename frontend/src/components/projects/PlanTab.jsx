@@ -98,7 +98,7 @@ export default function PlanTab({ project, agents, humans = [], onChanged }) {
   const steps = plan?.steps || [];
   const approved = plan?.approved && project.planning_approved_at;
   const nameOf = (list, id) => list.find((a) => a.id === id)?.display_name;
-  const describe = (s) => ({ agent: nameOf(agents, s.agent_id), reviewer: nameOf(agents, s.reviewer_agent_id), approver: nameOf(humans, s.approver_actor_id) });
+  const describe = (s) => ({ agent: nameOf(agents, s.agent_id) || (s.assignee_human_id && `${nameOf(humans, s.assignee_human_id) || 'İnsan'} (insan)`), reviewer: nameOf(agents, s.reviewer_agent_id), approver: nameOf(humans, s.approver_actor_id) });
   const onFlowChange = (next, error) => {
     if (error) { toast.warning(error); return; }
     setPlan((p) => ({ ...p, steps: next }));
@@ -118,7 +118,7 @@ export default function PlanTab({ project, agents, humans = [], onChanged }) {
         </div>
         {editable && (
           <div className="pj-actions" style={{ marginTop: 10 }}>
-            <Button variant="secondary" icon={RefreshCw} onClick={() => suggest(true)} disabled={!!busy}>
+            <Button variant="secondary" icon={RefreshCw} onClick={() => suggest(true)} disabled={!!busy || !!project.plan_blocked}>
               {busy === 'chat' ? 'Güncelleniyor…' : 'Planı bu konuşmaya göre güncelle'}
             </Button>
           </div>
@@ -137,13 +137,16 @@ export default function PlanTab({ project, agents, humans = [], onChanged }) {
             )}
             {approved ? <Badge tone="success">Onaylandı</Badge> : plan ? <Badge tone="warning">Onay bekliyor</Badge> : null}
           </div>}>
+          {editable && project.plan_blocked && (
+            <p className="pj-note medium">{project.plan_blocked}</p>
+          )}
           {editable && (
             <div className="pj-field" style={{ marginBottom: 10 }}>
               <label htmlFor="pj-fb">Beyin AI'ya not (isteğe bağlı)</label>
               <textarea id="pj-fb" className="ui-input" rows={2} value={feedback} onChange={(e) => setFeedback(e.target.value)}
                 placeholder="Örn. test adımını ayrı tut, tasarım için iki gün yeterli…" />
               <div className="pj-actions">
-                <Button icon={Brain} onClick={() => suggest(false)} disabled={!!busy}>{busy === 'suggest' ? 'Öneri hazırlanıyor…' : plan ? 'Yeniden öner' : 'Beyin AI plan önersin'}</Button>
+                <Button icon={Brain} onClick={() => suggest(false)} disabled={!!busy || !!project.plan_blocked}>{busy === 'suggest' ? 'Öneri hazırlanıyor…' : plan ? 'Yeniden öner' : 'Beyin AI plan önersin'}</Button>
                 {plan && <Button variant="secondary" icon={Save} onClick={save} disabled={!!busy || !dirty}>Planı kaydet</Button>}
                 {plan && <Button variant="success" icon={CheckCircle2} onClick={approve} disabled={!!busy || !steps.length}>Onayla ve iş adımlarına dönüştür</Button>}
               </div>
@@ -169,10 +172,7 @@ export default function PlanTab({ project, agents, humans = [], onChanged }) {
             <div className="pj-step-key">{s.key}</div>
             <div className="pj-step-body">
               <input className="ui-input half" aria-label="Adım adı" value={s.title} disabled={!editable} onChange={(e) => update(i, { title: e.target.value })} placeholder="Adım adı" />
-              <select className="ui-input half" aria-label="AI personel" value={s.agent_id || ''} disabled={!editable} onChange={(e) => update(i, { agent_id: e.target.value })}>
-                <option value="">Personel atanmadı</option>
-                {agents.map((a) => <option key={a.id} value={a.id}>{a.display_name}{a.role ? ` · ${a.role}` : ''}</option>)}
-              </select>
+              <AssigneeSelect className="ui-input half" step={s} agents={agents} humans={humans} disabled={!editable} onChange={(patch) => update(i, patch)} />
               <textarea className="ui-input wide" rows={2} aria-label="Açıklama" value={s.description || ''} disabled={!editable} onChange={(e) => update(i, { description: e.target.value })} placeholder="Ne yapılacak" />
               <textarea className="ui-input wide" rows={1} aria-label="Kabul ölçütü" value={s.acceptance_criteria || ''} disabled={!editable} onChange={(e) => update(i, { acceptance_criteria: e.target.value })} placeholder="Tamam sayılma ölçütü" />
               <label className="pj-mini"><span>Departman</span>
@@ -256,10 +256,7 @@ function StepInspector({ step, agents, humans, editable, onUpdate, onRemove }) {
         </div>
         <div className="pj-field">
           <label htmlFor="si-agent">Personel (işi yapan)</label>
-          <select id="si-agent" className="ui-input" value={step.agent_id || ''} disabled={!editable} onChange={(e) => onUpdate({ agent_id: e.target.value })}>
-            <option value="">Personel atanmadı</option>
-            {agents.map((a) => <option key={a.id} value={a.id}>{a.display_name}{a.role ? ` · ${a.role}` : ''}</option>)}
-          </select>
+          <AssigneeSelect id="si-agent" className="ui-input" step={step} agents={agents} humans={humans} disabled={!editable} onChange={onUpdate} />
         </div>
         <div className="pj-field">
           <label htmlFor="si-rev">Kontrol personeli</label>
@@ -295,7 +292,27 @@ function StepInspector({ step, agents, humans, editable, onUpdate, onRemove }) {
   );
 }
 
+/** #749 (C3-79): adımı AI personel ya da insan personel yapar (onay toplantısı, saha ölçümü, satın alma, imza…). */
+function AssigneeSelect({ step, agents, humans, onChange, ...props }) {
+  const value = step.assignee_human_id ? `h:${step.assignee_human_id}` : step.agent_id ? `a:${step.agent_id}` : '';
+  const pick = (v) => onChange(v.startsWith('h:') ? { assignee_human_id: v.slice(2), agent_id: '' }
+    : { agent_id: v.slice(2), assignee_human_id: '' });
+  return (
+    <select aria-label="İşi yapan personel" value={value} onChange={(e) => pick(e.target.value)} {...props}>
+      <option value="">Personel atanmadı</option>
+      <optgroup label="AI personel">
+        {agents.map((a) => <option key={a.id} value={`a:${a.id}`}>{a.display_name}{a.role ? ` · ${a.role}` : ''}</option>)}
+      </optgroup>
+      {humans.length > 0 && (
+        <optgroup label="İnsan personel">
+          {humans.map((h) => <option key={h.id} value={`h:${h.id}`}>{h.display_name} (insan)</option>)}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
 function normalize(s) {
   return { ...s, estimated_days: Number(s.estimated_days) || 1, agent_id: s.agent_id || null, reviewer_agent_id: s.reviewer_agent_id || null,
-    approver_actor_id: s.approver_actor_id || null };
+    approver_actor_id: s.approver_actor_id || null, assignee_human_id: s.assignee_human_id || null };
 }

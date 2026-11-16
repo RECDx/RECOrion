@@ -819,6 +819,38 @@ Olası notlar: "Doküman işleniyor: metin ve görseller okunuyor, kişisel veri
 
 > **Dikkat:** Paketinizin depolama kotası doluysa yükleme reddedilir. Gereksiz eski sürümleri silin veya paketinizi büyütün.
 
+### Keşif & Tanım sekmesi
+
+[[EKRAN: wa-kesif-tanim | Keşif & Tanım sekmesi: solda Beyin AI keşif görüşmesi (soru kartları, yanıt kutuları, Yanıtları gönder / Tanım belgesini onayla / Keşfi atla), sağda olgunluk çubuğu ve Proje Tanım Belgesi | Planlama durumundaki bir projeyi açın, "Keşif & Tanım" sekmesine basın; en az bir keşif turu yapılmış olsun]]
+
+**Bu ekran ne işe yarar?** Plan yapılmadan önce Beyin AI bir iş analisti gibi sizinle görüşür. Kısa brifinizi (isterleri) okur; amaç ve başarı ölçütü, paydaşlar ve kullanıcılar, kapsam içi/dışı, kısıtlar, teslimatlar ve kabul, riskler ve varsayımlar konularında ve şirketinizin sektörüne özgü konularda sorular sorar. Her turda yanıtlarınızla **Proje Tanım Belgesi**ni günceller ve belgeye **olgunluk puanı** (0–100) verir. Bu yalnız yazılım projeleri için değildir: üretim, hizmet, kalite, kampanya gibi her işte aynı akış kullanılır.
+
+**Neden zorunlu?** Beyin AI'nın planı bu belgedeki teslimatlara, kullanıcı akışlarına ve kabul ölçütlerine göre kurulur. Belge onaylanmadan (ya da keşif gerekçeyle atlanmadan) **Beyin AI plan önersin** düğmesi kapalıdır ve "Önce Keşif & Tanım sekmesinde…" uyarısı görünür. Case'lerde ve şablondan/toplantıdan açılan projelerde bu sekme zorunlu değildir.
+
+**Kimler değiştirebilir?** Proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar; yalnız proje Taslak veya Planlama durumundayken. Ekipteki diğer kişiler belgeyi salt okunur görür.
+
+**Nasıl kullanılır?**
+
+1. **Keşfe başla:** Beyin AI isterleri okur, ilk tanım belgesini çıkarır ve en fazla beş soru sorar. Taslak proje bu adımda Planlama durumuna geçer.
+2. Soruları yanıtlayın. Her sorunun altında "Neden önemli" açıklaması vardır. Bilmediğiniz soruyu boş bırakabilirsiniz; Beyin AI onu açık soru ya da varsayım olarak belgeye yazar. **Ek not** kutusuna sorulmamış bilgileri yazabilirsiniz.
+3. **Yanıtları gönder:** belge ve puan güncellenir, yeni sorular gelir. Görüşme en fazla sekiz tur sürer. "Bunu düşündünüz mü?" hatırlatmaları sık atlanan konuları ve gerçekçi olmayan süre/bütçe uyarılarını gösterir.
+4. **Tanım belgesini onayla:** puan eşiğin (%70) altındaysa gerekçe istenir; gerekçe kayda geçer.
+5. **Beyin AI Planlamaya geç:** plan artık onaylı belgeye göre önerilir.
+
+**Keşfi atla:** Küçük, iyi bilinen işlerde gerekçe yazarak keşfi atlayabilirsiniz; plan yalnız isterlerden kurulur. Karar İş Akışı kayıtlarına "Keşif atlandı" olarak düşer.
+
+**Proje Tanım Belgesi bölümleri:** Amaç · Teslimatlar ve kabul (her teslimat için kabul ölçütü ve doğrulama yöntemi: otomatik test, ölçüm, kanıt, kontrol listesi ya da insan onayı) · Başarı ölçütleri · Paydaşlar · Kullanıcılar ve roller · Kapsam içi / dışı · Kısıtlar · Kullanıcı / iş akışları · Riskler · Varsayımlar · Açık sorular. Üstteki çubuk olgunluk puanını, altındaki "Eksik: …" maddeleri belgenin planlamaya hazır olmasını engelleyen konuları gösterir.
+
+**Görüşme geçmişi:** Her turun soruları, yanıtları, notu, puanı ve RECAi kademesi saklanır. Her tur Beyin AI kredisi harcar.
+
+| Düğme | Ne yapar | Dikkat |
+|---|---|---|
+| **Keşfe başla** | İlk keşif turunu başlatır. | İsterler boşsa pasiftir. |
+| **Yanıtları gönder** | Yanıtlarla belgeyi günceller, sıradaki soruları getirir. | Bir iki dakika sürebilir. |
+| **Tanım belgesini onayla** | Belgeyi onaylar; plan önerisi açılır. | Puan %70'in altındaysa gerekçe ister. |
+| **Keşfi atla** | Keşfi gerekçeyle atlar. | Gerekçe zorunludur ve kayda geçer. |
+| **Beyin AI Planlamaya geç** | Planlama sekmesini açar. | Onay ya da atlamadan sonra görünür. |
+
 ### Beyin AI Planlama sekmesi
 
 [[EKRAN: wa-beyin-ai-planlama | Beyin AI Planlama sekmesi: üstte planlama sohbeti, altında "İş adımları" kartı (Liste görünümü), adım kartları, İşe alım önerileri ve Beyin AI notları | Planlama durumundaki bir projeyi açın, "Beyin AI Planlama" sekmesine basın; planda en az dört adım olsun]]
@@ -839,6 +871,8 @@ Olası notlar: "Doküman işleniyor: metin ve görseller okunuyor, kişisel veri
 
 Plan yoksa: **"Plan bekleniyor"** — "İsterleri yazdıktan sonra Beyin AI'dan iş adımı önerisi isteyin."
 
+**Keşif koşulu:** Proje Tanım Belgesi onaylanmadıkça (ya da keşif atlanmadıkça) öneri düğmeleri kapalıdır ve "Önce Keşif & Tanım sekmesinde…" uyarısı görünür. Beyin AI planı teknik katmanlara göre değil, belgedeki teslimatlara ve kullanıcı akışlarına göre kurar; yazılım projelerinde arayüz/kullanım tasarımı ve teslimden önce kullanıcı kabul testi adımı ekler.
+
 **Alanlar (sohbet ve Liste görünümü):**
 
 | Alan | Ne işe yarar | Nasıl doldurulur / seçenekler | Örnek | Zorunlu |
@@ -847,7 +881,7 @@ Plan yoksa: **"Plan bekleniyor"** — "İsterleri yazdıktan sonra Beyin AI'dan 
 | **Beyin AI'ya not (isteğe bağlı)** | Öneri isterken yön verir. | Serbest metin. | Test adımını ayrı tut, tasarım için iki gün yeterli. | Hayır |
 | Adım anahtarı (S1, S2…) | Adımın kısa kodu; bağımlılıklarda kullanılır. | Salt okunur. | S3 | — |
 | Adım adı | Adımın adı. | Kısa ve açık. | Veri modeli tasarımı | Evet |
-| **AI personel** | Adımı yürütecek personel. | **Personel atanmadı** veya havuzdaki AI personel ("Ad · Unvan"). | Orion Analist · İş Analisti | Başlamaya hazır için evet |
+| **İşi yapan personel** | Adımı yürütecek personel. | **Personel atanmadı**, havuzdaki AI personel ("Ad · Unvan") ya da insan personel ("Ad (insan)"). Onay toplantısı, saha ölçümü, satın alma, eğitim, imza gibi insan işlerini insan personele atayın; Beyin AI da bu adımlara insan önerir. İnsan adımı başlayınca kişiye bildirim gider, teslimi kişi yapar. | Orion Analist · İş Analisti | Başlamaya hazır için evet |
 | Açıklama ("Ne yapılacak") | Adımın içeriği. | Serbest metin. | — | Hayır |
 | Kabul ölçütü ("Tamam sayılma ölçütü") | Onaylayıcının bakacağı ölçüt. | Ölçülebilir yazın. | Tüm tablolar ilişki şemasıyla verilmiş olmalı. | Hayır |
 | **Departman** | Adımın ait olduğu birim. | Metin. | Bilgi İşlem | Hayır |

@@ -348,6 +348,10 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/projects/{{project_id}}/members"): HANDLER(),
     ("DELETE", f"{P}/projects/{{project_id}}/members/{{actor_id}}"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/plan/suggest"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/discovery"): HANDLER(),  # #749 keşif ve Proje Tanım Belgesi
+    ("POST", f"{P}/projects/{{project_id}}/discovery/round"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/discovery/approve"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/discovery/skip"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}/plan"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/plan/approve"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/plan/chat"): HANDLER(),

@@ -65,6 +65,17 @@ def brain(monkeypatch, world):
     async def chat(model_code, messages, **kw):
         content = messages[-1]["content"]
         calls.append(content)
+        if "keşif görüşmesi" in content:  # #749: Beyin AI keşif turu
+            answered = "Bayiler ve satış ekibi" in content
+            return ChatResult(json.dumps({
+                "charter": {"goal": "Müşteriler sipariş durumunu izler", "users_roles": ["Müşteri", "Satış ekibi"],
+                            "deliverables": [{"name": "Sipariş takip ekranı", "acceptance": "Müşteri kendi siparişlerini görür",
+                                              "verification": "Kullanıcı kabul testi"}],
+                            "workflows": ["Müşteri giriş yapar → siparişini açar → durumunu görür"], "scope_out": ["Ödeme"]},
+                "maturity": {"score": 80 if answered else 40, "missing": [] if answered else ["Kullanıcılar belirsiz"]},
+                "questions": [] if answered else [{"topic": "Paydaşlar", "text": "Kim kullanacak?", "why": "Roller ekranları belirler"},
+                                                  {"topic": "Kapsam", "text": "Ödeme kapsamda mı?", "why": "Entegrasyon gerekir"}],
+                "reminders": ["Bunu düşündünüz mü: bildirim e-postaları"]}), None, 900, 300, {})
         if "Sadece şu JSON" in content:
             a1, a2 = world["agents"]
             return ChatResult(json.dumps({"summary": "Plan özeti.", "steps": [
@@ -118,7 +129,35 @@ def test_plan_suggest_approve_simulate_and_start(client, db, world, brain):
     w, h = world, world["admin"]["h"]
     pid = w["project"]
     client.put(f"/api/v1/projects/{pid}", headers=h, json={"requirements": "Müşteriler sipariş durumunu görebilmeli."})
+    # #749: tanım belgesi onaylanmadan Beyin AI plan önermez
+    r = client.post(f"/api/v1/projects/{pid}/plan/suggest", headers=h, json={})
+    assert r.status_code == 409 and "Keşif & Tanım" in r.json()["detail"]
+    assert client.get(f"/api/v1/projects/{pid}", headers=h).json()["plan_blocked"]
+    # Ekip üyesi (yönetemeyen) keşif yapamaz, durumu görebilir
+    assert client.post(f"/api/v1/projects/{pid}/discovery/round", headers=w["member"]["h"], json={}).status_code == 403
+    assert client.get(f"/api/v1/projects/{pid}/discovery", headers=w["member"]["h"]).json()["status"] == "NOT_STARTED"
+    assert client.post(f"/api/v1/projects/{pid}/discovery/approve", headers=h, json={}).status_code == 409  # belge yok
+    d = client.post(f"/api/v1/projects/{pid}/discovery/round", headers=h, json={}).json()
+    assert d["status"] == "IN_PROGRESS" and d["maturity"]["score"] == 40 and len(d["pending"]) == 2
+    assert d["charter"]["deliverables"][0]["verification"] == "Kullanıcı kabul testi" and d["reminders"]
+    assert client.get(f"/api/v1/projects/{pid}", headers=h).json()["status"] == "PLANNING"  # keşif planlamaya alır
+    # Eşik altı onay gerekçe ister
+    r = client.post(f"/api/v1/projects/{pid}/discovery/approve", headers=h, json={})
+    assert r.status_code == 422 and "gerekçe" in r.json()["detail"]
+    q1, q2 = d["pending"]
+    d = client.post(f"/api/v1/projects/{pid}/discovery/round", headers=h,
+                    json={"answers": [{"id": q1["id"], "answer": "Bayiler ve satış ekibi"}, {"id": q2["id"], "answer": ""},
+                                      {"id": "uydurma", "answer": "x"}], "note": "Ödeme ikinci faz"}).json()
+    last = d["rounds"][-1]
+    assert [x["id"] for x in last["qa"]] == [q1["id"], q2["id"]] and last["note"] == "Ödeme ikinci faz"  # sorulmayan yanıt düşer
+    assert "Ödeme kapsamda mı?" in brain[-1].split("Yanıtlanmadan geçilen sorular:")[1].splitlines()[0]
+    assert d["maturity"]["score"] == 80 and d["pending"] == []
+    d = client.post(f"/api/v1/projects/{pid}/discovery/approve", headers=h, json={}).json()
+    assert d["status"] == "APPROVED" and d["plan_blocked"] is None
+    events = [e[0] for e in _all(db, "SELECT kind FROM task_events WHERE project_id = %s ORDER BY created_at", pid)]
+    assert events.count("DISCOVERY_ROUND") == 2 and "CHARTER_APPROVED" in events
     plan = client.post(f"/api/v1/projects/{pid}/plan/suggest", headers=h, json={}).json()
+    assert "Sipariş takip ekranı" in brain[-1] and "human_id=" in brain[-1]  # plan tanım belgesine ve insan havuzuna dayanır
     steps = {s["key"]: s for s in plan["steps"]}
     assert steps["S3"]["agent_id"] is None and steps["S3"]["depends_on"] == ["S2"]  # uydurma personel ve bağımlılık düşer
     assert plan["hire_suggestions"][0]["job_title"] == "Yazılım Test Uzmanı"
@@ -128,12 +167,15 @@ def test_plan_suggest_approve_simulate_and_start(client, db, world, brain):
     bad = {"steps": [{"key": "A", "title": "A", "depends_on": ["B"]}, {"key": "B", "title": "B", "depends_on": ["A"]}]}
     assert client.put(f"/api/v1/projects/{pid}/plan", headers=h, json=bad).status_code == 422
 
-    # Yönetici test adımını kodcuya atar ve onaylar
+    # Yönetici test adımını kodcuya, dokümantasyonu insan personele (#749, C3-79) atar ve onaylar
     plan["steps"][2]["agent_id"] = w["agents"][1]
-    assert client.put(f"/api/v1/projects/{pid}/plan", headers=h, json=plan).status_code == 200
+    plan["steps"][3].update(agent_id=w["agents"][0], assignee_human_id=w["member"]["id"])
+    saved = client.put(f"/api/v1/projects/{pid}/plan", headers=h, json=plan).json()
+    assert saved["steps"][3]["assignee_human_id"] == w["member"]["id"] and saved["steps"][3]["agent_id"] is None
     r = client.post(f"/api/v1/projects/{pid}/plan/approve", headers=h)
     assert r.json() == {"success": True, "task_count": 4, "unassigned": 0}
     tasks = {t["title"]: t for t in client.get(f"/api/v1/projects/{pid}/tasks", headers=h).json()}
+    assert tasks["Dokümantasyon"]["assignee_actor_id"] == w["member"]["id"]
     assert tasks["Kodlama"]["depends_on"] == [tasks["Analiz"]["id"]]
     members = client.get(f"/api/v1/projects/{pid}", headers=h).json()["members"]
     assert {m["actor_id"] for m in members if m["role"] == "AGENT"} == set(w["agents"])
@@ -167,6 +209,9 @@ def test_plan_chat(client, world, brain):
     assert client.post(f"/api/v1/projects/{pid}/plan/chat", headers=h, json={"content": "Nereden başlayalım?"}).json()["content"].startswith("Planlama")
     hist = client.get(f"/api/v1/projects/{pid}/plan/chat", headers=h).json()
     assert [m["role"] for m in hist] == ["user", "assistant"]
+    # #749: keşif gerekçesiz atlanamaz; gerekçeyle atlanınca plan isterlerden kurulur
+    assert client.post(f"/api/v1/projects/{pid}/discovery/skip", headers=h, json={"reason": " "}).status_code == 422
+    assert client.post(f"/api/v1/projects/{pid}/discovery/skip", headers=h, json={"reason": "Küçük iç iş"}).json()["status"] == "SKIPPED"
     client.post(f"/api/v1/projects/{pid}/plan/suggest", headers=h, json={"use_chat": True})
     assert "Nereden başlayalım?" in brain[-1]  # konuşma plana geri bildirim olarak girer
     client.post(f"/api/v1/projects/{pid}/status", headers=h, json={"action": "cancel", "summary": "Test temizliği"})
