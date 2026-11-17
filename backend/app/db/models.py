@@ -1455,3 +1455,19 @@ class WebResearch(Base):
     error = Column(Text)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     finished_at = Column(DateTime(timezone=True))
+
+
+class SectorPack(Base):
+    """Sektör bilgi paketi (İSTEK #751). draft yalnız RECDx'te; şirketler ve Beyin AI yalnız uzman kontrolünden geçmiş, yayından çekilmemiş published'ı kullanır."""
+    __tablename__ = "sector_packs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(40), nullable=False, unique=True)
+    title = Column(String(120), nullable=False)
+    description = Column(Text)
+    sector_codes = Column(JSONB, nullable=False, default=list)
+    keywords = Column(JSONB, nullable=False, default=list)
+    draft = Column(JSONB, nullable=False, default=dict)
+    published = Column(JSONB)
+    draft_updated_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

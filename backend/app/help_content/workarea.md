@@ -843,6 +843,15 @@ Olası notlar: "Doküman işleniyor: metin ve görseller okunuyor, kişisel veri
 
 **Görüşme geçmişi:** Her turun soruları, yanıtları, notu, puanı ve RECAi kademesi saklanır. Her tur Beyin AI kredisi harcar.
 
+#### Sektör paketi seçimi
+
+Keşif kartının üstündeki **Sektör paketi** listesi, Beyin AI'nın bu projede hangi iş kolu bilgisini kullanacağını gösterir. Sektör paketleri RECDx'te bir uzman tarafından kontrol edilip yayımlanır (ör. Yazılım projesi, Üretim / MES devreye alma, ERP devreye alma, Kalite & uyum). Her pakette o iş kolunun keşif soruları, standart aşamaları ve teslimat şablonları (kabul ölçütü ve doğrulama yöntemiyle), tipik roller, sık atlanan gereksinimler, riskler, KPI'lar ve standartlar bulunur.
+
+- **Beyin AI önerisi:** Siz seçim yapmadıkça Beyin AI isterlere ve şirketinizin sektörüne bakarak uygun paketi kendisi seçer; altta "Beyin AI isterlere ve şirketin sektörüne göre önerdi; değiştirebilirsiniz." yazar. Uygun paket bulamazsa "Beyin AI bu projeye uyan bir paket bulamadı; uygun olanı seçebilirsiniz." yazar.
+- **Seçmek / değiştirmek:** Listeden paketi seçin. Sonraki keşif turu paketteki soruları (şirketinizin kendi ek soruları önce gelir), sık atlanan gereksinimleri ve standartları dikkate alır; **Beyin AI plan önersin** paketteki aşama ve teslimat şablonlarını kullanır. Tanım belgesiyle çelişen şablonlar alınmaz.
+- **Paket yok (yalnız genel sorular):** Beyin AI yalnız sektörden bağımsız soru iskeletiyle çalışır.
+- Liste yalnız proje Taslak veya Planlama durumundayken ve proje yöneticisi ya da **Tüm Projeleri Yönetme** izni olanlar için değiştirilebilir. Seçim İş Akışı kayıtlarına "Sektör paketi: …" olarak düşer. Yayımlanmış paket yoksa liste görünmez.
+
 #### Web araştırması kartı
 
 [[EKRAN: wa-web-arastirmasi | Keşif & Tanım sekmesindeki Web araştırması kartı: Web'de araştır düğmesi, Beyin AI'nın önerdiği konular, tamamlanmış bir araştırmanın bulguları ([1] kaynak bağlantıları, "doğrulanmadı" rozeti), çelişkiler, projeye etkisi ve kaynak listesi | Planlama durumundaki projede "Keşif & Tanım" sekmesini açın; bir web araştırması tamamlanmış olsun]]

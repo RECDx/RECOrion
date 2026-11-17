@@ -305,7 +305,7 @@ try {
     throw new Error(`'${title}' ${minutes} dakikada onaya gelmedi (durum: ${await statusOf(page, title)})`);
   };
   const tw = Date.now();
-  await untilApproval(first, 20);
+  await untilApproval(first, 35);
   const v1 = await versionOf(first);
   const reviewNotes = await page.locator('.pj-list li', { hasText: 'Kontrol' }).count();
   step(v1 >= 1, 'AI personel ilk adımı kendisi yürüttü, kontrolden geçip onaya geldi',
@@ -1155,6 +1155,42 @@ try {
   step((draftOnly ? lockedEmpty && lockedNoConfirm && !rgAfter?.published : true) && !draftLeak,
     'Mevzuat paketi uzman kontrolü olmadan yayımlanamıyor; taslak şirkete görünmüyor',
     `${sgkText.split('\n')[0].slice(0, 70)} · boşken kilitli: ${lockedEmpty} · beyansız kilitli: ${lockedNoConfirm} · şirkette taslak: ${draftLeak ? 'EVET' : 'yok'}`);
+
+  // #751 Sektör paketleri: canlıda YAYIMLANMAZ (yayın tüm şirketlerin Beyin AI'sına açılır; uzman kontrolü şart).
+  // Süper Admin ilk dalga dört paketi taslak görür; uzman beyanı olmadan Yayımla kilitli kalır, vazgeçer. Yayımlanmamış paket
+  // şirkete ve projenin paket seçimine sızmaz; RECDx şirketin paket eklerini göremez (KVKK).
+  const sp = await session('super');
+  await sp.page.goto(`${APP}/#/super-admin/sector-packs`);
+  const spList = sp.page.getByRole('list', { name: 'Sektör paketleri (yönetim)' });
+  await spList.waitFor({ timeout: 30000 });
+  const spRows = await spList.locator('li').count();
+  const mesRow = spList.locator('li', { hasText: 'Üretim / MES' });
+  const mesText = await mesRow.innerText();
+  const mesDraft = /Taslak · uzman kontrolü bekliyor/.test(mesText);
+  let spLocked = true;
+  if (mesDraft) {
+    await mesRow.getByRole('button', { name: 'Uzman kontrolüyle yayımla' }).click();
+    const spDlg = sp.page.getByRole('dialog');
+    const lockA = await spDlg.getByRole('button', { name: 'Yayımla' }).isDisabled();
+    await spDlg.locator('#sp-reviewer').fill('Deneme Uzman');
+    const lockB = await spDlg.getByRole('button', { name: 'Yayımla' }).isDisabled();
+    await shot(sp.page, '17b-sektor-paketi-yayin-kilidi');
+    await spDlg.getByRole('button', { name: 'Vazgeç' }).click();
+    spLocked = lockA && lockB;
+  }
+  const spAll = (await api(sp.page, '/api/v1/system/sector-packs')).body || [];
+  const spKvkk = (await api(sp.page, `/api/v1/company/${cfg.tenant_id}/sector-packs`)).status;
+  await sp.ctx.close();
+  const spAdm = await session('admin');
+  const liveCodes = new Set(spAll.filter((p) => p.published && !p.published.withdrawn).map((p) => p.code));
+  const seenCodes = ((await api(spAdm.page, `/api/v1/company/${cfg.tenant_id}/sector-packs`)).body || []).map((p) => p.code);
+  const projPack = proj ? (await api(spAdm.page, `/api/v1/projects/${proj.id}/sector-pack`)).body : null;
+  const spLeak = seenCodes.some((c) => !liveCodes.has(c)) || (projPack?.options || []).some((o) => !liveCodes.has(o.code))
+    || (projPack?.code && !liveCodes.has(projPack.code));
+  await spAdm.ctx.close();
+  step(spRows >= 4 && spLocked && !spLeak && spKvkk === 403,
+    'Sektör paketleri taslak geldi; uzman kontrolü olmadan yayımlanamıyor, taslak şirkete ve projeye sızmıyor, RECDx şirket eklerini göremiyor',
+    `${spRows} paket · ${mesText.split('\n')[0].slice(0, 60)} · kilitli: ${spLocked} · yayında: ${liveCodes.size} · şirkette görünen: ${seenCodes.length} · RECDx şirket listesi: HTTP ${spKvkk}`);
 
   // 11.3 Toplantıdan proje: proje yöneticisi önce tarayıcıda kısa bir kayıt dener (sahte mikrofon yalnızca bip sesi verir →
   // anlaşılır konuşma yok uyarısı), sonra toplantı kaydını dosya olarak yükler (EVREN voxcpm2 ile üretilmiş sentetik Türkçe

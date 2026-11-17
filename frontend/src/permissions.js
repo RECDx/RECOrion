@@ -19,6 +19,7 @@ export const MENU_PERMISSIONS = {
   INTEGRATIONS: ['integration:manage', 'mapping:manage', 'integration:approve'],
   AUTOMATIONS: ['automation:manage'],
   REGULATIONS: ['regulation:manage'],
+  SECTOR_PACKS: ['tenant:manage', 'brain:manage'],  // #751
   CREDITS: ['billing:view'],
 };
 

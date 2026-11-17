@@ -5,6 +5,7 @@ import { Badge, Button, Card, EmptyState } from '../../ui/components';
 import { promptDialog, toast } from '../../ui/feedback';
 import { isPlanning } from './projectMeta';
 import ResearchPanel from './ResearchPanel';
+import { ProjectSectorPack } from '../sectorpacks/SectorPacks';
 
 const STATUS = { NOT_STARTED: ['Başlamadı', 'neutral'], IN_PROGRESS: ['Görüşme sürüyor', 'warning'], APPROVED: ['Onaylandı', 'success'], SKIPPED: ['Atlandı', 'neutral'] };
 const LIST_KEYS = [
@@ -74,6 +75,7 @@ export default function DiscoveryTab({ project, onChanged, onGoPlan }) {
       <div className="pj-steps">
         <Card title="Beyin AI keşif görüşmesi" subtitle="Plan yapılmadan önce işin ne olduğu netleşir; Beyin AI sizin düşünmediğiniz konuları sorar."
           actions={<Badge tone={stTone}>{stLabel}</Badge>}>
+          <ProjectSectorPack project={project} editable={editable} />
           {noReq && <p className="pj-note medium">Önce Bilgiler & İsterler sekmesinde projenin isterlerini (kısa brif) yazın.</p>}
           {d.status === 'SKIPPED' && <p className="pj-note info">Keşif atlandı: {d.skipped_reason}</p>}
           {d.status === 'APPROVED' && (

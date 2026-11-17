@@ -60,6 +60,7 @@ import CompanyDashboard from './dashboard/CompanyDashboard';
 import IntegrationsPanel from './integrations/IntegrationsPanel';
 import Automations from './integrations/Automations';
 import { CompanyRegulations } from './regulations/Regulations';
+import { CompanySectorPacks } from './sectorpacks/SectorPacks';
 import BrainPanel from './ai/BrainPanel';
 import LearningPanel from './ai/LearningPanel';
 import CatalogImportModal from './catalog/CatalogImportModal';
@@ -99,6 +100,7 @@ const COMPANY_NAV = [
     { tab: 'INTEGRATIONS', label: 'Entegrasyonlar', icon: Plug, color: 'var(--ac-38bdf8)' },
     { tab: 'AUTOMATIONS', label: 'Otomasyonlar', icon: Zap, color: 'var(--ac-fbbf24)' },
     { tab: 'REGULATIONS', label: 'Mevzuat Paketleri', icon: BookOpenCheck, color: '#f59e0b' },
+    { tab: 'SECTOR_PACKS', label: 'Sektör Paketleri', icon: Layers, color: 'var(--ac-a78bfa)' },
   ] },
   { key: 'KULLANIM', label: 'Kullanım', items: [
     { tab: 'CREDITS', label: 'Kredi ve Kullanım', icon: Coins, color: '#facc15' },
@@ -5183,6 +5185,7 @@ export default function CompanyAdminConsole({
           {activeTab === 'LEARNING' && <LearningPanel tenantId={tenantId} />}
           {activeTab === 'REGULATIONS' && <CompanyRegulations tenantId={tenantId}
             canManage={can(currentUser, 'regulation:manage')} />}
+          {activeTab === 'SECTOR_PACKS' && <CompanySectorPacks tenantId={tenantId} canManage={can(currentUser, 'tenant:manage')} />}
           {activeTab === 'CREDITS' && <CreditsPanel tenantId={tenantId} canManage={can(currentUser, 'tenant:manage')} />}
 
           <HireWizard

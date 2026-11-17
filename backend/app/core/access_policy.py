@@ -131,6 +131,11 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/system/regulation-packs"): SUPER_ADMIN,
     ("PUT", f"{P}/system/regulation-packs/{{pack_id}}"): SUPER_ADMIN,
     ("POST", f"{P}/system/regulation-packs/{{pack_id}}/publish"): SUPER_ADMIN,
+    ("GET", f"{P}/system/sector-packs"): SUPER_ADMIN,  # #751 sektör bilgi paketleri
+    ("POST", f"{P}/system/sector-packs"): SUPER_ADMIN,
+    ("PUT", f"{P}/system/sector-packs/{{pack_id}}"): SUPER_ADMIN,
+    ("POST", f"{P}/system/sector-packs/{{pack_id}}/publish"): SUPER_ADMIN,
+    ("POST", f"{P}/system/sector-packs/{{pack_id}}/withdraw"): SUPER_ADMIN,
     # Toplantı kaydından proje (ADIM 11.3): project:create; kayıt yalnızca yükleyene / project:manage'e (uçta denetlenir)
     ("POST", f"{C}/meetings"): HANDLER("project:create"),
     ("GET", f"{C}/meetings"): HANDLER("project:create"),
@@ -284,6 +289,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{C}/credits/resume-paused"): TENANT("tenant:manage"),
     ("GET", f"{C}/web-research/settings"): TENANT("billing:view"),  # #750 aç/kapa, izinli/yasaklı siteler
     ("PUT", f"{C}/web-research/settings"): TENANT("tenant:manage"),
+    ("GET", f"{C}/sector-packs"): TENANT(content=True),  # #751 yayındaki paketler + şirket ekleri (KVKK)
+    ("PUT", f"{C}/sector-packs/{{code}}"): TENANT("tenant:manage", content=True),
     ("GET", f"{C}/credit-store"): TENANT("billing:view"),  # #747 ek kredi satın alma (yönetim verisi)
     ("POST", f"{C}/credit-orders"): TENANT("tenant:manage"),
     ("POST", f"{C}/plan-upgrade-orders"): TENANT("tenant:manage"),  # #747 ek
@@ -358,6 +365,8 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/projects/{{project_id}}/discovery/round"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/discovery/approve"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/discovery/skip"): HANDLER(),
+    ("GET", f"{P}/projects/{{project_id}}/sector-pack"): HANDLER(),  # #751
+    ("PUT", f"{P}/projects/{{project_id}}/sector-pack"): HANDLER(),
     ("PUT", f"{P}/projects/{{project_id}}/plan"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/plan/approve"): HANDLER(),
     ("GET", f"{P}/projects/{{project_id}}/plan/chat"): HANDLER(),

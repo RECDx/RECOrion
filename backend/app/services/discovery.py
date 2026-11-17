@@ -117,6 +117,12 @@ async def run_round(db: AsyncSession, project: Project, answers: List[Dict[str, 
     from app.services import web_research  # #750: yöneticinin onayladığı web araştırmalarının kaynaklı bulguları
 
     research = await web_research.context_text(db, project)
+    from app.services import sector_packs
+
+    pack, _ = await sector_packs.for_project(db, project, tenant)
+    already = [x.get("question") or "" for r in d["rounds"] for x in r.get("qa", [])] + [q.get("text") or "" for q in d["pending"]]
+    pack_text = sector_packs.discovery_context(pack, tenant, already)
+    pack_block = f"\n{pack_text}\n" if pack_text else ""
     prompt = f"""Sen {tenant.name} şirketinin Beyin AI'sısın ve bir iş analisti gibi proje yöneticisiyle {'Case' if project.kind == 'CASE' else 'proje'} keşif görüşmesi yapıyorsun.
 Amaç: plan yapılmadan önce işin ne olduğunu netleştirmek. Kısa brifle başlayan yöneticinin düşünmediği konuları sen getirirsin.
 Bu yalnız yazılım için değildir; şirketin sektörüne ve işin türüne uygun sorular sor (üretim, hizmet, sağlık, kalite, ERP, kampanya…).
@@ -142,7 +148,7 @@ Yöneticinin ek notu: {(note or 'yok')[:2000]}
 
 # Web araştırması bulguları (yöneticinin onayıyla yapıldı; kaynaklı)
 {research or 'yok'}
-
+{pack_block}
 # Mevcut tanım belgesi
 {json.dumps(d['charter'], ensure_ascii=False)[:6000] if d['charter'] else 'yok'}
 

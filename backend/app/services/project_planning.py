@@ -158,6 +158,11 @@ async def suggest_plan(db: AsyncSession, project: Project, feedback: Optional[st
     from app.services import web_research  # #750
 
     research = await web_research.context_text(db, project, limit=4000)
+    from app.services import sector_packs  # #751
+
+    pack, _ = await sector_packs.for_project(db, project, ctx['tenant'])
+    pack_text = sector_packs.plan_context(pack)
+    pack_block = f"\n{pack_text}\n" if pack_text else ""
     prompt = f"""Sen {ctx['tenant'].name} şirketinin Beyin AI'sısın ve proje yöneticisiyle birlikte bir {'Case' if project.kind == 'CASE' else 'proje'} planlıyorsun.
 Görevin: isterlere göre uygulanabilir iş adımlarını çıkarmak ve her adım için departman + unvan bazında şirketin AI personel
 havuzundan en uygun personeli önermek. Havuzda uygun personel yoksa agent_id boş bırak ve hire_suggestions'a gereken unvanı yaz.
@@ -197,7 +202,7 @@ Hedef tarihler: {project.start_date or 'belirlenmedi'} - {project.end_date or 'b
 
 # Web araştırması bulguları (yöneticinin onayıyla; kaynaklı — tipik teslimatlar, süreler, mevzuat, riskler için kullan)
 {research or 'yok'}
-{ctx['knowledge']}
+{pack_block}{ctx['knowledge']}
 
 # Mevcut plan taslağı
 {current}

@@ -1,0 +1,793 @@
+[
+  {
+    "code": "yazilim",
+    "title": "Yazılım geliştirme",
+    "description": "Web, mobil ve iş uygulaması geliştirme projeleri: kapsam, kullanıcı akışları, entegrasyon, test ve canlıya alma.",
+    "sector_codes": [
+      "C"
+    ],
+    "keywords": [
+      "yazılım",
+      "uygulama",
+      "web",
+      "mobil uygulama",
+      "portal",
+      "web sitesi",
+      "api",
+      "crm",
+      "panel",
+      "platform",
+      "rezervasyon",
+      "e-ticaret"
+    ],
+    "content": {
+      "questions": [
+        {
+          "topic": "Kullanıcılar",
+          "text": "Sistemi kimler kullanacak ve her rol neyi görebilmeli, neyi yapabilmeli?",
+          "why": "Yetki modeli sonradan eklenirse ekranların çoğu yeniden yazılır."
+        },
+        {
+          "topic": "Ana akış",
+          "text": "Kullanıcının baştan sona en sık yaptığı işi adım adım anlatır mısınız (ör. kayıt → arama → seçim → ödeme → onay)?",
+          "why": "Akış netleşmeden ekran ve veri modeli doğru kurulamaz."
+        },
+        {
+          "topic": "Liste ekranları",
+          "text": "Liste ekranlarında hangi filtre, arama, sıralama ve dışa aktarma gerekli?",
+          "why": "Filtre ve arama en sık unutulan, kullanıcıların ilk fark ettiği eksiktir."
+        },
+        {
+          "topic": "Entegrasyon",
+          "text": "Hangi dış sistemlerle (ödeme, e-posta/SMS, ERP, muhasebe, harita) bağlantı gerekiyor; bunların test hesabı var mı?",
+          "why": "Entegrasyonlar süre ve riskin en büyük kaynağıdır."
+        },
+        {
+          "topic": "Veri",
+          "text": "Eski sistemden aktarılacak veri var mı; hangi biçimde ve ne kadar?",
+          "why": "Veri aktarımı ayrı bir iş kalemidir ve genellikle planda unutulur."
+        },
+        {
+          "topic": "Platform",
+          "text": "Hangi cihaz ve tarayıcılarda çalışmalı; mobil uygulama mı, mobil uyumlu web mi?",
+          "why": "Hedef platform mimariyi ve süreyi doğrudan değiştirir."
+        },
+        {
+          "topic": "Yönetim",
+          "text": "İçeriği ve ayarları kim yönetecek; bir yönetim paneli gerekiyor mu?",
+          "why": "Yönetim ekranı yoksa her değişiklik geliştirici ister."
+        },
+        {
+          "topic": "KVKK",
+          "text": "Kişisel veri işleniyor mu; aydınlatma metni, açık rıza ve silme talebi nasıl karşılanacak?",
+          "why": "KVKK yükümlülükleri sonradan eklendiğinde veri modeli değişir."
+        },
+        {
+          "topic": "Kabul",
+          "text": "İşin bittiğini nasıl anlayacaksınız; kabul testini kim, hangi senaryolarla yapacak?",
+          "why": "Kabul ölçütü olmayan iş bitmez."
+        },
+        {
+          "topic": "Canlıya geçiş",
+          "text": "Uygulama nerede barınacak (sunucu, alan adı, SSL) ve canlıya geçiş tarihi sabit mi?",
+          "why": "Barındırma ve alan adı işleri son haftaya kalırsa teslim gecikir."
+        }
+      ],
+      "phases": [
+        {
+          "name": "Analiz ve kapsam",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Gereksinim ve kullanıcı akışı belgesi",
+              "acceptance": "Her rol için ana akışlar ve kapsam dışı maddeler yazılı, yönetici onaylı",
+              "verification": "Belgede her rol ve akış için başlık var; yönetici onayı kayıtlı"
+            }
+          ]
+        },
+        {
+          "name": "Arayüz tasarımı",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Ekran listesi ve tel çerçeve (wireframe)",
+              "acceptance": "Her ana akışın ekranları, boş/hata durumları dahil",
+              "verification": "Ekran listesinde her akış adımına karşılık gelen ekran var"
+            }
+          ]
+        },
+        {
+          "name": "Geliştirme",
+          "split": "AI",
+          "deliverables": [
+            {
+              "name": "Çalışan uygulama (kod deposunda)",
+              "acceptance": "Kapsamdaki tüm ekranlar ve işlemler çalışır",
+              "verification": "Uygulama ayağa kalkar; menüdeki her bağlantı tıklanır, 404/boş sayfa yok; liste ekranlarında filtre ve arama çalışır"
+            }
+          ]
+        },
+        {
+          "name": "Test",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Test senaryoları ve sonuç raporu",
+              "acceptance": "Her ana akış için olumlu ve olumsuz senaryo; kritik hata yok",
+              "verification": "Otomatik testler geçer; senaryo listesi ana akışların hepsini kapsar"
+            }
+          ]
+        },
+        {
+          "name": "Kullanıcı kabul testi ve canlıya geçiş",
+          "split": "HUMAN",
+          "deliverables": [
+            {
+              "name": "Kabul tutanağı ve kurulum/kullanım kılavuzu",
+              "acceptance": "Yetkili kullanıcı kabul testini imzalar",
+              "verification": "Kılavuzda kurulum, yönetici ve son kullanıcı bölümleri var"
+            }
+          ]
+        }
+      ],
+      "roles": [
+        {
+          "role": "Ürün sahibi / iş birimi temsilcisi",
+          "side": "HUMAN",
+          "note": "Önceliklendirir, kabul testini yapar."
+        },
+        {
+          "role": "Analist",
+          "side": "AI",
+          "note": "Gereksinim ve akış belgesini hazırlar; insan onaylar."
+        },
+        {
+          "role": "Yazılım geliştirici",
+          "side": "AI",
+          "note": "Kodu yazar, birim testlerini ekler."
+        },
+        {
+          "role": "Test uzmanı",
+          "side": "AI",
+          "note": "Senaryoları çıkarır, tıklama taraması yapar."
+        },
+        {
+          "role": "Sistem yöneticisi",
+          "side": "HUMAN",
+          "note": "Sunucu, alan adı, SSL ve yedekleme."
+        }
+      ],
+      "missed": [
+        "Liste ekranlarında filtre, arama, sıralama ve sayfalama",
+        "Her ekranda Kapat / Geri / İptal ve kaydedilmemiş değişiklik uyarısı",
+        "Kullanıcıların uygulama içinde gezinmesi için tutarlı menü (sol menü/üst menü)",
+        "Yönetici ile son kullanıcı arasında geçiş ve rol bazlı menü",
+        "Boş liste, hata ve yükleniyor durumları",
+        "Parola sıfırlama, oturum zaman aşımı",
+        "Dışa aktarma (Excel/PDF) ve yazdırma",
+        "Yedekleme ve geri yükleme",
+        "Erişilebilirlik ve mobil uyum"
+      ],
+      "risks": [
+        "Kapsamın geliştirme sırasında genişlemesi",
+        "Dış sistem entegrasyonunun test hesabının geç gelmesi",
+        "Veri aktarımında kirli/eksik veri",
+        "Kabul ölçütlerinin belirsizliği nedeniyle bitmeyen düzeltme turları"
+      ],
+      "kpis": [
+        "Kabul testinde bulunan kritik hata sayısı",
+        "Planlanan / gerçekleşen teslim tarihi",
+        "Ana akış tamamlama süresi",
+        "Sayfa yüklenme süresi"
+      ],
+      "standards": [
+        {
+          "title": "KVKK (6698 sayılı Kanun)",
+          "note": "Kişisel veri işleniyorsa aydınlatma, açık rıza, saklama ve silme süreçleri"
+        },
+        {
+          "title": "OWASP Top 10",
+          "note": "Web uygulaması güvenlik açıkları için temel kontrol listesi"
+        },
+        {
+          "title": "WCAG 2.1",
+          "note": "Web erişilebilirliği"
+        }
+      ]
+    }
+  },
+  {
+    "code": "uretim-mes",
+    "title": "Üretim / MES devreye alma",
+    "description": "İmalat işletmelerinde üretim takip (MES), verimlilik (OEE) ve kalite projeleri: makine bağlantısı, veri toplama, raporlama ve sahada devreye alma.",
+    "sector_codes": [
+      "A",
+      "D",
+      "E",
+      "H"
+    ],
+    "keywords": [
+      "üretim",
+      "mes",
+      "imalat",
+      "fabrika",
+      "makine",
+      "oee",
+      "vardiya",
+      "plc",
+      "iş emri",
+      "duruş",
+      "hat",
+      "tezgah"
+    ],
+    "content": {
+      "questions": [
+        {
+          "topic": "Kapsam",
+          "text": "Kaç makine/hat kapsamda; ilk aşamada hangileri devreye alınacak (pilot hat)?",
+          "why": "Pilot hat seçilmezse devreye alma tüm sahaya yayılır ve kontrol kaybolur."
+        },
+        {
+          "topic": "Makine bağlantısı",
+          "text": "Makinelerin kontrol sistemleri ve haberleşme türleri neler (PLC markası, OPC UA, Modbus, dijital sinyal, bağlantısız)?",
+          "why": "Veri toplama yöntemi ve donanım ihtiyacı buna göre belirlenir."
+        },
+        {
+          "topic": "Vardiya",
+          "text": "Vardiya düzeni nasıl (kaç vardiya, mola saatleri, hafta sonu çalışma)?",
+          "why": "OEE ve duruş hesapları planlı çalışma süresine dayanır."
+        },
+        {
+          "topic": "Duruşlar",
+          "text": "Duruş nedenleri listesi var mı; operatör nedeni nereden ve nasıl girecek?",
+          "why": "Neden girilmeyen duruşlar raporları anlamsız kılar."
+        },
+        {
+          "topic": "İş emri",
+          "text": "İş emirleri nereden gelecek (ERP, Excel, elle) ve üretim sonucu ERP'ye geri yazılacak mı?",
+          "why": "ERP entegrasyonu çift veri girişini önler ama ayrı bir iş kalemidir."
+        },
+        {
+          "topic": "Kalite",
+          "text": "Hat sonu/ara kalite kontrolleri, hurda ve yeniden işleme nasıl kayda alınacak?",
+          "why": "Kalite bileşeni olmadan OEE'nin kalite oranı hesaplanamaz."
+        },
+        {
+          "topic": "Altyapı",
+          "text": "Sahada ağ (kablolu/kablosuz) ve operatör terminali (tablet, endüstriyel PC) var mı?",
+          "why": "Altyapı eksikliği devreye almayı en çok geciktiren konudur."
+        },
+        {
+          "topic": "İzlenebilirlik",
+          "text": "Lot/seri numarası izlenebilirliği gerekiyor mu (hammaddeden ürüne)?",
+          "why": "İzlenebilirlik veri modelini ve etiketleme sürecini değiştirir."
+        },
+        {
+          "topic": "Kullanıcılar",
+          "text": "Operatör, vardiya amiri, planlama ve yönetim hangi ekranları kullanacak?",
+          "why": "Operatör ekranı sade olmazsa veri girilmez."
+        },
+        {
+          "topic": "Başarı",
+          "text": "Başarıyı hangi ölçütle değerlendireceksiniz (OEE artışı, duruş azalması, hurda oranı)? Bugünkü değer biliniyor mu?",
+          "why": "Başlangıç değeri ölçülmezse iyileşme kanıtlanamaz."
+        }
+      ],
+      "phases": [
+        {
+          "name": "Saha keşfi ve analiz",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Saha keşif raporu (makine envanteri, haberleşme, ağ, vardiya)",
+              "acceptance": "Kapsamdaki her makine için bağlantı yöntemi belirlenmiş",
+              "verification": "Envanter tablosunda her makinenin bağlantı türü ve sorumlusu dolu"
+            }
+          ]
+        },
+        {
+          "name": "Süreç ve veri tasarımı",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Duruş nedenleri, OEE tanımı ve rapor tasarımı",
+              "acceptance": "Duruş ağacı ve OEE formülü üretim müdürü onaylı",
+              "verification": "Belgede planlı/plansız duruş ayrımı ve OEE bileşenleri tanımlı"
+            }
+          ]
+        },
+        {
+          "name": "Kurulum ve entegrasyon",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Pilot hatta veri toplama ve ERP iş emri entegrasyonu",
+              "acceptance": "Pilot hattan sinyaller kesintisiz geliyor; iş emirleri ERP'den alınıyor",
+              "verification": "Bir vardiya boyunca toplanan veri ile manuel sayım karşılaştırması %98 üzeri uyumlu"
+            }
+          ]
+        },
+        {
+          "name": "Eğitim ve pilot devreye alma",
+          "split": "HUMAN",
+          "deliverables": [
+            {
+              "name": "Operatör ve amir eğitimi, pilot hat kabul tutanağı",
+              "acceptance": "Operatörler duruş nedenini terminalden giriyor; amir raporu okuyabiliyor",
+              "verification": "Pilot süresince nedeni girilmemiş duruş oranı %10 altında"
+            }
+          ]
+        },
+        {
+          "name": "Yaygınlaştırma",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Kalan hatların devreye alma planı ve ilk dönem OEE raporu",
+              "acceptance": "Tüm kapsam hatları devrede; başlangıç ve güncel OEE karşılaştırması",
+              "verification": "Rapor başlangıç (baseline) değerini ve dönem sonu değerini içeriyor"
+            }
+          ]
+        }
+      ],
+      "roles": [
+        {
+          "role": "Üretim müdürü",
+          "side": "HUMAN",
+          "note": "Kapsamı ve başarı ölçütünü onaylar."
+        },
+        {
+          "role": "Bakım / otomasyon sorumlusu",
+          "side": "HUMAN",
+          "note": "PLC ve makine bağlantılarına saha erişimi."
+        },
+        {
+          "role": "Süreç analisti",
+          "side": "AI",
+          "note": "Duruş ağacı, OEE tanımı, rapor tasarımı taslakları."
+        },
+        {
+          "role": "Entegrasyon geliştiricisi",
+          "side": "AI",
+          "note": "ERP iş emri ve sonuç aktarımı, veri dönüşümleri."
+        },
+        {
+          "role": "Saha devreye alma uzmanı",
+          "side": "HUMAN",
+          "note": "Donanım kurulumu ve operatör eğitimi sahada yapılır."
+        }
+      ],
+      "missed": [
+        "Başlangıç (baseline) OEE ve duruş değerlerinin proje başında ölçülmesi",
+        "Planlı duruşların (mola, bakım, kalıp değişimi) OEE dışında tutulması",
+        "Operatörün duruş nedenini girmediği durumlar için kural",
+        "Ağ kesintisinde verinin yerelde tutulup sonra aktarılması",
+        "Makine saatlerinin ve sunucu saatinin eşitlenmesi",
+        "Vardiya devri ve vardiya raporu",
+        "ERP'ye geri yazılan miktarların mutabakatı"
+      ],
+      "risks": [
+        "Eski makinelerde veri toplamanın beklenenden zor çıkması",
+        "Operatör direnci ve eksik veri girişi",
+        "Saha ağ altyapısının yetersizliği",
+        "Üretim baskısı nedeniyle devreye alma için hat ayrılamaması"
+      ],
+      "kpis": [
+        "OEE (kullanılabilirlik × performans × kalite)",
+        "Plansız duruş süresi",
+        "Ortalama arıza aralığı (MTBF) ve onarım süresi (MTTR)",
+        "Hurda / yeniden işleme oranı",
+        "Nedeni girilmemiş duruş oranı"
+      ],
+      "standards": [
+        {
+          "title": "ISA-95 / IEC 62264",
+          "note": "İşletme ile üretim sistemleri arasındaki bilgi modeli ve katmanlar"
+        },
+        {
+          "title": "OPC UA (IEC 62541)",
+          "note": "Makine haberleşmesi için yaygın standart"
+        },
+        {
+          "title": "ISO 22400",
+          "note": "Üretim yönetimi için KPI tanımları (OEE dahil)"
+        },
+        {
+          "title": "İş sağlığı ve güvenliği (6331 sayılı Kanun)",
+          "note": "Sahada kurulum ve bakım çalışmaları"
+        }
+      ]
+    }
+  },
+  {
+    "code": "erp-devreye-alma",
+    "title": "ERP / iş yazılımı devreye alma",
+    "description": "Odoo vb. ERP ve iş yazılımlarının devreye alınması: süreç analizi, yapılandırma, veri aktarımı, eğitim ve canlıya geçiş.",
+    "sector_codes": [],
+    "keywords": [
+      "erp",
+      "odoo",
+      "muhasebe",
+      "stok",
+      "satın alma",
+      "satış",
+      "devreye alma",
+      "canlıya geçiş",
+      "logo",
+      "netsis",
+      "mikro",
+      "sap"
+    ],
+    "content": {
+      "questions": [
+        {
+          "topic": "Modüller",
+          "text": "Hangi süreçler/modüller kapsamda (satış, satın alma, stok, üretim, muhasebe, İK); ilk fazda hangileri canlıya alınacak?",
+          "why": "Fazlama yapılmayan ERP projeleri uzar ve canlıya geçiş riskli olur."
+        },
+        {
+          "topic": "Mevcut sistem",
+          "text": "Bugün hangi sistemler kullanılıyor ve hangileri kapatılacak; paralel çalışma olacak mı?",
+          "why": "Paralel çalışma süresi ve kapanacak sistemler plana girmelidir."
+        },
+        {
+          "topic": "Veri aktarımı",
+          "text": "Hangi ana veriler (cari, ürün, stok, açık siparişler, açılış bakiyeleri) aktarılacak; temizliği kim yapacak?",
+          "why": "Veri temizliği müşteri tarafında yapılmazsa canlıya geçiş tarihi kayar."
+        },
+        {
+          "topic": "Açılış",
+          "text": "Canlıya geçiş hangi tarihte ve hangi dönem açılışıyla yapılacak (ay başı, yıl başı)?",
+          "why": "Muhasebe açılışı dönem başına denk gelmelidir."
+        },
+        {
+          "topic": "Yasal",
+          "text": "e-Fatura, e-Arşiv, e-İrsaliye ve e-Defter entegratörü hangisi; mevcut sözleşme devam edecek mi?",
+          "why": "e-Belge geçişi ayrı test ve entegratör onayı ister."
+        },
+        {
+          "topic": "Özelleştirme",
+          "text": "Standart süreçten farklı çalışmanız gereken yerler neler; bunlar gerçekten şart mı?",
+          "why": "Her özelleştirme bakım ve sürüm yükseltme maliyeti doğurur."
+        },
+        {
+          "topic": "Raporlar",
+          "text": "Yönetimin ve muhasebenin vazgeçemeyeceği raporlar hangileri?",
+          "why": "Rapor ihtiyacı geç çıkarsa canlıya geçiş sonrası şikâyet artar."
+        },
+        {
+          "topic": "Kullanıcılar",
+          "text": "Kaç kullanıcı, hangi roller ve onay akışları (satın alma onayı, indirim yetkisi) var?",
+          "why": "Yetki ve onay akışları güvenlik ve lisans maliyetini belirler."
+        },
+        {
+          "topic": "Eğitim",
+          "text": "Anahtar kullanıcılar kim; son kullanıcı eğitimini kim verecek?",
+          "why": "Anahtar kullanıcısı olmayan ERP projesi canlıda zorlanır."
+        },
+        {
+          "topic": "Destek",
+          "text": "Canlıya geçişten sonra destek süresi ve kapsamı ne olacak?",
+          "why": "Hiper-bakım (ilk haftalar) dönemi plana yazılmalıdır."
+        }
+      ],
+      "phases": [
+        {
+          "name": "Süreç analizi (mevcut durum / hedef durum)",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Süreç analizi ve boşluk (gap) raporu",
+              "acceptance": "Her kapsam süreci için standart karşılama veya özelleştirme kararı yazılı",
+              "verification": "Rapordaki her süreç satırında karar ve sorumlu dolu"
+            }
+          ]
+        },
+        {
+          "name": "Yapılandırma ve özelleştirme",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Yapılandırılmış test ortamı",
+              "acceptance": "Kapsam süreçleri test ortamında uçtan uca çalışır",
+              "verification": "Her süreç için örnek kayıt test ortamında baştan sona işlenebiliyor"
+            }
+          ]
+        },
+        {
+          "name": "Veri aktarımı",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Veri aktarım şablonları, deneme aktarımı ve mutabakat raporu",
+              "acceptance": "Deneme aktarımında kayıt sayıları ve bakiyeler eski sistemle tutuyor",
+              "verification": "Cari, stok ve bakiye toplamları eski sistem raporuyla karşılaştırılmış"
+            }
+          ]
+        },
+        {
+          "name": "Eğitim ve kullanıcı kabul testi",
+          "split": "HUMAN",
+          "deliverables": [
+            {
+              "name": "Eğitim dokümanları ve UAT tutanağı",
+              "acceptance": "Anahtar kullanıcılar senaryoları test ortamında başarıyla tamamladı",
+              "verification": "Her rol için en az bir senaryo imzalı"
+            }
+          ]
+        },
+        {
+          "name": "Canlıya geçiş ve hiper-bakım",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Canlıya geçiş planı (cut-over) ve ilk ay destek raporu",
+              "acceptance": "Açılış bakiyeleri onaylı; ilk ay kritik sorun kalmadı",
+              "verification": "Cut-over kontrol listesinin her maddesi işaretli"
+            }
+          ]
+        }
+      ],
+      "roles": [
+        {
+          "role": "Proje sponsoru (yönetim)",
+          "side": "HUMAN",
+          "note": "Özelleştirme ve fazlama kararlarını verir."
+        },
+        {
+          "role": "Anahtar kullanıcılar",
+          "side": "HUMAN",
+          "note": "Süreç bilgisini verir, kabul testini yapar, eğitimi yaygınlaştırır."
+        },
+        {
+          "role": "ERP danışmanı / analist",
+          "side": "AI",
+          "note": "Süreç analizi, boşluk raporu, yapılandırma önerileri."
+        },
+        {
+          "role": "Veri aktarım uzmanı",
+          "side": "AI",
+          "note": "Şablonlar, dönüştürme ve mutabakat raporları."
+        },
+        {
+          "role": "Mali müşavir / muhasebe",
+          "side": "HUMAN",
+          "note": "Hesap planı, açılış bakiyeleri ve e-Belge onayı."
+        }
+      ],
+      "missed": [
+        "Açılış bakiyelerinin muhasebe tarafından onaylanması",
+        "Açık siparişlerin ve yoldaki malların aktarımı",
+        "Kullanıcı yetkileri ve onay limitleri",
+        "e-Belge entegratörü test ve canlı geçişi",
+        "Eski sistemin salt okunur erişimle saklanması",
+        "Yazdırma şablonları (fatura, irsaliye, teklif) ve şirket logosu",
+        "Canlıya geçiş sonrası hiper-bakım dönemi"
+      ],
+      "risks": [
+        "Kirli ana veri ve geciken veri temizliği",
+        "Aşırı özelleştirme isteği",
+        "Anahtar kullanıcıların günlük işten zaman ayıramaması",
+        "Dönem açılışının kaçırılması"
+      ],
+      "kpis": [
+        "Canlıya geçiş tarihine uyum",
+        "Aktarılan kayıtların mutabakat oranı",
+        "İlk ay açılan destek talebi sayısı",
+        "Sistemi aktif kullanan kullanıcı oranı"
+      ],
+      "standards": [
+        {
+          "title": "Vergi Usul Kanunu ve e-Belge düzenlemeleri (GİB)",
+          "note": "e-Fatura, e-Arşiv, e-İrsaliye, e-Defter"
+        },
+        {
+          "title": "KVKK (6698 sayılı Kanun)",
+          "note": "Cari ve personel kişisel verileri"
+        },
+        {
+          "title": "TTK defter tutma ve saklama yükümlülükleri",
+          "note": "Eski sistem kayıtlarının saklanması"
+        }
+      ]
+    }
+  },
+  {
+    "code": "kalite-uyum",
+    "title": "Kalite ve uyum (ISO 9001, KVKK, iç denetim)",
+    "description": "Kalite yönetim sistemi kurulumu, belgelendirme hazırlığı, KVKK uyum çalışmaları ve iç denetim projeleri.",
+    "sector_codes": [],
+    "keywords": [
+      "iso",
+      "9001",
+      "kalite",
+      "kvkk",
+      "uyum",
+      "denetim",
+      "belgelendirme",
+      "prosedür",
+      "risk",
+      "27001",
+      "14001",
+      "45001"
+    ],
+    "content": {
+      "questions": [
+        {
+          "topic": "Hedef",
+          "text": "Hedef bir belgelendirme mi (ISO 9001, 27001, 14001, 45001), KVKK uyumu mu, yoksa iç denetim mi? Belgelendirme denetimi için hedef tarih var mı?",
+          "why": "Hedef ve tarih tüm planı belirler; belgelendirme kuruluşu takvimi önceden alınmalıdır."
+        },
+        {
+          "topic": "Kapsam",
+          "text": "Hangi lokasyonlar, birimler ve süreçler kapsamda; kapsam dışı bırakılan var mı?",
+          "why": "Kapsam beyanı belgelendirmenin temelidir."
+        },
+        {
+          "topic": "Mevcut durum",
+          "text": "Mevcut prosedür, talimat ve kayıtlar var mı; en son ne zaman güncellendi?",
+          "why": "Boşluk analizi mevcut dokümantasyondan başlar."
+        },
+        {
+          "topic": "Sorumlular",
+          "text": "Kalite/uyum sorumlusu ve süreç sahipleri belli mi; yönetim temsilcisi kim?",
+          "why": "Süreç sahibi olmayan prosedür uygulanmaz."
+        },
+        {
+          "topic": "Kişisel veri",
+          "text": "Hangi kişisel veri kategorileri işleniyor (çalışan, müşteri, aday, ziyaretçi, kamera)? VERBİS kaydı var mı?",
+          "why": "KVKK envanteri tüm uyum belgelerinin dayanağıdır."
+        },
+        {
+          "topic": "Veri aktarımı",
+          "text": "Kişisel veriler yurt dışına (bulut, e-posta sağlayıcı) aktarılıyor mu?",
+          "why": "Yurt dışı aktarım ayrı şartlara bağlıdır."
+        },
+        {
+          "topic": "Risk",
+          "text": "Risk ve fırsat değerlendirmesi yapılıyor mu; hangi yöntemle?",
+          "why": "ISO standartları risk temelli yaklaşım ister."
+        },
+        {
+          "topic": "Ölçüm",
+          "text": "Kalite hedefleri ve performans göstergeleri tanımlı mı; nasıl ölçülüyor?",
+          "why": "Ölçülemeyen hedef denetimde uygunsuzluk çıkarır."
+        },
+        {
+          "topic": "Eğitim",
+          "text": "Çalışanlara farkındalık eğitimi verilecek mi; kayıtları nasıl tutulacak?",
+          "why": "Eğitim kayıtları denetimde istenir."
+        },
+        {
+          "topic": "Doküman kontrolü",
+          "text": "Dokümanlar nerede tutulacak; onay, sürüm ve dağıtım nasıl yönetilecek?",
+          "why": "Doküman kontrolü olmayan sistemde eski sürümler kullanılmaya devam eder."
+        }
+      ],
+      "phases": [
+        {
+          "name": "Boşluk analizi",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Boşluk (gap) analizi raporu",
+              "acceptance": "Standardın her maddesi için mevcut durum ve eksik yazılı",
+              "verification": "Rapor, standardın tüm madde başlıklarını içeriyor; her eksik için sorumlu ve tarih var"
+            }
+          ]
+        },
+        {
+          "name": "Dokümantasyon",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "Politika, prosedür ve form seti (KVKK: envanter, aydınlatma metinleri, saklama-imha politikası)",
+              "acceptance": "Her doküman süreç sahibi tarafından gözden geçirilmiş ve onaylı",
+              "verification": "Doküman listesinde her dokümanın sürümü, onaylayanı ve yürürlük tarihi var"
+            }
+          ]
+        },
+        {
+          "name": "Uygulama ve eğitim",
+          "split": "HUMAN",
+          "deliverables": [
+            {
+              "name": "Farkındalık eğitimi ve uygulama kayıtları",
+              "acceptance": "Kapsamdaki çalışanlar eğitimi aldı; prosedürlere göre kayıt üretilmeye başlandı",
+              "verification": "Eğitim katılım listesi ve her prosedür için en az bir örnek kayıt"
+            }
+          ]
+        },
+        {
+          "name": "İç denetim ve yönetim gözden geçirmesi",
+          "split": "AI+HUMAN",
+          "deliverables": [
+            {
+              "name": "İç denetim raporu, düzeltici faaliyetler ve YGG tutanağı",
+              "acceptance": "Tüm maddeler denetlendi; bulguların düzeltici faaliyetleri açıldı",
+              "verification": "Her bulgu için kök neden, faaliyet, sorumlu ve termin dolu"
+            }
+          ]
+        },
+        {
+          "name": "Belgelendirme denetimi",
+          "split": "HUMAN",
+          "deliverables": [
+            {
+              "name": "Belgelendirme denetimi ve kapanış",
+              "acceptance": "Büyük uygunsuzluk yok; küçük bulgular kapatıldı",
+              "verification": "Denetim raporundaki her bulgu için kapanış kanıtı"
+            }
+          ]
+        }
+      ],
+      "roles": [
+        {
+          "role": "Yönetim temsilcisi / kalite sorumlusu",
+          "side": "HUMAN",
+          "note": "Sistemin sahibi; denetimlerde muhatap."
+        },
+        {
+          "role": "Süreç sahipleri",
+          "side": "HUMAN",
+          "note": "Prosedürleri onaylar ve uygular."
+        },
+        {
+          "role": "Uyum analisti",
+          "side": "AI",
+          "note": "Boşluk analizi, doküman taslakları, kontrol listeleri."
+        },
+        {
+          "role": "İç denetçi",
+          "side": "HUMAN",
+          "note": "Bağımsızlık gereği denetimi yetkin bir insan yapar; AI kontrol listesi ve rapor taslağı hazırlar."
+        },
+        {
+          "role": "Hukuk danışmanı",
+          "side": "HUMAN",
+          "note": "KVKK metinlerinin hukuki kontrolü."
+        }
+      ],
+      "missed": [
+        "Kapsam beyanı ve kapsam dışı gerekçeleri",
+        "Doküman kontrolü (sürüm, onay, dağıtım, eski sürümlerin geri çekilmesi)",
+        "Risk ve fırsat kayıtları",
+        "Tedarikçi değerlendirme",
+        "Müşteri şikâyeti ve geri bildirim süreci",
+        "KVKK: kamera kayıtları, ziyaretçi kayıtları ve çalışan adaylarının verileri",
+        "Saklama-imha süreleri ve periyodik imha kaydı",
+        "Yönetimin gözden geçirmesi tutanağı"
+      ],
+      "risks": [
+        "Dokümanların kâğıt üzerinde kalıp uygulanmaması",
+        "Belgelendirme tarihinin uygulama kayıtları oluşmadan gelmesi",
+        "Süreç sahiplerinin zaman ayıramaması",
+        "Hazır şablonların şirkete uyarlanmadan kullanılması"
+      ],
+      "kpis": [
+        "Açık düzeltici faaliyet sayısı ve ortalama kapanış süresi",
+        "Denetim bulgu sayısı (büyük/küçük)",
+        "Eğitim tamamlama oranı",
+        "Müşteri şikâyeti sayısı"
+      ],
+      "standards": [
+        {
+          "title": "ISO 9001:2015",
+          "note": "Kalite yönetim sistemi"
+        },
+        {
+          "title": "ISO 19011",
+          "note": "Yönetim sistemleri denetim kılavuzu"
+        },
+        {
+          "title": "KVKK (6698 sayılı Kanun) ve ikincil düzenlemeler",
+          "note": "Aydınlatma, açık rıza, VERBİS, saklama-imha"
+        },
+        {
+          "title": "ISO/IEC 27001",
+          "note": "Bilgi güvenliği yönetim sistemi (kapsamdaysa)"
+        }
+      ]
+    }
+  }
+]

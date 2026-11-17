@@ -275,6 +275,7 @@ Aşağıdaki tablo Merkez Yönetim'in tam haritasıdır. Tüm menüleri yalnızc
 | Katalog | **Departman & Unvan** | Departman & Unvan Kataloğu | Katalog Departmanı, Katalog Unvanı, Platform Bilgi Dokümanları |
 | Katalog | **Proje Şablonları** | Proje Şablonları | Yeni RECDx şablonu / Şablonu düzenle |
 | Katalog | **Mevzuat Paketleri** | Mevzuat Paketleri | Taslak kartlar, Yayımla |
+| Katalog | **Sektör Paketleri** | Sektör bilgi paketleri | Yeni paket, <paket> · taslak, <paket> · yayımla |
 | Katalog | **Bağlantı Kataloğu** | Bağlantı Kataloğu | Kart ekle / Kartı düzenle |
 | Katalog | **Uygulama Talepleri** | Uygulama Talepleri (RECQmind, RECSlip) | Not penceresi |
 | Ticari & Yetki | **Kiralama Paketleri** | Kiralama Paketleri Yönetimi | Yeni Kiralama Paketi Tanımla / Paketi Düzenle |
@@ -1104,6 +1105,62 @@ Pencerede şu not yazar: "Kartların ilk sürümü Claude tarafından hazırland
 | **Vazgeç** | Kapatır | — |
 
 > **Dikkat:** Kartlar genel bilgilendirme içindir; şirketlerin ekranında "hukuki veya mali danışmanlık yerine geçmez" uyarısı görünür. Uzman kontrolü yapılmadan beyan kutusunu işaretlemeyin.
+
+## Sektör Paketleri
+
+### Sektör bilgi paketleri
+
+**Bu ekran ne işe yarar?** Beyin AI'nın keşif görüşmesinde, plan önerisinde ve doğrulamada kullandığı **iş kolu paketlerini** düzenler, uzman kontrolü beyanıyla yayımlar ve gerektiğinde yayından çekersiniz. İlk dalgada dört paket vardır: Yazılım projesi; Üretim / MES devreye alma; ERP devreye alma; Kalite & uyum. Bunlar sistem açılışında **taslak** olarak yüklenir.
+
+Taslaklar yalnız burada görünür. Şirketler ve Beyin AI yalnız **yayımlanmış ve yayından çekilmemiş** sürümü kullanır. Şirketler paketlere kendi ek sorularını ekleyebilir; bu ekler müşteri içeriğidir ve burada görünmez (KVKK).
+
+**Ne zaman kullanırım?** Yeni bir iş kolu eklenirken, uzman kontrolü tamamlandığında, bir pakette hata bulunduğunda.
+
+**Kimler görür / değiştirebilir?** Yalnızca RECDx süper yöneticileri.
+
+[[EKRAN: sy-sektor-paketleri | Sektör bilgi paketleri listesi: Yayında / Taslak / Yayından çekildi rozetleri | Sol menüde Katalog › Sektör Paketleri]]
+
+| Rozet | Anlamı |
+|---|---|
+| **Yayında · sürüm N** | Paketin N. sürümü şirketlere ve Beyin AI'ya açık |
+| **Taslak · uzman kontrolü bekliyor** | Paket hiç yayımlanmadı |
+| **Yayından çekildi · son sürüm N** | Paket kullanılmıyor; yeniden yayımlanabilir |
+| **Yayımlanmamış değişiklik var** | Taslakta yayındaki sürümden farklı değişiklik var |
+
+| Düğme | Ne yapar | Dikkat |
+|---|---|---|
+| **Yeni paket** | Kod (küçük harf, rakam, tire) ve ad sorar; boş taslak oluşturur | Kod sonradan değişmez |
+| **Düzenle** | "<paket> · taslak" penceresini açar | Yayındaki sürüm değişmez |
+| **Uzman kontrolüyle yayımla** | Yayımlama penceresini açar; her yayın yeni sürümdür, önceki sürümler geçmişte kalır | Soru ve aşama yoksa ya da yayından beri değişiklik yoksa pasiftir |
+| **Yayından çek** | Paketi şirketlerden ve Beyin AI'dan kaldırır | Bu paketi seçmiş projeler genel sorularla devam eder |
+
+#### Taslak penceresi
+
+| Alan | Nasıl doldurulur |
+|---|---|
+| **Paket adı**, **Açıklama** | Serbest metin |
+| **Sektör kodları** | Virgülle, şirket kartındaki Ticaret Bakanlığı sektör kodları (ör. C, H). Beyin AI öneride yalnız küçük bir ağırlık verir. |
+| **Anahtar kelimeler** | Virgülle. Beyin AI projeye paket önerirken isterlerde, proje adında ve açıklamada arar. 4 harf ve daha kısa kelimeler yalnız tam kelime olarak eşleşir (ör. "mes", "mesaj" kelimesinde eşleşmez). |
+| **Keşif soru bankası** | Her satır: Konu \| Soru \| Neden önemli |
+| **Standart aşamalar ve teslimatlar** | Aşama satırı: Aşama adı \| AI, HUMAN ya da AI+HUMAN; altındaki teslimatlar "-" ile: - Teslimat \| Kabul ölçütü \| Doğrulama yöntemi |
+| **Tipik roller ve iş bölümü** | Her satır: Rol \| AI ya da HUMAN \| Not |
+| **Sık atlanan gereksinimler**, **Tipik riskler**, **KPI'lar** | Her satıra bir madde |
+| **Mevzuat ve standartlar** | Her satır: Ad \| Kısa not |
+
+**Taslağı kaydet** yayındaki pakette "Taslak kaydedildi; yayındaki sürüm değişmedi. Uzman kontrolünden sonra yeniden yayımlayın." mesajını gösterir.
+
+#### Yayımla
+
+Pencerede şu not yazar: "İlk dalga paketlerin içeriği Claude tarafından hazırlandı. Yayından önce bu iş kolunda deneyimli bir uzmanın soruları, aşamaları ve standartları kontrol etmesi zorunludur; yayımlanan sürümü tüm şirketlerin Beyin AI'sı kullanır."
+
+| Alan | Ne işe yarar | Zorunlu |
+|---|---|---|
+| **Paket bu iş kolunda yetkin bir uzman tarafından kontrol edildi.** | Uzman kontrolü beyanı | Evet |
+| **Kontrol eden uzman \*** | En az 3 karakter ("Ad Soyad, unvan") | Evet |
+| **Kontrol tarihi \*** | İleri tarih seçilemez; varsayılan bugün | Evet |
+| **Not** | Ek açıklama | Hayır |
+
+> **Dikkat:** Uzman kontrolü yapılmadan beyan kutusunu işaretlemeyin. Yayımlanan sürüm hemen tüm şirketlerin Beyin AI'sına açılır.
 
 ## Bağlantı Kataloğu
 

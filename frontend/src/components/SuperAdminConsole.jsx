@@ -73,6 +73,7 @@ import PlanAppOffers from './integrations/PlanAppOffers';
 import CatalogAdmin from './catalog/CatalogAdmin';
 import TemplatesAdmin from './projects/TemplatesAdmin';
 import { RegulationAdmin } from './regulations/Regulations';
+import { SectorPackAdmin } from './sectorpacks/SectorPacks';
 import IntegrationCatalogAdmin from './integrations/CatalogAdmin';
 import AppRequestsAdmin from './integrations/AppRequestsAdmin';
 import EmailTemplateBuilder from './email/EmailTemplateBuilder';
@@ -99,6 +100,7 @@ const TAB_SLUG_MAP = {
   CATALOG: 'catalog',
   PROJECT_TEMPLATES: 'project-templates',
   REGULATIONS: 'regulations',
+  SECTOR_PACKS: 'sector-packs',
   INTEGRATION_CATALOG: 'integration-catalog',
   APP_REQUESTS: 'app-requests',
   CREDIT_STORE: 'credit-store',  // #747
@@ -123,6 +125,7 @@ const SLUG_TAB_MAP = {
   'catalog': 'CATALOG',
   'project-templates': 'PROJECT_TEMPLATES',
   'regulations': 'REGULATIONS',
+  'sector-packs': 'SECTOR_PACKS',
   'integration-catalog': 'INTEGRATION_CATALOG',
   'app-requests': 'APP_REQUESTS',
   'credit-store': 'CREDIT_STORE',  // #747
@@ -2194,6 +2197,18 @@ export default function SuperAdminConsole({
               </div>
             </button>
 
+            {/* SEKTÖR PAKETLERİ (#751) */}
+            <button
+              onClick={() => { switchTab('SECTOR_PACKS'); setSearchQuery(''); }}
+              className={`super-admin-nav-item ${activeTab === 'SECTOR_PACKS' ? 'active' : ''}`}
+              title="Sektör Paketleri"
+            >
+              <div className="super-admin-nav-item-left">
+                <Layers style={{ width: 17, height: 17, color: 'var(--ac-a78bfa)' }} />
+                {!sidebarCollapsed && <span>Sektör Paketleri</span>}
+              </div>
+            </button>
+
             {/* BAĞLANTI KATALOĞU (ADIM 12.1) */}
             <button
               onClick={() => { switchTab('INTEGRATION_CATALOG'); setSearchQuery(''); }}
@@ -2499,6 +2514,7 @@ export default function SuperAdminConsole({
               {activeTab === 'CATALOG' && 'Departman & Unvan Kataloğu'}
               {activeTab === 'PROJECT_TEMPLATES' && 'Proje Şablonları'}
               {activeTab === 'REGULATIONS' && 'Mevzuat Paketleri'}
+              {activeTab === 'SECTOR_PACKS' && 'Sektör Paketleri'}
               {activeTab === 'INTEGRATION_CATALOG' && 'Bağlantı Kataloğu'}
               {activeTab === 'APP_REQUESTS' && 'Uygulama Talepleri (RECQmind, RECSlip)'}
               {activeTab === 'SECTORS' && 'Sektör Tanımları (Ticaret Bakanlığı)'}
@@ -4625,6 +4641,7 @@ export default function SuperAdminConsole({
           {activeTab === 'CATALOG' && <CatalogAdmin />}
           {activeTab === 'PROJECT_TEMPLATES' && <TemplatesAdmin />}
           {activeTab === 'REGULATIONS' && <RegulationAdmin />}
+          {activeTab === 'SECTOR_PACKS' && <SectorPackAdmin />}
           {activeTab === 'INTEGRATION_CATALOG' && <IntegrationCatalogAdmin />}
           {activeTab === 'APP_REQUESTS' && <AppRequestsAdmin />}
           {activeTab === 'CREDIT_STORE' && <CreditPacksAdmin />}

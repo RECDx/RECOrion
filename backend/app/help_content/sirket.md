@@ -158,7 +158,7 @@ Menü sayaçları: **Kullanıcı Yönetimi** yanında aktif kullanıcı sayısı
 6. **AI Ajan İşe Alım:** AI personelinizi işe alın, dokümanlarınızı öğretin.
 7. **Beyin AI:** Beyin AI'nın kademesini seçin.
 8. **Entegrasyonlar** ve **Otomasyonlar:** dış sistemlerinizi bağlayın, gerekiyorsa otomasyon ve RECSlip.App v2 sürecini kurun.
-9. **Mevzuat Paketleri:** ilgili paketleri açın.
+9. **Mevzuat Paketleri:** ilgili paketleri açın. **Sektör Paketleri** ekranında iş kolunuzun paketlerine şirketinize özel soruları ekleyin.
 10. **Kredi ve Kullanım:** ilk haftadan sonra kredi tüketimini kontrol edin.
 
 ## Yardım ve RECAi'ye sor
@@ -214,6 +214,7 @@ Menü sayaçları: **Kullanıcı Yönetimi** yanında aktif kullanıcı sayısı
 | | Entegrasyonlar | Bağlantılar; Bağlantı ekle (katalog); bağlantı formu; ajan anahtarı; araç yetkileri; eşleme stüdyosu; RECDx uygulamaları; aktarım onay kuralları; aktarım günlüğü; araç çağrı kaydı | Bağlantı Yönetimi, Eşleme Stüdyosu, Dış Sisteme Yazma Onayı |
 | | Otomasyonlar | Hazır kurallar; RECSlip.App v2 aylık süreç kartı ve kurulum penceresi; kural listesi; yeni kural; örnek olayla dene; günlük; imza anahtarı; otomasyon günlüğü | Otomasyon Kuralları |
 | | Mevzuat Paketleri | Paket listesi; paket kartları | Mevzuat Paketlerini Açma/Kapatma |
+| | Sektör Paketleri | Yayımlanmış sektör paketleri; paket içeriği; şirketinize özel ekler | Şirket Ayarlarını Yönetme, Beyin AI Ayarları |
 | **Kullanım** | Kredi ve Kullanım | Kredi bakiyesi, dağılımlar, son işlemler, kredi hareketleri | Kredi ve Kullanımı Görme |
 
 ## İzinler
@@ -1705,6 +1706,39 @@ Başlık "<paket adı> · sürüm V"; "Kontrol eden: <uzman> · <tarih>"; her ka
 
 - *Kartları düzenleyebilir miyim?* Hayır; kartlar RECDx uzman kontrolüyle yayımlanır. Şirketiniz her zaman yayımlanmış son sürümü görür.
 - *Kartlar hukuki danışmanlık yerine geçer mi?* Hayır; genel bilgilendirme amaçlıdır.
+
+## Sektör Paketleri
+
+### Sektör bilgi paketleri ekranı
+
+**Bu ekran ne işe yarar?** Beyin AI, projenin iş koluna uygun sektör paketindeki soruları, aşamaları ve sık atlanan gereksinimleri keşif görüşmesinde ve plan önerisinde kullanır. Bu ekranda RECDx'in yayımladığı paketlerin içeriğini görür ve paketlere **şirketinize özel** ek sorular ve sık atlanan maddeler eklersiniz.
+
+**Ne zaman kullanırım?** Kurulumda; projelerde Beyin AI'nın sizin işinize özgü bir konuyu sormadığını fark ettiğinizde.
+
+**Kimler görür / değiştirir?** Menüyü "Şirket Ayarlarını Yönetme" ya da "Beyin AI Ayarları" izni olanlar görür. **Şirket ekleri** düğmesi yalnız "Şirket Ayarlarını Yönetme" izni olanlarda görünür. Projede hangi paketin kullanılacağını proje yöneticisi Work Space'te **Keşif & Tanım** sekmesinde seçer.
+
+[[EKRAN: ca-sektor-paketleri | Sektör bilgi paketleri: sürüm rozetli paket listesi, İçeriği gör ve Şirket ekleri düğmeleri | Şirket Yöneticisi ile giriş yapın; Kurum Zekâsı › Sektör Paketleri; en az bir paket yayımlanmış olsun]]
+
+**Paket satırı:** paket adı, **Sürüm N** rozeti, varsa **Şirket eki: N soru, M madde** rozeti; altında "N soru · M aşama · kontrol: <tarih> (<uzman>)". Hiç paket yayımlanmamışsa "Henüz yayımlanmış paket yok" yazar.
+
+| Düğme | Ne yapar | Dikkat |
+|---|---|---|
+| **İçeriği gör** | "<paket> · sürüm N" penceresinde soruları, aşama ve teslimatları, rolleri, sık atlananları, riskleri, KPI'ları ve standartları gösterir. | Paket içeriğini yalnız RECDx değiştirir. |
+| **Şirket ekleri** | "<paket> · şirketinize özel ekler" penceresini açar. | Ekler yalnız sizin şirketinizde geçerlidir; RECDx ve diğer şirketler göremez. |
+
+#### Şirketinize özel ekler penceresi
+
+| Alan | Ne işe yarar | Nasıl doldurulur | Örnek | Zorunlu |
+|---|---|---|---|---|
+| **Ek keşif soruları** | Beyin AI bu paketi kullanan projelerin keşfinde bu soruları paketin sorularından önce sorar. | Her satır: Konu \| Soru \| Neden önemli | Hat \| Kalıp değişim süresi ölçülüyor mu? \| SMED hedefi | Hayır |
+| **Sık atlanan gereksinimler** | Beyin AI "Bunu düşündünüz mü?" hatırlatmalarında kullanır. | Her satıra bir madde | Etiket yazıcısı entegrasyonu | Hayır |
+
+**Kaydet** "Şirketinize özel ekler kaydedildi; Beyin AI bu paketi kullanan projelerin keşfinde önce bunları sorar." mesajını gösterir. **Vazgeç** kaydetmeden kapatır.
+
+**Sık sorulan sorular:**
+
+- *Paket yanlış ya da eksikse?* RECDx'e bildirin; paket uzman kontrolünden sonra yeni sürümle güncellenir. O zamana kadar eksiği şirket eki olarak yazabilirsiniz.
+- *Bir projede paket istemiyorum.* Proje yöneticisi Keşif & Tanım sekmesinde "Paket yok (yalnız genel sorular)" seçer.
 
 # Kullanım
 
