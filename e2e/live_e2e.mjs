@@ -587,9 +587,18 @@ try {
     'Doğrulama sekmesi kapsam raporunu gösteriyor; gerekçeyle kabuller kayıtlı (#752)',
     `${covText.trim()} · ${covRows} satır · gerekçeli onay: ${waived} · ${covApi.rows.map((r) => `${r.title.slice(0, 25)}=${r.status}`).join(', ')}`);
   await page.getByRole('tab', { name: 'İş Akışı' }).click();
-  await page.getByText('Tüm adımlar tamamlandı').first().waitFor({ timeout: 30000 })
-    .then(() => step(true, 'Proje akışı bitti, yöneticiye bildirim kaydı düştü'))
-    .catch(() => step(false, 'Proje akışı bitti kaydı'));
+  // Test kalınca açılan düzeltme turları (Test düzeltmesi / Yeniden test) asıl adım gerekçeyle onaylansa da çalışmayı sürdürür;
+  // açık tur varken akış "bitti" sayılmaz, proje kapanışta bu adımları iptal eder (F103 tasarımı).
+  const FIX_RE = /^(Test düzeltmesi|Yeniden test) \d+: /;
+  const wfNow = (await api(page, `/api/v1/projects/${covApi.project_id || (await api(page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME).id}/workflow`)).body;
+  const openFix = (wfNow.tasks || []).filter((t) => FIX_RE.test(t.title) && !['DONE', 'CANCELLED'].includes(t.status));
+  if (openFix.length) {
+    step(true, 'Proje akışı: test düzeltme turları sürüyor; akış henüz bitmedi (kapanışta iptal edilecek)', openFix.map((t) => `${t.title.slice(0, 40)}=${t.status}`).join(', '));
+  } else {
+    await page.getByText('Tüm adımlar tamamlandı').first().waitFor({ timeout: 30000 })
+      .then(() => step(true, 'Proje akışı bitti, yöneticiye bildirim kaydı düştü'))
+      .catch(() => step(false, 'Proje akışı bitti kaydı'));
+  }
   await shot(page, '05-akis-tamam');
 
   // 6. API ile olay geçmişi sağlaması (aynı oturum)
@@ -601,8 +610,10 @@ try {
   const mine = flow.find((x) => x.name === NAME)?.f;
   const kinds = (mine?.events || []).map((e) => e.kind);
   const cnt = (k) => kinds.filter((x) => x === k).length;
+  const planIds = new Set((mine?.tasks || []).filter((t) => titles.includes(t.title)).map((t) => t.id));
+  const planDone = (mine?.events || []).filter((e) => e.kind === 'DONE' && planIds.has(e.task_id)).length;
   step(cnt('AI_OUTPUT') >= titles.length + 1 && cnt('REVIEW_PASSED') + cnt('REVIEW_FAILED') >= 1 && cnt('REJECTED') >= 1
-    && cnt('DONE') === titles.length && cnt('PROJECT_FINISHED') === 1,
+    && planDone === titles.length && cnt('PROJECT_FINISHED') === (openFix.length ? 0 : 1),
     'Silinemez akış geçmişi tutarlı', `AI_OUTPUT:${cnt('AI_OUTPUT')} REVIEW_PASSED:${cnt('REVIEW_PASSED')} REVIEW_FAILED:${cnt('REVIEW_FAILED')} REJECTED:${cnt('REJECTED')} BLOCKED:${cnt('BLOCKED')} APPROVED:${cnt('APPROVED')} DONE:${cnt('DONE')} FINISHED:${cnt('PROJECT_FINISHED')}`);
   const lastTask = mine?.tasks.find((t) => t.title === lastTitle);
   const lastKinds = (mine?.events || []).filter((e) => e.task_id === lastTask?.id).map((e) => e.kind);
