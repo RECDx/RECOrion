@@ -232,6 +232,10 @@ Sadece şu JSON'u döndür:
     if not plan["steps"]:
         raise HTTPException(status_code=502, detail="Beyin AI iş adımı üretemedi; isterleri biraz daha ayrıntılandırıp tekrar deneyin.")
     plan.update({"model_code": result.public_model, "generated_at": psvc.now().isoformat(), "approved": False})
+    # LLM dakikalar sürebilir: bu arada proje iptal edildi / başlatıldıysa eski durumla üzerine yazma
+    await db.refresh(project, ["status"])
+    if project.status not in ("DRAFT", "PLANNING"):
+        raise HTTPException(status_code=409, detail="Plan hazırlanırken projenin durumu değişti (ör. iptal edildi); öneri kaydedilmedi.")
     await _attach_hire_matches(db, project, plan)
     project.plan = plan
     project.planning_approved_at = None

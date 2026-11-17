@@ -75,8 +75,8 @@ def test_sector_packs_review_publish_withdraw_and_company_extras(client, db, wor
     assert client.get(base, headers=sa).status_code == 403
     mine = next(p for p in client.get(base, headers=member).json() if p["code"] == "uretim-mes")
     assert mine["extras"]["questions"][0]["text"] == "Kalıp değişim süresi ölçülüyor mu?"
-    other = _exec(db, "SELECT settings FROM tenants WHERE id <> %s AND settings ? 'sector_packs'", w["tenant"])
-    assert not other or all("Kalıp değişim" not in json.dumps(s) for (s,) in other)
+    (other,) = _exec(db, "SELECT coalesce(string_agg(settings::text, ' '), '') FROM tenants WHERE id <> %s", w["tenant"])
+    assert "Kalıp değişim" not in other
 
     # yayından çekilen paket şirkete görünmez
     assert client.post(f"/api/v1/system/sector-packs/{mes['id']}/withdraw", headers=sa).status_code == 200
