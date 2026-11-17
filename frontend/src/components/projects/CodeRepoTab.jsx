@@ -41,11 +41,13 @@ export default function CodeRepoTab({ project, onChanged }) {
     if (mode === 'NONE' && !(await confirmDialog({ message: 'Kod deposu kullanılmasın mı? Depo ve geçmişi silinmez; yeni çıktılar artık commit edilmez.' }))) return;
     setBusy(true);
     try {
-      setRepo({ ...(await api.setProjectRepository(project.id, mode, mode === 'RECORION' ? source : null)), can_manage: repo?.can_manage });
+      const next = await api.setProjectRepository(project.id, mode, mode === 'RECORION' ? source : null);
+      // önce proje bilgisi (repo_mode) yenilenir, sonra "açık" görünür: Hazırlık sekmesi eski "depo yok" uyarısını göstermesin
+      await onChanged?.();
+      setRepo({ ...next, can_manage: repo?.can_manage });
       toast.success(mode === 'RECORION'
         ? (source ? 'Kod deposu seçilen projenin kodundan açıldı; AI personel bu kod üzerinde çalışacak.' : 'Kod deposu açıldı; AI personelin kod çıktıları adım dallarına commit edilecek.')
         : 'Kod deposu kullanımı kapatıldı.');
-      onChanged?.();  // proje bilgisi (repo_mode) yenilensin: Hazırlık sekmesi eski "depo yok" uyarısını göstermesin
     } catch (e) { toast.error(e.message); } finally { setBusy(false); }
   };
   const merge = async (s) => {

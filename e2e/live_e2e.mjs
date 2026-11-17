@@ -55,6 +55,14 @@ const pickCard = async (dlg, title) => {
   await dlg.getByRole('list', { name: 'Bağlantı kataloğu' }).getByRole('listitem').filter({ hasText: title }).first().click();
   await dlg.locator('#ig-name').waitFor({ timeout: 10000 });
 };
+// Oturum belirteciyle doğrudan API çağrısı (tarayıcı dışından; bilerek reddedilecek istekler konsolu kirletmez)
+const api = async (pg, url, opts = {}) => {
+  const token = await pg.evaluate(() => sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token'));
+  const r = await fetch(APP + url, { ...opts, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+  let body = null;
+  try { body = await r.json(); } catch { /* boş yanıt */ }
+  return { status: r.status, body };
+};
 const dialogOk = async (page, text) => {
   const d = page.getByRole('alertdialog');
   await d.waitFor({ timeout: 10000 });
@@ -719,13 +727,6 @@ try {
 
   // 8.1 Silinemez mesaj kaydı: kullanıcı gibi dene (ekip dışı okuma, kapanmış projeye yazma, kaydı değiştirme)
   // Bilerek reddedilecek istekler tarayıcı dışından (aynı oturum belirteciyle) gider; konsolda sahte hata oluşmaz
-  const api = async (pg, url, opts = {}) => {
-    const token = await pg.evaluate(() => sessionStorage.getItem('recorion_token') || localStorage.getItem('recorion_token'));
-    const r = await fetch(APP + url, { ...opts, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-    let body = null;
-    try { body = await r.json(); } catch { /* boş yanıt */ }
-    return { status: r.status, body };
-  };
   const proj = (await api(page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME);
   const log = await api(page, `/api/v1/chat/project/${proj.id}`);
   const taskId = log.body.find((x) => x.task_id)?.task_id;
