@@ -182,6 +182,15 @@ try {
   step(stepCount > 0, 'Beyin AI iş adımı önerdi',
     `${stepCount} adım, ${Math.round((Date.now() - t1) / 1000)} sn${planTries > 1 ? ` (EVREN yoğun: ${planTries}. denemede)` : ''}`);
   if (!planOk) throw new Error(`Beyin AI ${planTries} denemede plan öneremedi (EVREN yanıt vermiyor)`);
+  // #752: her adım teslimat + doğrulama (tür ve somut yöntem) taşır; ekranda alanlar dolu gelir
+  {
+    const delivs = await page.locator('.pj-step input[aria-label="Teslimat"]').evaluateAll((els) => els.map((e) => e.value.trim()));
+    const methods = await page.locator('.pj-step textarea[aria-label="Doğrulama yöntemi"]').evaluateAll((els) => els.map((e) => e.value.trim()));
+    const vtypes = await page.locator('.pj-step select[aria-label="Doğrulama türü"]').evaluateAll((els) => els.map((e) => e.value));
+    const filled = delivs.filter((d, i) => d && (methods[i] || '').length >= 10).length;
+    step(filled >= Math.ceil(stepCount / 2), 'Beyin AI her adıma teslimat ve doğrulama yöntemi yazdı (#752)',
+      `${filled}/${stepCount} adım · türler: ${[...new Set(vtypes)].join(', ')} · ör: ${(methods.find(Boolean) || '').slice(0, 90)}`);
+  }
   // Personeli atanmamış adımlara havuzdan personel ata
   const selects = page.locator('.pj-step select[aria-label="İşi yapan personel"]');
   let assigned = 0;
@@ -496,7 +505,7 @@ try {
 
   // 5c. Tüm adımlar AI tarafından sırayla yürütülür; yönetici onaylar
   const deadline = Date.now() + 40 * 60000;
-  let approved = 0;
+  let approved = 0, waived = 0;
   let released = 0;
   let linkApproved = false;
   while (Date.now() < deadline) {
@@ -534,8 +543,14 @@ try {
     } else if (await waiting.count()) {
       await waiting.first().getByRole('button', { name: 'Onayla', exact: true }).click();
       await dialogOk(page);  // C3-28: isteğe bağlı onay notu penceresi (alertdialog)
-      const gate = page.getByRole('alertdialog').getByRole('button', { name: 'Yine de onayla' });  // #734 kabul kapısı uyarısı
-      if (await gate.waitFor({ timeout: 4000 }).then(() => true).catch(() => false)) await gate.click();
+      const gate = page.getByRole('alertdialog').getByRole('button', { name: /^(Yine de onayla|Gerekçeyle onayla)$/ });  // #734 kabul kapısı / #752 doğrulama
+      if (await gate.waitFor({ timeout: 4000 }).then(() => true).catch(() => false)) {
+        if ((await gate.textContent()).includes('Gerekçeyle')) {  // #752: doğrulanmamış teslimat yalnız gerekçeyle kabul edilir
+          await page.getByRole('alertdialog').locator('input, textarea').first().fill('Canlı test: doğrulama eksikken gerekçeyle kabul edildi');
+          waived += 1;
+        }
+        await gate.click();
+      }
       approved += 1;
       await page.waitForTimeout(2500);
     } else if (await quarantined.count() && released < 2) {
@@ -553,6 +568,17 @@ try {
   if (!linkApproved) step(false, 'Onay bağlantısı senaryosu çalışmadı (onay bekleyen adım bulunamadı)');
   step(doneCount === titles.length, 'Tüm adımları AI personel sırayla yürüttü, yönetici onayladı',
     `${doneCount}/${titles.length} tamamlandı, ${approved} onay${released ? `, ${released} karantinadan yeniden deneme` : ''}`);
+  // #752 kapsam raporu: Doğrulama sekmesi "N teslimattan M tanesi doğrulandı" özetini ve her teslimatın durumunu gösterir
+  await page.getByRole('tab', { name: 'Doğrulama' }).click();
+  const covText = await page.getByRole('status', { name: 'Kapsam özeti' }).innerText({ timeout: 20000 }).catch(() => '');
+  const covRows = await page.getByRole('list', { name: 'Teslimatlar' }).locator(':scope > li').count().catch(() => 0);
+  const covApi = (await api(page, `/api/v1/projects/${(await api(page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME).id}/verification`)).body;
+  await shot(page, '05b-dogrulama');
+  step(/\d+ teslimattan \d+ tanesi doğrulandı/.test(covText) && covRows === covApi.total && covApi.total >= titles.length - 1
+      && (covApi.counts.WAIVED >= waived),
+    'Doğrulama sekmesi kapsam raporunu gösteriyor; gerekçeyle kabuller kayıtlı (#752)',
+    `${covText.trim()} · ${covRows} satır · gerekçeli onay: ${waived} · ${covApi.rows.map((r) => `${r.title.slice(0, 25)}=${r.status}`).join(', ')}`);
+  await page.getByRole('tab', { name: 'İş Akışı' }).click();
   await page.getByText('Tüm adımlar tamamlandı').first().waitFor({ timeout: 30000 })
     .then(() => step(true, 'Proje akışı bitti, yöneticiye bildirim kaydı düştü'))
     .catch(() => step(false, 'Proje akışı bitti kaydı'));
@@ -668,6 +694,13 @@ try {
   await page.locator('#pj-close').fill('Canlı test kapanışı: maliyet raporu Excel olarak indirildi.');
   await page.getByRole('button', { name: 'Projeyi tamamla' }).click();
   await dialogOk(page);
+  // #752 kalite kapısı: doğrulanmamış teslimat varsa kapanış özetindeki gerekçeyle "Eksikle kabul et"
+  const gapBtn = page.getByRole('alertdialog').getByRole('button', { name: 'Eksikle kabul et' });
+  if (await gapBtn.waitFor({ timeout: 5000 }).then(() => true).catch(() => false)) {
+    const gapText = await page.getByRole('alertdialog').innerText();
+    await gapBtn.click();
+    step(/teslimattan/.test(gapText), 'Doğrulanmamış teslimatla proje kabulü gerekçe istedi ve kayda geçti (#752)', gapText.replace(/\s+/g, ' ').slice(0, 140));
+  }
   await page.locator('.ui-badge', { hasText: 'Tamamlandı' }).first().waitFor({ timeout: 20000 });
   await page.getByRole('tab', { name: /^Maliyet/ }).click();
   await page.locator('.pj-stat', { hasText: 'Gerçekleşen' }).first().waitFor({ timeout: 20000 });

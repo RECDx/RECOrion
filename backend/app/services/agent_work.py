@@ -249,7 +249,7 @@ Başlık: {task.title}
 Sıra: projenin {task.order_index or '-'}. adımı
 Bugünün tarihi: {datetime.now(ZoneInfo('Europe/Istanbul')).strftime('%d.%m.%Y')}
 Ne yapılacak: {task.description or '-'}
-Kabul ölçütü: {task.acceptance_criteria or '-'}
+Kabul ölçütü: {task.acceptance_criteria or '-'}{_deliverable_lines(task)}
 {latest_run}{knowledge.format_context(hits, max_chars=6000)}{reg_context}
 {repo_context}# Önceki adımların çıktıları
 {chr(10).join(dep_blocks) or 'yok'}
@@ -314,7 +314,7 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
         art.content_hash = hashlib.sha256(data).hexdigest()
     if runs:
         # Test Uzmanı: dal Kod Çalıştırma Ortamı'nda gerçekten çalışır; sonuç ve AI değerlendirmesi çıktıya eklenir
-        extra = await _with_test_run(db, project, task, tenant, agent)
+        extra = await _with_test_run(db, project, task, tenant, agent, runs)
         content = f"{content}\n\n{extra}"
         data = content.encode("utf-8")
         await storage.put_object(key, data, "text/markdown; charset=utf-8")
@@ -329,15 +329,18 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
 
 
 def _runs_tests(project: Project, agent: Actor, task: Optional[Task] = None):
-    """Adım teslim edilince kod gerçekten çalıştırılır mı: test uzmanı ("test") veya kabul/teslim adımı ("accept", #734)."""
+    """Adım teslim edilince kod gerçekten çalıştırılır mı: test uzmanı ("test"), kabul/teslim adımı ("accept", #734) ya da
+    doğrulaması otomatik test olan teslimat ("verify", #752: sistem dalı kendisi dener; sonuç kontrol personeline ve onaya gider)."""
     if not (sandbox.enabled() and code_repo.active(project)):
         return False
     if sandbox.is_test_role(agent.role):
         return "test"
-    return "accept" if task is not None and sandbox.is_acceptance_step(task) else False
+    if task is not None and sandbox.is_acceptance_step(task):
+        return "accept"
+    return "verify" if task is not None and (task.verification or {}).get("type") == "TEST" else False
 
 
-async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant: Tenant, agent: Actor) -> str:
+async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant: Tenant, agent: Actor, mode: str = "test") -> str:
     await live.thought(project.id, task.id, "ANALYSIS", f"{agent.display_name}: testler Kod Çalıştırma Ortamı'nda çalıştırılıyor…")
     # C3-42: dal, ana daldaki (onaylanmış düzeltmeler dahil) son kodla güncellenir; yoksa testler eski kodla koşar
     upd = await code_repo.update_from_base(project, task)
@@ -356,6 +359,10 @@ async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant:
     await db.commit()  # koşu Testler sekmesinde "Çalışıyor" görünsün
     run = await sandbox.finish(db, project, run, task)
     facts = sandbox.report_md(run)
+    if mode == "verify":  # #752: değerlendirme ve düzeltme turu yok; kontrol personeli ve onaylayıcı gerçek sonucu görür
+        method = (task.verification or {}).get("method") or task.acceptance_criteria or ""
+        return (f"{facts}\n\n_Sistem (teslimat doğrulaması): bu adımın doğrulaması otomatik testtir"
+                + (f" — {method[:300]}" if method else "") + ". Koşu geçmeden adım doğrulanmış sayılmaz._")
     await live.thought(project.id, task.id, "WRITING", f"{agent.display_name} gerçek test sonuçlarını değerlendiriyor…")
     try:
         res = await llm_gateway.chat(
@@ -372,6 +379,16 @@ async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant:
         evaluation = f"_Değerlendirme yazılamadı: {exc.message}_"
     loop = await sandbox.schedule_fix_loop(db, project, task, run)  # kalan testler → geliştiriciye düzeltme + yeniden test
     return f"{facts}\n\n## Test Uzmanı değerlendirmesi (gerçek koşuya göre)\n\n{evaluation}" + (f"\n\n{loop}" if loop else "")
+
+
+def _deliverable_lines(task: Task) -> str:
+    """#752: adımın teslimatı ve doğrulama yöntemi (onaydan önce sistem bunu kontrol eder)."""
+    v = task.verification or {}
+    if not (task.deliverable or v.get("method")):
+        return ""
+    from app.services import verification
+    return (f"\nTeslimat: {task.deliverable or '-'}"
+            f"\nDoğrulama ({verification.TYPE_TR.get(v.get('type'), '-')}): {v.get('method') or '-'}")
 
 
 REVIEW_MAX_TOKENS = 3000
@@ -427,7 +444,7 @@ async def review(db: AsyncSession, task_id) -> Dict[str, Any]:
     prompt = f"""# İş adımı
 Başlık: {task.title}
 Ne yapılacak: {task.description or '-'}
-Kabul ölçütü: {task.acceptance_criteria or '-'}
+Kabul ölçütü: {task.acceptance_criteria or '-'}{_deliverable_lines(task)}
 
 # Önceki değerlendirmelerinde istediklerin (yalnız bunların düzelip düzelmediğine bak; yeni ret ölçütü ekleme)
 {prior_text}

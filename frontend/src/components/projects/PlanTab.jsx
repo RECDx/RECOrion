@@ -6,10 +6,10 @@ import { confirmDialog, toast } from '../../ui/feedback';
 import ChatPanel from '../ai/ChatPanel';
 import HireWizard from '../catalog/HireWizard';
 import FlowCanvas from './FlowCanvas';
-import { PRIORITY, isPlanning } from './projectMeta';
+import { PRIORITY, VERIFY_HINT, VERIFY_TYPES, isPlanning } from './projectMeta';
 
 const emptyStep = (n) => ({ key: `S${n}`, title: '', description: '', acceptance_criteria: '', department: '', job_title: '',
-  agent_id: '', estimated_days: 1, depends_on: [], priority: 'MEDIUM' });
+  agent_id: '', estimated_days: 1, depends_on: [], priority: 'MEDIUM', deliverable: '', verification: '', verification_type: 'EVIDENCE' });
 
 /**
  * Beyin AI planlama (ADIM 6.3): planlama sohbeti + iş adımı taslağı.
@@ -175,6 +175,17 @@ export default function PlanTab({ project, agents, humans = [], onChanged }) {
               <AssigneeSelect className="ui-input half" step={s} agents={agents} humans={humans} disabled={!editable} onChange={(patch) => update(i, patch)} />
               <textarea className="ui-input wide" rows={2} aria-label="Açıklama" value={s.description || ''} disabled={!editable} onChange={(e) => update(i, { description: e.target.value })} placeholder="Ne yapılacak" />
               <textarea className="ui-input wide" rows={1} aria-label="Kabul ölçütü" value={s.acceptance_criteria || ''} disabled={!editable} onChange={(e) => update(i, { acceptance_criteria: e.target.value })} placeholder="Tamam sayılma ölçütü" />
+              {/* #752: teslimat ve doğrulama — onaydan önce sistem doğrulamayı kontrol eder */}
+              <input className="ui-input half" aria-label="Teslimat" value={s.deliverable || ''} disabled={!editable}
+                onChange={(e) => update(i, { deliverable: e.target.value })} placeholder="Teslimat (ne teslim edilecek)" />
+              <label className="pj-mini half"><span>Doğrulama türü</span>
+                <select className="ui-input" aria-label="Doğrulama türü" value={s.verification_type || 'EVIDENCE'} disabled={!editable}
+                  onChange={(e) => update(i, { verification_type: e.target.value })}>
+                  {Object.entries(VERIFY_TYPES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+              </label>
+              <textarea className="ui-input wide" rows={1} aria-label="Doğrulama yöntemi" value={s.verification || ''} disabled={!editable}
+                onChange={(e) => update(i, { verification: e.target.value })} placeholder={VERIFY_HINT[s.verification_type || 'EVIDENCE']} />
               <label className="pj-mini"><span>Departman</span>
                 <input className="ui-input" value={s.department || ''} disabled={!editable} onChange={(e) => update(i, { department: e.target.value })} />
               </label>

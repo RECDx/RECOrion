@@ -428,6 +428,8 @@ class Task(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text)
     acceptance_criteria = Column(Text)
+    deliverable = Column(Text)  # #752 adımın teslimatı
+    verification = Column(JSONB)  # #752 {type, method, evidence[], measure, checklist[], status, waived}
     priority = Column(String(16), default="MEDIUM")
     # BACKLOG, READY, IN_PROGRESS, WAITING_APPROVAL, REVISION, QUARANTINED, DONE, CANCELLED
     status = Column(String(32), default="BACKLOG")

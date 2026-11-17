@@ -143,7 +143,12 @@ export const api = {
   getProject: (projectId) => request(`/projects/${projectId}`),
   updateProject: (projectId, data) => request(`/projects/${projectId}`, { method: 'PUT', body: JSON.stringify(data) }),
   getProjectCancelPreview: (projectId) => request(`/projects/${projectId}/cancel-preview`),  // #745
-  changeProjectStatus: (projectId, action, summary) => request(`/projects/${projectId}/status`, { method: 'POST', body: JSON.stringify({ action, summary }) }),
+  changeProjectStatus: (projectId, action, summary, acceptGaps = false) => request(`/projects/${projectId}/status`, { method: 'POST', body: JSON.stringify({ action, summary, accept_gaps: acceptGaps }) }),
+  // #752 teslimat doğrulaması ve kapsam raporu
+  getProjectVerification: (projectId) => request(`/projects/${projectId}/verification`),
+  addVerificationEvidence: (taskId, data) => request(`/tasks/${taskId}/verification/evidence`, { method: 'POST', body: JSON.stringify(data) }),
+  setVerificationMeasure: (taskId, data) => request(`/tasks/${taskId}/verification/measure`, { method: 'PUT', body: JSON.stringify(data) }),
+  setVerificationChecklist: (taskId, items) => request(`/tasks/${taskId}/verification/checklist`, { method: 'PUT', body: JSON.stringify({ items }) }),
   addProjectMember: (projectId, actorId, role) => request(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ actor_id: actorId, role }) }),
   removeProjectMember: (projectId, actorId) => request(`/projects/${projectId}/members/${actorId}`, { method: 'DELETE' }),
   // #750 web derin araştırma

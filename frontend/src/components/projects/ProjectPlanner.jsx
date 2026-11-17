@@ -8,6 +8,7 @@ import DocumentLibrary from '../docs/DocumentLibrary';
 import PlanTab from './PlanTab';
 import DiscoveryTab from './DiscoveryTab';
 import WorkflowTab from './WorkflowTab';
+import VerificationTab from './VerificationTab';
 import CostTab from './CostTab';
 import CodeRepoTab from './CodeRepoTab';
 import TestRunsTab from './TestRunsTab';
@@ -27,6 +28,7 @@ const TABS = [
   ['team', 'Ekip & Simülasyon'],
   ['ready', 'Hazırlık & Bildirim'],
   ['flow', 'İş Akışı'],
+  ['verify', 'Doğrulama'],  // #752: teslimat doğrulaması ve kapsam raporu
   ['cost', 'Maliyet'],
   ['repo', 'Kod Deposu'],
   ['tests', 'Testler'],  // ADIM 16.2: Kod Çalıştırma Ortamı koşuları
@@ -89,6 +91,23 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       toast.success(DONE_MSG[name] || 'Güncellendi.');
       await reload();
     } catch (e) {
+      // #752 kalite kapısı: doğrulanmamış teslimat varsa kabul ancak gerekçeyle (kapanış özeti) ve kayıtlı yapılır
+      if (e.code === 'COVERAGE_GATE') {
+        const ok = await confirmDialog({
+          title: 'Doğrulanmamış teslimatlar',
+          message: `${e.message}\n\nEksikle kabul etmek için kapanış özetine gerekçeyi yazdığınızdan emin olun; karar akış geçmişine kaydedilir.`,
+          confirmText: 'Eksikle kabul et',
+          cancelText: 'Vazgeç',
+        });
+        if (ok) {
+          try {
+            await api.changeProjectStatus(project.id, name, summary, true);
+            toast.success(DONE_MSG[name] || 'Güncellendi.');
+            await reload();
+          } catch (e2) { toast.error(e2.message); }
+        }
+        return;
+      }
       toast.error(e.message);
     } finally {
       setBusy(false);
@@ -181,6 +200,7 @@ export default function ProjectPlanner({ projectId, tenant, currentUser, onBack,
       {tab === 'team' && <TeamSimTab project={project} actors={actors} onChanged={reload} />}
       {tab === 'ready' && <ReadinessTab project={project} onAction={action} busy={busy} />}
       {tab === 'flow' && <WorkflowTab project={project} />}
+      {tab === 'verify' && <VerificationTab project={project} />}
       {tab === 'cost' && project.can_manage && <CostTab project={project} />}
       {tab === 'repo' && <CodeRepoTab project={project} onChanged={reload} />}
       {tab === 'tests' && <TestRunsTab project={project} />}

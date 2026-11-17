@@ -182,6 +182,10 @@ async def approve(db: AsyncSession, task_id, payload: Dict[str, Any]) -> Dict[st
     task, project = await _load(db, task_id)
     task.status, task.completed_at = "DONE", now()
     await costs.snapshot_labor(db, task)
+    # #752: doğrulama sonucu onay anında sabitlenir (Work Space onayı bunu önceden yapar; e-posta/otomatik onay burada)
+    if task.verification and (task.verification or {}).get("status") not in ("VERIFIED", "WAIVED"):
+        from app.services import verification
+        await verification.record_decision(db, project, task, payload.get("actor_id"), None)
     await log(db, project, task, "APPROVED", payload.get("actor_id"), payload.get("note"), {"channel": payload.get("channel") or "WEB"})
     await log(db, project, task, "DONE")
     await db.commit()

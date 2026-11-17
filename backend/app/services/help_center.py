@@ -53,7 +53,7 @@ SCREENS: Dict[Tuple[str, str], List[str]] = {
     ("workarea", "Projeler ve Case'ler ekranı"): ["workspace/HUB"], ("workarea", "Proje ekranı"): ["workspace/project/"],
     ("workarea", "Bilgiler & İsterler sekmesi"): ["workspace/project/info"], ("workarea", "Proje Ekleri sekmesi"): ["workspace/project/docs"],
     ("workarea", "Keşif & Tanım sekmesi"): ["workspace/project/discovery"], ("workarea", "Beyin AI Planlama sekmesi"): ["workspace/project/plan"], ("workarea", "Ekip & Simülasyon sekmesi"): ["workspace/project/team"],
-    ("workarea", "Hazırlık & Bildirim sekmesi"): ["workspace/project/ready"], ("workarea", "İş Akışı sekmesi"): ["workspace/project/flow"],
+    ("workarea", "Hazırlık & Bildirim sekmesi"): ["workspace/project/ready"], ("workarea", "İş Akışı sekmesi"): ["workspace/project/flow"], ("workarea", "Doğrulama sekmesi"): ["workspace/project/verify"],
     ("workarea", "Maliyet sekmesi"): ["workspace/project/cost"], ("workarea", "Kod Deposu sekmesi"): ["workspace/project/repo"],
     ("workarea", "RECSlip sekmesi"): ["workspace/project/recslip"], ("workarea", "Kapanış sekmesi"): ["workspace/project/close"],
     ("workarea", "Onaylarım"): ["workspace/INBOX"], ("workarea", "Çalışma Alanı"): ["workspace/WORK"],

@@ -18,6 +18,19 @@ export async function approveTask(taskId, title) {
     return await api.decideTask(taskId, true, note.trim() || null);
   } catch (e) {
     if (e.code !== 'TEST_GATE') throw e;
+    // #752: teslimat doğrulanmadıysa eksikle onay ancak gerekçeyle verilir (kapsam raporuna ve akış geçmişine yazılır)
+    if (e.detail?.needs_reason) {
+      const reason = await promptDialog({
+        title: 'Doğrulanmamış teslimat',
+        message: `${e.message}\n\nEksikle kabul etmek için gerekçeyi yazın (kapsam raporuna ve akış geçmişine kaydedilir). `
+          + 'Önce doğrulamayı tamamlamak için Doğrulama sekmesine geçebilirsiniz.',
+        confirmText: 'Gerekçeyle onayla',
+        defaultValue: note.trim(),
+        required: true,
+      });
+      if (!reason || !reason.trim()) throw new Error('Onay verilmedi. Doğrulama sekmesinden kanıt, ölçüm ya da kontrol listesini tamamlayabilirsiniz.');
+      return api.decideTask(taskId, true, reason.trim(), true);
+    }
     const ok = await confirmDialog({
       title: 'Kabul öncesi denetim',
       message: `${e.message}\n\nYine de onaylamak istiyor musunuz? Bu karar akış geçmişine yazılır.`,

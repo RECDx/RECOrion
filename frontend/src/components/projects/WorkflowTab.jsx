@@ -6,7 +6,7 @@ import SimpleMarkdown from '../ai/SimpleMarkdown';
 import FlowCanvas from './FlowCanvas';
 import { confirmDialog, promptDialog, toast } from '../../ui/feedback';
 import { approveTask } from './approveTask';
-import { fmtDay } from './projectMeta';
+import { VERIFY_TONE, fmtDay } from './projectMeta';
 import { useProjectLive } from '../../live';
 import { TaskTransferModal } from '../integrations/Transfers';
 import TaskPeopleModal from './TaskPeopleModal';
@@ -24,7 +24,9 @@ const EVENT = { PROJECT_STARTED: 'Proje akışı başladı', TASK_STARTED: 'Adı
   REPO_MERGED: 'Ana dala birleştirildi', REPO_ERROR: 'Kod deposu işlemi yapılamadı',
   REPO_MIRROR_SET: 'Kod deposu yansıtması kuruldu', REPO_MIRROR_CLEARED: 'Kod deposu yansıtması kaldırıldı',
   TEST_FIX_UPDATED: 'Testler yine kaldı: açık düzeltme turu güncel sonuçla sürüyor', TEST_FIX_CLOSED: 'Testler geçti: gereksiz düzeltme turları kapatıldı',
-  TEST_GATE_OVERRIDE: 'Kabul öncesi denetim uyarısına rağmen onaylandı', PEOPLE_CHANGED: 'Adımın kişileri değiştirildi',
+  TEST_GATE_OVERRIDE: 'Kabul öncesi denetim uyarısına rağmen onaylandı',
+  VERIFICATION_WAIVED: 'Doğrulama eksikken gerekçeyle kabul edildi', EVIDENCE_ADDED: 'Kanıt eklendi', MEASURE_RECORDED: 'Ölçüm girildi',
+  CHECKLIST_UPDATED: 'Kontrol listesi güncellendi', ACCEPTED_WITH_GAPS: 'Proje eksik teslimatla kabul edildi', PEOPLE_CHANGED: 'Adımın kişileri değiştirildi',
   QUARANTINE_APPROVED: 'Karantinadaki son sürüm yönetici tarafından kabul edildi',
   // #745 ve C3-46: proje durum değişiklikleri ile ham görünen olaylar
   PROJECT_PAUSED: 'Proje duraklatıldı', PROJECT_RESUMED: 'Proje devam ettirildi', PROJECT_COMPLETED: 'Proje tamamlandı',
@@ -190,6 +192,13 @@ export default function WorkflowTab({ project }) {
                 {t.depends_on.length > 0 && <span>Önce: {t.depends_on.map((d) => titles[d]).filter(Boolean).join(', ')}</span>}
                 {t.completed_at && <span>Bitiş: {fmtDay(t.completed_at)}</span>}
               </div>
+              {t.verification && (
+                <div className="pj-meta" aria-label={`${t.title}: teslimat doğrulaması`}>
+                  {t.verification.deliverable && <span>Teslimat: {t.verification.deliverable}</span>}
+                  <span>Doğrulama: {t.verification.type_label}{t.verification.method ? ` — ${t.verification.method}` : ''}</span>
+                  <Badge tone={VERIFY_TONE[t.verification.status] || 'neutral'}>{t.verification.status_label}</Badge>
+                </div>
+              )}
               {t.ai_working && (
                 <div className="pj-note info" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Bot size={15} /> {t.assignee?.name} çalışıyor{t.status === 'REVISION' ? ' (geri bildirime göre düzeltiyor)' : ''}…

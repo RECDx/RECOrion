@@ -238,6 +238,175 @@ def run_browser(c, services, saved, browser):
         page.close()
 
 
+CRAWL_PAGES, CRAWL_BUTTONS, CRAWL_BUDGET = 6, 12, 120  # sayfa, sayfa başına düğme, saniye
+_MUT_JS = """() => { window.__rxMut = 0; if (window.__rxObs) window.__rxObs.disconnect();
+  window.__rxObs = new MutationObserver((m) => { window.__rxMut += m.length; });
+  window.__rxObs.observe(document.documentElement, {subtree: true, childList: true, attributes: true, characterData: true});
+  document.addEventListener('invalid', () => { window.__rxMut += 1; }, true); }"""
+_BTN_JS = """(max) => [...document.querySelectorAll('button, [role=button], input[type=button], input[type=submit]')]
+  .filter((b) => !b.disabled && b.getAttribute('aria-disabled') !== 'true' && b.offsetParent !== null)
+  .slice(0, max).map((b, i) => { b.setAttribute('data-rx-btn', String(i)); return b; })
+  .map((b, i) => ({i, label: (b.innerText || b.value || b.getAttribute('aria-label') || b.title || '').trim().slice(0, 50)}))"""
+_LINK_JS = """() => [...document.querySelectorAll('a[href]')].map((a) => ({href: a.getAttribute('href'), text: (a.innerText || '').trim().slice(0, 50)}))"""
+
+
+def _same_origin_path(href: str, port: int):
+    """Uygulama içi bağlantı mı; öyleyse yol (+sorgu) döner. Çapa, mailto, javascript ve dış adresler atlanır."""
+    if not href or href.startswith(("#", "mailto:", "tel:", "javascript:")):
+        return None
+    u = urllib.parse.urlparse(href)
+    if u.scheme and u.scheme not in ("http", "https"):
+        return None
+    if u.netloc and u.netloc not in (f"127.0.0.1:{port}", f"localhost:{port}"):
+        return None
+    path = u.path or "/"
+    return path + (f"?{u.query}" if u.query else "")
+
+
+def crawl(services, browser, login_check, saved):
+    """İSTEK #752 tıklama taraması: uygulama içi sayfaları gezer; her görünür düğmeye taze sayfada tıklar ve hiçbir şey
+    yapmayan düğmeyi (DOM, adres, ağ isteği, pencere değişmiyor), JS hatasını ve ölü bağlantıyı (4xx/5xx) raporlar.
+    Giriş gerekiyorsa ilk başarılı arayüz denetiminin adımları önce tekrarlanır (aynı oturum)."""
+    svc = services.get((login_check or {}).get("service")) or next((s for s in services.values() if s.get("ready")), None)
+    if not svc or not svc.get("ready") or browser is None:
+        return None
+    port, base, t0 = svc["port"], f"http://127.0.0.1:{svc['port']}", time.time()
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.set_default_timeout(8_000)
+    js_errors, net, dialogs = [], {"n": 0}, {"n": 0}
+    page.on("pageerror", lambda e: js_errors.append(str(e).split("\n")[0][:160]))
+    page.on("request", lambda r: net.__setitem__("n", net["n"] + 1) if r.resource_type in ("xhr", "fetch", "document") else None)
+    page.on("dialog", lambda d: (dialogs.__setitem__("n", dialogs["n"] + 1), d.dismiss()))
+    ctx.on("page", lambda p: (dialogs.__setitem__("n", dialogs["n"] + 1), p.close()))
+    out = {"pages": [], "dead_buttons": [], "dead_links": [], "js_errors": [], "texts": [], "login": None}
+    start = "/"
+    try:
+        if login_check:
+            try:
+                page.goto(base + _fmt(login_check.get("path") or "/", saved))
+                for st in (login_check.get("steps") or [])[:25]:
+                    st = _fmt(st, saved)
+                    if "fill" in st:
+                        page.fill(st["fill"], str(st.get("value", "")))
+                    elif "click" in st:
+                        page.click(st["click"])
+                    elif "select" in st:
+                        page.select_option(st["select"], str(st.get("value", "")))
+                    elif "press" in st:
+                        page.press(st.get("selector") or "body", str(st["press"]))
+                    elif "goto" in st:
+                        page.goto(base + st["goto"])
+                    elif "expect_text" in st:
+                        page.get_by_text(str(st["expect_text"])).first.wait_for(state="visible")
+                page.wait_for_timeout(500)
+                start = _same_origin_path(page.url, port) or "/"
+                out["login"] = login_check.get("name")
+            except Exception as exc:
+                out["login_error"] = str(exc).split("\n")[0][:200]
+        queue, seen, checked = [start], set(), {}
+        while queue and len(seen) < CRAWL_PAGES and time.time() - t0 < CRAWL_BUDGET:
+            path = queue.pop(0)
+            if path in seen:
+                continue
+            seen.add(path)
+            n_err = len(js_errors)
+            resp = page.goto(base + path, wait_until="networkidle")
+            page.wait_for_timeout(300)
+            info = {"path": path, "status": resp.status if resp else None, "buttons": 0, "dead": 0}
+            out["texts"].append(page.inner_text("body")[:6000])
+            for ln in page.evaluate(_LINK_JS)[:60]:
+                p2 = _same_origin_path(ln["href"], port)
+                if p2 is None:
+                    continue
+                if p2 not in checked:
+                    try:
+                        checked[p2] = _http("GET", base + p2, timeout=8)[0]
+                    except Exception as exc:
+                        checked[p2] = f"{exc.__class__.__name__}"
+                code = checked[p2]
+                if not isinstance(code, int) or code >= 400:
+                    out["dead_links"].append({"page": path, "text": ln["text"], "href": p2, "status": code})
+                elif p2 not in seen and p2 not in queue and p2.split("?")[0] != path.split("?")[0]:
+                    queue.append(p2)
+            buttons = page.evaluate(_BTN_JS, CRAWL_BUTTONS)
+            info["buttons"] = len(buttons)
+            for b in buttons:
+                if time.time() - t0 > CRAWL_BUDGET:
+                    break
+                try:
+                    page.goto(base + path, wait_until="networkidle")
+                    page.wait_for_timeout(200)
+                    page.evaluate(_BTN_JS, CRAWL_BUTTONS)  # yeniden yüklemede işaretler kaybolur
+                    page.evaluate(_MUT_JS)
+                    url0, net0, dlg0 = page.url, net["n"], dialogs["n"]
+                    page.click(f'[data-rx-btn="{b["i"]}"]', timeout=3000)
+                    page.wait_for_timeout(700)
+                    moved = page.url != url0
+                    mut = 0 if moved else page.evaluate("() => window.__rxMut || 0")
+                    if not (moved or mut or net["n"] > net0 or dialogs["n"] > dlg0):
+                        info["dead"] += 1
+                        out["dead_buttons"].append({"page": path, "label": b["label"] or f"düğme {b['i'] + 1}"})
+                except Exception:
+                    info["skipped"] = info.get("skipped", 0) + 1  # görünmez/kapanan öğe: tarama hatası ölü düğme sayılmaz
+            out["pages"].append(info)
+            for e in dict.fromkeys(js_errors[n_err:]):  # aynı hata her yeniden yüklemede tekrarlanır: bir kez yazılır
+                if len(out["js_errors"]) < 8:
+                    out["js_errors"].append({"page": path, "error": e})
+            del js_errors[:]
+    except Exception as exc:
+        out["error"] = f"{exc.__class__.__name__}: {str(exc).split(chr(10))[0][:200]}"
+    finally:
+        try:
+            ctx.close()
+        except Exception:
+            pass
+    out["seconds"] = round(time.time() - t0, 1)
+    return out
+
+
+def crawl_check(cr):
+    """Tarama sonucunu denetim satırına çevirir: ölü düğme, JS hatası ve ölü bağlantı duman testini düşürür."""
+    probs = []
+    if cr.get("dead_buttons"):
+        probs.append("tepkisiz düğme: " + ", ".join(f"'{d['label']}' ({d['page']})" for d in cr["dead_buttons"][:6]))
+    if cr.get("js_errors"):
+        probs.append("JS hatası: " + "; ".join(f"{e['page']}: {e['error']}" for e in cr["js_errors"][:4]))
+    if cr.get("dead_links"):
+        probs.append("ölü bağlantı: " + ", ".join(f"'{d['text'] or d['href']}' → {d['href']} ({d['status']})" for d in cr["dead_links"][:6]))
+    n_btn = sum(p["buttons"] for p in cr.get("pages") or [])
+    head = f"{len(cr.get('pages') or [])} sayfa, {n_btn} düğme tıklandı"
+    if cr.get("login_error"):
+        head += f" (giriş tekrarlanamadı: {cr['login_error'][:80]})"
+    if cr.get("error") and not cr.get("pages"):
+        return {"name": "Tıklama taraması", "type": "crawl", "ok": None, "detail": f"Tarama yapılamadı: {cr['error']}", "seconds": cr.get("seconds")}
+    return {"name": "Tıklama taraması", "type": "crawl", "ok": not probs, "seconds": cr.get("seconds"),
+            "detail": head + (" · " + " · ".join(probs) if probs else " · sorun yok")}
+
+
+CLAIM_RE = re.compile(r"[\"“«]([^\"”»\n]{3,40})[\"”»]|\*\*([^*\n]{3,40})\*\*")
+
+
+def doc_claims(texts):
+    """README'deki tırnaklı/kalın kısa ifadeler (ör. "sol menü", **Sepete ekle**) taranan sayfaların metninde aranır."""
+    readme = next((n for n in ("README.md", "readme.md") if os.path.isfile(os.path.join(WORK, n))), None)
+    if not readme or not texts:
+        return None
+    body = open(os.path.join(WORK, readme), encoding="utf-8", errors="replace").read()
+    body = re.sub(r"```.*?```|`[^`]*`", " ", body, flags=re.S)  # kod blokları komut/örnek: iddia değil
+    claims = []
+    for m in CLAIM_RE.finditer(body):
+        c = (m.group(1) or m.group(2)).strip()
+        if c and not re.search(r"[/\\:=<>{}$]|https?|\.\w{2,4}$", c) and c.lower() not in (x.lower() for x in claims):
+            claims.append(c)
+    claims = claims[:25]
+    if not claims:
+        return None
+    page = " ".join(texts).casefold()
+    missing = [c for c in claims if c.casefold() not in page]
+    return {"claims": len(claims), "missing": missing}
+
+
 def main():
     result = {"status": "NO_SMOKE", "services": [], "checks": [], "readme": None}
     readme = next((n for n in ("README.md", "readme.md", "README.MD", "README.txt", "README") if os.path.isfile(os.path.join(WORK, n))), None)
@@ -261,7 +430,8 @@ def main():
     saved, browser, pw = {}, None, None
     checks = (spec.get("checks") or [])[:MAX_CHECKS]
     try:
-        if any(c.get("type") == "browser" for c in checks):
+        web_ui = _has_web_ui()
+        if web_ui or any(c.get("type") == "browser" for c in checks):
             try:
                 from playwright.sync_api import sync_playwright
                 pw = sync_playwright().start()
@@ -280,6 +450,23 @@ def main():
                 ok, detail = False, f"{exc.__class__.__name__}: {str(exc)[:200]}"
             result["checks"].append({"name": name, "type": c.get("type") or "http", "ok": ok, "detail": detail,
                                      "seconds": round(time.time() - t0, 1)})
+        # İSTEK #752: arayüzlü uygulamada tıklama taraması + README iddialarının sayfada aranması
+        if web_ui and browser is not None:
+            login = next((c for c, r in zip(checks, result["checks"]) if c.get("type") == "browser" and r["ok"] is True), None)
+            try:
+                cr = crawl(services, browser, login, saved)
+            except Exception as exc:
+                cr = {"error": f"{exc.__class__.__name__}: {str(exc)[:200]}"}
+            if cr is not None:
+                result["crawl"] = {k: v for k, v in cr.items() if k != "texts"}
+                result["checks"].append(crawl_check(cr))
+                claims = doc_claims(cr.get("texts") or [])
+                if claims:
+                    result["doc_claims"] = claims
+                    miss = claims["missing"]
+                    result["checks"].append({"name": "Belge iddiaları sayfada", "type": "claims", "ok": not miss, "seconds": 0,
+                                             "detail": f"README'deki {claims['claims']} ifadeden {claims['claims'] - len(miss)} tanesi sayfalarda bulundu"
+                                                       + (" · bulunamayan: " + ", ".join(f"'{m}'" for m in miss[:8]) if miss else "")})
     finally:
         try:
             if browser:
@@ -302,7 +489,7 @@ def main():
     for s in result["services"]:
         s["log"] = s.get("log") or ""
     # Depoda web arayüzü varsa arayüzden deneme zorunlu: yalnız API denemek arayüzün çalıştığını göstermez
-    if _has_web_ui() and not any(c.get("type") == "browser" for c in checks):
+    if web_ui and not any(c.get("type") == "browser" for c in checks):
         result["checks"].append({"name": "Arayüzden deneme", "type": "browser", "ok": False, "seconds": 0,
                                  "detail": "Depoda web arayüzü (HTML) var ama recorion.json'da arayüzden deneme (type: browser) yok; "
                                            "arayüzün gerçek API'ye bağlanıp çalıştığı doğrulanmadı."})

@@ -26,6 +26,7 @@ from app.db.models import Actor, ChatMessage, Department, JobTitle, LLMModel, Pr
 from app.services import credits, discovery, knowledge, llm_gateway
 from app.services import projects as psvc
 from app.services.llm_gateway import LLMContext
+from app.services import verification  # #752
 
 logger = logging.getLogger("recorion.planning")
 
@@ -106,6 +107,10 @@ def validate_plan(plan: Dict[str, Any], pool_ids: set, human_ids: Optional[set] 
         steps.append({
             "key": key, "title": title, "description": str(s.get("description") or "").strip()[:4000],
             "acceptance_criteria": str(s.get("acceptance_criteria") or "").strip()[:2000],
+            # #752 teslimat + doğrulama (tür ve yöntem): onaydan önce sistem kontrol eder
+            "deliverable": str(s.get("deliverable") or "").strip()[:400] or None,
+            "verification": str(s.get("verification") or "").strip()[:600] or None,
+            "verification_type": verification.clean_type(s.get("verification_type"), bool(human)),
             "department": (str(s.get("department") or "").strip() or None), "job_title": (str(s.get("job_title") or "").strip() or None),
             "agent_id": agent if agent in pool_ids else None, "assignee_human_id": human, "estimated_days": max(0.5, min(days, 60.0)),
             # Kontrol personeli (ADIM 7.2): havuzdan, işi yapan personelden farklı bir AI personel
@@ -177,7 +182,12 @@ Planı teknik katmanlara (Backend/Frontend/Test) göre DEĞİL, Proje Tanım Bel
 her adım bir teslimatı ya da bir akışı uçtan uca tamamlasın; adımın kabul ölçütü o teslimatın kabul ölçütü ve doğrulama yöntemiyle
 aynı olsun (ör. "Turlar sayfasında 'Yurt dışı' seçilince yalnız yurt dışı turları görünür"). Yazılım projesinde plana bir
 "Arayüz/kullanım tasarımı" (ekranlar, menü/gezinme haritası, tasarım dili) adımı ve teslimden önce tanım belgesindeki tüm akışları
-gerçek arayüzde deneyen bir "Kullanıcı kabul testi" adımı ekle. Başka sektörlerde bunların karşılığını (ör. saha kabul, pilot,
+gerçek arayüzde deneyen bir "Kullanıcı kabul testi" adımı ekle.
+Her adıma bir teslimat (deliverable) ve doğrulama (verification + verification_type) yaz; sistem onaydan önce doğrulamayı kontrol eder.
+Türler: TEST (yazılımda sistemin tarayıcıda/testle kendisi denediği; ör. "'Yurt dışı' seçilince yalnız yurt dışı turları görünür"),
+MEASURE (ölçülen değer; ör. "OEE ve çevrim süresi ölçülür, hedef %65"), EVIDENCE (kanıt: rapor, ekran görüntüsü, test kaydı, fotoğraf),
+CHECKLIST (maddeleri ';' ile ayır; ör. "iç denetim maddeleri; uygunsuzluk kapanışları"), HUMAN (belirlenen kişinin onayı; ör. kilit
+kullanıcı imzası). Doğrulama "kod var, sayfa açılıyor" gibi genel olamaz; teslimatın gerçekten çalıştığını gösterecek kadar somut olsun. Başka sektörlerde bunların karşılığını (ör. saha kabul, pilot,
 eğitim, canlıya geçiş) ekle. İnsan yapması gereken işleri (onay toplantısı, saha ölçümü, satın alma, eğitim vermek, imza) AI'ya
 verme: bu adımlara assignee_human_id ile insan personel ata. Gerçekçi olmayan tarih/bütçe görürsen "risks" içinde açıkça yaz.
 
@@ -213,6 +223,8 @@ Hedef tarihler: {project.start_date or 'belirlenmedi'} - {project.end_date or 'b
 Sadece şu JSON'u döndür:
 {{"summary": "planın 3-5 cümlelik özeti (toplam gün veya bitiş tarihi YAZMA; süreyi sistem simülasyonla hesaplar)",
   "steps": [{{"key": "S1", "title": "adım adı", "description": "ne yapılacak", "acceptance_criteria": "tamam sayılma ölçütü",
+             "deliverable": "bu adımın teslimatı (tanım belgesindeki adıyla)", "verification": "tamam olduğunu nasıl anlayacağız (somut, denenebilir)",
+             "verification_type": "TEST|MEASURE|EVIDENCE|CHECKLIST|HUMAN",
              "department": "departman", "job_title": "gereken unvan", "agent_id": "havuzdan agent_id veya boş", "assignee_human_id": "insan adımıysa human_id, değilse boş",
              "reviewer_agent_id": "çıktıyı kontrol edecek, işi yapandan farklı havuz agent_id'si veya boş",
              "estimated_days": 2, "depends_on": ["önceki adım key"], "priority": "HIGH|MEDIUM|LOW"}}],
@@ -338,6 +350,8 @@ async def approve_plan(db: AsyncSession, project: Project, actor_id: uuid.UUID) 
             reviewer = None
         task = Task(project_id=project.id, title=s["title"], description=s.get("description"),
                     acceptance_criteria=s.get("acceptance_criteria"), priority=s.get("priority", "MEDIUM"),
+                    deliverable=s.get("deliverable"),
+                    verification=verification.init_for_task(s, bool(s.get("assignee_human_id")) or bool(agent and agent.actor_type == "HUMAN")),
                     assignee_actor_id=agent.id if agent else None, estimated_effort=s.get("estimated_days", 1),
                     department_id=depts.get((s.get("department") or "").lower()), job_title_id=agent.job_title_id if agent else None,
                     order_index=i, status="BACKLOG", depends_on=[], reviewer_actor_id=reviewer.id if reviewer else None,

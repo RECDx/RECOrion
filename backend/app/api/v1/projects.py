@@ -208,6 +208,7 @@ async def update_project(project_id: uuid.UUID, payload: ProjectUpdate, user: Cu
 class StatusIn(BaseModel):
     action: str  # start_planning, mark_ready, reopen_planning, start, pause, resume, complete, cancel
     summary: Optional[str] = Field(None, max_length=4000)
+    accept_gaps: bool = False  # #752: doğrulaması eksik teslimatla kabul (gerekçe = kapanış özeti; kayda geçer)
 
 
 @router.post("/{project_id}/status")
@@ -219,6 +220,15 @@ async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentU
 
     # #745: iptalde kayıp maliyet, durum değişmeden önceki hâliyle hesaplanır ve kayda geçer
     preview = await cost_svc.cancel_preview(db, project) if payload.action == "cancel" and previous not in ("COMPLETED", "CANCELLED") else None
+    gap = None
+    if payload.action == "complete" and previous in ("ACTIVE", "PAUSED"):  # #752 kalite kapısı: tüm teslimatlar doğrulanmış olmalı
+        from app.services import verification
+        cov = await verification.coverage(db, project)
+        gap = verification.completion_problem(cov) if any(r["type"] for r in cov["rows"]) else None
+        if gap and not payload.accept_gaps:
+            raise HTTPException(status_code=409, detail={"code": "COVERAGE_GATE", "message": gap})
+        if gap and len((payload.summary or "").strip()) < 10:
+            raise HTTPException(status_code=422, detail="Eksik teslimatla kabul için kapanış özetine gerekçeyi yazın (en az 10 karakter).")
     await svc.transition(db, project, payload.action, payload.summary)
     try:
         await _sync_workflow(project, payload.action, user)
@@ -233,6 +243,8 @@ async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentU
         raise
     await db.commit()
     reason = (payload.summary or "").strip()
+    if gap:
+        await task_flow.log(db, project, None, "ACCEPTED_WITH_GAPS", user.actor_id, f"{gap}\nGerekçe: {reason}", {"reason": reason})
     # #745 / C3-66c / C3-75: durum değişiklikleri akış geçmişine düşer (kim, ne zaman, neden)
     if payload.action == "pause":
         await task_flow.log(db, project, None, "PROJECT_PAUSED", user.actor_id, reason or "Proje yöneticisi duraklattı.", {"reason": "MANAGER"})

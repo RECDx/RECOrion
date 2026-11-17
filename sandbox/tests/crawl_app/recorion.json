@@ -1,0 +1,2 @@
+{"services":[{"name":"web","dir":".","start":"python -m http.server 8080 --bind 127.0.0.1","port":8080,"ready":"/"}],
+ "checks":[{"name":"Ana sayfa","type":"browser","service":"web","path":"/","steps":[{"expect_text":"Turlar"}]}]}

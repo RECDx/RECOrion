@@ -138,7 +138,8 @@ def smoke_md(smoke: Dict[str, Any]) -> List[str]:
             lines += ["```text", s["log"][-1500:], "```"]
     for c in smoke.get("checks") or []:
         mark = "✓" if c.get("ok") is True else "✗" if c.get("ok") is False else "–"
-        lines.append(f"- {mark} {c.get('name')} ({'arayüz' if c.get('type') == 'browser' else 'API'}): {(c.get('detail') or '')[:300]}")
+        kind = {"browser": "arayüz", "crawl": "tıklama taraması", "claims": "belge"}.get(c.get("type"), "API")
+        lines.append(f"- {mark} {c.get('name')} ({kind}): {(c.get('detail') or '')[:600]}")
     rd = smoke.get("readme") or {}
     if rd:
         lines.append(f"- README: {'var, ' + str(rd.get('chars')) + ' karakter' if rd.get('file') else 'YOK'}"
@@ -164,6 +165,11 @@ async def finish(db: AsyncSession, project: Project, run: TestRun, task: Optiona
         run.result, run.status = result, result.get("status") if result.get("status") in STATUS_TR else "ERROR"
         t = _totals(result)
         run.passed, run.failed, run.skipped = t["passed"], t["failed"], t["skipped"]
+        # #752: ana dalda (önceden doğrulanmış) olan denetimler bu dalda silindi ya da gevşetildi mi
+        from app.services import verification
+        loose = await verification.loosened_for_ref(project, run.ref)
+        if loose:
+            run.result = {**result, "loosened": loose}
     except SandboxError as exc:
         run.status, run.error = "ERROR", str(exc)
     except Exception as exc:  # beklenmeyen: koşu kaydı açık kalmasın
@@ -206,6 +212,10 @@ def report_md(run: TestRun) -> str:
         if test.get("status") in ("FAILED", "TIMEOUT") and not test.get("failures"):
             lines += ["```text", (test.get("log") or "")[-2000:], "```"]
     lines += smoke_md(res.get("smoke") or {})
+    if res.get("loosened"):
+        lines += ["", "### Önceden doğrulanmış denetimlerde gevşetme (ana dala göre)"]
+        lines += [f"- ⚠ `{x['name']}`: {x['change']}" for x in res["loosened"][:15]]
+        lines.append("- Bu fark kontrol personeline ve onaylayıcıya gösterilir; gerekçesiz gevşetme kabul edilmez.")
     return "\n".join(lines)
 
 

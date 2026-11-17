@@ -183,7 +183,7 @@ Aşağıdaki harita, girişten önceki ekranları ve Work Space'in tamamını te
 | Giriş öncesi | E-postadaki bağlantılar | Şifre belirleme sayfası · Onay bağlantısı sayfası | Bağlantıyı alan kişi |
 | Work Space | Üst çubuk | Kurum (logo), Resmi Web & Paketler, Şirket Yönetimi, kullanıcı kartı, Çıkış | Herkes (Şirket Yönetimi düğmesi yalnız yönetim izni olanlarda) |
 | Work Space | **Projeler** | Projeler ve Case'ler listesi · Yeni Proje / Case · Şablondan proje oluştur · Toplantıdan proje oluştur | Herkes (oluşturma düğmeleri yalnız **Proje / Case Açma** izni olanlarda) |
-| Work Space | Projeler › Proje ekranı | Bilgiler & İsterler · Proje Ekleri · Beyin AI Planlama · Ekip & Simülasyon · Hazırlık & Bildirim · İş Akışı · Maliyet · Kod Deposu · Testler · RECSlip · Kapanış · Şablon olarak kaydet | Projenin ekibi; **Maliyet** yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar; **RECSlip** yalnız RECSlip Case'lerinde |
+| Work Space | Projeler › Proje ekranı | Bilgiler & İsterler · Proje Ekleri · Beyin AI Planlama · Ekip & Simülasyon · Hazırlık & Bildirim · İş Akışı · Doğrulama · Maliyet · Kod Deposu · Testler · RECSlip · Kapanış · Şablon olarak kaydet | Projenin ekibi; **Maliyet** yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar; **RECSlip** yalnız RECSlip Case'lerinde |
 | Work Space | **Onaylarım** | RECSlip masraf fişleri · Dış sisteme aktarımlar · Araç işlemleri (yazma) · İş adımı onayları ve karantinadakiler | Herkes (yalnız kendi kararını bekleyenler) |
 | Work Space | **Çalışma Alanı** | Sol: Proje & Görevler · Orta: Sohbet · Sağ: Kalite Kapısı & Kurum Hafızası · Yeni İş Akışı Görevi Oluştur | Herkes (yalnız ekibinde olduğu projeler) |
 | Work Space | **Pano** | Şirket veya departman göstergeleri | **Şirket Geneli Pano** veya **Departman Panosu** izni olanlar |
@@ -707,7 +707,7 @@ Pencerede not: "Plan taslak olarak gelir: unvanı uyan AI personel adımlara ata
 
 1. **Başlık:** **← Projeler** (listeye döner), proje adı, durum rozeti, tür, "Yönetici: <ad>", tarih aralığı.
 2. **Durum düğmeleri** (sağda; duruma göre değişir).
-3. **Sekme çubuğu:** **Bilgiler & İsterler** · **Proje Ekleri** · **Beyin AI Planlama** · **Ekip & Simülasyon** · **Hazırlık & Bildirim** · **İş Akışı** · **Maliyet** · **Kod Deposu** · **Testler** · **RECSlip** · **Kapanış**. Bazı sekmelerin yanında sayı vardır: Proje Ekleri = ek sayısı, Beyin AI Planlama = plandaki adım sayısı, Ekip & Simülasyon = ekip üye sayısı.
+3. **Sekme çubuğu:** **Bilgiler & İsterler** · **Proje Ekleri** · **Beyin AI Planlama** · **Ekip & Simülasyon** · **Hazırlık & Bildirim** · **İş Akışı** · **Doğrulama** · **Maliyet** · **Kod Deposu** · **Testler** · **RECSlip** · **Kapanış**. Bazı sekmelerin yanında sayı vardır: Proje Ekleri = ek sayısı, Beyin AI Planlama = plandaki adım sayısı, Ekip & Simülasyon = ekip üye sayısı.
 
 Hangi sekmeyle açılır? Aktif veya Duraklatıldı projede **İş Akışı**; şablondan veya toplantıdan gelmiş, planı henüz onaylanmamış projede **Beyin AI Planlama**; diğerlerinde **Bilgiler & İsterler**.
 
@@ -919,6 +919,9 @@ Plan yoksa: **"Plan bekleniyor"** — "İsterleri yazdıktan sonra Beyin AI'dan 
 | **İşi yapan personel** | Adımı yürütecek personel. | **Personel atanmadı**, havuzdaki AI personel ("Ad · Unvan") ya da insan personel ("Ad (insan)"). Onay toplantısı, saha ölçümü, satın alma, eğitim, imza gibi insan işlerini insan personele atayın; Beyin AI da bu adımlara insan önerir. İnsan adımı başlayınca kişiye bildirim gider, teslimi kişi yapar. | Orion Analist · İş Analisti | Başlamaya hazır için evet |
 | Açıklama ("Ne yapılacak") | Adımın içeriği. | Serbest metin. | — | Hayır |
 | Kabul ölçütü ("Tamam sayılma ölçütü") | Onaylayıcının bakacağı ölçüt. | Ölçülebilir yazın. | Tüm tablolar ilişki şemasıyla verilmiş olmalı. | Hayır |
+| **Teslimat** ("Teslimat (ne teslim edilecek)") | Adımın teslim edeceği şey; Doğrulama sekmesinde ve kapsam raporunda bu adla görünür. | Tanım belgesindeki teslimat adıyla. | Turlar sayfasında bölge ve fiyat filtresi | Hayır |
+| **Doğrulama türü** | Teslimatın tamam olduğunun nasıl anlaşılacağı. | **Otomatik test** (yazılımda sistem kendisi dener) · **Ölçüm** (ölçülen değer girilir) · **Kanıt** (not, bağlantı ya da Proje Eki) · **Kontrol listesi** (maddelerin hepsi işaretlenir) · **İnsan onayı** (belirlenen kişinin onayı). | Otomatik test | Hayır |
+| **Doğrulama yöntemi** | Somut ve denenebilir doğrulama. Kontrol listesinde maddeleri ";" ile ayırın. | Kutu, seçilen türe göre örnek gösterir. "Kod var, sayfa açılıyor" gibi genel yazmayın. | 'Yurt dışı' seçilince yalnız yurt dışı turları görünür | Hayır |
 | **Departman** | Adımın ait olduğu birim. | Metin. | Bilgi İşlem | Hayır |
 | **Gereken unvan** | Adım için gereken uzmanlık. | Metin. | Yazılım Mimarı | Hayır |
 | **Süre (iş günü)** | Tahmini süre; simülasyonda kullanılır. | 0,5–60 arası, 0,5'lik adımlarla. | 2 | Evet |
@@ -1197,6 +1200,38 @@ Commit yoksa: **"Henüz commit yok"** — "AI personel bir iş adımının çık
 
 **Mesajlar:** **"Kod deposu sunucusu bu kurulumda yapılandırılmamış. RECDx ile iletişime geçin."** · **"Şirketin GitHub/Gitea bağlantısı yok. Şirket yöneticisi Şirket Yönetimi › Entegrasyonlar ekranından ekler."**
 
+### Doğrulama sekmesi
+
+[[EKRAN: wa-dogrulama | Doğrulama sekmesi: üstte "N teslimattan M tanesi doğrulandı" özeti ve Doğrulandı / Eksik / Gerekçeyle kabul / Bekliyor sayıları, altta teslimat listesi (durum rozetleri, Kanıt ekle / Ölçüm gir / Kontrol listesi düğmeleri) | Planı teslimat ve doğrulamayla onaylanmış Aktif bir projede "Doğrulama" sekmesine basın; adımlardan biri onay bekliyor olsun]]
+
+**Bu ekran ne işe yarar?** Planda her adım için iki şey yazılır: ne teslim edilecek ve tamam olduğunu nasıl anlayacağız. Sistem onaydan önce ikincisini gerçekten kontrol eder. Bu sekme projenin **kapsam raporudur**: "18 teslimattan 14 tanesi doğrulandı, 4 tanesinde doğrulama eksik" gibi bir özet ve her teslimatın durumu.
+
+**Doğrulama türleri ve ne zaman doğrulanmış sayılır:**
+
+| Tür | Kim yapar | Ne zaman doğrulanmış sayılır |
+|---|---|---|
+| **Otomatik test** | Sistem | Kod deposu olan projede adım teslim edilince sistem adımın dalını Kod Çalıştırma Ortamı'nda koşar (testler, duman testi, tıklama taraması). Koşu geçerse doğrulanır. Kod deposu olmayan projede kanıt gibi değerlendirilir. |
+| **Ölçüm** | Sorumlu | Ölçülen değer girilince (ör. OEE %62). Değeri hedefle onaylayıcı karşılaştırır. |
+| **Kanıt** | Sorumlu yükler, kontrol personeli inceler | En az bir kanıt (not, bağlantı ya da Proje Eki) eklenince. AI personelin adımında adımın çıktısı kanıttır. |
+| **Kontrol listesi** | Kontrol personeli / onaylayıcı | Maddelerin hepsi işaretlenince. |
+| **İnsan onayı** | Belirlenen kişi | Onaylayıcının onayıyla. |
+
+**Durum rozetleri:** **Doğrulandı** (yeşil) · **Eksik** (kırmızı) · **Gerekçeyle kabul** (sarı) · **Bekliyor** (gri: adım henüz teslim edilmedi, insan onayı bekliyor ya da doğrulama yöntemi tanımlanmamış eski plan adımı).
+
+**Kimler kayıt girer?** Adımın sorumlusu, onaylayıcısı, kontrol personeli ve proje yöneticisi. Adım tamamlanınca kayıt değiştirilemez.
+
+| Düğme | Ne yapar | Dikkat |
+|---|---|---|
+| **Kanıt ekle** | **Not**, **Bağlantı** (https://…) ya da **Proje Eki** seçip açıklamayla ekler. | Not en az 5 karakter. Bir teslimata en fazla 20 kanıt. |
+| **Ölçüm gir** | **Ölçülen değer**, **Birim** ve **Not** girilir. | Yalnız Ölçüm türünde. |
+| **Kontrol listesi** | Maddeleri işaretlersiniz. | Yalnız Kontrol listesi türünde. |
+
+**Onaya etkisi:** Doğrulaması eksik adım onaya gelince İş Akışı kartında "Teslimat doğrulanmadı (…) — …" uyarısı görünür. **Onayla** dediğinizde "Doğrulanmamış teslimat" penceresi açılır. Eksikle kabul ancak gerekçe yazarak yapılır; gerekçe kapsam raporuna ve İş Akışı geçmişine ("Doğrulama eksikken gerekçeyle kabul edildi") yazılır. Önce kanıtı ekleyip ya da listeyi işaretleyip sonra onaylamak her zaman tercih edilir.
+
+**Projenin kabulü:** Kapanış sekmesinde **Projeyi tamamla** dediğinizde tamamlanmış adımlardan doğrulaması eksik olan ya da tamamlanmamış adım varsa "Doğrulanmamış teslimatlar" penceresi çıkar. **Eksikle kabul et** ancak kapanış özetine en az 10 karakterlik gerekçe yazılmışsa olur; karar geçmişe kaydedilir.
+
+> **Örnek:** Üretim takip projesinde "Pilot hat OEE değeri" teslimatının doğrulaması Ölçüm'dür: "OEE ölçülür, hedef %65". Vardiya amiri ölçümü yapar, **Ölçüm gir** ile 62 % yazar; rozet **Doğrulandı** olur. Proje yöneticisi değeri hedefle karşılaştırıp onaylar ya da revizyon ister.
+
 ### Testler sekmesi
 
 [[EKRAN: wa-testler | Testler sekmesi: Kod Çalıştırma Ortamı kartı (Dal seçimi, Testleri çalıştır) ve bir test koşusu: Kaldı rozeti, "2 geçti · 1 kaldı", kalan testin adı ve mesajı | Deposu açık ve testleri olan bir projede "Testler" sekmesine basın; Testleri çalıştır'a basıp sonucun gelmesini bekleyin, Ayrıntı'yı açın]]
@@ -1218,6 +1253,13 @@ Döngü en fazla **2 tur** döner. Sonrasında yeni adım açılmaz, çıktıda 
 - **JavaScript** (package.json): `npm install`, ardından package.json'daki **test** betiği (`npm test`).
 - Kökte **scripts/recorion_test.sh** varsa o da çalışır.
 Her aşamanın üst süresi 5 dakikadır.
+
+**Doğrulaması otomatik test olan teslimatlar:** Planda doğrulama türü **Otomatik test** olan bir adım teslim edilince kod, test uzmanı olmasa da kendiliğinden çalışır; sonuç adımın çıktısına eklenir. Kontrol personeli ve onaylayıcı gerçek sonucu görür. Koşu geçmeden adım doğrulanmış sayılmaz.
+
+**Duman testinde ek denetimler (web arayüzü olan uygulamalarda):**
+- **Tıklama taraması:** Sistem uygulama içindeki sayfaları gezer ve her görünür düğmeye tıklar. Hiçbir şey yapmayan düğmeyi ("tepkisiz düğme", ör. çalışmayan Kapat), sayfa JS hatasını ve açılmayan iç bağlantıyı ("ölü bağlantı") raporlar. Giriş gerektiren uygulamada önce ilk başarılı arayüz denetiminin adımları tekrarlanır. Sorun bulunursa duman testi kalır.
+- **Belge iddiaları sayfada:** README'de tırnak içinde ya da kalın yazılmış kısa ifadeler (ör. "sol menü", **Sepete ekle**) taranan sayfalarda aranır; bulunamayanlar listelenir ve duman testi kalır.
+- **Gevşetme farkı:** Ana dalda (önceden doğrulanmış) olan bir denetim adımın dalında silinir ya da beklentisi azaltılırsa koşu raporunda "Önceden doğrulanmış denetimlerde gevşetme" bölümü çıkar. Fark kontrol personeline ve onaylayıcıya gösterilir; bu adımın teslimatı doğrulanmış sayılmaz.
 
 **Ekranın bölümleri:**
 
@@ -1356,7 +1398,7 @@ Genel ayarlar:
 
 | Düğme | Ne yapar | Dikkat |
 |---|---|---|
-| **Projeyi tamamla** | Projeyi Tamamlandı yapar; kapanışta önerilecek aktarımlar onaya düşer. | **"Proje tamamlandı olarak kapatılsın mı?"** Geri alınamaz. |
+| **Projeyi tamamla** | Projeyi Tamamlandı yapar; kapanışta önerilecek aktarımlar onaya düşer. | **"Proje tamamlandı olarak kapatılsın mı?"** Geri alınamaz. Doğrulanmamış teslimat varsa "Doğrulanmamış teslimatlar" penceresi çıkar; **Eksikle kabul et** için kapanış özetine gerekçe yazın (bkz. Doğrulama sekmesi). |
 | **İptal et** | **"Projeyi iptal et"** penceresini açar: harcanan, teslimata dönüşen ve kayıp maliyet; zorunlu gerekçe; geri alınamaz onay kutusu. Onaylanınca proje İptal edildi olur, açık adımlar gerekçeyle iptal edilir. Kapanış özeti kutusuna yazdığınız metin gerekçe olarak pencereye gelir. | Gerekçe ve onay kutusu olmadan **İptal et** pasiftir. |
 | **Excel raporu** | Maliyet raporunu indirir. | — |
 | **Seçilenleri Kurum Hafızasına aktar (n)** | Seçilen ekleri şirket geneline taşır: **"n ek Kurum Hafızasına aktarıldı; artık şirketin tüm AI personeli yararlanır."** | Onay sormaz. |

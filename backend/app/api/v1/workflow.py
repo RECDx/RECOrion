@@ -56,7 +56,18 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
         return {"id": str(a.id), "name": a.display_name, "type": a.actor_type} if a else None
 
     from app.services import sandbox
+    from app.services import verification
     gates = {t.id: await sandbox.acceptance_gate(db, project, t) for t in tasks if t.status in ("WAITING_APPROVAL", "QUARANTINED")}
+    verify = {}  # #752 teslimat ve doğrulama durumu (kartta gösterilir; eksikse onaydan önce uyarı)
+    for t in tasks:
+        if t.deliverable or t.verification:
+            st, why = await verification.evaluate(db, project, t)
+            v = t.verification or {}
+            verify[t.id] = {"deliverable": t.deliverable, "type": v.get("type"), "type_label": verification.TYPE_TR.get(v.get("type"), "—"),
+                            "method": v.get("method"), "status": st, "status_label": verification.STATUS_TR[st], "reason": why}
+            if st == "MISSING" and t.status in ("WAITING_APPROVAL", "QUARANTINED"):
+                msg = await verification.gate(db, project, t)
+                gates[t.id] = "\n\n".join(m for m in (gates.get(t.id), msg) if m)
     # F86: duran adımın nedeni kartta görünsün (son "yeniden dene"den sonraki en son BLOCKED kaydı)
     blocked, unreviewed = {}, {}
     for e in events:  # en yeniden eskiye
@@ -94,7 +105,8 @@ async def project_workflow(project_id: uuid.UUID, user: CurrentUser = Depends(ge
             "can_cancel": manages and t.status not in task_flow.CLOSED and t.status != "QUARANTINED" and project.status in ("ACTIVE", "PAUSED"),
             "can_edit_people": manages and t.status not in task_flow.CLOSED,  # F92
             "fix_kind": t.fix_kind, "fix_of_task_id": str(t.fix_of_task_id) if t.fix_of_task_id else None,
-            "acceptance_warning": gates.get(t.id),  # kabul kapısı (#734): onaydan önce gösterilir
+            "acceptance_warning": gates.get(t.id),  # kabul kapısı (#734) + teslimat doğrulaması (#752): onaydan önce gösterilir
+            "verification": verify.get(t.id),
             "manager_revisions": revision_left.get(t.id),  # F82: {used, max}
             "blocked_reason": blocked.get(t.id) if t.status == "QUARANTINED" else None,  # F86
             "unreviewed_warning": unreviewed.get(t.id) if t.status == "WAITING_APPROVAL" else None,  # F89
@@ -128,6 +140,27 @@ async def submit_task(task_id: uuid.UUID, payload: SubmitIn, user: CurrentUser =
     return {"accepted": True}
 
 
+async def _approval_gates(db: AsyncSession, project, task, user: CurrentUser, note: str, force: bool) -> None:
+    """Onaydan önce kabul kapısı (#734: uygulama gerçekten açılıp denendi mi) ve teslimat doğrulaması (#752).
+    Uyarı varsa 409 TEST_GATE; onaylayıcı "yine de onayla" derse geçmişe yazılır. Doğrulaması eksik teslimat ancak
+    gerekçeyle kabul edilir (gerekçe onay notudur)."""
+    from app.services import sandbox, verification
+
+    acc = await sandbox.acceptance_gate(db, project, task)
+    ver = await verification.gate(db, project, task)
+    msgs = [m for m in (acc, ver) if m]
+    if msgs and not force:
+        raise HTTPException(status_code=409, detail={"code": "TEST_GATE", "message": "\n\n".join(msgs), "needs_reason": bool(ver)})
+    if ver and not note:
+        raise HTTPException(status_code=422, detail="Doğrulaması eksik teslimatı kabul etmek için gerekçe yazın; kapsam raporuna ve akış geçmişine kaydedilir.")
+    if acc:
+        await task_flow.log(db, project, task, "TEST_GATE_OVERRIDE", user.actor_id, acc)
+    if ver:
+        await task_flow.log(db, project, task, "VERIFICATION_WAIVED", user.actor_id, f"{ver}\nGerekçe: {note}", {"reason": note})
+    await verification.record_decision(db, project, task, user.actor_id, note if ver else None)
+    await db.commit()
+
+
 class DecisionIn(BaseModel):
     approve: bool
     note: Optional[str] = Field(None, max_length=4000)
@@ -148,13 +181,7 @@ async def decide_task(task_id: uuid.UUID, payload: DecisionIn, user: CurrentUser
     if not payload.approve and not note:
         raise HTTPException(status_code=422, detail="Revizyon isterken gerekçeyi yazın; personel buna göre düzeltecek.")
     if payload.approve:
-        from app.services import sandbox
-        gate = await sandbox.acceptance_gate(db, project, task)
-        if gate and not payload.force:
-            raise HTTPException(status_code=409, detail={"code": "TEST_GATE", "message": gate})
-        if gate:
-            await task_flow.log(db, project, task, "TEST_GATE_OVERRIDE", user.actor_id, gate)
-            await db.commit()
+        await _approval_gates(db, project, task, user, note, payload.force)
     await engine.signal_task(str(task.id), "decide", {"actor_id": str(user.actor_id), "approve": payload.approve, "note": note})
     return {"accepted": True}
 
@@ -180,13 +207,7 @@ async def release_task(task_id: uuid.UUID, payload: ReleaseIn, user: CurrentUser
             raise HTTPException(status_code=422, detail="Son sürümü kabul ederken gerekçeyi yazın; akış geçmişine kaydedilir.")
         if not (await db.execute(select(Artifact.id).where(Artifact.task_id == task.id).limit(1))).scalar():
             raise HTTPException(status_code=409, detail="Bu adımın kabul edilecek bir çıktısı yok; yeniden deneyin veya iptal edin.")
-        from app.services import sandbox
-        gate = await sandbox.acceptance_gate(db, project, task)
-        if gate and not payload.force:
-            raise HTTPException(status_code=409, detail={"code": "TEST_GATE", "message": gate})
-        if gate:
-            await task_flow.log(db, project, task, "TEST_GATE_OVERRIDE", user.actor_id, gate)
-            await db.commit()
+        await _approval_gates(db, project, task, user, (payload.note or "").strip(), payload.force)
     if payload.assignee_actor_id:
         actor = await db.get(Actor, payload.assignee_actor_id)
         if not actor or actor.tenant_id != project.tenant_id:
