@@ -1243,10 +1243,10 @@ Commit yoksa: **"Henüz commit yok"** — "AI personel bir iş adımının çık
 **Ne zaman kullanırım?** Yazılım projelerinde. **AI Test Uzmanı** (unvanında "Test", "QA" veya "Kalite Güvence" geçen AI personel) deposu açık bir projede iş adımını teslim ettiğinde testler **kendiliğinden** çalışır: test uzmanı önce test kodunu yazar, sistem adımın dalını çalıştırır, sonuç ("Gerçek test koşusu") ve test uzmanının bu sonuca göre yazdığı değerlendirme ("Karar: Kabul" / "Karar: Düzeltme gerekli") adımın çıktısına ve görev sohbetine eklenir. Proje yöneticisi istediği dalda testleri elle de çalıştırabilir.
 
 **Testler kalınca ne olur? (geri gönderme döngüsü)** Sistem iş akışına kendiliğinden iki adım ekler:
-1. **Test düzeltmesi <n>: <kod adımı>**: kodu yazan AI personele (test adımından önceki, depoya kod yazmış son AI personel adımı) atanır; kalan testler ve hata mesajları açıklamasındadır. Test adımını onayladığınızda başlar.
+1. **Test düzeltmesi <n>: <kod adımı>**: kodu yazan AI personele (test adımından önceki, depoya kod yazmış son AI personel adımı) atanır; kalan testler ve hata mesajları açıklamasındadır. Test adımının onayını beklemeden hemen başlar.
 2. **Yeniden test <n>: <test adımı>**: düzeltme onaylanınca test uzmanına açılır; testler yeniden çalışır.
 
-Döngü en fazla **2 tur** döner. Sonrasında yeni adım açılmaz, çıktıda "karar proje yöneticisinde" yazar. Proje yöneticisine bildirim gider; İş Akışı geçmişinde **"Testler kaldı: düzeltme ve yeniden test adımı açıldı"** olayı görünür. İstemediğiniz düzeltme adımını iptal edebilirsiniz.
+Döngü en fazla **2 tur** döner. Sonrasında yeni adım açılmaz, çıktıda "karar proje yöneticisinde" yazar. Proje yöneticisine bildirim gider; İş Akışı geçmişinde **"Testler kaldı: düzeltme ve yeniden test adımı açıldı"** olayı görünür. İstemediğiniz düzeltme adımını iptal edebilirsiniz. Teslimatı doğrulanmamış test adımını **Gerekçeyle onayla** ile kabul ederseniz o adımın **henüz başlamamış** düzeltme ve yeniden test adımları kendiliğinden iptal edilir (kredi harcanmaz); çalışmakta olan düzeltme işini bitirir. İptal edilenler İş Akışı geçmişinde **"Adım gerekçeyle onaylandı; başlamamış turlar iptal edildi"** olarak görünür.
 
 **Kimler görür / çalıştırır?** Projenin ekibi sonuçları görür. **Testleri çalıştır** düğmesini yalnız proje yöneticisi ve **Tüm Projeleri Yönetme** izni olanlar görür ("Testleri elle proje yöneticisi başlatır; AI Test Uzmanı'nın koşuları kendiliğinden yapılır.").
 

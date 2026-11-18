@@ -370,6 +370,27 @@ async def _close_lineage(db: AsyncSession, project: Project, test_task: Task, ta
     return closed
 
 
+async def cancel_pending_rounds(db: AsyncSession, project: Project, task: Task) -> list:
+    """Kullanıcı kararı (18.11.2026): adım doğrulaması eksikken gerekçeyle onaylanınca (#752 "Gerekçeyle onayla"), aynı test adımının henüz
+    BAŞLAMAMIŞ düzeltme ve yeniden test turları iptal edilir (kredi harcamasın). Çalışmakta olan tur işini bitirir."""
+    from sqlalchemy import select
+
+    root = root_of(task)
+    pending = (await db.execute(select(Task).where(Task.project_id == project.id, Task.fix_of_task_id == root,
+                                                   Task.id != task.id, Task.status.in_(("BACKLOG", "READY"))))).scalars().all()
+    closed = []
+    for t in pending:
+        try:
+            await task_flow.request_cancel(db, t, project, None, f"'{task.title}' doğrulama eksikken gerekçeyle onaylandı; bu tur artık gerekmiyor.")
+            closed.append(t.title)
+        except Exception:  # akış sinyali gitmezse yönetici elle iptal eder
+            logger.warning("Başlamamış düzeltme turu iptal edilemedi (%s)", t.id, exc_info=True)
+    if closed:
+        await task_flow.log(db, project, task, "TEST_FIX_CLOSED", None,
+                            "Adım gerekçeyle onaylandı; başlamamış turlar iptal edildi: " + ", ".join(closed))
+    return closed
+
+
 async def schedule_fix_loop(db: AsyncSession, project: Project, test_task: Task, run: TestRun) -> Optional[str]:
     """Test/kabul koşusundan sonra düzeltme döngüsü (Aşama 2 bulgularıyla yeniden: F99, F100, F103, F105, F109).
 

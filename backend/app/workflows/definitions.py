@@ -134,6 +134,8 @@ class TaskWorkflow:
                 out = await workflow.execute_activity(act.ai_work, args=[task_id, feedback], **AI_OPTS)
                 if self.cancelled is not None:
                     return await self._cancel(task_id)
+                if not out["ok"] and out.get("cancelled"):  # HATA #760: adım/proje veritabanında zaten kapatılmış; çıktı yazılmadı
+                    return "CANCELLED"
                 # #746 (yalnız yeni sonuç alanlarıyla çalışır; eski akış geçmişleri bu dallara hiç girmez):
                 if not out["ok"] and out.get("queued"):  # EVREN koruma sınırı: sırada bekle, sonra yeniden dene
                     await workflow.sleep(timedelta(seconds=45))

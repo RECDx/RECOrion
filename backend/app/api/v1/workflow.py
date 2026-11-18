@@ -159,6 +159,9 @@ async def _approval_gates(db: AsyncSession, project, task, user: CurrentUser, no
         await task_flow.log(db, project, task, "VERIFICATION_WAIVED", user.actor_id, f"{ver}\nGerekçe: {note}", {"reason": note})
     await verification.record_decision(db, project, task, user.actor_id, note if ver else None)
     await db.commit()
+    if ver:  # doğrulaması eksik teslimat gerekçeyle kabul edildi → başlamamış düzeltme turları iptal (kredi harcamasın)
+        await sandbox.cancel_pending_rounds(db, project, task)
+        await db.commit()
 
 
 class DecisionIn(BaseModel):

@@ -524,6 +524,12 @@ try {
   let approved = 0, waived = 0;
   let released = 0;
   let linkApproved = false;
+  // Plan adımlarından kaçının gerçekten tamamlandığı (API; kartlardaki rozet düzeltme turlarını da sayar)
+  const planDoneNow = async () => {
+    const p = (await api(page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME);
+    const wf = p ? (await api(page, `/api/v1/projects/${p.id}/workflow`)).body : {};
+    return (wf.tasks || []).filter((t) => titles.includes(t.title) && t.status === 'DONE').length;
+  };
   while (Date.now() < deadline) {
     const waiting = page.locator('.pj-step', { has: page.getByRole('button', { name: 'Onayla', exact: true }) });
     const quarantined = page.locator('.pj-step', { has: page.getByRole('button', { name: 'Yeniden dene' }) });
@@ -575,12 +581,12 @@ try {
       await page.getByRole('dialog').getByRole('button', { name: 'Yeniden dene' }).click();  // C3-50: not/personel penceresi
       await page.waitForTimeout(2500);
     } else {
-      const done = await page.locator('.pj-step .ui-badge', { hasText: 'Tamamlandı' }).count();
+      const done = await planDoneNow();  // düzeltme turu görevleri (Test düzeltmesi / Yeniden test) sayılmaz
       if (done === titles.length) break;
       await page.waitForTimeout(3000);
     }
   }
-  const doneCount = await page.locator('.pj-step .ui-badge', { hasText: 'Tamamlandı' }).count();
+  const doneCount = await planDoneNow();
   if (!linkApproved) step(false, 'Onay bağlantısı senaryosu çalışmadı (onay bekleyen adım bulunamadı)');
   step(doneCount === titles.length, 'Tüm adımları AI personel sırayla yürüttü, yönetici onayladı',
     `${doneCount}/${titles.length} tamamlandı, ${approved} onay${released ? `, ${released} karantinadan yeniden deneme` : ''}`);

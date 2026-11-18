@@ -191,6 +191,13 @@ def with_manager_note(note: Optional[str], feedback: Optional[str]) -> Optional[
             + (f"\n\nÖnceki kontrol notu:\n{feedback}" if feedback else ""))
 
 
+async def stopped(db: AsyncSession, task_id, project_id) -> bool:
+    """Adım iptal edildi ya da proje kapandı mı (oturumdaki nesneye değil veritabanındaki güncel duruma bakar)."""
+    t = (await db.execute(select(Task.status).where(Task.id == task_id))).scalar()
+    p = (await db.execute(select(Project.status).where(Project.id == project_id))).scalar()
+    return t == "CANCELLED" or p in ("COMPLETED", "CANCELLED")
+
+
 async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> Dict[str, Any]:
     task, project, tenant = await _load(db, task_id)
     agent = await db.get(Actor, task.assignee_actor_id) if task.assignee_actor_id else None
@@ -279,6 +286,8 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
         return {"ok": False, "error": f"AI personel çalışamadı: {exc}"}
     if not content:
         return {"ok": False, "error": "AI personel boş çıktı üretti."}
+    if await stopped(db, task.id, project.id):  # HATA #760: yanıt beklenirken adım iptal edildi / proje kapandı → hiçbir şey yazılmaz
+        return {"ok": False, "cancelled": True, "error": "Adım iptal edildi ya da proje kapandı; üretilen çıktı kaydedilmedi."}
     version = (previous.version + 1) if previous else 1
     data = content.encode("utf-8")
     key = artifact_key(task, version)
@@ -377,7 +386,8 @@ async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant:
         evaluation = (res.content or "").strip()
     except LLMError as exc:
         evaluation = f"_Değerlendirme yazılamadı: {exc.message}_"
-    loop = await sandbox.schedule_fix_loop(db, project, task, run)  # kalan testler → geliştiriciye düzeltme + yeniden test
+    # kalan testler → geliştiriciye düzeltme + yeniden test (HATA #760: koşu sürerken adım iptal edildi / proje kapandıysa tur açılmaz)
+    loop = None if await stopped(db, task.id, project.id) else await sandbox.schedule_fix_loop(db, project, task, run)
     return f"{facts}\n\n## Test Uzmanı değerlendirmesi (gerçek koşuya göre)\n\n{evaluation}" + (f"\n\n{loop}" if loop else "")
 
 
