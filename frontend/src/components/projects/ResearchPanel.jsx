@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Globe, Square } from 'lucide-react';
+import { ExternalLink, Globe, Square, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '../../api';
 import { Badge, Button, Card, Modal } from '../../ui/components';
 import { confirmDialog, toast } from '../../ui/feedback';
@@ -40,6 +40,12 @@ export default function ResearchPanel({ project, suggestions = [], onDone }) {
     try { await api.cancelProjectResearch(project.id, r.id); load(); } catch (e) { toast.error(e.message); }
   };
 
+  // #753: yöneticinin tek tık değerlendirmesi Beyin AI'nin öğrenme kaydına girer (araştırma önerilerini iyileştirir)
+  const rate = async (r, rating) => {
+    try { await api.rateProjectResearch(project.id, r.id, rating); toast.success('Değerlendirmeniz kaydedildi; Beyin AI bundan öğrenir.'); load(); }
+    catch (e) { toast.error(e.message); }
+  };
+
   if (!data) return null;
   return (
     <Card title="Web araştırması" subtitle="Beyin AI web'de çok adımlı araştırma yapar; yalnız sizin onayınızla başlar ve kredi harcar."
@@ -57,7 +63,8 @@ export default function ResearchPanel({ project, suggestions = [], onDone }) {
       )}
       {data.items.length === 0 ? <p className="pj-hint">Henüz araştırma yok. Örnek: "Diş kliniklerinde randevu ve hasta kaydı için KVKK'da nelere dikkat edilmeli?"</p> : (
         <div className="pj-steps">
-          {data.items.map((r) => <ResearchItem key={r.id} r={r} canStop={canRun} onStop={() => stop(r)} />)}
+          {data.items.map((r) => <ResearchItem key={r.id} r={r} canStop={canRun} onStop={() => stop(r)}
+            canRate={project.can_manage} onRate={(rating) => rate(r, rating)} />)}
         </div>
       )}
       {asking && <StartModal project={project} initial={asking} onClose={() => setAsking(null)} onStarted={() => { setAsking(null); load(); }} />}
@@ -65,7 +72,9 @@ export default function ResearchPanel({ project, suggestions = [], onDone }) {
   );
 }
 
-function ResearchItem({ r, canStop, onStop }) {
+const RATINGS = [['USEFUL', 'Faydalı', ThumbsUp], ['PARTIAL', 'Kısmen', null], ['USELESS', 'Faydasız', ThumbsDown]];
+
+function ResearchItem({ r, canStop, onStop, canRate, onRate }) {
   const [label, tone] = STATUS[r.status] || STATUS.RUNNING;
   const res = r.result || {};
   const src = Object.fromEntries((res.sources || []).map((s) => [s.n, s]));
@@ -110,6 +119,15 @@ function ResearchItem({ r, canStop, onStop }) {
                   <li key={s.n} value={s.n}><a href={s.url} target="_blank" rel="noopener noreferrer">{s.title} <ExternalLink size={12} /></a></li>
                 ))}
               </ol>
+            </div>
+          )}
+          {canRate && (
+            <div className="pj-actions" role="group" aria-label="Araştırma faydalı oldu mu?">
+              <small className="pj-hint">Bu araştırma işinize yaradı mı?</small>
+              {RATINGS.map(([code, text, icon]) => (
+                <Button key={code} size="sm" variant={r.rating === code ? 'primary' : 'ghost'} icon={icon || undefined}
+                  aria-pressed={r.rating === code} onClick={() => onRate(code)}>{text}</Button>
+              ))}
             </div>
           )}
         </div>

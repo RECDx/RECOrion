@@ -144,6 +144,7 @@ function PackEditor({ pack, onClose, onSaved }) {
   return (
     <Modal open onClose={onClose} title={`${pack.title} · taslak`} size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>Vazgeç</Button><Button onClick={save} disabled={busy}>{busy ? 'Kaydediliyor…' : 'Taslağı kaydet'}</Button></>}>
+      <PackSuggestions pack={pack} />
       <div className="pj-form">
         <label className="pj-field">Paket adı<input className="ui-input" value={f.title} onChange={set('title')} /></label>
         <label className="pj-field">Sektör kodları (virgülle; şirket kartındaki sektörler)<input className="ui-input" value={f.sector_codes} onChange={set('sector_codes')} placeholder="C, H" /></label>
@@ -156,6 +157,39 @@ function PackEditor({ pack, onClose, onSaved }) {
         ))}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * #753: şirketlerin bu paketle yapılan Beyin planlarına sık eklediği / çıkardığı adımlar. Yalnız en az k şirkette görülen ve
+ * tek şirketin baskın olmadığı örüntüler gelir (KVKK k-anonimlik); tekil kayıt ve şirket adı yoktur. Uzman uygun bulursa
+ * taslağa elle ekler; paket ancak uzman kontrolüyle yeniden yayımlanınca şirketlere ulaşır.
+ */
+function PackSuggestions({ pack }) {
+  const [s, setS] = useState(null);
+  useEffect(() => { api.getSectorPackSuggestions(pack.id).then(setS).catch(() => setS(null)); }, [pack.id]);
+  if (!s) return null;
+  const empty = !s.added.length && !s.removed.length;
+  return (
+    <section className="pj-note info" aria-label="Şirketlerden gelen öneriler" style={{ marginBottom: 12 }}>
+      <strong>Şirketlerden gelen öneriler (anonim)</strong>
+      <p className="pj-hint" style={{ margin: '4px 0' }}>
+        Bu paketle yapılan {s.plans} onaylı planda yöneticilerin Beyin AI önerisine yaptığı değişiklikler. Yalnız en az {s.k_min} şirkette
+        görülen ve tek şirketin payı %{s.dominance_pct}'i aşmayan örüntüler gösterilir{s.hidden ? ` (${s.hidden} örüntü eşiğin altında kaldı)` : ''}.
+      </p>
+      {empty ? <p className="pj-hint" style={{ margin: 0 }}>Henüz eşiği geçen örüntü yok.</p> : (
+        <div className="pj-split">
+          {[['added', 'Sık eklenen adımlar'], ['removed', 'Sık çıkarılan adımlar']].map(([k, t]) => (
+            <div key={k}><small><strong>{t}</strong></small>
+              <ul className="pj-list" aria-label={t}>
+                {s[k].length ? s[k].map((x) => <li key={x.title}><span>{x.title} <small className="pj-hint">· {x.companies} şirket</small></span></li>)
+                  : <li><span className="pj-hint">—</span></li>}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -35,7 +35,10 @@ LABEL_TR = {"DOGRU": "Doğru", "YANLIS": "Yanlış", "BELIRSIZ": "Belirsiz"}
 CAUSE_TR = {"MODEL_HATASI": "AI personelin hatası", "ORTAM": "Ortam / altyapı", "DEGERLENDIRICI": "Değerlendirme hatası",
             "KAPSAM": "Kapsam değişikliği", "BELIRSIZ": "Belirsiz"}
 SOURCE_TR = {"APPROVAL": "Onay", "REJECTION": "Yönetici reti", "REVIEW": "Kontrol personeli reti", "TEST_RUN": "Test koşusu",
-             "TRANSFER": "Sisteme aktarım", "CHAT": "Sohbet", "CANCEL": "İptal"}
+             "TRANSFER": "Sisteme aktarım", "CHAT": "Sohbet", "CANCEL": "İptal",
+             # #753: Beyin AI yönlendirmeleri
+             "BRAIN_DISCOVERY": "Beyin · Keşif", "BRAIN_PLAN": "Beyin · Plan önerisi", "BRAIN_RESEARCH": "Beyin · Web araştırması",
+             "BRAIN_OUTCOME": "Beyin · Proje sonucu"}
 MAX_INPUT, MAX_OUTPUT = 8000, 20000
 
 _bg: set = set()
@@ -156,6 +159,8 @@ def test_cause(run_status: str, error: Optional[str], report: str = "") -> str:
 LESSON_SYSTEM = """Sen RECOrion'un öğrenme motoru RECAi'sin. Bir AI personelin iş adımı kararını inceler, (1) olumsuz kararın
 NEDENİNİ sınıflandırır, (2) personelin gelecekte benzer işlerde kullanacağı kısa ve genel bir DERS çıkarırsın.
 Her sektörden iş olabilir (sağlık, turizm, üretim, finans, hukuk, yazılım…).
+Kaynak "Beyin · …" ise kayıt Beyin AI'nin (proje rehberi: keşif soruları, plan önerisi, web araştırması) yönlendirmesidir; ders
+Beyin'in rehberlik biçimi içindir. Yöneticinin zevk tercihi ya da sonradan değişen kapsam MODEL_HATASI değildir.
 
 Neden sınıfları (yalnız etiket YANLIS ise):
 - MODEL_HATASI: personelin çıktısı gerçekten eksik/yanlış (kabul ölçütünü karşılamıyor, istenmeyeni yapmış, uydurmuş).
@@ -251,6 +256,8 @@ async def extract_lesson(db: AsyncSession, record_id) -> LearningRecord:
         await db.commit()
         return rec
     scope = "GLOBAL" if str(d.get("kapsam") or "").upper() == "GLOBAL" else "AGENT"
+    if rec.agent_id is None:  # #753: Beyin AI'nin kişisel hafızası yok; dersi şirket hafızasına aday (yönetici onayı) düşer
+        scope = "GLOBAL"
     mem = await _save_lesson(db, rec, lesson[:1500], scope)
     rec.lesson, rec.lesson_scope, rec.lesson_memory_id, rec.lesson_status = lesson[:1500], scope, mem.id, "SAVED"
     await db.commit()
@@ -318,8 +325,10 @@ def out(rec: LearningRecord, names: Optional[Dict] = None, full: bool = False) -
          "label": rec.label, "label_text": LABEL_TR.get(rec.label, rec.label), "cause": rec.cause,
          "cause_text": CAUSE_TR.get(rec.cause) if rec.cause else None, "cause_by": rec.cause_by, "cause_reason": rec.cause_reason,
          "project_id": str(rec.project_id) if rec.project_id else None, "task_id": str(rec.task_id) if rec.task_id else None,
-         "agent_id": str(rec.agent_id) if rec.agent_id else None, "agent_name": names.get(rec.agent_id),
-         "job_title": rec.job_title, "task_title": (rec.task_input or "").split("\n", 1)[0].removeprefix("Adım: ") or None,
+         "agent_id": str(rec.agent_id) if rec.agent_id else None,
+         "agent_name": names.get(rec.agent_id) or ("Beyin AI" if (rec.source or "").startswith("BRAIN_") else None),
+         "job_title": rec.job_title,
+         "task_title": (rec.task_input or "").split("\n", 1)[0].removeprefix("Adım: ").removeprefix("Beyin AI · ") or None,
          "feedback": rec.feedback, "lesson": rec.lesson, "lesson_scope": rec.lesson_scope, "lesson_status": rec.lesson_status,
          "paired": bool(rec.pair_id) or bool((rec.data or {}).get("pairs")), "created_at": rec.created_at}
     if full:

@@ -869,6 +869,8 @@ Keşif kartının üstündeki **Sektör paketi** listesi, Beyin AI'nın bu proje
 
 **Sonuç:** Özet · **Bulgular** (her bulgunun yanında [1], [2] kaynak bağlantıları; kaynağı olmayan çıkarımlar **doğrulanmadı** rozetiyle) · **Çelişkiler ve belirsizlikler** · **Projeye etkisi** · **Kaynaklar** listesi. Harcama hiçbir zaman üst sınırı aşmaz; sınıra gelinirse kalan alt sorular atlanır ve bu sonuçta yazılır.
 
+**Değerlendirme:** Tamamlanan araştırmanın altında "Bu araştırma işinize yaradı mı?" sorusu ve **Faydalı** / **Kısmen** / **Faydasız** düğmeleri vardır (yalnız proje yöneticisi). Tek tık yeterlidir; fikrinizi sonra değiştirebilirsiniz. Değerlendirmeniz ve araştırmanın maliyeti Beyin AI'nın öğrenme kaydına girer; Beyin AI sonraki projelerde hangi konularda araştırma önereceğini bundan öğrenir (Şirket Yönetimi › Öğrenme).
+
 **Güvenlik:** Web sayfalarındaki metinler talimat olarak değil, yalnız bilgi olarak işlenir. Şirket yöneticisi özelliği kapatabilir ve izinli/yasaklı site listesi tanımlayabilir (Kredi ve Kullanım ekranı). Harcama Kredi ve Kullanım ekranında **Web araştırması** işlem türü olarak ayrı görünür.
 
 | Mesaj | Anlamı |

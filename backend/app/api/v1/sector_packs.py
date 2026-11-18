@@ -7,6 +7,7 @@ Merkez (RECDx Süper Admin):
 - PUT  /system/sector-packs/{id}               taslağı düzenle (yayındaki sürüm değişmez)
 - POST /system/sector-packs/{id}/publish       uzman kontrolü beyanıyla yayımla → yeni sürüm
 - POST /system/sector-packs/{id}/withdraw      yayından geri çek (şirketler ve Beyin AI artık kullanmaz)
+- GET  /system/sector-packs/{id}/suggestions   #753 şirketlerin plana sık eklediği/çıkardığı adımlar (k-anonim toplam)
 Şirket:
 - GET  /company/{tid}/sector-packs             yayımlanmış paketler (içerik) + şirketin ekleri
 - PUT  /company/{tid}/sector-packs/{code}      şirketin ek soruları ve sık atlanan maddeleri (tenant:manage; yalnız bu şirkette)
@@ -133,6 +134,17 @@ async def admin_withdraw(pack_id: uuid.UUID, user: CurrentUser = Depends(get_cur
     p.published = {**p.published, "withdrawn": True, "withdrawn_at": datetime.now(timezone.utc).isoformat()}
     await db.commit()
     return _admin_out(p)
+
+
+@router.get("/system/sector-packs/{pack_id}/suggestions")
+async def admin_suggestions(pack_id: uuid.UUID, user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """#753: yöneticilerin bu paketle yapılan Beyin planlarına sık eklediği/çıkardığı adımlar — şirketler arası, k-anonim
+    (en az k şirket, tek şirket baskın değil). Tekil kayıt ve şirket adı yok; uzman uygun bulursa taslağa elle ekler."""
+    from app.services import brain_learning
+
+    _super(user)
+    p = await _pack(db, pack_id)
+    return await brain_learning.sector_pack_suggestions(db, p.code)
 
 
 # ---------------------------------------------------------------- şirket

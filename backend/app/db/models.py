@@ -1457,6 +1457,9 @@ class WebResearch(Base):
     error = Column(Text)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     finished_at = Column(DateTime(timezone=True))
+    rating = Column(String(12))  # #753: USEFUL, PARTIAL, USELESS (yöneticinin tek tık değerlendirmesi)
+    rated_by = Column(UUID(as_uuid=True))
+    rated_at = Column(DateTime(timezone=True))
 
 
 class SectorPack(Base):

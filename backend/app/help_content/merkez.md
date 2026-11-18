@@ -1149,6 +1149,8 @@ Taslaklar yalnız burada görünür. Şirketler ve Beyin AI yalnız **yayımlanm
 
 **Taslağı kaydet** yayındaki pakette "Taslak kaydedildi; yayındaki sürüm değişmedi. Uzman kontrolünden sonra yeniden yayımlayın." mesajını gösterir.
 
+**Şirketlerden gelen öneriler (anonim):** Taslak penceresinin üstünde, bu paketle yapılan onaylı Beyin AI planlarında şirket yöneticilerinin **sık eklediği** ve **sık çıkardığı** adımlar, kaç şirkette görüldüğüyle listelenir. Yalnız en az k şirkette görülen ve tek şirketin payı sınırı aşmayan örüntüler gösterilir (k ve sınır Yapay Zeka › EVREN Modelleri ekranındaki **Toplu istatistik gizliliği** kartından değişir; varsayılan 5 şirket, %60); tekil kayıt ve şirket adı gösterilmez. Uygun bulduğunuz maddeyi taslağa elle ekleyin; şirketlere ancak uzman kontrolüyle yeniden yayımlayınca ulaşır. "Henüz eşiği geçen örüntü yok" yazıyorsa yeterli sayıda şirket bu paketi kullanmamıştır.
+
 #### Yayımla
 
 Pencerede şu not yazar: "İlk dalga paketlerin içeriği Claude tarafından hazırlandı. Yayından önce bu iş kolunda deneyimli bir uzmanın soruları, aşamaları ve standartları kontrol etmesi zorunludur; yayımlanan sürümü tüm şirketlerin Beyin AI'sı kullanır."

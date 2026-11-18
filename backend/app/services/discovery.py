@@ -216,6 +216,9 @@ async def approve(db: AsyncSession, project: Project, actor_id, reason: Optional
                         f"Proje Tanım Belgesi onaylandı (olgunluk %{score})" + (f"; gerekçe: {reason.strip()}" if (reason or "").strip() else ""),
                         {"score": score, "below_threshold": score < THRESHOLD})
     await db.commit()
+    from app.services import brain_learning  # #753: sorulan sorular ve yanıtlanıp belgeye girenler öğrenme kaydına
+
+    await brain_learning.on_charter_approved(project, actor_id, d, THRESHOLD)
     return d
 
 

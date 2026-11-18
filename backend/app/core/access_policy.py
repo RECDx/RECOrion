@@ -136,6 +136,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("PUT", f"{P}/system/sector-packs/{{pack_id}}"): SUPER_ADMIN,
     ("POST", f"{P}/system/sector-packs/{{pack_id}}/publish"): SUPER_ADMIN,
     ("POST", f"{P}/system/sector-packs/{{pack_id}}/withdraw"): SUPER_ADMIN,
+    ("GET", f"{P}/system/sector-packs/{{pack_id}}/suggestions"): SUPER_ADMIN,  # #753 k-anonim örüntüler (içerik değil)
     # Toplantı kaydından proje (ADIM 11.3): project:create; kayıt yalnızca yükleyene / project:manage'e (uçta denetlenir)
     ("POST", f"{C}/meetings"): HANDLER("project:create"),
     ("GET", f"{C}/meetings"): HANDLER("project:create"),
@@ -362,6 +363,7 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("GET", f"{P}/projects/{{project_id}}/research"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/research"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/research/{{research_id}}/cancel"): HANDLER(),
+    ("POST", f"{P}/projects/{{project_id}}/research/{{research_id}}/rating"): HANDLER(),  # #753 fayda değerlendirmesi
     ("POST", f"{P}/projects/{{project_id}}/discovery/round"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/discovery/approve"): HANDLER(),
     ("POST", f"{P}/projects/{{project_id}}/discovery/skip"): HANDLER(),

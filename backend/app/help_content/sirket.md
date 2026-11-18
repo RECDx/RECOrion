@@ -1156,6 +1156,17 @@ Aynı ünvan kodu şirketinizde varsa koda otomatik bir ek konur.
 
 **Dersler:** Sıradan bir onaydan ders çıkarılmaz; reddedilip sonra onaylanan işten "böyle yap", AI hatası olan retten "bunu yapma, doğrusu şu" dersi çıkar. Ders genel yazılır (kişi, müşteri, tutar, tarih içermez). Personele özgü ders doğrudan o AI personelin hafızasına girer; şirket geneli (kurumsal) ders onayınıza düşer: sağ panel › **Hafıza** › **Onay bekliyor** (ekranın üstünde bekleyen sayısı yazar).
 
+**Beyin AI da öğrenir.** Beyin AI'nın yönlendirmeleri aynı ekranda **Beyin AI** adıyla görünür:
+
+| Kaynak | Ne zaman kaydedilir | Etiket |
+|---|---|---|
+| **Beyin · Keşif** | Proje Tanım Belgesi onaylanınca | Sorulan sorular ve yanıtlanıp belgeye girenler; olgunluk eşiğin altındaysa **Belirsiz** |
+| **Beyin · Plan önerisi** | Plan onaylanınca; plan geri bildirimle yeniden istenince | Onaylanan plan **Doğru**. Önerilen planı onaydan önce belirgin değiştirdiyseniz ya da geri bildirimle yenisini istediyseniz önerilen sürüm **Yanlış** olur ve onayladığınız planla eşlenir; ayrıntıda eklenen, çıkarılan ve değiştirilen adımlar yazar |
+| **Beyin · Web araştırması** | Araştırmayı **Faydalı** / **Kısmen** / **Faydasız** değerlendirdiğinizde | Doğru / Belirsiz / Yanlış |
+| **Beyin · Proje sonucu** | Proje tamamlanınca | Tüm teslimatlar doğrulandıysa **Doğru**; eksikle kabul edildiyse **Belirsiz** ve o projenin onaylı plan kaydı da sonradan **Belirsiz**'e çekilir |
+
+Planı değiştirmeniz Beyin AI'nın hatası sayılmaz: nedeni RECAi önerir, siz düzeltebilirsiniz; ders yalnız **AI personelin hatası** nedeninden çıkar. Beyin AI'nın dersleri kurumsal ders olarak onayınıza düşer.
+
 **Ekranın bölümleri:** üstte özet (Doğru / Yanlış / Belirsiz sayıları, çift sayısı, hafızaya yazılan ders, onay bekleyen kurumsal ders); süzgeç (Tümü, Yanlış, Doğru, Belirsiz); tablo: Tarih, AI personel, Adım, Kaynak, Etiket, Neden, Ders, **Ayrıntı** (iş, çıktı, geri bildirim ve ders).
 
 > **Dikkat:** Öğrenme kayıtları ayrıca şirket kartındaki "RECAi model geliştirmeye katkı" izni açıksa, maskelendikten sonra RECAi'nin geliştirilmesinde kullanılır (Şirket Profili). İzin kapalıyken de öğrenme ve hafıza çalışır.

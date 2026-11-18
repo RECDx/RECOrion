@@ -64,6 +64,32 @@ async def cancel_research(project_id: uuid.UUID, research_id: uuid.UUID, user: C
     return wr.out(await wr.cancel(db, project, research_id))
 
 
+class RatingIn(BaseModel):
+    rating: Literal["USEFUL", "PARTIAL", "USELESS"]
+
+
+@router.post("/projects/{project_id}/research/{research_id}/rating")
+async def rate_research(project_id: uuid.UUID, research_id: uuid.UUID, payload: RatingIn,
+                        user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """#753: yönetici araştırmanın faydasını tek tıkla değerlendirir (Beyin öğrenme kaydı; yeniden değerlendirilebilir)."""
+    from app.db.models import WebResearch
+    from app.services import brain_learning, task_flow
+
+    project = await svc.load(db, user, project_id, manage=True)
+    r = await db.get(WebResearch, research_id)
+    if r is None or r.project_id != project.id:
+        raise HTTPException(status_code=404, detail="Araştırma bulunamadı.")
+    if r.status != "DONE":
+        raise HTTPException(status_code=409, detail="Yalnız tamamlanan araştırma değerlendirilebilir.")
+    r.rating, r.rated_by, r.rated_at = payload.rating, user.actor_id, svc.now()
+    label = brain_learning.RATINGS[payload.rating][1]
+    await task_flow.log(db, project, None, "WEB_RESEARCH_RATED", user.actor_id, f"Web araştırması değerlendirildi: {label}",
+                        {"research_id": str(r.id), "rating": payload.rating})
+    await db.commit()
+    await brain_learning.on_research_rated(project, r, user.actor_id)
+    return wr.out(r)
+
+
 @router.get("/company/{tenant_id}/web-research/settings")
 async def get_settings(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     tenant = await db.get(Tenant, tenant_id)

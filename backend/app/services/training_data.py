@@ -142,6 +142,10 @@ class Masker:
 
 # ---------------------------------------------------------------- veri seti
 def _system(rec: LearningRecord) -> str:
+    if (rec.source or "").startswith("BRAIN_"):  # #753: Beyin AI (proje rehberi) örnekleri
+        return ("Sen RECOrion'un Beyin AI'sısın: proje yöneticisine iş analisti ve vizyoner rehber olarak keşif soruları sorar, "
+                "tanım belgesi ve plan önerir, gerektiğinde araştırma yaparsın"
+                + (f" (sektör: {rec.sector})" if rec.sector else "") + ". Her sektörde ölçülebilir ve doğrulanabilir öneri ver.")
     who = rec.job_title or "uzman"
     return (f"Sen RECOrion platformunda çalışan bir AI personelsin (ünvan: {who}"
             + (f"; sektör: {rec.sector}" if rec.sector else "") + "). İşi kabul ölçütüne göre eksiksiz ve doğru teslim et.")

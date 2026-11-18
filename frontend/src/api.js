@@ -156,6 +156,7 @@ export const api = {
   estimateProjectResearch: (projectId, depth) => request(`/projects/${projectId}/research/estimate`, { method: 'POST', body: JSON.stringify({ depth }) }),
   startProjectResearch: (projectId, data) => request(`/projects/${projectId}/research`, { method: 'POST', body: JSON.stringify(data) }),
   cancelProjectResearch: (projectId, rid) => request(`/projects/${projectId}/research/${rid}/cancel`, { method: 'POST' }),
+  rateProjectResearch: (projectId, rid, rating) => request(`/projects/${projectId}/research/${rid}/rating`, { method: 'POST', body: JSON.stringify({ rating }) }),
   getWebResearchSettings: (tenantId) => request(`/company/${tenantId}/web-research/settings`),
   putWebResearchSettings: (tenantId, data) => request(`/company/${tenantId}/web-research/settings`, { method: 'PUT', body: JSON.stringify(data) }),
   // #749 keşif görüşmesi ve Proje Tanım Belgesi
@@ -335,6 +336,7 @@ export const api = {
   updateSectorPack: (id, data) => request(`/system/sector-packs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   publishSectorPack: (id, data) => request(`/system/sector-packs/${id}/publish`, { method: 'POST', body: JSON.stringify(data) }),
   withdrawSectorPack: (id) => request(`/system/sector-packs/${id}/withdraw`, { method: 'POST' }),
+  getSectorPackSuggestions: (id) => request(`/system/sector-packs/${id}/suggestions`),
   getCompanySectorPacks: (tenantId) => request(`/company/${tenantId}/sector-packs`),
   setCompanySectorPackExtras: (tenantId, code, data) => request(`/company/${tenantId}/sector-packs/${code}`, { method: 'PUT', body: JSON.stringify(data) }),
   getProjectSectorPack: (id) => request(`/projects/${id}/sector-pack`),

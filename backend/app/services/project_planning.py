@@ -249,6 +249,14 @@ Sadece şu JSON'u döndür:
     if project.status not in ("DRAFT", "PLANNING"):
         raise HTTPException(status_code=409, detail="Plan hazırlanırken projenin durumu değişti (ör. iptal edildi); öneri kaydedilmedi.")
     await _attach_hire_matches(db, project, plan)
+    # #753: önerilen planın değişmez kopyası (onayda yöneticinin değişikliği bununla ölçülür); geri bildirimle yeniden
+    # istenen plan, önceki önerinin reddi olarak öğrenme kaydına girer ve sonradan onaylanan planla eşlenir
+    from app.services import brain_learning
+
+    previous = project.plan or {}
+    plan["suggested"] = brain_learning.plan_snapshot(plan)
+    rejected = await brain_learning.on_plan_resuggested(project, previous, feedback)
+    plan["rejected_records"] = [*(previous.get("rejected_records") or []), *([rejected] if rejected else [])][-10:]
     project.plan = plan
     project.planning_approved_at = None
     if project.status == "DRAFT":
@@ -370,6 +378,14 @@ async def approve_plan(db: AsyncSession, project: Project, actor_id: uuid.UUID) 
     if project.status == "DRAFT":
         project.status = "PLANNING"
     await db.commit()
+    # #753: onaylanan plan Beyin öğrenme kaydına (aynı öneri yeniden onaylanırsa ikinci kez yazılmaz)
+    sugg = (project.plan or {}).get("suggested") or {}
+    if sugg and project.plan.get("learned") != sugg.get("generated_at"):
+        from app.services import brain_learning
+
+        await brain_learning.on_plan_approved(db, project, actor_id)
+        project.plan = {**project.plan, "learned": sugg.get("generated_at"), "rejected_records": []}
+        await db.commit()
     return list(key_to_task.values())
 
 

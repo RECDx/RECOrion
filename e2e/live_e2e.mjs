@@ -147,6 +147,14 @@ try {
     const srcCount = await item.locator('.pj-sources li').count();
     step(/Tamamlandı/.test(webStatus) && srcCount > 0, 'Web araştırması kaynaklı sonuç verdi',
       `${webStatus || 'sürüyor'}, ${srcCount} kaynak, ${Math.round((Date.now() - tWeb) / 1000)} sn`);
+    if (/Tamamlandı/.test(webStatus)) {  // #753: yönetici araştırmanın faydasını tek tıkla değerlendirir (Beyin öğrenme kaydı)
+      if (!(await item.evaluate((d) => d.open))) await item.locator('summary').click();
+      const rateGrp = item.getByRole('group', { name: 'Araştırma faydalı oldu mu?' });
+      await rateGrp.getByRole('button', { name: 'Faydalı' }).click();
+      const pressed = await rateGrp.locator('button[aria-pressed="true"]', { hasText: 'Faydalı' }).waitFor({ timeout: 15000 })
+        .then(() => true).catch(() => false);
+      step(pressed, 'Web araştırması tek tıkla "Faydalı" değerlendirildi (#753)', pressed ? 'seçili' : 'seçim görünmedi');
+    }
     if (!/Tamamlandı|Başarısız|Durduruldu/.test(webStatus)) {  // EVREN çok yavaşsa kullanıcı gibi durdurur
       await item.getByRole('button', { name: 'Durdur' }).click();
       await dialogOk(page);
@@ -721,6 +729,19 @@ try {
     step(/teslimattan/.test(gapText), 'Doğrulanmamış teslimatla proje kabulü gerekçe istedi ve kayda geçti (#752)', gapText.replace(/\s+/g, ' ').slice(0, 140));
   }
   await page.locator('.ui-badge', { hasText: 'Tamamlandı' }).first().waitFor({ timeout: 20000 });
+  // #753: Beyin AI'nın yönlendirmeleri öğrenme kaydına düştü (keşif, plan, araştırma değerlendirmesi, proje sonucu)
+  {
+    const pr = (await api(page, '/api/v1/projects/?scope=mine')).body.find((x) => x.name === NAME);
+    await page.waitForTimeout(3000);
+    const recs = (await api(page, `/api/v1/company/${pr.tenant_id}/learning/records?limit=500`)).body;
+    const mine = Array.isArray(recs) ? recs.filter((r) => r.project_id === pr.id && (r.source || '').startsWith('BRAIN_')) : [];
+    const by = (src) => mine.filter((r) => r.source === src);
+    const plan = by('BRAIN_PLAN');
+    step(by('BRAIN_DISCOVERY').length === 1 && plan.some((r) => r.label !== 'YANLIS') && by('BRAIN_OUTCOME').length === 1
+        && mine.every((r) => r.agent_name === 'Beyin AI'),
+      'Beyin AI öğrenme kayıtları: keşif, plan, araştırma ve proje sonucu etiketlendi (#753)',
+      mine.map((r) => `${r.source_label}=${r.label_text}`).join(', ') || `kayıt yok (${Array.isArray(recs) ? recs.length : JSON.stringify(recs).slice(0, 80)})`);
+  }
   await page.getByRole('tab', { name: /^Maliyet/ }).click();
   await page.locator('.pj-stat', { hasText: 'Gerçekleşen' }).first().waitFor({ timeout: 20000 });
   step(await page.getByRole('button', { name: 'Kalem ekle' }).count() === 0 && await page.locator('#cost-budget').isDisabled(),

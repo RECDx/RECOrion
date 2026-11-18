@@ -262,8 +262,10 @@ async def change_status(project_id: uuid.UUID, payload: StatusIn, user: CurrentU
         note = f"Proje iptal edildi: {reason}" if payload.action == "cancel" else "Proje kapatıldı; açık adım iptal edildi."  # C3-80b
         await task_flow.cancel_remaining(db, project.id, {"actor_id": str(user.actor_id), "note": note})
     if payload.action == "complete":  # ADIM 12.4: kapanışta tanımlı aktarım önerileri (onaya düşer)
-        from app.services import transfers
+        from app.services import brain_learning, transfers
         await transfers.after_project_closed(project)
+        # #753: teslim edilen ↔ tanım belgesi uyumu Beyin öğrenme kaydına; eksikle kapanışta onaylı plan kaydı güncellenir
+        await brain_learning.on_project_completed(db, project, user.actor_id, reason)
     return _out(project)
 
 
@@ -421,7 +423,9 @@ async def update_plan(project_id: uuid.UUID, payload: PlanIn, user: CurrentUser 
     old = project.plan or {}
     project.plan = {**plan, "model_code": old.get("model_code"), "generated_at": old.get("generated_at"),
                     "edited_at": svc.now().isoformat(), "approved": False,
-                    "hire_suggestions": plan["hire_suggestions"] or old.get("hire_suggestions", [])}
+                    "hire_suggestions": plan["hire_suggestions"] or old.get("hire_suggestions", []),
+                    # #753: Beyin'in önerdiği sürüm ve reddedilen öneriler korunur (onayda değişiklik bununla ölçülür)
+                    **{k: old[k] for k in ("suggested", "rejected_records", "learned") if k in old}}
     project.planning_approved_at = None
     if project.status == "DRAFT":
         project.status = "PLANNING"

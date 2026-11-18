@@ -132,7 +132,8 @@ def out(r: WebResearch) -> Dict[str, Any]:
             "max_credits": float(r.max_credits or 0), "spent_credits": float(r.spent_credits or 0), "result": r.result,
             "error": r.error, "pii": r.pii or {}, "requested_by": str(r.requested_by) if r.requested_by else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
-            "finished_at": r.finished_at.isoformat() if r.finished_at else None}
+            "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+            "rating": r.rating, "rated_at": r.rated_at.isoformat() if r.rated_at else None}
 
 
 async def start(db: AsyncSession, project: Project, actor_id, question: str, depth: str, max_credits: Optional[float],
