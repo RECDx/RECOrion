@@ -337,6 +337,10 @@ export const api = {
   publishSectorPack: (id, data) => request(`/system/sector-packs/${id}/publish`, { method: 'POST', body: JSON.stringify(data) }),
   withdrawSectorPack: (id) => request(`/system/sector-packs/${id}/withdraw`, { method: 'POST' }),
   getSectorPackSuggestions: (id) => request(`/system/sector-packs/${id}/suggestions`),
+  // #754 Beyin deneme seti
+  getBrainBenchCases: () => request('/system/brain-bench/cases'),
+  getBrainBenchRuns: () => request('/system/brain-bench/runs'),
+  startBrainBench: (data) => request('/system/brain-bench/runs', { method: 'POST', body: JSON.stringify(data) }),
   getCompanySectorPacks: (tenantId) => request(`/company/${tenantId}/sector-packs`),
   setCompanySectorPackExtras: (tenantId, code, data) => request(`/company/${tenantId}/sector-packs/${code}`, { method: 'PUT', body: JSON.stringify(data) }),
   getProjectSectorPack: (id) => request(`/projects/${id}/sector-pack`),

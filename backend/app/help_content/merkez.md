@@ -276,6 +276,7 @@ Aşağıdaki tablo Merkez Yönetim'in tam haritasıdır. Tüm menüleri yalnızc
 | Katalog | **Proje Şablonları** | Proje Şablonları | Yeni RECDx şablonu / Şablonu düzenle |
 | Katalog | **Mevzuat Paketleri** | Mevzuat Paketleri | Taslak kartlar, Yayımla |
 | Katalog | **Sektör Paketleri** | Sektör bilgi paketleri | Yeni paket, <paket> · taslak, <paket> · yayımla |
+| Katalog | **Beyin Deneme Seti** | Beyin deneme seti | Brifler ve ölçüt, Seti koştur, Ayrıntı |
 | Katalog | **Bağlantı Kataloğu** | Bağlantı Kataloğu | Kart ekle / Kartı düzenle |
 | Katalog | **Uygulama Talepleri** | Uygulama Talepleri (RECQmind, RECSlip) | Not penceresi |
 | Ticari & Yetki | **Kiralama Paketleri** | Kiralama Paketleri Yönetimi | Yeni Kiralama Paketi Tanımla / Paketi Düzenle |
@@ -1163,6 +1164,32 @@ Pencerede şu not yazar: "İlk dalga paketlerin içeriği Claude tarafından haz
 | **Not** | Ek açıklama | Hayır |
 
 > **Dikkat:** Uzman kontrolü yapılmadan beyan kutusunu işaretlemeyin. Yayımlanan sürüm hemen tüm şirketlerin Beyin AI'sına açılır.
+
+## Beyin Deneme Seti
+
+### Beyin deneme seti
+
+Beyin AI'nın proje rehberliği kalitesini ölçer. Farklı sektörlerden 8 kısa brif (tur sitesi, üretim OEE, e-ticaret, diş
+kliniği, şantiye, ay sonu kapanışı, kurs kaydı, depo sayımı) **RECOrion Canlı Test A.Ş.** şirketinde projeye dönüşür ve yalnız
+keşif → Proje Tanım Belgesi → plan önerisi aşamasına kadar koşar; adımlar yürütülmez. Proje yöneticisini RECAi oynar: Beyin
+AI'nın sorularını yalnız brifin gizli cevap anahtarındaki bilgilerle yanıtlar, sorulmayanı söylemez. Böylece Beyin AI'nın
+yöneticinin aklına gelmeyenleri sorup sormadığı ölçülür. Her geliştirmeden sonra seti yeniden koşturun; her koşu bir önceki
+tamamlanmış koşuyla karşılaştırılır (parantez içindeki +/− farklar).
+
+| Puan | En fazla | Nasıl ölçülür |
+|---|---|---|
+| **Keşif** | 30 | Cevap anahtarı maddelerinin soruyla ortaya çıkan ya da tanım belgesine giren oranı (en fazla 3 keşif turu) |
+| **Tanım** | 20 | Belgenin bölümleri (amaç, başarı ölçütü, kapsam içi/dışı, roller, kabul ve doğrulamalı teslimatlar, riskler; yazılımda kullanıcı akışları) ve olgunluk puanı |
+| **Plan yapısı** | 25 | Planın teknik katmana değil teslimat ve kullanıcı akışına göre kurulması (RECAi değerlendirici), yazılımda arayüz tasarımı ve kullanıcı kabul testi adımı, insan adımı |
+| **Doğrulama** | 25 | Somut teslimat ve doğrulaması olan adım oranı ve cevap anahtarı maddelerinin planda karşılanma oranı |
+
+- **Brifler ve ölçüt:** brifleri, gizli cevap anahtarlarını ve puanlama ölçütünü gösterir.
+- **Seti koştur:** onaydan sonra koşu arka planda başlar (yaklaşık 30–60 dakika, canlı test şirketinin kredisinden birkaç yüz
+  kredi). Aynı anda tek koşu yapılır; sonuçlar brif brif gelir, ekran 15 saniyede bir yenilenir.
+- **Ayrıntı:** brifin keşifte kaçırılan maddeleri, değerlendiricinin notu, plan denetimi (✓/✗) ve plan adımları.
+- Deneme projeleri canlı test şirketinde "Beyin Deneme · …" adıyla açılır ve koşu sonunda gerekçeyle iptal edilir. Bu
+  projeler Beyin AI öğrenme kaydı üretmez (yöneticiyi RECAi oynadığı için eğitim verisi sayılmaz).
+- EVREN yanıt veremezse o brif "Kaldı" gerekçesiyle görünür, koşu diğer briflerle sürer. 4 saati aşan koşu yarıda kalmış sayılır.
 
 ## Bağlantı Kataloğu
 

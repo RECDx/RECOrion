@@ -96,6 +96,8 @@ async def capture(project: Project, source: str, label: str, *, task_input: str,
     from app.db.session import AsyncSessionLocal
     from app.services import learning_records as lr
 
+    if (project.settings or {}).get("brain_bench"):  # #754: deneme setinde yöneticiyi RECAi oynar → eğitim verisi olmaz
+        return None
     try:
         async with AsyncSessionLocal() as s:
             rec = LearningRecord(tenant_id=project.tenant_id, project_id=project.id, agent_id=None,

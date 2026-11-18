@@ -1,0 +1,142 @@
+{
+  "_note": "İSTEK #754 Beyin AI deneme seti. brief: yöneticinin kısa brifi (Beyin AI yalnız bunu görür). key: gizli cevap anahtarı — yönetici rolündeki RECAi yalnız sorulduğunda bunlardan yanıt verir. expect: plan yapısı denetimi (software: arayüz tasarımı + kabul testi adımı beklenir; human: insan adımı beklenir).",
+  "cases": [
+    {
+      "code": "gezi101",
+      "title": "GEZİ 101 tur sitesi",
+      "sector": "Turizm / yazılım",
+      "brief": "Seyahat acentemiz için turlarımızı gösteren ve online rezervasyon alan bir web sitesi istiyoruz.",
+      "expect": {"software": true, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Kapsam", "fact": "Yurt içi ve yurt dışı turlar var; ziyaretçi tur listesini yurt içi/yurt dışı, bölge, tarih ve fiyata göre süzebilmeli."},
+        {"id": "k2", "topic": "Kapsam", "fact": "Rezervasyonda tarih ve kişi sayısı seçilir; kontenjan aşılırsa rezervasyon reddedilir."},
+        {"id": "k3", "topic": "Kısıtlar", "fact": "Gerçek ödeme yok; sahte ödeme adımı olacak, kart bilgisi alınmaz ve saklanmaz."},
+        {"id": "k4", "topic": "Kısıtlar", "fact": "KVKK onayı zorunlu; T.C. kimlik no istenmez, yalnız ad soyad, telefon, e-posta."},
+        {"id": "k5", "topic": "Paydaşlar", "fact": "Yönetim paneli olacak: yönetici ve operasyon rolleri tur ekler/düzenler, rezervasyonları onaylar/iptal eder."},
+        {"id": "k6", "topic": "Teslimatlar", "fact": "Yönetim panelinde tura göre kişi ve tutar veren basit satış özeti olmalı."},
+        {"id": "k7", "topic": "Kullanıcı akışı", "fact": "Rezervasyon sonrası onay numarası verilir; rezervasyon penceresi işlem bitince kapanır, kullanıcı listeye döner."},
+        {"id": "k8", "topic": "Kullanıcı akışı", "fact": "Sitede sol menü/üst menü ile anasayfa, turlar, hakkımızda, iletişim ve yönetim paneline geçiş olmalı."},
+        {"id": "k9", "topic": "Teslimatlar", "fact": "Teslim: çalışan uygulama, kurulum talimatı ve otomatik test raporu (kontenjan, fiyat, KVKK, sahte ödeme)."}
+      ]
+    },
+    {
+      "code": "uretim_oee",
+      "title": "Üretim hattı OEE takibi",
+      "sector": "Üretim",
+      "brief": "Fabrikamızda iki hattın verimliliğini takip etmek ve duruşları azaltmak istiyoruz.",
+      "expect": {"software": false, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Amaç", "fact": "Hedef OEE %65; şu an tahmini %52. Planlanmamış duruşları 6 ayda %30 azaltmak istiyoruz."},
+        {"id": "k2", "topic": "Kapsam", "fact": "Yalnız pres hattı ve montaj hattı; boyahane kapsam dışı."},
+        {"id": "k3", "topic": "Kısıtlar", "fact": "Makinelerde PLC var ama veri toplanmıyor; duruşlar şu an kâğıt formlara yazılıyor."},
+        {"id": "k4", "topic": "Paydaşlar", "fact": "Vardiya amirleri duruş nedenini girecek; bakım şefi ve üretim müdürü raporları kullanacak."},
+        {"id": "k5", "topic": "Kısıtlar", "fact": "Üç vardiya çalışılıyor; vardiya devirlerinde veri kaybı yaşanıyor."},
+        {"id": "k6", "topic": "Teslimatlar", "fact": "Duruş nedeni kodları listesi (standart duruş kataloğu) hazırlanmalı."},
+        {"id": "k7", "topic": "Teslimatlar", "fact": "Haftalık OEE raporu ve en çok duruş yaratan 5 neden (Pareto) gösterilmeli."},
+        {"id": "k8", "topic": "Kısıtlar", "fact": "Bütçe 400.000 TL; yeni sensör alımı bütçeye dahil değil."}
+      ]
+    },
+    {
+      "code": "eticaret",
+      "title": "Butik giyim e-ticaret",
+      "sector": "Perakende / e-ticaret",
+      "brief": "Mağazamızın ürünlerini internetten de satmak istiyoruz.",
+      "expect": {"software": true, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Kapsam", "fact": "Yaklaşık 300 ürün; beden ve renk varyantları var."},
+        {"id": "k2", "topic": "Kısıtlar", "fact": "Stok mağazadaki POS/ön muhasebe programıyla ortak olmalı; aynı ürün iki kez satılmamalı."},
+        {"id": "k3", "topic": "Kapsam", "fact": "Kargo anlaşmalı tek firma; 750 TL üzeri kargo bedava."},
+        {"id": "k4", "topic": "Kısıtlar", "fact": "İade süresi 14 gün; mesafeli satış sözleşmesi ve ön bilgilendirme formu gerekli."},
+        {"id": "k5", "topic": "Kısıtlar", "fact": "Ödeme sanal POS ile; kart bilgisi bizde saklanmayacak."},
+        {"id": "k6", "topic": "Paydaşlar", "fact": "Siparişleri mağazadaki iki satış danışmanı hazırlayacak; ürün fotoğraflarını biz çekeceğiz."},
+        {"id": "k7", "topic": "Amaç", "fact": "İlk 6 ayda aylık 150 sipariş hedefi."},
+        {"id": "k8", "topic": "Kısıtlar", "fact": "e-Arşiv fatura kesilmesi zorunlu."}
+      ]
+    },
+    {
+      "code": "dis_crm",
+      "title": "Diş kliniği hasta takibi",
+      "sector": "Sağlık",
+      "brief": "Kliniğimizde randevu ve hasta takibini dijitale taşımak istiyoruz.",
+      "expect": {"software": true, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Paydaşlar", "fact": "3 hekim, 2 asistan ve 1 sekreter kullanacak; hekimler yalnız kendi hastalarının tedavi notlarını görmeli."},
+        {"id": "k2", "topic": "Kısıtlar", "fact": "Hasta verisi özel nitelikli kişisel veri; KVKK açık rıza ve erişim kaydı gerekli."},
+        {"id": "k3", "topic": "Kapsam", "fact": "Randevu hatırlatması SMS ile, randevudan 1 gün önce."},
+        {"id": "k4", "topic": "Kapsam", "fact": "Tedavi planı ve seans takibi (ör. kanal tedavisi 3 seans) tutulmalı."},
+        {"id": "k5", "topic": "Kısıtlar", "fact": "Mevcut 4.000 hasta kaydı Excel'de; aktarılmalı."},
+        {"id": "k6", "topic": "Kapsam", "fact": "Ödeme ve taksit takibi var; e-Nabız entegrasyonu kapsam dışı."},
+        {"id": "k7", "topic": "Kısıtlar", "fact": "Röntgen görüntüleri cihaz yazılımında kalacak, sisteme yalnız bağlantı/dosya adı girilecek."},
+        {"id": "k8", "topic": "Amaç", "fact": "Gelmeyen hasta oranını %18'den %8'e düşürmek."}
+      ]
+    },
+    {
+      "code": "santiye",
+      "title": "İnşaat şantiye ilerleme takibi",
+      "sector": "İnşaat",
+      "brief": "Şantiyelerimizin ilerlemesini merkezden takip etmek istiyoruz.",
+      "expect": {"software": false, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Kapsam", "fact": "3 aktif şantiye: 2 konut, 1 AVM; her biri ayrı şantiye şefinde."},
+        {"id": "k2", "topic": "Kapsam", "fact": "Günlük şantiye raporu: hava durumu, çalışan sayısı, yapılan imalat, fotoğraf."},
+        {"id": "k3", "topic": "Teslimatlar", "fact": "İş programına göre gerçekleşen ilerleme yüzdesi (planlanan/gerçekleşen) izlenmeli."},
+        {"id": "k4", "topic": "Kapsam", "fact": "Hakediş takibi ve taşeron imalat metrajları dahil."},
+        {"id": "k5", "topic": "Kısıtlar", "fact": "Şantiyede internet zayıf; çevrimdışı veri girişi gerekebilir."},
+        {"id": "k6", "topic": "Riskler", "fact": "İSG olayları (ramak kala, kaza) ayrı kayıt altına alınmalı ve aynı gün bildirilmeli."},
+        {"id": "k7", "topic": "Paydaşlar", "fact": "Proje müdürü haftalık özet ister; yatırımcıya aylık rapor gider."},
+        {"id": "k8", "topic": "Kısıtlar", "fact": "Saha ekibine eğitim verilmeli; şefler tablet kullanacak."}
+      ]
+    },
+    {
+      "code": "ay_sonu",
+      "title": "Muhasebe ay sonu kapanışı",
+      "sector": "Finans / muhasebe",
+      "brief": "Ay sonu kapanışımız çok uzun sürüyor, hızlandırmak istiyoruz.",
+      "expect": {"software": false, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Amaç", "fact": "Kapanış şu an 9 iş günü; hedef 4 iş günü."},
+        {"id": "k2", "topic": "Kısıtlar", "fact": "Logo Tiger ERP kullanılıyor; banka hesap hareketleri elle giriliyor."},
+        {"id": "k3", "topic": "Kapsam", "fact": "3 şirketli grup; şirketler arası mutabakat en çok zaman alan iş."},
+        {"id": "k4", "topic": "Teslimatlar", "fact": "Kapanış kontrol listesi (görev, sorumlu, son gün) ve takip ekranı."},
+        {"id": "k5", "topic": "Kapsam", "fact": "Kur farkı değerlemesi ve amortisman ay sonunda elle hesaplanıyor."},
+        {"id": "k6", "topic": "Paydaşlar", "fact": "Mali müşavir dışarıda; beyannameleri o hazırlıyor, kapanış verisini ondan önce istiyor."},
+        {"id": "k7", "topic": "Kısıtlar", "fact": "Bağımsız denetime tabiyiz; her düzeltme kaydının onay izi tutulmalı."},
+        {"id": "k8", "topic": "Paydaşlar", "fact": "Finans ekibi 4 kişi; yeni işe alım yok."}
+      ]
+    },
+    {
+      "code": "egitim_kayit",
+      "title": "Kurs merkezi öğrenci kaydı",
+      "sector": "Eğitim",
+      "brief": "Kurs merkezimiz için online öğrenci kayıt sistemi istiyoruz.",
+      "expect": {"software": true, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Kapsam", "fact": "YKS ve LGS hazırlık kursları; şube başına sınıf kontenjanı 16 kişi."},
+        {"id": "k2", "topic": "Paydaşlar", "fact": "Öğrenci 18 yaşından küçükse veli onayı gerekir; veli bilgisi zorunlu."},
+        {"id": "k3", "topic": "Kapsam", "fact": "Ücret 8 taksite kadar bölünebilir; kardeş indirimi %10."},
+        {"id": "k4", "topic": "Kısıtlar", "fact": "Özel öğretim kurumu olarak MEB e-Kayıt'a ayrıca giriş yapılıyor; sistem bunu yapmayacak ama dışa aktarım vermeli."},
+        {"id": "k5", "topic": "Kapsam", "fact": "Seviye belirleme sınavı sonucu sınıf yerleştirmesini belirler."},
+        {"id": "k6", "topic": "Kısıtlar", "fact": "Kayıt dönemi Haziran–Eylül; sistem Mayıs sonunda canlıda olmalı."},
+        {"id": "k7", "topic": "Kısıtlar", "fact": "KVKK: öğrenci ve veli verisi; açık rıza ve aydınlatma metni."},
+        {"id": "k8", "topic": "Teslimatlar", "fact": "Sekreterlik için günlük kayıt ve tahsilat raporu."}
+      ]
+    },
+    {
+      "code": "depo_sayim",
+      "title": "Lojistik depo sayımı",
+      "sector": "Lojistik",
+      "brief": "Depomuzdaki stok sayım farklarını azaltmak istiyoruz.",
+      "expect": {"software": false, "human": true},
+      "key": [
+        {"id": "k1", "topic": "Amaç", "fact": "Yıllık sayım farkı ciro %1,8; hedef %0,5."},
+        {"id": "k2", "topic": "Kapsam", "fact": "12.000 m² depo, 6.500 SKU, raf adresli değil."},
+        {"id": "k3", "topic": "Kapsam", "fact": "Yıllık tam sayım yerine dönemsel (ABC sınıfına göre) sayıma geçmek istiyoruz."},
+        {"id": "k4", "topic": "Kısıtlar", "fact": "El terminali yok; barkod etiketleri ürünlerin %70'inde var."},
+        {"id": "k5", "topic": "Kısıtlar", "fact": "Sayım sırasında sevkiyat durdurulamıyor (7/24 sevkiyat)."},
+        {"id": "k6", "topic": "Paydaşlar", "fact": "Depo müdürü, 2 vardiya şefi ve 25 depo personeli; sayımı vardiya şefleri yürütecek."},
+        {"id": "k7", "topic": "Teslimatlar", "fact": "Sayım farkı kök neden analizi (kayıt hatası, fire, hırsızlık, yanlış adres) raporu."},
+        {"id": "k8", "topic": "Kısıtlar", "fact": "SAP Business One kullanılıyor; sayım sonuçları oraya aktarılacak."}
+      ]
+    }
+  ]
+}

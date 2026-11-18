@@ -137,6 +137,11 @@ POLICY: Dict[Tuple[str, str], Rule] = {
     ("POST", f"{P}/system/sector-packs/{{pack_id}}/publish"): SUPER_ADMIN,
     ("POST", f"{P}/system/sector-packs/{{pack_id}}/withdraw"): SUPER_ADMIN,
     ("GET", f"{P}/system/sector-packs/{{pack_id}}/suggestions"): SUPER_ADMIN,  # #753 k-anonim örüntüler (içerik değil)
+    # #754 Beyin deneme seti: sentetik brifler, yalnız canlı test şirketinde koşar (müşteri içeriği yok)
+    ("GET", f"{P}/system/brain-bench/cases"): SUPER_ADMIN,
+    ("GET", f"{P}/system/brain-bench/runs"): SUPER_ADMIN,
+    ("POST", f"{P}/system/brain-bench/runs"): SUPER_ADMIN,
+    ("GET", f"{P}/system/brain-bench/runs/{{run_id}}"): SUPER_ADMIN,
     # Toplantı kaydından proje (ADIM 11.3): project:create; kayıt yalnızca yükleyene / project:manage'e (uçta denetlenir)
     ("POST", f"{C}/meetings"): HANDLER("project:create"),
     ("GET", f"{C}/meetings"): HANDLER("project:create"),

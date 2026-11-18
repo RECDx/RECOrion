@@ -1476,3 +1476,20 @@ class SectorPack(Base):
     published = Column(JSONB)
     draft_updated_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class BrainBenchRun(Base):
+    """İSTEK #754: Beyin AI deneme seti koşusu (Merkez). Kısa brifler canlı test şirketinde keşif → tanım → plan aşamasına
+    kadar koşturulur, yönetici rolünü RECAi gizli cevap anahtarıyla oynar; sonuç brif başına puan ve gerekçe."""
+    __tablename__ = "brain_bench_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    status = Column(String(16), nullable=False, default="RUNNING")  # RUNNING, DONE, FAILED
+    label = Column(String(200))
+    case_codes = Column(JSONB, nullable=False, default=list)
+    results = Column(JSONB, nullable=False, default=list)
+    total = Column(Numeric(5, 1))
+    error = Column(Text)
+    started_by = Column(UUID(as_uuid=True))
+    started_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    finished_at = Column(DateTime(timezone=True))
