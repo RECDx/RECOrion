@@ -193,7 +193,7 @@ async def run_case(case: Dict[str, Any]) -> Dict[str, Any]:
         tenant, manager = await _test_tenant(db)
         name = f"{PROJECT_PREFIX}{case['title']}"
         project = Project(tenant_id=tenant.id, slug=await psvc.unique_slug(db, tenant.id, name), name=name, requirements=case["brief"],
-                          field_package="YAZILIM" if case["expect"].get("software") else "GENEL", status="DRAFT",
+                          field_package="GENEL", status="DRAFT",  # gerçek kullanıcı gibi: yazılım mı kararını Beyin AI verir
                           manager_actor_id=manager.id, created_by_actor_id=manager.id, settings={"brain_bench": case["code"]})
         db.add(project)
         await db.commit()

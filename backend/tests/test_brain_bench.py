@@ -128,3 +128,32 @@ def test_brain_bench_failure_is_recorded_per_case(client, db, world, monkeypatch
     run = client.get(f"/api/v1/system/brain-bench/runs/{rid}", headers=sa).json()
     assert run["status"] == "FAILED" and run["results"][0]["error"].startswith("keşif")
     assert _exec(db, "SELECT status FROM projects WHERE id = %s", run["results"][0]["project_id"])[0] == "CANCELLED"
+
+
+def test_plan_prompt_decides_work_type(client, db, world, monkeypatch):  # noqa: F811
+    """#754 ilk koşu bulgusu: yazılım kuralları (README, duman testi, arayüz tasarımı) üretim/depo/muhasebe planlarına sızıyordu.
+    İstem önce işin türünü (YAZILIM/GENEL) seçtirir; yönetici yazılım işaretlediyse ya da kod deposu varsa bunu söyler."""
+    from app.services import project_planning as pp
+    from app.services.evren_client import ChatResult, evren_client
+    from tests.test_workflow import _ready_project
+
+    assert pp.validate_plan({"work_type": "GENEL", "steps": [{"title": "Sayım pilotu"}]}, set())["work_type"] == "GENEL"
+    assert pp.validate_plan({"work_type": "x", "steps": []}, set())["work_type"] is None
+    w = world
+    pid, _, _ = _ready_project(client, w, "İş türü")
+    _exec(db, "UPDATE projects SET status = 'PLANNING', plan = NULL, field_package = 'GENEL', repo_mode = 'NONE' WHERE id = %s", pid)
+    seen = []
+
+    async def chat(model_code, messages, **kw):
+        seen.append(messages[-1]["content"])
+        return ChatResult(json.dumps({"work_type": "GENEL", "summary": "s", "steps": [{"key": "S1", "title": "Pilot", "estimated_days": 1}]}), None, 10, 10, {})
+    monkeypatch.setattr(evren_client, "chat", chat)
+    h = w["admin"]["h"]
+    _exec(db, "UPDATE projects SET settings = jsonb_build_object('discovery', jsonb_build_object('status', 'SKIPPED')) WHERE id = %s", pid)
+    r = client.post(f"/api/v1/projects/{pid}/plan/suggest", headers=h, json={})
+    assert r.status_code == 200, r.text
+    assert "ÖNCE İŞİN TÜRÜNE KARAR VER" in seen[-1] and "GENEL ise: README" in seen[-1]
+    assert "yazılım projesi olarak işaretlendi" not in seen[-1] and r.json()["work_type"] == "GENEL"
+    _exec(db, "UPDATE projects SET field_package = 'YAZILIM' WHERE id = %s", pid)
+    assert client.post(f"/api/v1/projects/{pid}/plan/suggest", headers=h, json={}).status_code == 200
+    assert "yazılım projesi olarak işaretlendi" in seen[-1]

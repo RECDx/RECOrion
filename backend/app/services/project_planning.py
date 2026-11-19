@@ -142,7 +142,8 @@ def validate_plan(plan: Dict[str, Any], pool_ids: set, human_ids: Optional[set] 
         visit(k)
     hires = [{"job_title": str(h.get("job_title") or "").strip()[:128], "department": (str(h.get("department") or "").strip() or None),
               "reason": str(h.get("reason") or "").strip()[:500]} for h in (plan.get("hire_suggestions") or []) if h.get("job_title")]
-    return {"summary": str(plan.get("summary") or "").strip()[:3000], "steps": steps, "hire_suggestions": hires[:10],
+    return {"work_type": plan.get("work_type") if plan.get("work_type") in ("YAZILIM", "GENEL") else None,
+            "summary": str(plan.get("summary") or "").strip()[:3000], "steps": steps, "hire_suggestions": hires[:10],
             "risks": [str(r)[:300] for r in (plan.get("risks") or [])][:10],
             "questions": [str(q)[:300] for q in (plan.get("questions") or [])][:8]}
 
@@ -168,21 +169,32 @@ async def suggest_plan(db: AsyncSession, project: Project, feedback: Optional[st
     pack, _ = await sector_packs.for_project(db, project, ctx['tenant'])
     pack_text = sector_packs.plan_context(pack)
     pack_block = f"\n{pack_text}\n" if pack_text else ""
+    # #754 deneme seti: yazılım kuralları (README, duman testi, arayüz tasarımı) üretim, depo, muhasebe planlarına da sızıyordu
+    sw = (project.field_package or "").upper() == "YAZILIM" or (project.repo_mode or "NONE") != "NONE"
+    sw_hint = "\nBu proje yöneticice yazılım projesi olarak işaretlendi (alan paketi ya da kod deposu): work_type YAZILIM." if sw else ""
     prompt = f"""Sen {ctx['tenant'].name} şirketinin Beyin AI'sısın ve proje yöneticisiyle birlikte bir {'Case' if project.kind == 'CASE' else 'proje'} planlıyorsun.
 Görevin: isterlere göre uygulanabilir iş adımlarını çıkarmak ve her adım için departman + unvan bazında şirketin AI personel
 havuzundan en uygun personeli önermek. Havuzda uygun personel yoksa agent_id boş bırak ve hire_suggestions'a gereken unvanı yaz.
 Bir personele aynı anda çok iş yığma; başka projelerdeki açık işleri dikkate al. Bağımlılıklar döngüsüz olmalı.
 Kalite gerektiren adımlara, işi yapandan farklı ve konuya uygun bir kontrol personeli (reviewer_agent_id) öner.
-Yazılım/kod üreten bir işse plan, teslimden önce mutlaka "Kurulum ve duman testi" adımı içermeli (test veya kalite unvanlı
+ÖNCE İŞİN TÜRÜNE KARAR VER (work_type): Proje Tanım Belgesindeki teslimatlardan biri çalışan bir yazılım/uygulama/kod ise
+YAZILIM; değilse (süreç iyileştirme, saha/operasyon, sayım, muhasebe kapanışı, eğitim, kampanya, denetim…) GENEL.{sw_hint}
+YALNIZ YAZILIM ise: plan, teslimden önce mutlaka "Kurulum ve duman testi" adımı içermeli (test veya kalite unvanlı
 personel; yoksa kabul adımına dahil et): uygulama README'deki talimatla temiz ortamda kurulup AÇILIR, recorion.json'daki
 denetimlerle giriş ve temel akış (web arayüzü varsa arayüzden) gerçekten denenir; ölçütü "uygulama açıldı, denetimler geçti,
 README eksiksiz" olsun. Kabul/teslim adımının ölçütü de bu gerçek sonuca dayanmalı, yalnız rapor yazmak yetmez.
+GENEL ise: README, kurulum/duman testi, kod geliştirme ya da ekran/arayüz tasarımı adımı EKLEME (ölçüm tablosu, form ya da
+rapor şablonu gibi araçlar ayrı bir yazılım işi değildir). Bunun yerine sektörün gerçek aşamalarını kur: mevcut durum
+ölçümü/analizi, pilot, saha uygulaması, eğitim, canlıya geçiş/yaygınlaştırma, hedefin ölçülmesi ve sorumluların kabulü.
+Sahada ya da kişilerce yürütülen işler (sayım, ölçüm, eğitim vermek, toplantı, onay, imza) insan personele atanır.
 Bilmediğin bilgiyi uydurma; eksikleri "questions" içinde yöneticiye sor.
 Planı teknik katmanlara (Backend/Frontend/Test) göre DEĞİL, Proje Tanım Belgesindeki teslimatlara ve kullanıcı akışlarına göre kur:
 her adım bir teslimatı ya da bir akışı uçtan uca tamamlasın; adımın kabul ölçütü o teslimatın kabul ölçütü ve doğrulama yöntemiyle
-aynı olsun (ör. "Turlar sayfasında 'Yurt dışı' seçilince yalnız yurt dışı turları görünür"). Yazılım projesinde plana bir
+aynı olsun (ör. "Turlar sayfasında 'Yurt dışı' seçilince yalnız yurt dışı turları görünür"). YAZILIM ise plana bir
 "Arayüz/kullanım tasarımı" (ekranlar, menü/gezinme haritası, tasarım dili) adımı ve teslimden önce tanım belgesindeki tüm akışları
 gerçek arayüzde deneyen bir "Kullanıcı kabul testi" adımı ekle.
+Tanım belgesindeki her teslimat, kabul ölçütü, kısıt ve başarı ölçütü (hedef değerler dahil) en az bir adımda karşılanmalı;
+karşılanmayan kalmasın.
 Her adıma bir teslimat (deliverable) ve doğrulama (verification + verification_type) yaz; sistem onaydan önce doğrulamayı kontrol eder.
 Türler: TEST (yazılımda sistemin tarayıcıda/testle kendisi denediği; ör. "'Yurt dışı' seçilince yalnız yurt dışı turları görünür"),
 MEASURE (ölçülen değer; ör. "OEE ve çevrim süresi ölçülür, hedef %65"), EVIDENCE (kanıt: rapor, ekran görüntüsü, test kaydı, fotoğraf),
@@ -221,7 +233,7 @@ Hedef tarihler: {project.start_date or 'belirlenmedi'} - {project.end_date or 'b
 {(feedback or 'yok')[:4000]}
 
 Sadece şu JSON'u döndür:
-{{"summary": "planın 3-5 cümlelik özeti (toplam gün veya bitiş tarihi YAZMA; süreyi sistem simülasyonla hesaplar)",
+{{"work_type": "YAZILIM|GENEL", "summary": "planın 3-5 cümlelik özeti (toplam gün veya bitiş tarihi YAZMA; süreyi sistem simülasyonla hesaplar)",
   "steps": [{{"key": "S1", "title": "adım adı", "description": "ne yapılacak", "acceptance_criteria": "tamam sayılma ölçütü",
              "deliverable": "bu adımın teslimatı (tanım belgesindeki adıyla)", "verification": "tamam olduğunu nasıl anlayacağız (somut, denenebilir)",
              "verification_type": "TEST|MEASURE|EVIDENCE|CHECKLIST|HUMAN",
