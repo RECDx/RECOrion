@@ -1705,7 +1705,8 @@ try {
     requirements: 'Bir bayi sipariş portalında yavaşlık şikâyeti geldi. Şikâyeti incele, kök nedeni bul, çözüm önerisi ve müşteriye yanıt taslağı hazırla.' } })).body?.result?.structuredContent;
   let planned = null;
   const planStart = Date.now();
-  for (let i = 0; i < 60; i++) {
+  // 10 dk: Beyin AI 240 sn zaman aşımı + yedek model (e2e754b: deepseek düştü, gemma 97 sn'de üretti → toplam ~340 sn)
+  for (let i = 0; i < 150; i++) {
     planned = (await mcpCall('tools/call', { name: 'get_project', arguments: { project_id: created?.id } })).body?.result?.structuredContent;
     if (planned?.plan_draft_steps?.length) break;
     await mc.page.waitForTimeout(4000);
