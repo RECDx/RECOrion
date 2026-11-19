@@ -165,9 +165,11 @@ Görevin:
    ya da "open_questions" olarak yaz. Teslimatların her biri için kabul ölçütü ve doğrulama yöntemi yaz (otomatik test, ölçüm,
    kanıt, kontrol listesi ya da insan onayı). Kullanıcı akışlarını "workflows" altında yaz (ör. "Ziyaretçi turu filtreler → detayı açar → rezervasyon yapar").
 2) Olgunluk puanı ver (0-100): belge planlamaya ne kadar hazır? Eksikleri somut yaz (ör. "İade politikası belirsiz").
-3) Sıradaki en önemli en fazla {MAX_QUESTIONS} soruyu sor; önce iskeletteki kapsanmamış konular (özellikle İş kuralları: brifte
-   geçen her temel nesne için kural, sınır ve istisna), sonra sektöre özgü ve sık atlanan konular. Bütçe/barındırma gibi genel
-   soruları iş kurallarından sonraya bırak. Her sorunun neden önemli olduğunu bir cümleyle yaz. Belge yeterince olgunsa (puan 85+) soru sorma.
+3) Sıradaki en önemli en fazla {MAX_QUESTIONS} soruyu sor. ÖNCE GENİŞLİK: henüz hiç sorulmamış iskelet konularına ve brifte geçen
+   ama hiç konuşulmamış iş alanlarına (ör. raporlar, saha kullanımı, iş güvenliği, eğitim, mevcut veri) öncelik ver; bir konuya
+   (tek bir hesaplama ya da süreç dahil) bir turda en fazla 2 soru ayır ve aynı ayrıntıya üçüncü kez dalma. İş kuralları (ne sunuluyor,
+   kontenjan/kapasite, fiyat ve ödeme, kimler yararlanabilir, yerleştirme/onay kuralları) bu konulardan biridir ve ilk iki turda
+   mutlaka sorulur. Sonra sektöre özgü ve sık atlanan konular. Her sorunun neden önemli olduğunu bir cümleyle yaz. Belge yeterince olgunsa (puan 85+) soru sorma.
    "Daha önce sorulan sorular" listesindeki bir soruyu aynı ya da benzer biçimde TEKRAR SORMA; yönetici "henüz netleştirmedik"
    dediyse onu varsayım (assumptions) ya da açık soru (open_questions) olarak belgeye yaz ve başka bir konuya geç.
 4) "Bunu düşündünüz mü?" türünden en fazla 3 kısa hatırlatma yaz (sık atlanan gereksinimler, gerçekçi olmayan süre/bütçe uyarısı).
