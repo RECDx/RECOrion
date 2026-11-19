@@ -157,3 +157,29 @@ def test_plan_prompt_decides_work_type(client, db, world, monkeypatch):  # noqa:
     _exec(db, "UPDATE projects SET field_package = 'YAZILIM' WHERE id = %s", pid)
     assert client.post(f"/api/v1/projects/{pid}/plan/suggest", headers=h, json={}).status_code == 200
     assert "yazılım projesi olarak işaretlendi" in seen[-1]
+
+
+def test_discovery_prompt_asks_business_rules_and_lists_asked(client, db, world, monkeypatch):  # noqa: F811
+    """#754 (kurs kaydı 66,5): keşif iş kurallarını sormuyor, aynı soruyu tekrar soruyordu. İskelette İş kuralları var;
+    sonraki turlarda daha önce sorulan sorular "tekrar sorma" listesiyle istemde."""
+    from app.services.evren_client import ChatResult, evren_client
+    from tests.test_workflow import _ready_project
+
+    w = world
+    h = w["admin"]["h"]
+    pid, _, _ = _ready_project(client, w, "Kurallar")
+    _exec(db, "UPDATE projects SET status = 'PLANNING', plan = NULL, settings = NULL WHERE id = %s", pid)
+    seen = []
+
+    async def chat(model_code, messages, **kw):
+        seen.append(messages[-1]["content"])
+        return ChatResult(json.dumps({"charter": {"goal": "g"}, "maturity": {"score": 50, "missing": []},
+                                      "questions": [{"topic": "İş kuralları", "text": "Kontenjan kaç?", "why": "sınıf"}]}), None, 10, 10, {})
+    monkeypatch.setattr(evren_client, "chat", chat)
+    r = client.post(f"/api/v1/projects/{pid}/discovery/round", headers=h, json={"answers": []})
+    assert r.status_code == 200, r.text
+    assert "İş kuralları: İşin temel nesneleri" in seen[-1] and "# Daha önce sorulan sorular (tekrar sorma)\nyok" in seen[-1]
+    qid = r.json()["pending"][0]["id"]
+    assert client.post(f"/api/v1/projects/{pid}/discovery/round", headers=h,
+                       json={"answers": [{"id": qid, "answer": "Henüz netleştirmedik."}]}).status_code == 200
+    assert "# Daha önce sorulan sorular (tekrar sorma)\n- Kontenjan kaç?" in seen[-1] and "TEKRAR SORMA" in seen[-1]

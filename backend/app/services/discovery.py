@@ -32,6 +32,10 @@ SKELETON = [
     ("Kısıtlar", "Bütçe, süre, mevzuat, mevcut sistemler ve veriler"),
     ("Teslimatlar", "Somut olarak ne teslim edilecek, kabulü nasıl yapılacak?"),
     ("Riskler", "Riskler ve varsayımlar"),
+    # #754 deneme seti (kurs kaydı 66,5): genel sorularda kalıp işin kurallarını hiç sormuyordu
+    ("İş kuralları", "İşin temel nesneleri ve kuralları: ne sunuluyor/satılıyor (ürün, hizmet, program, tür), kapasite/kontenjan, "
+                     "fiyat, indirim, taksit ve ödeme koşulları, kimlerin yararlanabileceği (yaş, veli/vasi, uygunluk), "
+                     "sınıflandırma/yerleştirme/onay kuralları, istisnalar"),
 ]
 CHARTER_KEYS = ("goal", "success_criteria", "stakeholders", "users_roles", "scope_in", "scope_out", "constraints",
                 "deliverables", "workflows", "risks", "assumptions", "open_questions")
@@ -111,6 +115,7 @@ async def run_round(db: AsyncSession, project: Project, answers: List[Dict[str, 
     skipped = [asked[q]["text"] for q in asked if q not in {x["id"] for x in qa if x["answer"]}]
     tenant = await db.get(Tenant, project.tenant_id)
     sectors = ", ".join(str(s) for s in (tenant.sectors or [])) or "belirtilmemiş"
+    asked_before = "\n".join(f"- {x.get('question')}" for x in [*(y for r in d["rounds"] for y in r.get("qa", [])), *qa] if x.get("question"))
     history = "\n".join(f"- [{x['topic']}] {x['question']} → {x['answer']}" for r in d["rounds"] for x in r.get("qa", []) if x.get("answer"))
     now_qa = "\n".join(f"- [{x['topic']}] {x['question']} → {x['answer'] or '(yanıtlanmadı)'}" for x in qa)
     skeleton = "\n".join(f"- {t}: {q}" for t, q in SKELETON)
@@ -141,6 +146,9 @@ Bütçe: {project.budget_try or 'belirtilmedi'} TL · Hedef tarihler: {project.s
 # Önceki turlarda alınan yanıtlar
 {history or 'yok'}
 
+# Daha önce sorulan sorular (tekrar sorma)
+{asked_before or 'yok'}
+
 # Bu turun yanıtları
 {now_qa or 'ilk tur'}
 Yanıtlanmadan geçilen sorular: {'; '.join(skipped) or 'yok'}
@@ -157,8 +165,11 @@ Görevin:
    ya da "open_questions" olarak yaz. Teslimatların her biri için kabul ölçütü ve doğrulama yöntemi yaz (otomatik test, ölçüm,
    kanıt, kontrol listesi ya da insan onayı). Kullanıcı akışlarını "workflows" altında yaz (ör. "Ziyaretçi turu filtreler → detayı açar → rezervasyon yapar").
 2) Olgunluk puanı ver (0-100): belge planlamaya ne kadar hazır? Eksikleri somut yaz (ör. "İade politikası belirsiz").
-3) Sıradaki en önemli en fazla {MAX_QUESTIONS} soruyu sor; önce iskeletteki kapsanmamış konular, sonra sektöre özgü ve sık atlanan konular.
-   Her sorunun neden önemli olduğunu bir cümleyle yaz. Belge yeterince olgunsa (puan 85+) soru sorma.
+3) Sıradaki en önemli en fazla {MAX_QUESTIONS} soruyu sor; önce iskeletteki kapsanmamış konular (özellikle İş kuralları: brifte
+   geçen her temel nesne için kural, sınır ve istisna), sonra sektöre özgü ve sık atlanan konular. Bütçe/barındırma gibi genel
+   soruları iş kurallarından sonraya bırak. Her sorunun neden önemli olduğunu bir cümleyle yaz. Belge yeterince olgunsa (puan 85+) soru sorma.
+   "Daha önce sorulan sorular" listesindeki bir soruyu aynı ya da benzer biçimde TEKRAR SORMA; yönetici "henüz netleştirmedik"
+   dediyse onu varsayım (assumptions) ya da açık soru (open_questions) olarak belgeye yaz ve başka bir konuya geç.
 4) "Bunu düşündünüz mü?" türünden en fazla 3 kısa hatırlatma yaz (sık atlanan gereksinimler, gerçekçi olmayan süre/bütçe uyarısı).
 5) Web'de araştırılması belgeyi belirgin biçimde güçlendirecek en fazla 2 konu öner (ör. güncel mevzuat, sektördeki benzer çözümler,
    tipik teslimatlar). Araştırmayı sen başlatmazsın; yönetici onaylarsa yapılır. Gerek yoksa boş bırak. Konu metninde kişi/şirket adı olmasın.
