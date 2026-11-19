@@ -82,10 +82,14 @@ def retry_after_seconds(status_code: int, headers) -> Optional[float]:
 
 def thinking_enabled(model_code: str, purpose: Optional[str] = None) -> bool:
     """EVREN'de sohbet modelleri varsayılan olarak düşünür; EVREN_NO_THINKING_MODELS'takilerde kapatılır (#666).
-    EVREN_THINKING_PURPOSES'taki amaçlarda (iş adımları) her modelde açık kalır (F85)."""
+    EVREN_THINKING_PURPOSES'taki amaçlarda (iş adımları) her modelde açık kalır (F85); EVREN_NO_THINKING_PURPOSES'takilerde
+    (Beyin AI, #754) her modelde kapalıdır."""
     keep = {p.strip().upper() for p in (settings.EVREN_THINKING_PURPOSES or "").split(",") if p.strip()}
     if purpose and purpose.upper() in keep:
         return True
+    no = {p.strip().upper() for p in (settings.EVREN_NO_THINKING_PURPOSES or "").split(",") if p.strip()}
+    if purpose and purpose.upper() in no:  # #754: Beyin AI JSON çağrıları düşünmeden (hız ve yarım kalmayan JSON)
+        return False
     off = {m.strip().lower() for m in (settings.EVREN_NO_THINKING_MODELS or "").split(",") if m.strip()}
     return (model_code or "").lower() not in off
 

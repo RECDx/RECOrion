@@ -82,6 +82,19 @@ def test_thinking_kept_for_agent_work_purpose(client, monkeypatch):
     assert brain["chat_template_kwargs"] == {"enable_thinking": False} and brain["max_tokens"] == 4000
 
 
+def test_brain_purpose_never_thinks(client, monkeypatch):
+    """#754: Beyin AI JSON çağrıları (BRAIN) düşünen modelde de düşünmeden yapılır; bütçe istenen kadar kalır.
+    Diğer amaçlarda (sohbet) düşünen model düşünmeye devam eder."""
+    monkeypatch.setattr(settings, "EVREN_THINKING_PURPOSES", "")
+    monkeypatch.setattr(settings, "EVREN_NO_THINKING_PURPOSES", "BRAIN")
+    client.use(lambda r: httpx.Response(200, content=_sse(_delta(content="{}"), _finish())))
+    _run(client.chat("deepseek-v4-flash", [{"role": "user", "content": "x"}], max_tokens=5000, purpose="BRAIN"))
+    _run(client.chat("deepseek-v4-flash", [{"role": "user", "content": "x"}], max_tokens=500, purpose="CHAT"))
+    brain, chat = client.sent
+    assert brain["chat_template_kwargs"] == {"enable_thinking": False} and brain["max_tokens"] == 5000
+    assert "chat_template_kwargs" not in chat and chat["max_tokens"] == 4096
+
+
 def test_repetition_penalty_only_for_agent_work(client, monkeypatch):
     """F85: iş adımlarında (AGENT_CHAT) tekrar cezası gönderilir, düşünme kapalı kalır; diğer amaçlarda gönderilmez."""
     monkeypatch.setattr(settings, "EVREN_THINKING_PURPOSES", "")

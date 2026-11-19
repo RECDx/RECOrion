@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     # F85 (08.11.2026): bu amaçlarda düşünme her modelde açık kalır. Varsayılan boş: iş adımında düşünmek EVREN hızına
     # sığmadı (qwen 4096 token'ı düşünmeye harcadı). Tekrar döngüsü bunun yerine tekrar cezasıyla önlenir.
     EVREN_THINKING_PURPOSES: str = ""
+    # #754 (19.11.2026 ölçüm): Beyin AI'nın JSON çağrılarında (keşif, plan) deepseek-v4-flash düşünürken 286 sn sürüp
+    # 5000 token bütçesini düşünmeye harcadı ve JSON yarım kaldı (onarım + yedek model → keşif turu 10 dk'yı aştı);
+    # düşünme kapalıyken 128 sn'de geçerli JSON. Bu amaçlarda düşünme her modelde kapalıdır (EVREN_THINKING_PURPOSES önceliklidir).
+    EVREN_NO_THINKING_PURPOSES: str = "BRAIN"
     # Düşünmesi kapalı modelin uzun kodda aynı satırları tekrarlaması (F85) için: bu amaçlarda repetition_penalty gönderilir.
     EVREN_REPETITION_PENALTY: float = 1.05
     EVREN_REPETITION_PURPOSES: str = "AGENT_CHAT"

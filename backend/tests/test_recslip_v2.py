@@ -278,6 +278,9 @@ def test_unsent_receipt_and_key_expiry_reminders(client, world, slip, v2, db, mo
     cal = rs.calendar_of(period, rs.DEFAULT_SETTINGS)
     v2.add(401, 50.0, [], [], rs_state="analyzed")
     t0 = cal["cutoff"] - timedelta(days=10)
+    # Önceki testler advance'i gerçek zamanda çağırıp hatırlatmayı "şimdi" kaydeder; ayın son 10 gününde t0 bu kaydın
+    # N gün içinde kalır ve hatırlatma atlanır (19.11.2026'da kaldı) → zamana bağlı kaydı temizle
+    _exec(db, "UPDATE projects SET settings = settings #- '{state,submit_reminded}' WHERE id = %s RETURNING id", slip["case"])
     asyncio.run(run("advance", t0))
     unsent = [x for x in sent if "onaya gönderilmedi" in x[1]]
     assert len(unsent) == 1 and "Fiş 401" in unsent[0][1] and unsent[0][0] == [w_id := world["admin"]["id"]]
