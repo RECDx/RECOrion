@@ -32,6 +32,8 @@ MERGE_RETRY_SECONDS = 2
 MERGE_TOTAL_SECONDS = 60
 MAX_FILES = 40
 MAX_FILE_BYTES = 200_000
+SHRINK_MIN_LINES = 20  # C4-25: bu kadar anlamlı satırı olan var olan dosya
+SHRINK_KEEP = 0.5  # satırlarının yarısından azı kalacaksa ilk kez yazan adım üzerine yazamaz
 CODE_BLOCK = re.compile(r"^```[ \t]*([\w+#.-]*)[ \t]+([\w./-]+\.[\w]+)[ \t]*\n(.*?)^```[ \t]*$", re.M | re.S)
 PATH_ONLY_BLOCK = re.compile(r"^```[ \t]*((?:[\w.-]+/)+[\w.-]+\.[\w]+)[ \t]*\n(.*?)^```[ \t]*$", re.M | re.S)
 # Senaryo F81 (08.11.2026): model yolu açılış satırına değil bloğun ilk satırına yorum olarak yazıyor
@@ -296,6 +298,16 @@ def is_test_path(path: str) -> bool:
     return bool(TEST_PATH.search(path or ""))
 
 
+def shrinks(existing: str, new: str, min_lines: int = SHRINK_MIN_LINES, keep: float = SHRINK_KEEP) -> bool:
+    """C4-25: adımın daha önce hiç yazmadığı, depoda var olan bir dosyanın büyük kısmını silen çıktı mı (ör. yönetim paneli
+    "Panel içeriği burada yüklenecek" taslağıyla değiştirildi). Var olan anlamlı satırların keep oranından azı kalıyorsa True."""
+    old = {line.strip() for line in existing.splitlines() if line.strip()}
+    if len(old) < min_lines:
+        return False
+    kept = old & {line.strip() for line in new.splitlines() if line.strip()}
+    return len(kept) / len(old) < keep
+
+
 def merge3(base: str, ours: str, theirs: str) -> Tuple[Optional[str], int]:
     """C4-22: satır bazlı üç yollu birleştirme (git merge-file benzeri). base: AI'nın bu dosyanın önceki kendi sürümü, ours: AI'nın
     yeni sürümü, theirs: daldaki güncel hâl (başka adımların ana daldan gelen onaylı değişiklikleri dahil). Dönen (metin, çakışma);
@@ -349,14 +361,21 @@ async def commit_step(project: Project, task: Task, version: int, content: str, 
     before = files_from_output(task, previous) if previous else {}
     conflicts: List[str] = []
     merged: List[str] = []
+    shrunk: List[str] = []
     for path, body in list(files.items()):
         current = await _exists(f"/repos/{owner}/{repo}/contents/{path}?ref={ref}")
-        if path in before and isinstance(current, dict) and current.get("content") is not None and not path.startswith("docs/adimlar/"):
+        theirs = None
+        if isinstance(current, dict) and current.get("content") is not None and not path.startswith("docs/adimlar/"):
             try:
                 theirs = base64.b64decode(current["content"]).decode("utf-8")
             except (ValueError, UnicodeDecodeError):
                 theirs = None
-            if theirs is not None and theirs != before[path] and theirs != body:
+        if theirs is not None and path not in before and theirs != body and shrinks(theirs, body):
+            shrunk.append(path)  # C4-25: ilk kez yazılan var olan dosyanın büyük kısmı silinmez
+            del files[path]
+            continue
+        if path in before and theirs is not None:
+            if theirs != before[path] and theirs != body:
                 text, _n = merge3(before[path], body, theirs)
                 if text is None:
                     conflicts.append(path)
@@ -382,7 +401,7 @@ async def commit_step(project: Project, task: Task, version: int, content: str, 
         pr = opened["number"]
     task.repo_branch, task.repo_pr_number = branch, pr
     return {"branch": branch, "commit": sha, "pr": pr, "files": list(files), "dropped": dropped, "partial": partial,
-            "conflicts": conflicts, "merged": merged}
+            "conflicts": conflicts, "merged": merged, "shrunk": shrunk}
 
 
 async def update_from_base(project: Project, task: Task) -> str:
@@ -448,7 +467,7 @@ async def after_output(db: AsyncSession, project: Project, task: Task, version: 
     from app.services import task_flow
 
     if not active(project):
-        return {"dropped": [], "partial": [], "conflicts": []}
+        return {"dropped": [], "partial": [], "conflicts": [], "shrunk": []}
     try:
         r = await commit_step(project, task, version, content, author, keep, previous)
         await task_flow.log(db, project, task, "REPO_COMMIT", task.assignee_actor_id,
@@ -458,12 +477,13 @@ async def after_output(db: AsyncSession, project: Project, task: Task, version: 
                                if r["partial"] else "")
                             + (f" Başka adımın ana daldaki değişiklikleriyle birleştirildi: {', '.join(r['merged'])}." if r["merged"] else "")
                             + (f" Yazılmayan (başka adımın ana daldaki onaylı değişiklikleriyle çakışıyor): {', '.join(r['conflicts'])}."
-                               if r["conflicts"] else ""), r)
-        return {"dropped": r["dropped"], "partial": r["partial"], "conflicts": r["conflicts"]}
+                               if r["conflicts"] else "")
+                            + (f" Yazılmayan (var olan dosyanın büyük kısmını siliyor): {', '.join(r['shrunk'])}." if r["shrunk"] else ""), r)
+        return {"dropped": r["dropped"], "partial": r["partial"], "conflicts": r["conflicts"], "shrunk": r["shrunk"]}
     except RepoError as exc:
         logger.warning("Depo commit hatası (%s): %s", task.id, exc.message)
         await task_flow.log(db, project, task, "REPO_ERROR", note=exc.message)
-        return {"dropped": [], "partial": [], "conflicts": []}
+        return {"dropped": [], "partial": [], "conflicts": [], "shrunk": []}
 
 
 async def after_approval(db: AsyncSession, project: Project, task: Task, actor_id, approver: str) -> None:

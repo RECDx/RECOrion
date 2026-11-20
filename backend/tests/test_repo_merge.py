@@ -9,6 +9,7 @@ import base64
 
 from app.services import code_repo
 from app.services.code_repo import merge3
+from tests.test_workflow import world  # noqa: F401  (fikstür)
 
 BASE = "<nav>\n<a>Anasayfa</a>\n</nav>\n<main>\n<p>turlar</p>\n</main>\n<footer>(c)</footer>\n"
 
@@ -104,3 +105,66 @@ def test_context_for_ai_puts_priority_files_and_recorion_json_first_in_full(monk
     assert out.index("### recorion.json") < out.index("### src/app/main.py")
     assert "b" * 20000 in out  # öncelikli dosya kısaltılmadan
     assert "GÜNCEL hâlini temel al" in out
+
+
+def test_shrinks_blocks_placeholder_replacing_existing_file(monkeypatch):
+    """C4-25: bakım adımının ilk sürümü işleyen yönetim panelini "Panel içeriği burada yüklenecek" taslağıyla değiştirdi."""
+    panel = "\n".join(f"function ekran{i}() {{ return {i}; }}" for i in range(40)) + "\n"
+    stub = "<h2>Yönetim Paneli</h2>\n<p>Panel içeriği burada yüklenecek.</p>\n"
+    assert code_repo.shrinks(panel, stub) is True
+    assert code_repo.shrinks(panel, panel + "function yeni() {}\n") is False  # ekleme
+    assert code_repo.shrinks("a\nb\n", "c\n") is False  # küçük dosya serbest
+    branch = {"src/static/js/admin.js": panel}
+    sent = {}
+
+    async def exists(path):
+        if "/branches/" in path:
+            return {"name": "x"}
+        for p, body in branch.items():
+            if f"/contents/{p}?" in path:
+                return {"sha": "s1", "content": base64.b64encode(body.encode()).decode()}
+        return None
+
+    async def call(method, path, json=None, ok=(200, 201, 204), params=None):
+        if method == "POST" and path.endswith("/contents"):
+            sent["files"] = {f["path"] for f in json["files"]}
+            return 201, {"commit": {"sha": "c"}}
+        return 200, {}
+
+    monkeypatch.setattr(code_repo, "_exists", exists)
+    monkeypatch.setattr(code_repo, "_call", call)
+    out = f"```js src/static/js/admin.js\n{stub}```\n"
+    r = asyncio.run(code_repo.commit_step(P(), T(), 1, out, "Web Geliştirici"))
+    assert r["shrunk"] == ["src/static/js/admin.js"] and "src/static/js/admin.js" not in sent["files"]
+    # adımın kendi önceki sürümü varsa (kendi dosyası) üç yollu birleştirme kuralı geçerli, küçültme engeli uygulanmaz
+    r = asyncio.run(code_repo.commit_step(P(), T(), 2, out, "Web Geliştirici", previous=f"```js src/static/js/admin.js\n{panel}```\n"))
+    assert r["shrunk"] == [] and "src/static/js/admin.js" in sent["files"]
+
+
+def test_acceptance_gate_counts_runs_on_merged_step_branches(client, db, world, monkeypatch):  # noqa: F811
+    """C4-25: insan kabul adımında 'uygulama hiç çalıştırılıp denenmedi' yanlış uyarısı — koşular birleşmiş adım dallarındaydı."""
+    import uuid as _uuid
+
+    from app.db.models import Project, Task
+    from app.db.session import AsyncSessionLocal
+    from app.services import sandbox
+    from tests.test_workflow import _exec, _ready_project
+
+    w = world
+    pid, human_id, ai_id = _ready_project(client, w, f"Kapı {_uuid.uuid4().hex[:4]}")
+    monkeypatch.setattr(sandbox, "enabled", lambda: True)
+    monkeypatch.setattr(code_repo, "active", lambda project: True)
+    ai_task = _exec(db, "SELECT id FROM tasks WHERE project_id = %s AND title = 'AI adımı'", pid)[0]
+    human_task = _exec(db, "SELECT id FROM tasks WHERE project_id = %s AND id <> %s ORDER BY created_at LIMIT 1", pid, ai_task)[0]
+    _exec(db, "UPDATE tasks SET status = 'DONE', repo_branch = 'adim-1-ai', repo_merged_at = now() WHERE id = %s", ai_task)
+    _exec(db, "UPDATE tasks SET title = 'Kullanıcı kabul testi', repo_branch = NULL WHERE id = %s", human_task)
+
+    async def gate():
+        async with AsyncSessionLocal() as s:
+            return await sandbox.acceptance_gate(s, await s.get(Project, pid), await s.get(Task, human_task))
+    assert "hiç çalıştırılıp denenmedi" in client.portal.call(gate)
+    _exec(db, "INSERT INTO test_runs (id, tenant_id, project_id, task_id, ref, status, passed, failed, skipped, result) "
+              "SELECT gen_random_uuid(), tenant_id, id, %s, 'adim-1-ai', 'PASSED', 27, 0, 0, "
+              "'{\"smoke\": {\"status\": \"PASSED\", \"checks\": []}}'::jsonb FROM projects WHERE id = %s", ai_task, pid)
+    warn = client.portal.call(gate)
+    assert warn is None or "hiç çalıştırılıp denenmedi" not in warn, warn

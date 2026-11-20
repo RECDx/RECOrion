@@ -237,7 +237,8 @@ async def acceptance_gate(db: AsyncSession, project: Project, task: Task) -> Opt
     last_open = not any(t.id != task.id and t.status not in task_flow.CLOSED for t in tasks)
     if not (is_acceptance_step(task) or last_open):
         return None
-    refs = [r for r in (task.repo_branch, code_repo.BASE_BRANCH) if r]
+    # C4-25: insan kabul adımının kendi dalı yok; koşular ana dala birleşmiş adım dallarında yapıldı → onlar da sayılır
+    refs = [r for r in (task.repo_branch, code_repo.BASE_BRANCH, *(t.repo_branch for t in tasks if t.repo_merged_at)) if r]
     run = (await db.execute(select(TestRun).where(TestRun.project_id == project.id, TestRun.ref.in_(refs), TestRun.status != "RUNNING")
                             .order_by(TestRun.created_at.desc()).limit(1))).scalar_one_or_none()
     if not run:

@@ -311,7 +311,8 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
     prev_text = await artifact_text(previous, 10_000_000) if previous else None  # C4-22: üç yollu birleştirmenin tabanı
     repo_res = await code_repo.after_output(db, project, task, version, content, agent.display_name, keep, prev_text)
     dropped, partial, clash = repo_res["dropped"], repo_res["partial"], repo_res.get("conflicts") or []
-    if dropped or partial or clash:
+    shrunk = repo_res.get("shrunk") or []
+    if dropped or partial or clash or shrunk:
         warn = ""
         if dropped:
             warn += ("\n\n_Sistem: test uzmanı uygulama kodunu değiştiremez; şu dosyalar depoya yazılmadı: "
@@ -324,6 +325,11 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
             warn += ("\n\n_Sistem: şu dosyalar başka bir adımın ana dala birleşmiş onaylı değişiklikleriyle çakıştığı için depoya "
                      "YAZILMADI (daldaki güncel hâli duruyor): " + ", ".join(f"`{d}`" for d in clash[:15])
                      + ". Sonraki sürümde dosyanın depodaki GÜNCEL hâlini temel alıp yalnız kendi değişikliğini ekle._")
+        if shrunk:  # C4-25: var olan dosya taslakla değiştirilmesin
+            warn += ("\n\n_Sistem: şu var olan dosyalar, mevcut içeriğinin büyük kısmını sildiği için depoya YAZILMADI (daldaki hâli "
+                     "duruyor): " + ", ".join(f"`{d}`" for d in shrunk[:15])
+                     + ". Var olan dosyayı değiştirirken depodaki GÜNCEL hâlini baştan sona koru, yalnız gereken değişikliği ekle; "
+                     "işleyen ekranları taslak/yer tutucu ile değiştirme._")
         content += warn
         data = content.encode("utf-8")
         await storage.put_object(key, data, "text/markdown; charset=utf-8")
