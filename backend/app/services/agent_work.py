@@ -221,8 +221,10 @@ async def produce(db: AsyncSession, task_id, feedback: Optional[str] = None) -> 
         dep_blocks.append("## Proje yöneticisinin önceki adımlara onay notları (bu adımda ilgili olanları MUTLAKA uygula)\n"
                           + "\n".join(f"- {t}: {(n or '').strip()[:800]}" for t, n in reversed(approval_notes)))
     # F98: depo etkinse ana daldaki gerçek kod (özet değil) bağlama girer
-    repo_context = await code_repo.context_for_ai(project) if code_repo.active(project) else ""
     previous = await latest_artifact(db, task.id)
+    # C4-22: adımın önceki sürümünde yazdığı dosyalar ana daldaki GÜNCEL hâlleriyle tam olarak bağlama girer
+    own_paths = list(code_repo.files_from_output(task, await artifact_text(previous, 10_000_000))) if previous else []
+    repo_context = await code_repo.context_for_ai(project, priority=own_paths) if code_repo.active(project) else ""
     own = await artifact_text(previous, MAX_OWN_CHARS)
     # C3-43: yönetici karantinadaki adımı not yazarak yeniden denemeye açtıysa bu not, bir sonraki karantina kararına kadar
     # üretilen TÜM sürümlerde en öncelikli yönlendirmedir (kontrolcü reddinden sonraki sürümler de görür). Son yeniden
@@ -306,9 +308,10 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
                          "tool_calls": [{"id": str(c.id), "tool": c.tool, "status": c.status} for c in tool_calls]})
     runs = _runs_tests(project, agent, task)
     keep = code_repo.is_test_path if runs == "test" else None  # F104: test uzmanı yalnız test dosyalarını commit eder
-    repo_res = await code_repo.after_output(db, project, task, version, content, agent.display_name, keep)  # depo varsa adımın dalına commit
-    dropped, partial = repo_res["dropped"], repo_res["partial"]
-    if dropped or partial:
+    prev_text = await artifact_text(previous, 10_000_000) if previous else None  # C4-22: üç yollu birleştirmenin tabanı
+    repo_res = await code_repo.after_output(db, project, task, version, content, agent.display_name, keep, prev_text)
+    dropped, partial, clash = repo_res["dropped"], repo_res["partial"], repo_res.get("conflicts") or []
+    if dropped or partial or clash:
         warn = ""
         if dropped:
             warn += ("\n\n_Sistem: test uzmanı uygulama kodunu değiştiremez; şu dosyalar depoya yazılmadı: "
@@ -317,6 +320,10 @@ Bu iş adımının {'düzeltilmiş ' if feedback else ''}çıktısını şimdi t
             warn += ("\n\n_Sistem: şu dosyalar '...' / 'kalan kodlar aynı' gibi kısaltma içerdiği için depoya YAZILMADI (depodaki eski "
                      "hâli duruyor): " + ", ".join(f"`{d}`" for d in partial[:15])
                      + ". Değiştirilecek dosya her zaman baştan sona TAM yazılmalı._")
+        if clash:  # C4-22: başka adımın onaylı değişikliği silinmesin
+            warn += ("\n\n_Sistem: şu dosyalar başka bir adımın ana dala birleşmiş onaylı değişiklikleriyle çakıştığı için depoya "
+                     "YAZILMADI (daldaki güncel hâli duruyor): " + ", ".join(f"`{d}`" for d in clash[:15])
+                     + ". Sonraki sürümde dosyanın depodaki GÜNCEL hâlini temel alıp yalnız kendi değişikliğini ekle._")
         content += warn
         data = content.encode("utf-8")
         await storage.put_object(key, data, "text/markdown; charset=utf-8")
@@ -356,8 +363,12 @@ async def _with_test_run(db: AsyncSession, project: Project, task: Task, tenant:
     if upd == "CONFLICT":  # çakışma: son çıktı ana daldan açılan yeni dala yazılır (eski kodla test koşulmasın)
         art = await latest_artifact(db, task.id)
         if art is not None:
+            # C4-22: önceki sürüm üç yollu birleştirmenin tabanı (ana daldaki başka adımın onaylı değişikliği silinmesin)
+            prev = (await db.execute(select(Artifact).where(Artifact.task_id == task.id, Artifact.version == art.version - 1)
+                                     .limit(1))).scalar_one_or_none()
             r = await code_repo.rebranch(project, task, art.version, await artifact_text(art, 10_000_000), agent.display_name,
-                                         code_repo.is_test_path if _runs_tests(project, agent, task) == "test" else None)
+                                         code_repo.is_test_path if _runs_tests(project, agent, task) == "test" else None,
+                                         await artifact_text(prev, 10_000_000) if prev else None)
             await task_flow.log(db, project, task, "REPO_UPDATED", None,
                                 f"Adımın dalı ana dalla çakışıyordu; son sürüm ana daldan açılan {r['branch']} dalına yazıldı (#{r['pr']}).",
                                 {"result": "REBRANCHED", **r})

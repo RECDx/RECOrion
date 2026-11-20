@@ -10,6 +10,7 @@ Proje kod deposu (ADIM 8.5): RECOrion Gitea deposu.
 """
 import asyncio
 import base64
+import difflib
 import logging
 import re
 import unicodedata
@@ -295,9 +296,46 @@ def is_test_path(path: str) -> bool:
     return bool(TEST_PATH.search(path or ""))
 
 
-async def commit_step(project: Project, task: Task, version: int, content: str, author: str, keep=None) -> Dict[str, Any]:
+def merge3(base: str, ours: str, theirs: str) -> Tuple[Optional[str], int]:
+    """C4-22: satır bazlı üç yollu birleştirme (git merge-file benzeri). base: AI'nın bu dosyanın önceki kendi sürümü, ours: AI'nın
+    yeni sürümü, theirs: daldaki güncel hâl (başka adımların ana daldan gelen onaylı değişiklikleri dahil). Dönen (metin, çakışma);
+    çakışma varsa metin None — başka adımın onaylı değişikliği sessizce silinmez."""
+    b, a, t = base.splitlines(True), ours.splitlines(True), theirs.splitlines(True)
+    am = difflib.SequenceMatcher(None, b, a, autojunk=False).get_matching_blocks()
+    tm = difflib.SequenceMatcher(None, b, t, autojunk=False).get_matching_blocks()
+    sync, ia, it = [], 0, 0
+    while ia < len(am) and it < len(tm):
+        ab, aa, al = am[ia]
+        tb, tt, tl = tm[it]
+        i, j = max(ab, tb), min(ab + al, tb + tl)
+        if i < j:
+            sync.append((i, j, aa + (i - ab), tt + (i - tb)))
+        if ab + al < tb + tl:
+            ia += 1
+        else:
+            it += 1
+    sync.append((len(b), len(b), len(a), len(t)))
+    out: List[str] = []
+    conflicts, zb, za, zt = 0, 0, 0, 0
+    for i, j, sa, st in sync:
+        zs, as_, ts = b[zb:i], a[za:sa], t[zt:st]
+        if as_ == ts or ts == zs:
+            out += as_
+        elif as_ == zs:
+            out += ts
+        else:
+            conflicts += 1
+        out += b[i:j]
+        zb, za, zt = j, sa + (j - i), st + (j - i)
+    return (None if conflicts else "".join(out)), conflicts
+
+
+async def commit_step(project: Project, task: Task, version: int, content: str, author: str, keep=None,
+                      previous: Optional[str] = None) -> Dict[str, Any]:
     """Çıktıyı adımın dalına commit eder; dal yoksa main'den açılır; ana dala birleştirme isteği yoksa açılır.
-    keep: dosya yolu süzgeci (ör. test uzmanı yalnız test dosyaları); süzülenler "dropped" olarak döner."""
+    keep: dosya yolu süzgeci (ör. test uzmanı yalnız test dosyaları); süzülenler "dropped" olarak döner.
+    previous: adımın bir önceki çıktısı (C4-22): daldaki dosya bu adımın önceki sürümünden farklıysa (başka bir adımın onaylı
+    değişikliği ana daldan gelmiş) üç yollu birleştirilir; çakışan dosya yazılmaz, "conflicts" olarak döner."""
     owner, repo = project.repo_owner, project.repo_name
     branch = task.repo_branch or branch_name(task)
     branch_exists = bool(await _exists(f"/repos/{owner}/{repo}/branches/{branch}"))
@@ -308,8 +346,24 @@ async def commit_step(project: Project, task: Task, version: int, content: str, 
     partial = [p for p in partial if p not in files]  # aynı dosyanın tam hâli de verildiyse uyarı yok
     dropped = [p for p in files if keep and not keep(p)]
     files = {p: b for p, b in files.items() if p not in dropped}
-    for path, body in files.items():
+    before = files_from_output(task, previous) if previous else {}
+    conflicts: List[str] = []
+    merged: List[str] = []
+    for path, body in list(files.items()):
         current = await _exists(f"/repos/{owner}/{repo}/contents/{path}?ref={ref}")
+        if path in before and isinstance(current, dict) and current.get("content") is not None and not path.startswith("docs/adimlar/"):
+            try:
+                theirs = base64.b64decode(current["content"]).decode("utf-8")
+            except (ValueError, UnicodeDecodeError):
+                theirs = None
+            if theirs is not None and theirs != before[path] and theirs != body:
+                text, _n = merge3(before[path], body, theirs)
+                if text is None:
+                    conflicts.append(path)
+                    del files[path]
+                    continue
+                body = files[path] = text
+                merged.append(path)
         op = {"path": path, "content": base64.b64encode(body.encode("utf-8")).decode()}
         if isinstance(current, dict) and current.get("sha"):
             op.update(operation="update", sha=current["sha"])
@@ -327,7 +381,8 @@ async def commit_step(project: Project, task: Task, version: int, content: str, 
             "body": f"RECOrion iş adımı: **{task.title}**\n\nAna dala birleştirme insan onayıyla yapılır (adım onaylanınca)."})
         pr = opened["number"]
     task.repo_branch, task.repo_pr_number = branch, pr
-    return {"branch": branch, "commit": sha, "pr": pr, "files": list(files), "dropped": dropped, "partial": partial}
+    return {"branch": branch, "commit": sha, "pr": pr, "files": list(files), "dropped": dropped, "partial": partial,
+            "conflicts": conflicts, "merged": merged}
 
 
 async def update_from_base(project: Project, task: Task) -> str:
@@ -344,16 +399,18 @@ async def update_from_base(project: Project, task: Task) -> str:
 
 
 
-async def rebranch(project: Project, task: Task, version: int, content: str, author: str, keep=None) -> Dict[str, Any]:
+async def rebranch(project: Project, task: Task, version: int, content: str, author: str, keep=None,
+                   previous: Optional[str] = None) -> Dict[str, Any]:
     """C3-42: dal ana dalla çakışıyor → eski PR kapatılır, çıktı ana daldan açılan YENİ dala (…-r<sürüm>) yazılır, yeni PR açılır.
-    Çıktılar tam dosya olduğu için adımın son hâli korunur; ana daldaki onaylı düzeltmeler de dalda olur."""
+    C4-22: çıktılar tam dosya olduğu için ana daldaki başka adımların onaylı değişiklikleri üzerine yazılabilirdi; artık
+    previous (adımın bir önceki çıktısı) tabanıyla üç yollu birleştirilir, çakışan dosya yazılmaz."""
     if task.repo_pr_number and not task.repo_merged_at:
         try:
             await _call("PATCH", f"/repos/{project.repo_owner}/{project.repo_name}/pulls/{task.repo_pr_number}", {"state": "closed"})
         except RepoError:
             pass
     task.repo_branch, task.repo_pr_number = f"{branch_name(task)}-r{version}", None
-    return await commit_step(project, task, version, content, author, keep)
+    return await commit_step(project, task, version, content, author, keep, previous)
 
 async def merge_step(project: Project, task: Task, approver: str) -> Dict[str, Any]:
     if not task.repo_pr_number or task.repo_merged_at:
@@ -385,25 +442,28 @@ async def close_step(project: Project, task: Task) -> None:
 
 # ---------------------------------------------------------------- akış kancaları (hata akışı durdurmaz)
 async def after_output(db: AsyncSession, project: Project, task: Task, version: int, content: str, author: str,
-                       keep=None) -> Dict[str, List[str]]:
+                       keep=None, previous: Optional[str] = None) -> Dict[str, List[str]]:
     """Depo varsa çıktıyı adımın dalına commit eder. Dönen: {"dropped": süzgece takılanlar, "partial": '...' ile kısaltıldığı
     için yazılmayanlar (C3-59)}."""
     from app.services import task_flow
 
     if not active(project):
-        return {"dropped": [], "partial": []}
+        return {"dropped": [], "partial": [], "conflicts": []}
     try:
-        r = await commit_step(project, task, version, content, author, keep)
+        r = await commit_step(project, task, version, content, author, keep, previous)
         await task_flow.log(db, project, task, "REPO_COMMIT", task.assignee_actor_id,
                             f"{r['branch']} dalına {len(r['files'])} dosya commit edildi."
                             + (f" Yazılmayan (test uzmanı kapsamı dışı): {', '.join(r['dropped'])}." if r["dropped"] else "")
                             + (f" Yazılmayan (kısaltılmış, '...' içeriyor; tam dosya gerekli): {', '.join(r['partial'])}."
-                               if r["partial"] else ""), r)
-        return {"dropped": r["dropped"], "partial": r["partial"]}
+                               if r["partial"] else "")
+                            + (f" Başka adımın ana daldaki değişiklikleriyle birleştirildi: {', '.join(r['merged'])}." if r["merged"] else "")
+                            + (f" Yazılmayan (başka adımın ana daldaki onaylı değişiklikleriyle çakışıyor): {', '.join(r['conflicts'])}."
+                               if r["conflicts"] else ""), r)
+        return {"dropped": r["dropped"], "partial": r["partial"], "conflicts": r["conflicts"]}
     except RepoError as exc:
         logger.warning("Depo commit hatası (%s): %s", task.id, exc.message)
         await task_flow.log(db, project, task, "REPO_ERROR", note=exc.message)
-        return {"dropped": [], "partial": []}
+        return {"dropped": [], "partial": [], "conflicts": []}
 
 
 async def after_approval(db: AsyncSession, project: Project, task: Task, actor_id, approver: str) -> None:
@@ -528,6 +588,8 @@ async def tree(project: Project, ref: str) -> Dict[str, Any]:
 # AI personelin gördüğü depo kodu (senaryo F98, 08.11.2026)
 REPO_CONTEXT_CHARS = 30000
 REPO_FILE_CHARS = 9000
+REPO_PRIORITY_CHARS = 30000  # C4-22: adımın kendi dosyaları ve recorion.json için ek bağlam
+REPO_PRIORITY_FILE_CHARS = 30000
 REPO_LISTING_MAX = 300
 CONTEXT_EXT = {".py", ".js", ".mjs", ".ts", ".html", ".css", ".sql", ".yaml", ".yml", ".json", ".toml", ".txt", ".cfg", ".ini", ".sh"}
 CODE_EXT = {".py", ".js", ".mjs", ".ts"}
@@ -538,7 +600,8 @@ def _ext(path: str) -> str:
     return ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
 
 
-async def context_for_ai(project: Project, ref: str = BASE_BRANCH, limit: int = REPO_CONTEXT_CHARS) -> str:
+async def context_for_ai(project: Project, ref: str = BASE_BRANCH, limit: int = REPO_CONTEXT_CHARS,
+                         priority: Optional[List[str]] = None) -> str:
     """Dalın dosya listesi + kaynak dosyaların içeriği (önce uygulama kodu, sonra testler ve yapılandırma), sınır içinde.
     Depoya ulaşılamazsa boş döner; iş durmaz."""
     try:
@@ -552,9 +615,13 @@ async def context_for_ai(project: Project, ref: str = BASE_BRANCH, limit: int = 
     def rank(e):
         p = e["path"].lower()
         return ("test" in p, _ext(p) not in CODE_EXT, p.count("/"), e["size"])
+    # C4-22: adımın yazacağı dosyalar (önceki sürümünde yazdıkları) ve paylaşılan recorion.json önce ve TAM verilir; aksi hâlde AI
+    # ana daldaki başka adımın onaylı değişikliğini görmeden dosyayı baştan yazıp siliyordu
+    first = set(priority or []) | {"recorion.json"}
     picks = sorted((e for e in files if _ext(e["path"]) in CONTEXT_EXT and not e["path"].startswith("docs/")
-                    and 0 < e["size"] <= MAX_FILE_BYTES), key=rank)
+                    and 0 < e["size"] <= MAX_FILE_BYTES), key=lambda e: (e["path"] not in first, rank(e)))
     parts, used = [], len(listing)
+    limit += REPO_PRIORITY_CHARS if priority else 0
     for e in picks:
         if used >= limit:
             break
@@ -562,15 +629,18 @@ async def context_for_ai(project: Project, ref: str = BASE_BRANCH, limit: int = 
             body = (await read_file(project, ref, e["path"]))["content"]
         except Exception:  # noqa: BLE001
             continue
-        if len(body) > REPO_FILE_CHARS:
-            body = body[:REPO_FILE_CHARS] + "\n… (dosyanın devamı kısaltıldı)"
+        cap = REPO_PRIORITY_FILE_CHARS if e["path"] in first else REPO_FILE_CHARS
+        if len(body) > cap:
+            body = body[:cap] + "\n… (dosyanın devamı kısaltıldı)"
         block = f"\n### {e['path']}\n{body}\n"
         if used + len(block) > limit:
             continue
         parts.append(block)
         used += len(block)
     return (f"# Depodaki kod (dal: {ref})\nBu, projenin şu anki gerçek kodudur; önceki adım özetleriyle çelişirse depodakini esas al "
-            f"(uç nokta adları, alan adları, giriş yöntemi).\nDosyalar:\n{listing}\n" + "".join(parts) + "\n")
+            f"(uç nokta adları, alan adları, giriş yöntemi). Var olan bir dosyayı değiştirirken buradaki GÜNCEL hâlini temel al: "
+            f"başka adımların eklediği bölümleri (menü, bağlantı, recorion.json denetimleri vb.) koru, yalnız kendi değişikliğini ekle."
+            f"\nDosyalar:\n{listing}\n" + "".join(parts) + "\n")
 
 
 async def archive(project: Project, ref: str) -> bytes:

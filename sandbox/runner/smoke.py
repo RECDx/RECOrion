@@ -182,6 +182,16 @@ def run_http(c, services, saved):
     return True, f"HTTP {code}"
 
 
+def _rel(target) -> str:
+    """C4-20: denetimde goto/path tam adres yazılmışsa (http://127.0.0.1:8000/admin) yalnız yol kısmı kullanılır; adresin başına
+    servis adresi ikinci kez eklenip "invalid URL" olmasın."""
+    target = str(target or "/")
+    if "://" in target:
+        rest = target.split("://", 1)[1]
+        target = "/" + rest.split("/", 1)[1] if "/" in rest else "/"
+    return target if target.startswith("/") else "/" + target
+
+
 STEP_KINDS = ("fill", "click", "select", "check", "uncheck", "press", "goto", "expect_text", "expect_selector",
               "wait_for_selector", "wait_ms")
 
@@ -200,7 +210,7 @@ def run_browser(c, services, saved, browser):
     steps = (c.get("steps") or [])[:25]
     where = "sayfa açılışı"
     try:
-        page.goto(f"http://127.0.0.1:{svc['port']}{_fmt(c.get('path') or '/', saved)}")
+        page.goto(f"http://127.0.0.1:{svc['port']}{_rel(_fmt(c.get('path') or '/', saved))}")
         for i, st in enumerate(steps, 1):
             st = _fmt(st, saved)
             kind = next((k for k in STEP_KINDS if k in st), None)
@@ -222,7 +232,7 @@ def run_browser(c, services, saved, browser):
             elif kind == "press":
                 page.press(st.get("selector") or "body", str(st["press"]), timeout=to)
             elif kind == "goto":
-                page.goto(f"http://127.0.0.1:{svc['port']}{st['goto']}", timeout=to)
+                page.goto(f"http://127.0.0.1:{svc['port']}{_rel(st['goto'])}", timeout=to)
             elif kind == "expect_text":
                 page.get_by_text(str(st["expect_text"])).first.wait_for(state="visible", timeout=to)
             elif kind in ("expect_selector", "wait_for_selector"):
@@ -296,7 +306,7 @@ def crawl(services, browser, login_check, saved):
                     elif "press" in st:
                         page.press(st.get("selector") or "body", str(st["press"]))
                     elif "goto" in st:
-                        page.goto(base + st["goto"])
+                        page.goto(base + _rel(st["goto"]))
                     elif "expect_text" in st:
                         page.get_by_text(str(st["expect_text"])).first.wait_for(state="visible")
                 page.wait_for_timeout(500)
